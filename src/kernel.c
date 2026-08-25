@@ -1,4 +1,5 @@
 #include "vga.h"
+#include "console.h"
 #include "gdt.h"
 #include "idt.h"
 #include "isr.h"
@@ -41,6 +42,7 @@ static void counter_task(void *arg) {
 void kernel_main(uint32_t mb_magic, uint32_t mb_info) {
     vga_init();
     serial_init();
+    console_init();          /* COM1 console: input + output mirror */
     klog_init();
     klog_puts("[boot] kernel_main\n");
 

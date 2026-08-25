@@ -46,4 +46,9 @@ void keyboard_init(void);
 int  keyboard_getchar(void);    /* blocks; returns char value or KEY_* */
 int  keyboard_available(void);
 int  keyboard_key_pressed(uint8_t scancode); /* 1 if held, 0 if not */
+/* Inject a character/KEY_* code into the input queue as if it had been
+ * typed. Used by the serial console so a socket-attached client feeds the
+ * same queue as the PS/2 driver. */
+void keyboard_inject(int c);
+
 void keyboard_flush(void);                   /* drain ASCII queue    */

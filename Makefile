@@ -33,7 +33,7 @@ UCFLAGS  = -m32 -ffreestanding -fno-pie -no-pie -fno-stack-protector \
            -nostdlib -Isrc -mgeneral-regs-only -O2
 USER_ELFS = user/hello.elf user/cat.elf user/echo.elf user/systest.elf user/spin.elf
 
-.PHONY: all clean distclean run run-ai iso disk user
+.PHONY: all clean distclean run run-ai run-console run-tcp iso disk user
 
 all: iso
 
@@ -137,6 +137,31 @@ run-ai: iso $(DISK)
 	    -serial file:/tmp/soupos-serial.log \
 	    -serial unix:/tmp/soupos-ai.sock,server,nowait; \
 	kill `cat /tmp/soupos-ai.pid` 2>/dev/null; rm -f /tmp/soupos-ai.pid
+
+# ── Serial console (no VGA window, no keyboard) ─────────────────────────
+# soupOS mirrors all VGA text output to COM1 and reads COM1 as keyboard
+# input, so it can be driven over a plain byte stream. See src/console.c.
+
+# Console on this terminal. Ctrl+A X quits QEMU.
+run-console: iso $(DISK)
+	@echo "soupOS console on this terminal.  (Ctrl+A then X to quit QEMU)"
+	qemu-system-i386 \
+	    -drive file=$(DISK),format=raw,if=ide,index=0 \
+	    -cdrom $(ISO) -boot d \
+	    -m 128M -no-reboot -no-shutdown \
+	    -display none -serial stdio
+
+# Console on a TCP port — how a hosted instance runs. QEMU waits for the
+# client to connect (no `nowait`) so the player sees the boot sequence from
+# the first line instead of joining a session already in progress.
+CONSOLE_PORT ?= 4444
+run-tcp: iso $(DISK)
+	@echo "soupOS console on tcp/$(CONSOLE_PORT) — connect with:  nc 127.0.0.1 $(CONSOLE_PORT)"
+	qemu-system-i386 \
+	    -drive file=$(DISK),format=raw,if=ide,index=0 \
+	    -cdrom $(ISO) -boot d \
+	    -m 128M -no-reboot -no-shutdown \
+	    -display none -serial tcp:127.0.0.1:$(CONSOLE_PORT),server
 
 clean:
 	rm -f src/*.o $(TARGET) $(ISO) iso/boot/kernel.elf user/*.elf

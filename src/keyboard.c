@@ -1,6 +1,7 @@
 #include "keyboard.h"
 #include "isr.h"
 #include "task.h"
+#include "console.h"
 
 /* PS/2 scancodes set 1 → ASCII, unshifted */
 static const char scancode_table[128] = {
@@ -69,6 +70,11 @@ static void kb_push(int val) {
         kb_write = next;
     }
 }
+
+/* Public face of kb_push, for the serial console. Serial input and PS/2
+ * input share one queue, so both work at once and every existing reader
+ * (shell, editor, soupyc `input`) picks up serial for free. */
+void keyboard_inject(int c) { kb_push(c); }
 
 static void keyboard_irq_handler(registers_t *regs) {
     (void)regs;
@@ -161,7 +167,10 @@ void keyboard_init(void) {
     irq_register(1, keyboard_irq_handler);
 }
 
-int keyboard_available(void) { return kb_read != kb_write; }
+int keyboard_available(void) {
+    console_rx_poll();               /* drain COM1 into the same queue */
+    return kb_read != kb_write;
+}
 
 int keyboard_getchar(void) {
     while (!keyboard_available()) {

@@ -1,4 +1,5 @@
 #include "vga.h"
+#include "console.h"
 #include <stdarg.h>
 
 #define VGA_WIDTH   80
@@ -86,6 +87,10 @@ void vga_fill_row(int row, char c) {
 }
 
 void vga_putchar(char c) {
+    /* Mirror to the serial console before touching the cell buffer, so a
+     * remote client sees exactly the stream a local VGA user would. */
+    console_out_char(c);
+
     if (c == '\n') {
         vga_col = 0;
         vga_row++;

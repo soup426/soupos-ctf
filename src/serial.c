@@ -34,6 +34,13 @@ void serial_puts(const char *s) {
     while (*s) serial_putc(*s++);
 }
 
+/* Non-blocking read of one byte from COM1. Returns -1 when the receiver
+ * holding register is empty (LSR bit 0 = data ready). */
+int serial_getc_nb(void) {
+    if (inb(COM1 + 5) & 0x01) return (int)inb(COM1);
+    return -1;
+}
+
 /* ── COM2 — the AI bridge channel ────────────────────────────────────────
  * A second polled UART, kept separate from COM1 so the kernel log mirror
  * never collides with AI traffic. Read + write. Presence is probed via the
