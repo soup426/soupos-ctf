@@ -2,6 +2,9 @@ TARGET  = kernel.elf
 ISO     = soupOS.iso
 DISK    = disk.img
 
+# Challenge flag baked into the disk image. Placeholder by default.
+FLAG   ?= flag{placeholder_not_the_real_flag}
+
 CC      = gcc
 # -mgeneral-regs-only keeps GCC out of the SSE/MMX/x87 register files. Without
 # it, GCC 12+ auto-vectorises ordinary byte loops at -O2 (e.g. zeroing the TSS
@@ -71,6 +74,9 @@ $(DISK):
 	    | mcopy -i $(DISK) - ::RECIPE.TXT
 	printf 'The secret ingredient is soup.\n' \
 	    | mcopy -i $(DISK) - ::SECRET.TXT
+	# Challenge flag. Baked into the image, so it is the same for every
+	# instance. Override at build time:  make disk FLAG='flag{real}'
+	printf '$(FLAG)\n' | mcopy -i $(DISK) - ::FLAG.TXT
 	printf '# soupyc demo - run with: soup DEMO.SC\nlet i = 1\npour "Counting to 10:"\nwhile i <= 10 {\n    pour i\n    i = i + 1\n}\npour ""\npour "What is your name?"\nlet name = input\npour "Hello, " + name + "!"\npour ""\nlet x = 6\nlet y = 7\npour "Is " + x + " * " + y + " = 42? " + (x * y == 42)\n' \
 	    | mcopy -i $(DISK) - ::DEMO.SC
 	printf '# Functions demo - run with: soup FN.SC\nfn factorial(n) {\n    if n <= 1 {\n        return 1\n    }\n    return n * factorial(n - 1)\n}\nfn fib(n) {\n    if n <= 1 { return n }\n    return fib(n - 1) + fib(n - 2)\n}\npour "Factorials:"\nlet i = 1\nwhile i <= 8 {\n    pour i + "! = " + factorial(i)\n    i = i + 1\n}\npour ""\npour "Fibonacci:"\ni = 0\nwhile i < 10 {\n    pour "fib(" + i + ") = " + fib(i)\n    i = i + 1\n}\npour ""\npour "hash(soupOS) = " + hash("soupOS")\n' \
