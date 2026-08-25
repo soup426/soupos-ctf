@@ -1,0 +1,147 @@
+soupOS — Code Review & soupc Direction
+======================================
+HISTORICAL — this sweep was performed on the v0.4.0 tree. The codebase is
+now at v0.7.0 (ring-3 user mode, syscalls, ELF loader, bowls/users, jot
+editor, AI bridge). For current state see ROADMAP.txt and CLAUDE.md; this
+file is kept as a point-in-time record and is not maintained.
+
+Sweep performed on the v0.4.0 tree. Organised by severity + how the work
+fits the goal of evolving soupyc into a real "soupc" language.
+
+────────────────────────────────────────────────────────────────
+REAL BUGS  (all fixed — verified 2026-05-20)
+────────────────────────────────────────────────────────────────
+
+This whole section has been resolved by later work. Kept as a record.
+
+  [x] soupyc &&/|| short-circuit — N_BINOP returns early before the RHS
+      eval when TK_AND/TK_OR outcome is already known (soupyc.c).
+  [x] vga_putchar('\b') crosses row boundaries — at col 0 with row > 0
+      it steps back to the previous row (vga.c).
+  [x] vga_set_cursor clamps row/col into range (vga.c).
+  [x] kernel_main panics loudly when pmm_init finds 0 usable pages
+      instead of faulting in paging_init (kernel.c).
+  [x] FAT write uses a write-back sector cache — the FAT is flushed once
+      at the end of fat_write, not per cluster (fat.c).
+  [x] fat_alloc_cluster keeps a "next free" hint so probes no longer
+      restart from the front of the FAT each call (fat.c).
+  [x] as_int skips leading whitespace and a leading '+' correctly;
+      int(" 42") now parses to 42 (soupyc.c).
+  [ ] soupyc pool_used overflow still parses noisily after new_node
+      returns NULL — harmless (err_flag short-circuits eval) but the
+      error messages are messy. Low priority.
+
+────────────────────────────────────────────────────────────────
+MINOR / COSMETIC
+────────────────────────────────────────────────────────────────
+
+  [ ] kfree only forward-coalesces  (src/heap.c:73-76)
+      Heap fragments over long sessions. Adding a prev pointer would
+      cost 4 bytes per block but enable proper coalescing.
+  [ ] krealloc doesn't shrink in place  (src/heap.c:87)
+      Old block stays full size after a shrink.
+  [ ] Boot banner prints before mb_magic check  (src/kernel.c:69-86)
+      [WARN] line lands below the banner. Reorder.
+  [x] Panic handler now dumps registers + CR2 + an EBP stack walk and
+      mirrors the whole report to klog/serial (src/isr.c).
+  [ ] ATA driver hardcoded to primary master only  (src/ata.c)
+      No slave probe, no secondary channel. WAD lives next to dev
+      files on the same volume.
+  [ ] soupyc string concat truncates silently at 47 chars
+      (src/soupyc.c:613-622)
+      Should at least set an error.
+
+────────────────────────────────────────────────────────────────
+KERNEL — THINGS TO ADD (ranked by leverage)
+────────────────────────────────────────────────────────────────
+
+  1. VFS layer — thin shim over fat_* so future filesystems and
+     /dev/serial / /proc-style nodes can plug in without rewriting
+     every shell command.
+  2. Cooperative task scheduler — single TSS, yield(), round-robin.
+     Unlocks: background clock, async I/O, soupc concurrency, ps/kill.
+  3. Mouse driver — IRQ12 + cursor in mode 13h. Cheap, demos well,
+     unlocks GUI experiments.
+  4. [DONE] Better panic — register dump, EBP stack walk, serial mirror.
+  5. VESA framebuffer — needs a BIOS trampoline first. Then linear
+     framebuffer + bitmap fonts → real UI possible.
+  6. PCI BAR parsing — currently pci.c only reads vendor/class. BARs
+     are needed for any real device driver (RTL8139, AC97, ATA DMA).
+  7. ATA DMA — PIO blocks for milliseconds per sector. DMA + IRQ14
+     makes Doom load ~10x faster.
+  8. [DONE] Kernel log ring buffer — klog.c ring + `dmesg` + serial
+     mirror. Boot log and panics both route through it.
+
+────────────────────────────────────────────────────────────────
+soupc — LANGUAGE DESIGN PLAN
+────────────────────────────────────────────────────────────────
+
+The current soupyc is a tree-walking interpreter with 48-char strings,
+a 64-var symbol table, and no arrays. To make "soupc" a real language
+we split the work into three phases.
+
+── Phase 1 — fix the substrate (still tree-walked) ────────────────
+
+  [ ] Heap-allocated strings instead of char[48]. kmalloc + length +
+      capacity. Removes the truncation footgun.
+  [ ] Arrays — first new type after string/int. Enables every real
+      algorithm.
+  [ ] Block-scoped `let`. Currently `let` always lives until function
+      return. Add a per-block scope marker so `if { let x = 1 }`
+      cleans up.
+  [ ] Short-circuit `&&` / `||` (also in REAL BUGS).
+  [ ] Standard library builtins: len, abs, min, max, rand, time, int,
+      str, chr, ord, substr, upper, lower. All trivial in N_CALL.
+  [ ] `for i in 0..n` sugar. Desugars to while loop.
+  [ ] File I/O builtins (open/read/write/close) backed by fat_f* API.
+
+After Phase 1 you can write meaningful programs in soupyc.
+
+── Phase 2 — soupc as a real compiler ─────────────────────────────
+
+This is the rename. Same syntax (mostly), but:
+  [ ] Bytecode VM (32 ops, stack machine). ~10x faster than tree-walk,
+      simpler than JIT. Reuse the existing parser. Bytecode lives in
+      heap or as a .SBC file on FAT.
+  [ ] Static types: int, str, bool, arrays. Catch wrong-arg-count and
+      type errors at compile time. Tiny annotated-locals system, not
+      full Hindley-Milner.
+  [ ] Compiler shell command:
+        soupc DEMO.SC      → DEMO.SBC
+        soupc -r DEMO.SC   → compile + run
+        soupc -e DEMO.SC   → emit ELF (after loader exists)
+  [ ] Module system: `import math` resolves to MATH.SC on disk,
+      namespaced. Required once stdlib grows.
+  [ ] soupc REPL as a shell command. Read-eval-print on the VM.
+
+── Phase 3 — soupc as a system language ───────────────────────────
+
+Once ELF loader + ring 3 + syscalls land (T3 roadmap), soupc programs
+become real processes:
+  [ ] `extern fn write(fd, buf, n) -> int` so soupc can call kernel
+      syscalls directly.
+  [ ] `pour` becomes sugar for `write(stdout, ...)`.
+  [ ] Drivers in soupc — mouse cursor app, clock daemon, tetris.
+      Self-hosting moment.
+
+── Smaller wins along the way ─────────────────────────────────────
+
+  [ ] Rename soupyc → soupc when committing to Phase 2 (clean break
+      since bytecode is the fundamental change).
+  [ ] File extensions: .sc source, .sbc bytecode, .sxe executables.
+  [ ] Per-AST-node line/col tracking so runtime errors say "line 42,
+      col 7" instead of just "line 42".
+  [ ] `disasm` shell command that dumps bytecode for a .SBC file —
+      invaluable for debugging the compiler.
+
+────────────────────────────────────────────────────────────────
+SUGGESTED NEXT STEPS (concrete order)
+────────────────────────────────────────────────────────────────
+
+  1. [DONE] Real bugs above.
+  2. [DONE] soupyc stdlib batch (len, abs, min, max, rand, time, int,
+     str, chr, ord, substr, upper, lower) — see soupyc.c call_builtin.
+  3. [DONE] VFS skeleton — fat_* now sits behind a vfs_* API (vfs.c).
+  4. [DONE] soupyc arrays — reference type, static pool of 24 (see
+     soupyc.c). A heap-backed values rework is still open but not
+     blocking; the static pool is enough for current programs.

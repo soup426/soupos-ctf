@@ -1,0 +1,621 @@
+soupOS — Feature Roadmap
+========================
+A 32-bit hobby OS written in C and NASM.
+Current version: v0.7.3
+
+Features are grouped roughly by effort. Nothing here is required;
+everything is just "it would be funny/cool to build."
+
+────────────────────────────────────────────────────────────────
+CHANGELOG
+────────────────────────────────────────────────────────────────
+
+v0.7.3  (2026-06-16)  — SOUPYC LANGUAGE POLISH
+  Three ergonomics/robustness fixes to the soupyc interpreter.
+  - Triple-quoted multi-line strings: """...""" runs verbatim (newlines
+    kept, no \-escapes) until the closing """; single-quoted "" keeps the
+    one-line \n/\t form. Both share the 47-char value cap. (src/soupyc.c
+    next_tok)
+  - Line-numbered errors: every AST node carries the source line it began
+    on (node_t.line, stamped from the current token; binop/index/var/call
+    nodes inherit the correct start line rather than drifting past it).
+    Both "parse error (line N)" and "runtime error (line N)" now point at
+    the offending line. Verified: undefined var and a too-long concat each
+    reported the exact line.
+  - String overflow is now an error, not a silent truncation: a string
+    literal or a "+" concatenation that would exceed 47 chars raises
+    "string too long (max 47 chars)" instead of quietly dropping bytes.
+  Note: soupyc strings are still a fixed char[48]; lifting the 47-char cap
+  needs heap-backed strings (a bigger value-system rework — see below).
+  Not done this round: spawn(fn) as a background task — that needs the
+  tree-walker made reentrant (per-task interpreter state) first, since all
+  its state is file-scope globals; deferred to its own focused change.
+
+v0.7.2  (2026-06-16)  — COOPERATIVE SYS_YIELD + SYS_TICKS
+  Ring-3 programs can now cooperate with the scheduler.
+  - SYS_YIELD is wired to task_yield() (was a no-op). It re-enables
+    interrupts first: the int 0x80 gate is a DPL-3 *interrupt* gate so IF
+    is clear in the handler, and a peer that hlts waiting for an IRQ would
+    deadlock with interrupts off. Safe because only one user program runs
+    at a time, so the frame left on the TSS (esp0) kernel stack can't be
+    clobbered by another ring3->ring0 trap while we're switched away; the
+    user's IF is restored from its saved EFLAGS by iret. (src/usermode.c)
+  - SYS_TICKS (call #8): returns timer_get_ticks() (100 Hz uptime), so a
+    user program can pace itself in wall-clock time. ulib gains sys_ticks()
+    and eprint_int() (decimal to serial). (syscall_nr.h, user/ulib.*)
+  - New program user/spin.c: loops on ticks+yield for ~3 s, emitting [u]
+    markers to serial. New shell `yieldbg`: spawns a background task that
+    logs [bg] markers every 300 ms via task_sleep. Run `yieldbg` then
+    `cook spin.elf` — the [bg]/[u] markers interleave in the serial log,
+    which only happens if the ring-3 yield reaches the scheduler. Verified
+    headless: bg kept ticking on schedule all through spin's 3 s busy loop.
+  - QoL: `menu` is now paged. The 25-row text screen has no scrollback, so
+    the ~60-line listing used to scroll its top off. cmd_menu drives the
+    lines through a small pager (page_line/PAGE_ROWS) that pauses with a
+    "-- more --" prompt each screenful; any key shows the next page, q/ESC
+    stop. (src/shell.c)
+  Still open: per-process page directories (one user program at a time).
+
+v0.7.1  (2026-06-16)  — SYSCALL DEPTH + USER RUNTIME + PROGRAMS
+  Fills out the ring-3 ABI that v0.7.0 stubbed. The syscall table grows
+  from 4 to 8 calls, gains a real user-space runtime, and ships three
+  new programs. Verified end-to-end headless (systest.elf emits TESTOUT
+  markers to serial; all three pass).
+  - Syscalls: SYS_OPEN/SYS_CLOSE (per-process fd table, 16 slots, fd>=3
+    via the VFS), SYS_SBRK (heap break grows user pages on demand, won't
+    collide with the stack), SYS_ARGS (the cook command line). All gate
+    user pointers through user_ok() so a hostile program can't steer the
+    kernel at kernel memory. (src/usermode.c, syscall_nr.h)
+  - exec_elf now takes an args string; shell `cook <prog.elf> [args]`
+    splits the program name from the rest of the line and passes it down.
+    Per-run state (fd table, brk, args) resets on each exec. (src/shell.c)
+  - User runtime: user/ulib.{c,h} — _start (calls main, exits with its
+    return), int 0x80 wrappers for every syscall, and conveniences
+    (print/eprint/print_int, strlen_, a bump malloc over sbrk). A program
+    is now just `int main(void)`.
+  - New user programs: user/echo.c (print args), user/cat.c (open+read+
+    write a file), user/systest.c (exercises args/open/read/sbrk and
+    reports to serial). `make user` builds all four ELFs; the disk recipe
+    mcopies ECHO/CAT/SYSTEST.ELF alongside HELLO.ELF.
+  Still open: per-process page directories (one user program at a time),
+  sys_yield wired to the scheduler, write to a streaming fat backend.
+
+v0.7.0  (2026-06-16)  — RING 3 + SYSCALLS + ELF LOADER
+  The big OS-ification jump (path step 3). soupOS now runs real
+  user-mode processes with hardware memory protection.
+  - GDT: added ring-3 code/data segments (0x1B/0x23) and a TSS (0x28)
+    holding ss0/esp0 — the kernel stack the CPU switches to on a
+    ring3->ring0 trap. `ltr` loads it at boot. (src/gdt.c, gdt.h)
+  - Paging: map_page now propagates the user bit to the PDE when a user
+    PTE is added (privilege is AND-ed across levels, so kernel pages stay
+    supervisor-only). Added paging_unmap. (src/paging.c)
+  - Syscalls: `int 0x80` gate at DPL 3 (idt.c) + a syscall stub
+    (isr_stubs.asm) -> syscall_dispatch. Calls: exit, write (fd 1=screen,
+    2=serial), read (kbd line), yield (no-op for now). (src/usermode.c)
+  - Ring transitions: user_mode_enter builds an iret frame into ring 3;
+    the exit syscall calls user_mode_exit, which unwinds back to the
+    launcher (one-shot coroutine swap). (src/usermode_asm.asm)
+  - ELF loader: exec_elf reads an ELF32 ET_EXEC i386 binary, maps each
+    PT_LOAD into fresh user pages (USER_BASE 0xC0000000), copies the
+    image, zeroes .bss, sets up a 16 KB user stack, runs it, and tears
+    the pages down on exit. (src/usermode.c)
+  - Shell `cook <prog.elf>` runs a program in ring 3. First user program:
+    user/hello.c (freestanding, syscalls only) -> HELLO.ELF on the disk;
+    `make user` builds it. Verified end-to-end headless: ring-3 writes
+    reach the kernel, exit returns to the shell, pages free, re-exec works.
+  - Boot diagnostic: usermode_selftest fires int 0x80 from ring 0.
+  Not yet: per-process address spaces (one user program at a time),
+  brk/open/close syscalls, scheduler-integrated yield.
+
+v0.6.4  (2026-06-16)
+  - THE LLM (serial bridge, Option A): `ai <prompt>` asks a host-side
+    LLM and streams the reply back into the OS. New COM2 (0x2F8) polled
+    UART in serial.c (serial2_*), probed via the 16550 scratch register
+    so it degrades cleanly when absent (no COM2 = "oracle asleep", no
+    hang). New src/ai.{c,h}: ai_send writes "<prompt>\n", ai_getc reads
+    reply bytes until 0x04 (EOT), yielding to the scheduler between polls
+    so background tasks keep running. Shell `ai` streams to the screen
+    and mirrors the assembled reply to klog/COM1 (visible in dmesg). Also
+    a soupyc `ai(prompt)` builtin (reply capped at the 47-char string
+    limit). Host side: tools/ai_bridge.py (Ollama by default, AI_FAKE=1
+    for offline) + a `make run-ai` target wiring COM2 to a unix socket.
+    Verified end-to-end headlessly: prompt reaches the daemon, reply
+    reaches the kernel.
+
+v0.6.3  (2026-06-16)
+  - Text editor: `jot <file>` — a full-screen nano-like editor in new
+    src/editor.{c,h}. Loads an existing file or starts empty; flat 8 KB
+    buffer with in-place tail shifts for insert/delete. Keys: arrows /
+    Home / End move, Backspace / Del erase, Enter splits a line, Ctrl+S
+    writes back via fat_write, Esc / Ctrl+Q quit (with a discard prompt
+    when modified). Renders straight to the 0xB8000 cell buffer (never
+    scrolls), with a status bar showing the file, Ln/Col, and a * when
+    dirty. Shell `jot` gates on read+write (existing) or parent write
+    (new); clears the screen on exit so the prompt comes back clean.
+  - soupyc: five new builtins — sum(arr), reverse(arr), sort(arr)
+    (in-place, ascending by int value) and contains(s,sub)/find(s,sub)
+    (substring test / first index, -1 if absent).
+
+v0.6.2  (2026-06-16)
+  - soupyc: `include "file.sc"` — parses another script inline via the
+    VFS. Functions register into the global table; the included file's
+    top-level statements run where the include sits. Nests up to 4 deep;
+    the lexer state is saved/restored around the recursive parse and the
+    kmalloc'd source buffer is freed once the AST has copied what it needs.
+  - soupyc: nested indexed assignment `a[i][j] = x` (any depth). The
+    parser folds every bracket but the last into N_INDEX over the base;
+    because arrays are a reference type, indexing yields the inner array
+    to mutate. (Read-side nested indexing already worked.)
+  - soupyc: recursion depth cap raised 8 -> 16 (MAX_CALL_DEPTH). fib(9)+
+    used to hit "call stack overflow"; fib(12) now evaluates fine.
+
+v0.6.1  (2026-06-16)
+  - File management: `decant <src> <dst>` (copy) and
+    `relabel <src> <dst>` (move/rename). Both resolve relative paths
+    against the cwd, honour copy-into-bowl semantics (a destination
+    that names an existing bowl keeps the source's basename inside it),
+    enforce the same advisory rwx checks as stir/strain, and refuse to
+    clobber a bowl or copy onto themselves. relabel = copy + delete, so
+    it works as both an in-place rename and a move between bowls. Copy
+    is staged through a single 64 KB buffer (fat_write has no streaming
+    form); larger files are refused. New: shell cmd_decant/cmd_relabel
+    plus the prep_file_op/copy_file_core helpers in src/shell.c.
+
+v0.6.0  (2026-05-21)
+  - Bowls: FAT16 subdirectory support. fat.c walks '/'-separated
+    paths over the fixed root + cluster-chain subdirs; subdirs grow
+    a cluster at a time. New: fat_mkdir/fat_rmdir/fat_is_dir/
+    fat_exists. Shell: cd, pwd, mkbowl, rmbowl, bowltest; the prompt
+    shows the current bowl.
+  - Users: the "kitchen staff". Accounts in /etc/kitchen
+    (name:uid:hexhash); uid 0 = headchef (superuser), others are
+    cooks. Boot login prompt; clockout/whoami/roster; hire/fire
+    (headchef only). New module: src/users.{c,h}.
+  - Access control: an owner uid + rwx mode are stamped into spare
+    FAT dirent bytes (fat_stat/fat_chmod/fat_chown). The shell's
+    may() enforces read/write/enter on pour/soup/stir/strain/cd/
+    serve/mkbowl/rmbowl. `perms` shows/sets a file's mode.
+    Advisory only — soupOS is ring 0 (see OS-IFICATION step 3).
+  - Elevation: `chef <command>` runs one command as the headchef,
+    prompting for the headchef secret. Bare `chef` is still CPU info.
+
+v0.5.0  (2026-05-20)
+  - Doom port parked in doom-disabled/ (excluded from the build) to
+    focus on core OS work; re-enable per doom-disabled/README.txt.
+  - Cooperative scheduler finished: task_sleep + wait-queue primitives
+    in use; every in-tree busy-wait now yields (speaker, ATA PIO,
+    shell wipe/bounce/clock/cat).
+  - VFS shim (vfs.c) — uniform open/read/write/seek/close over FAT
+    files plus /dev/{null,zero,serial,kbd}. Shell: vfstest.
+  - serial.c extracted; klog.c kernel log ring buffer mirrored to
+    COM1; shell `dmesg`. Panic now dumps registers + CR2 + an EBP
+    stack walk (build uses -fno-omit-frame-pointer).
+  - soupyc grew up: 13 stdlib builtins (len/abs/min/max/rand/time/
+    int/str/chr/ord/substr/upper/lower), arrays (literals, indexing,
+    push/pop, reference semantics), file I/O (open/read/write/close/
+    eof via the VFS), `for v in a..b` loops, and string indexing s[i].
+  - Demo scripts on the disk image: STDLIB.SC, ARRAY.SC, FILEIO.SC.
+
+v0.4.0
+  - Pre-changelog baseline (FAT16 r/w, soupyc fn/return, Doom port).
+
+────────────────────────────────────────────────────────────────
+CURRENT BUG — ENEMY AI BROKEN (investigated 2026-04-19)
+────────────────────────────────────────────────────────────────
+
+All six Doom gameplay tasks (level exit, enemy ranged attacks, weapon
+flash, sector specials, locked doors, death screen) were implemented in
+doom.c but enemy AI is completely broken as a regression.
+
+Symptoms (confirmed visually in QEMU):
+  - Enemies never move toward player
+  - Enemies never deal damage (melee or ranged)
+  - Shooting at enemies doesn't kill them
+  - Ammo decrements but fire_weapon() bails early (lv_thing_ai NULL?)
+  - Enemy sprite always shows idle frame 'A', never walk cycle
+
+Root cause hypothesis:
+  lv_thing_ai is NULL because kmalloc fails at level_load time.
+  fire_weapon() decrements ammo before the NULL check, so ammo
+  decrements but nothing else happens. thing_think() also returns
+  immediately. The most likely cause is heap exhaustion — the new
+  g_sec_base_light + g_pistol_flash allocations push the heap over
+  the limit when combined with all the texture/sprite/flat caches.
+
+  Alternatively: something in level_load order is corrupting the
+  lv_thing_ai pointer after allocation.
+
+Suggested fix approach:
+  1. Add a serial debug print after the lv_thing_ai kmalloc to confirm
+     it's NULL:
+       if (!lv_thing_ai) serial_puts("[doom] lv_thing_ai kmalloc FAILED\n");
+     (use outb(0x3F8, c) inline if serial_puts not available in doom.c)
+  2. If NULL: check heap free space before/after level_load. The heap
+     is 8MB. Total texture + sprite + flat + level data might exceed it.
+     Reduce MAX_SPRITES (128→64) or MAX_FLAT_CACHE (32→16) as a quick fix.
+  3. If not NULL: the wake-up distance check (ENEMY_SEE_D2 = 512*512)
+     might have an int32 overflow for enemies far from player — dx*dx+dy*dy
+     can overflow if coordinates are large. Fix: cast to int64 before mul.
+
+Also broken (separate issue):
+  Death/level-complete text screen shows garbled/rainbow pixels because
+  Doom's PLAYPAL is still loaded in the VGA DAC when vga13h_exit() returns
+  to text mode. Fix: before calling vga13h_exit(), reset VGA DAC entries
+  0-15 back to standard CGA colors using vga13h_setpal().
+
+────────────────────────────────────────────────────────────────
+
+────────────────────────────────────────────────────────────────
+OS-IFICATION PATH  (make it feel like a real OS, in order)
+────────────────────────────────────────────────────────────────
+Current gap: soupOS boots, pages, heaps, runs a FS + shell + Doom
+— but it's still mostly single-tasking, ring 0 only, with apps
+baked into the kernel binary. These four steps close that gap:
+
+  1. Cooperative scheduler  (Tier 2)   — DONE
+     [x] task_t, task_init, task_spawn, task_yield, task_exit
+     [x] task_switch.asm (callee-saved reg swap + esp swap)
+     [x] Reaper: dead tasks are unlinked + stacks freed on next yield
+     [x] keyboard_getchar yields instead of busy-waiting
+     [x] Shell commands: ps, kill <id>, bgclock
+     [x] task_sleep(ms) + wait-queue primitives (task_block_on/task_wake)
+     [x] speaker_beep: pause loop replaced with task_sleep(ms)
+     [x] ATA PIO wait loops yield periodically (task_yield every ~16k
+         polls) so a slow drive can't starve the scheduler. Full
+         IRQ14-driven blocking is still optional future work — see
+         Tier 3 "ATA DMA".
+     [x] shell live loops yield: tick_delay (wipe/bounce) now uses
+         task_sleep; clock and cat yield before hlt. (doom is parked.)
+
+  2. VFS shim over fat_*  (Tier 2)   — DONE
+     [x] vfs_open/read/write/seek/close + vfs_node_t (src/vfs.{c,h}).
+     [x] FAT backend: read-only files stream via fat_f*; write-mode
+         files buffer in heap and flush via fat_write on close.
+     [x] Char devices: /dev/null, /dev/zero, /dev/serial, /dev/kbd.
+     [x] vfs_ls merges the FAT root with the /dev nodes.
+     [x] `vfstest` shell command exercises the whole API.
+     fat_* still works untouched — the VFS is an additive layer, so
+     existing shell commands did not need rewriting.
+
+  3. ELF loader + ring 3 + syscalls  (Tier 3)   — DONE (v0.7.0)
+     [x] User-mode GDT segments (0x1B/0x23) + TSS (esp0/ss0), ltr at boot
+     [x] int 0x80 dispatch (DPL-3 gate -> syscall_dispatch)
+     [x] ELF32 PT_LOAD mapping into user pages at USER_BASE 0xC0000000
+     [x] jump to entry in ring 3 (user_mode_enter) + exit back (user_mode_exit)
+     [x] syscalls: write, read, exit, yield, open, close, sbrk, args
+         (v0.7.1) + ticks (v0.7.2). yield is now wired to task_yield (v0.7.2).
+     [x] shell `cook <prog.elf> [args]`; programs hello/echo/cat/systest,
+         a user runtime (user/ulib.{c,h}) provides _start + syscall wrappers
+     Still single-address-space: one user program at a time, added to the
+     kernel page directory and torn down on exit. Per-task page
+     directories + concurrent processes are the next layer.
+
+  4. Better panic + kernel log ring  (quality of life)   — DONE
+     [x] serial.c — COM1 driver extracted from kernel.c.
+     [x] klog.c — 8 KB ring buffer, klog()/klog_puts(), mirrors every
+         byte to COM1. Boot messages route through it.
+     [x] `dmesg` shell command dumps the ring.
+     [x] Panic (isr.c) dumps all GP registers + eip/cs/eflags, the
+         page-fault CR2 + decoded cause, and an EBP stack walk; the
+         whole report is mirrored to klog/serial. Build now uses
+         -fno-omit-frame-pointer so the stack walk has frames.
+
+All four steps are done. Step 3 landed in v0.7.0: soupOS runs ring-3
+user-mode ELF programs over an int 0x80 syscall interface with real
+(U/S-bit) memory protection. v0.7.1 filled out the syscall table
+(open/close/sbrk/args + a user runtime) and v0.7.2 added ticks and wired
+sys_yield to the scheduler. What remains is depth, not breadth — per-process
+page directories so multiple user programs can coexist (and run as real
+scheduler tasks rather than the current one-shot coroutine swap).
+
+
+────────────────────────────────────────────────────────────────
+TIER 1 — Quick Wins (a few hours each)
+────────────────────────────────────────────────────────────────
+
+Shell quality-of-life
+  [x] Ctrl+C  — cancel current input line
+  [x] Ctrl+U  — clear line from cursor to start
+  [x] Ctrl+A / Ctrl+E  — Home / End (readline-style)
+  [x] Ctrl+W  — delete word backwards
+  [ ] Pasting multi-char sequences doesn't corrupt the line
+
+soupyc builtins   — DONE (see soupyc.c call_builtin; demo: STDLIB.SC)
+  [x] len(s)          — string length
+  [x] substr(s,i,n)   — substring
+  [x] upper(s) / lower(s)
+  [x] str(x) / int(s) — explicit type casts
+  [x] chr(n) / ord(s) — char <-> code
+  [x] abs(n) / min(a,b) / max(a,b)
+  [x] rand()          — LCG PRNG, 0..32767
+  [x] time()          — returns uptime ticks
+  [x] contains(s,sub) / find(s,sub)  — substring test / index (-1)
+  [x] sum(arr) / reverse(arr) / sort(arr)  — fold / in-place reorder
+
+soupyc language
+  [x] String indexing: s[i]  — yields a 1-char string (read-only)
+  [x] for v in a..b { }      — range loop (a inclusive, b exclusive)
+  [x] Multi-line strings (triple-quote """...""")  — v0.7.3 (capped at 47
+      chars like all strings until heap-backed strings land)
+  [x] include "file.sc"  — import another script from disk (parsed inline
+      via the VFS; functions register globally, top-level stmts run in place)
+
+Fun shell commands
+  [x] cal               — ASCII calendar for current month
+  [x] clock             — live digital clock (redraws in place)
+  [x] bounce            — VGA bouncing-ball screensaver (mode 13h, 4 balls w/ trails)
+  [x] wipe              — animated screen clear (two-pass colored sweep)
+  [x] fortune           — random quote from FORTUNE.TXT on disk
+  [x] uname             — print OS name, arch, version (-a for full string)
+  [x] cat               — (hidden) spinning cat, traps input until reboot
+
+────────────────────────────────────────────────────────────────
+TIER 2 — Medium Effort (a weekend each)
+────────────────────────────────────────────────────────────────
+
+Filesystem
+  [x] FAT subdirectory support — directories are "bowls".
+      fat.c walks '/'-separated paths over the FAT16 root + cluster-chain
+      subdirs; fat_mkdir/fat_rmdir/fat_is_dir/fat_exists added; fat_ls and
+      all path calls take an absolute path. Shell: cd, pwd, mkbowl, rmbowl,
+      bowltest; the prompt shows the current bowl. Verified via bowltest.
+  [ ] FAT32 write support (currently read-only)
+  [x] cp / mv / rename commands — `decant` (copy) and `relabel`
+      (move/rename). Copy-into-bowl semantics; advisory rwx checks;
+      staged through a 64 KB buffer (single fat_write, no streaming).
+  [ ] File size limit lifted beyond single cluster chain (already
+      works in theory; needs end-to-end testing with large files)
+  [x] Simple text editor — `jot <file>`, a full-screen nano-like editor
+      (src/editor.c). Arrows/Home/End, insert/delete, Ctrl+S save, Esc
+      quit; 8 KB buffer. Verified: create/edit/save round-trips to disk.
+
+soupyc arrays   — DONE (see soupyc.c N_ARRAY/N_INDEX; demo: ARRAY.SC)
+  [x] let arr = [] / [e1, e2]  — array literal
+  [x] arr[i]                   — indexed read (also nested: arr[i][j])
+  [x] arr[i] = x               — indexed write
+  [x] push(arr, x)             — append
+  [x] pop(arr)                 — remove + return last
+  [x] len(arr)                 — element count
+  [x] arr[i][j] = x            — nested indexed write (any depth)
+  Arrays are a reference type (fixed pool of 24, 48 elems each). Sharing
+  a value shares storage, so functions can mutate a passed-in array.
+
+soupyc file I/O   — DONE (backed by the VFS; demo: FILEIO.SC)
+  [x] open(name [,"w"])      — handle int, or -1 if missing; "w" = write
+  [x] read(handle, n)        — read up to n bytes as a string
+  [x] write(handle, str)     — write string, returns bytes written
+  [x] close(handle)          — flush (write mode) + release
+  [x] eof(handle)            — 1 once all bytes are read
+  Works on disk files and /dev nodes alike (open("/dev/serial","w")).
+  Handles map to VFS nodes; the table is closed between script runs.
+
+Graphics (VGA mode 13h — 320×200, 256 colors)
+  [ ] vga_set_mode13() / vga_set_text_mode()
+  [ ] plot(x, y, color)
+  [ ] draw_line, draw_rect, fill_rect
+  [ ] Colored Mandelbrot renderer (much prettier than ASCII)
+  [ ] Julia set explorer with parameter tuning
+  [ ] Plasma / fire effect demo
+
+PS/2 Mouse
+  [ ] Mouse driver (IRQ 12, port 0x60/0x64)
+  [ ] Cursor rendering in mode 13h
+  [ ] Click events exposed to soupyc via mouse_x() / mouse_y() / mouse_btn()
+
+Multitasking (cooperative, not preemptive)
+  [x] Simple task struct: stack, instruction pointer, state
+  [x] task_yield() — hand off to next task
+  [x] Round-robin scheduler + dead-task reaper
+  [x] keyboard_getchar yields → background tasks keep running
+      while the shell waits for input (try `bgclock` then typing)
+  [x] Shell: ps, kill <id>, bgclock
+  [x] task_sleep(ms), wait-queues (task_block_on / task_wake)
+  [x] All remaining in-tree blocking loops yield (beep, ATA, clock,
+      bounce, cat)
+  [ ] spawn(fn_name) in soupyc — blocked on making the tree-walker
+      reentrant (interpreter state is all file-scope globals; two evals
+      interleaving via task_yield would corrupt each other). Needs a
+      per-invocation context struct first.
+
+────────────────────────────────────────────────────────────────
+TIER 3 — Big Projects (week+ each)
+────────────────────────────────────────────────────────────────
+
+Preemptive multitasking
+  [ ] Timer IRQ switches tasks (PIT IRQ0 at 100 Hz already exists)
+  [ ] TSS for kernel stack switching
+  [ ] Task scheduler: round-robin or simple priority queue
+  [ ] ps command — list running tasks
+  [ ] kill <id> — terminate a task
+
+User mode (ring 3)   — DONE in v0.7.0 (see OS-IFICATION step 3)
+  [x] Set up user-mode GDT segments
+  [x] syscall interface (int 0x80)
+  [x] Basic syscalls: write, read, exit, yield, open, close, sbrk, args (v0.7.1)
+  [ ] Each soupyc script runs in its own ring-3 task (needs per-process
+      page directories first)
+
+ELF loader   — DONE in v0.7.0
+  [x] Parse ELF32 headers from a file on FAT disk
+  [x] Map PT_LOAD segments into memory
+  [x] Jump to entry point in user mode
+  [x] Lets you compile small C programs with a cross-compiler
+      and run them on soupOS directly (user/hello.c, `make user`, `cook`)
+
+Network (RTL8139 — QEMU emulates this)
+  [ ] PCI detect RTL8139 (vendor 0x10EC device 0x8139)
+  [ ] Basic TX / RX ring buffer
+  [ ] ARP, static IPv4
+  [ ] UDP send/receive
+  [ ] Simple DNS lookup
+  [ ] HTTP GET (enough to fetch a page from a local server)
+
+VESA/VBE framebuffer
+  [ ] Query VESA modes via BIOS int 10h (must be done in real mode
+      at boot, before protected mode — add a BIOS trampoline)
+  [ ] Linear framebuffer at arbitrary resolution (e.g. 800×600×32)
+  [ ] Font rendering (bitmapped PSF font)
+  [ ] Proper windowed UI becomes possible
+
+────────────────────────────────────────────────────────────────
+TIER 4 — Unhinged / Hall of Fame
+────────────────────────────────────────────────────────────────
+
+soupyc JIT compiler
+  [ ] Translate soupyc bytecode to x86 machine code at runtime
+  [ ] Emit to an executable page (mprotect equivalent)
+  [ ] Would make the language actually fast enough for real use
+  [ ] Bonus: add a `compile` shell command that outputs a .BIN
+
+TCP/IP stack from scratch
+  [ ] Ethernet → IP → TCP, all hand-rolled
+  [ ] netcat-style command: connect <ip> <port>
+  [ ] Tiny HTTP server: serve files from FAT over the network
+  [ ] IRC client — because why not
+
+Doom port  (actually happening)
+  [x] PLAYPAL palette + TITLEPIC + menu state machine
+  [x] Level load (VERTEXES/LINEDEFS/SEGS/SSECTORS/NODES/SECTORS/THINGS)
+  [x] Automap (TAB toggle)
+  [x] BSP first-person renderer with portal walls
+  [x] Texture compositing (TEXTURE1/TEXTURE2 + PNAMES + patches)
+  [x] Perspective-correct texture mapping
+  [x] Upper/lower texture pegging (default + UNPEGGED flags)
+  [x] Sprite billboards (monsters/decorations visible, sorted far-to-near)
+  [x] Sprite transparency via 0xFF sentinel (palette-index-0 renders correctly)
+  [x] Wall collision (circle-vs-segment with wall-slide)
+  [x] Status bar (STBAR + digit patches + face)
+  [x] COLORMAP diminished lighting (distance attenuation)
+  [x] Per-sector floor/ceiling flats (per-column sector sampling in raycaster)
+  [x] Pickups (health/ammo/armor/keys — scan things near player, bump HUD)
+  [x] Doors + lifts (USE and walk-activated specials)
+  [x] Hitscan pistol (ray through BSP + damage + weapon sprite)
+  [x] Enemy AI (idle → chase → dead, per-type HP, death animation)
+  [x] F_SKY1 → sky texture, scrolls with view angle
+  [x] Sprite portal clipping via per-subsector span snapshots
+  [x] Level exit (linedef specials 11 and 52 — advance to next map)
+  [x] Enemy ranged attacks (imp fireballs as projectile_t, zombie hitscan)
+  [x] Weapon fire animation (PISFB0 muzzle flash for ~5 ticks)
+  [x] Sector specials (damage floors; light blink / flicker effects)
+  [x] Locked doors (check pl_keys bitmask before opening)
+  [x] Player death screen (STFDEAD face or "You Died" pause)
+  [ ] True visplane flats (proper height handling across sectors)
+  [ ] Sound effects (PC speaker beeps per event table)
+
+────────────────────────────────────────────────────────────────
+THE LLM  (aka the funniest possible feature)
+────────────────────────────────────────────────────────────────
+
+The idea: type `ai <prompt>` at the soupOS shell and get an
+actual LLM response — from inside a 32-bit hobby OS.
+
+Obviously we can't run a real LLM in-kernel. Here are three
+approaches ranked from "actually works" to "maximum chaos":
+
+─── OPTION A: Serial Port Bridge (most practical) ───────────────
+
+QEMU can expose the serial port as a PTY or TCP socket instead
+of logging to a file:
+
+  qemu-system-i386 ... -serial pty
+  # or
+  qemu-system-i386 ... -serial tcp:127.0.0.1:4321,server
+
+On the host side, a tiny Python daemon listens on that socket,
+receives the prompt, fires it at Ollama (or the Claude API), and
+streams the response back character by character.
+
+Kernel side:  [DONE — shipped in v0.6.4]
+  [x] UART driver — polled COM2 (0x2F8), bidirectional (serial2_* in
+      serial.c). Probed via the scratch register; IRQ-driven RX is still
+      possible future work but polling+yield is plenty at 38400 baud.
+  [x] `ai_send(prompt)` — writes "<prompt>\n" to COM2 (ai.c)
+  [x] `ai_getc(timeout)` — reads reply bytes until 0x04 (EOT)
+  [x] `ai` shell command: reads args, calls send/recv, prints
+  [x] Response streams in real-time (one char at a time from UART)
+
+This is surprisingly doable. The OS just needs to talk serial;
+all the heavy lifting happens on the host. Latency would be the
+same as any Ollama query.
+
+Makefile target `run-ai` would launch QEMU with the TCP serial
+and auto-start the Python bridge daemon.
+
+─── OPTION B: Tiny Baked-In Markov Brain ────────────────────────
+
+Train a character-level Markov chain (order 4) on soup recipes,
+kernel source code commentary, and BOFH excuses. Bake the
+transition table directly into the kernel binary as a C array.
+
+  [ ] 26^4 = 456,976 states × a few bytes each ≈ ~2 MB table
+  [ ] `markov_generate(seed_str, length)` function
+  [ ] Responds with convincingly soup-flavored nonsense
+  [ ] Fits in a single .c file with a big static array
+  [ ] Totally offline, no network needed
+  [ ] Response quality: absolute garbage (this is the point)
+
+Shell command: `ai <prompt>`
+  soupOS> ai why is the kernel crashing
+  > The broth requires additional simmering. Have you considered
+    reallocating the stack noodles? A page fault at 0x0 indicates
+    insufficient seasoning in the GDT descriptor soup.
+
+─── OPTION C: GGML Micro-Inference (maximum chaos) ─────────────
+
+Run actual neural network inference in kernel mode, in 32-bit
+protected mode, with no FPU (just integer math).
+
+  [ ] Port llama.c / ggml to freestanding 32-bit C
+  [ ] Use 1-bit or 2-bit quantization to fit a model in ~8 MB
+  [ ] Store weights as a file on the FAT disk (BRAIN.BIN)
+  [ ] Load into heap at boot, run inference in-kernel
+  [ ] No OS overhead — inferring at near-bare-metal speed
+
+Model candidate: a tiny GPT-2 variant (~10M params, INT4) or
+a purpose-trained 1M-param "soupOS assistant" fine-tuned on
+the kernel source and soup recipes.
+
+Estimated RAM: 8–16 MB for weights + ~2 MB for activations.
+The VM boots with 128 MB so this is technically feasible.
+Tokens per second: probably 0.2–2 tok/s on a modern host.
+Vibes: 11/10.
+
+─── RECOMMENDED PLAN ────────────────────────────────────────────
+
+  Phase 1 — Ship Option A (serial bridge). Fast to implement,
+            gives a real LLM, great demo.
+  Phase 2 — Add Option B as a fallback for when the bridge is
+            not running ("offline mode"). The garbage output is
+            its own reward.
+  Phase 3 — Option C for the README hall of fame entry.
+
+soupyc integration (all options):
+  [x] ai(prompt)  — soupyc builtin that calls the AI and returns
+                    the response as a string (v0.6.4; capped at 47 chars)
+  [ ] Allows writing soupyc scripts that use the LLM as a
+      subroutine, which is the most unhinged use of a hobby OS
+      scripting language imaginable.
+
+  Example:
+    let question = "explain paging in one sentence"
+    let answer = ai(question)
+    pour answer
+    beep 440 100
+
+────────────────────────────────────────────────────────────────
+KNOWN BUGS / DEBT
+────────────────────────────────────────────────────────────────
+
+  [x] RECIPE.TXT shows "FAT16 read-only" — update the string now
+      that write is supported
+      (already fixed in `recipe` cmd; also bumped README.TXT to v0.4.0)
+  [x] Tab completion only matches filenames, not command names
+  [ ] shell_tab_complete rescans FAT on every Tab press — cache it
+  [x] soupyc recursion depth raised from 8 to 16 (MAX_CALL_DEPTH); the
+      call_args table is sized off it, so it grew automatically
+  [x] beep busy-waited with pause; now calls task_sleep(ms)
+  [ ] FAT write does not handle fragmented free clusters correctly
+      when the disk is nearly full
+  [ ] VGA scrolling is slow (copies entire buffer on newline)
+  [ ] No bounds check on prompt_row when screen is full and
+      tab-completion redraws the prompt

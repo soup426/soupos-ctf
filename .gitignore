@@ -1,0 +1,9 @@
+# Build output
+*.o
+*.elf
+*.iso
+disk.img
+iso/boot/kernel.elf
+
+# Large binary assets (shareware WAD — copy in manually, see `make wad`)
+*.WAD
