@@ -1783,7 +1783,7 @@ static void cmd_cal(void) {
 static void cmd_uname(const char *args) {
     int show_all = args && (args[0] == '-' && args[1] == 'a');
     if (show_all) {
-        vga_puts("soupOS 0.7.3 i686 soup-kernel protected-mode\n");
+        vga_puts("soupOS 0.7.4 i686 soup-kernel protected-mode\n");
     } else {
         vga_puts("soupOS\n");
     }
@@ -1965,7 +1965,7 @@ static void cmd_bounce(void) {
 
 static void cmd_recipe(void) {
     vga_set_color(VGA_LIGHT_CYAN, VGA_BLACK);
-    vga_puts("  soupOS  v0.7.3\n");
+    vga_puts("  soupOS  v0.7.4\n");
     vga_set_color(VGA_LIGHT_GREY, VGA_BLACK);
     vga_puts("  Architecture:  i686 (IA-32, protected mode)\n");
     vga_puts("  Kernel base:   0x00100000\n");

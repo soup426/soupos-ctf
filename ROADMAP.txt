@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.7.3
+Current version: v0.7.4
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,44 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.7.4  (2026-08-25)  — PREEMPTIVE MULTITASKING + GCC 16 BUILD FIX
+  The scheduler stops being cooperative-only: IRQ0 now switches tasks.
+  (The kernel side of this had been sitting unreleased in the tree since
+  2026-06-16; this entry documents it and makes it build again.)
+  - Timer-driven preemption. task.c gains `preempt_armed` + `sched_locked`,
+    `sched_preempt()`, and `preempt_disable/enable`. irq_handler calls
+    sched_preempt() after the IRQ0 EOI with interrupts still off; it switches
+    only when preemption is armed, the scheduler is not already locked, and
+    more than one task exists. kernel_main arms it after the cooperative
+    self-test. (src/task.c, src/task.h, src/isr.c, src/kernel.c)
+  - sched_locked balances *across* a context switch: whoever is switched to
+    runs the matching sched_unlock (after its own task_switch, or via the
+    first-run trampoline task_start), so a running task always observes
+    sched_locked == 0.
+  - heap.c wraps kmalloc/kfree in irq_save/irq_restore — the free list is
+    shared mutable state and a preemption mid-splice would corrupt it.
+  - New shell `spinbg`: a CPU-bound task that never calls task_yield. Under
+    the old scheduler it froze the box for 4 s; now the shell stays live and
+    other tasks keep running. Run `yieldbg` then `spinbg` — the [bg] sleeper
+    holds its exact 30-tick cadence straight through the [spin] window,
+    which can only happen if IRQ0 is switching tasks.
+  - BUILD FIX: added -mgeneral-regs-only to CFLAGS and UCFLAGS. GCC 12+
+    auto-vectorises plain byte loops at -O2; on GCC 16 the TSS-zeroing loop
+    in gdt_init compiled to `pxor xmm0,xmm0`. The kernel never enables SSE
+    (no CR4.OSFXSR / FXSAVE area) and QEMU's default qemu32 CPU does not
+    expose SSE2, so that is an invalid opcode — and with no IDT loaded yet
+    it went #UD -> #GP -> #DF -> triple fault, before the GDT was even
+    installed. The tree had 545 such instructions in the kernel and 83 in
+    each user ELF; the flag takes both to zero. Without it soupOS does not
+    boot on any modern toolchain.
+  - New scripts/smoke-test.sh — headless boot + shell driver (via the QEMU
+    monitor, scripts/qemu_keys.py) that greps the serial log for the marker
+    each subsystem emits. Exits non-zero on the first miss, so it works as
+    a gate. Covers boot, preemption arming, all four ring-3 syscall paths,
+    scheduler interleaving, and "did not panic".
+  Still open: the non-heap subsystems are not preemption-safe yet — see
+  KNOWN BUGS / DEBT.
 
 v0.7.3  (2026-06-16)  — SOUPYC LANGUAGE POLISH
   Three ergonomics/robustness fixes to the soupyc interpreter.
@@ -200,8 +238,12 @@ v0.4.0
   - Pre-changelog baseline (FAT16 r/w, soupyc fn/return, Doom port).
 
 ────────────────────────────────────────────────────────────────
-CURRENT BUG — ENEMY AI BROKEN (investigated 2026-04-19)
+PARKED BUG — DOOM ENEMY AI (investigated 2026-04-19)
 ────────────────────────────────────────────────────────────────
+
+NOT a live bug: the Doom port was parked in doom-disabled/ on 2026-05-20
+and is excluded from the build, so nothing below affects the current
+kernel. Kept as the handover note for whoever re-enables it.
 
 All six Doom gameplay tasks (level exit, enemy ranged attacks, weapon
 flash, sector specials, locked doors, death screen) were implemented in
@@ -421,12 +463,19 @@ Multitasking (cooperative, not preemptive)
 TIER 3 — Big Projects (week+ each)
 ────────────────────────────────────────────────────────────────
 
-Preemptive multitasking
-  [ ] Timer IRQ switches tasks (PIT IRQ0 at 100 Hz already exists)
-  [ ] TSS for kernel stack switching
-  [ ] Task scheduler: round-robin or simple priority queue
-  [ ] ps command — list running tasks
-  [ ] kill <id> — terminate a task
+Preemptive multitasking   — DONE (v0.7.4)
+  [x] Timer IRQ switches tasks (IRQ0 @ 100 Hz -> sched_preempt, armed by
+      kernel_main after the cooperative self-test)
+  [x] TSS for kernel stack switching (landed with ring 3 in v0.7.0)
+  [x] Task scheduler: round-robin over the circular task list
+  [x] ps command — list running tasks
+  [x] kill <id> — terminate a task
+  [x] spinbg — CPU-bound task that never yields, as the proof
+  [ ] Per-task sched_locked. It is currently one global counter shared with
+      preempt_disable(), so a preempt_disable region that yields has its
+      decrement run by whichever task is switched to — the critical section
+      leaks into an unrelated task. Latent (nothing calls preempt_disable
+      today) but it must be fixed before anything does.
 
 User mode (ring 3)   — DONE in v0.7.0 (see OS-IFICATION step 3)
   [x] Set up user-mode GDT segments
@@ -606,6 +655,21 @@ soupyc integration (all options):
 KNOWN BUGS / DEBT
 ────────────────────────────────────────────────────────────────
 
+  [ ] PREEMPTION SAFETY — the big one. v0.7.4 armed IRQ0 preemption but
+      only heap.c was made safe (irq_save around the free list). Every
+      other subsystem with file-scope mutable state is now interruptible
+      at any instruction: fat.c (44 statics), soupyc.c (69), ata.c (9),
+      vga.c (8), plus vfs/users/shell. Two tasks in fat_write, or a
+      background task printing while the shell redraws, are data races.
+      The cooperative design put yields at chosen points; IRQ0 removed
+      that guarantee. Needs either a big-kernel-lock (preempt_disable
+      around driver entry points) or per-subsystem locks.
+  [ ] A ring-3 fault panics and halts the kernel instead of killing the
+      program. Verified: `cook` an ELF containing an invalid opcode and
+      isr.c takes the whole box down (exception 6, cs=0x1b). Ring 3
+      exists precisely so a bad user program cannot do that — the fault
+      handler should check cs & 3 and, for a user fault, tear down the
+      process and return to the shell.
   [x] RECIPE.TXT shows "FAT16 read-only" — update the string now
       that write is supported
       (already fixed in `recipe` cmd; also bumped README.TXT to v0.4.0)

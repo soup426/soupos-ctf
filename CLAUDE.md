@@ -3,7 +3,7 @@
 ## What this is
 
 soupOS is a 32-bit x86 hobby OS written in C and NASM assembly (currently
-**v0.7.3**). It boots via GRUB and runs in protected mode with paging, a
+**v0.7.4**). It boots via GRUB and runs in protected mode with paging, a
 physical/heap allocator, and a cooperative scheduler. On top of that:
 
 - **Filesystem**: FAT16 read/write with subdirectories ("bowls") and a VFS shim
@@ -52,7 +52,30 @@ make distclean && make disk
 make wad
 ```
 
+**Headless smoke test** (the oracle — use this as the gate after any change):
+```bash
+./scripts/smoke-test.sh          # boots, drives the shell, greps serial markers
+KEEP=1 ./scripts/smoke-test.sh   # keep the serial log for inspection
+```
+It boots with `-display none`, types into the guest through the QEMU monitor
+(`scripts/qemu_keys.py`), and checks boot, preemption arming, all four ring-3
+syscall paths, scheduler interleaving, and that nothing panicked. Non-zero exit
+on the first missing marker.
+
 **Requirements:** `gcc` (32-bit multilib), `nasm`, `grub-mkrescue`, `xorriso`, `qemu-system-i386`, `mtools`
+(on Arch/Manjaro: `pacman -S nasm libisoburn mtools` — `xorriso` ships inside `libisoburn`)
+
+> **Do not remove `-mgeneral-regs-only` from `CFLAGS`/`UCFLAGS`.** GCC 12+
+> auto-vectorises ordinary byte loops at `-O2`. The kernel never enables SSE
+> and QEMU's default `qemu32` CPU has no SSE2, so a single emitted `pxor`
+> triple-faults the machine at boot — before the IDT exists, so there is no
+> panic message, just a hang. This bit us on GCC 16 (545 SSE instructions in
+> the kernel, 83 per user ELF). See `ROADMAP.txt` v0.7.4.
+
+**Note:** `make` builds the kernel + ISO but **not** the ring-3 programs, and
+`make disk` is a no-op when `disk.img` already exists. After changing anything
+under `user/`, run `make user` and re-`mcopy` the ELFs (or `rm disk.img &&
+make disk`) — otherwise you are testing the stale copies on the old image.
 
 **QEMU invocation** (from Makefile):
 ```
@@ -97,17 +120,29 @@ src/
   editor.c / editor.h  jot — full-screen text editor (writes 0xB8000 directly)
   soupyc.c          soupyc scripting language interpreter
   str.c             String utilities
-  task.c / task.h   Cooperative scheduler (task_init, spawn, yield, exit)
+  task.c / task.h   Scheduler (task_init, spawn, yield, exit, preemption)
   task_switch.asm   Context switch primitive (callee-saved reg + esp swap)
+scripts/
+  smoke-test.sh     Headless boot + shell-driver test (the gate)
+  qemu_keys.py      Types into a running guest via the QEMU monitor
 ```
 
 ---
 
-## Scheduler (cooperative, ring 0)
+## Scheduler (preemptive, ring 0)
 
-soupOS has a single-ring cooperative scheduler. Tasks run concurrently but
-are never preempted — a task only gives up the CPU when it (or a blocking
-call it makes) voluntarily invokes `task_yield()`.
+soupOS has a single-ring round-robin scheduler. A task gives up the CPU
+either voluntarily — it (or a blocking call it makes) invokes `task_yield()`
+— or involuntarily, when the 100 Hz timer IRQ preempts it (v0.7.4).
+
+> **Preemption safety is incomplete.** Only `heap.c` guards its shared state
+> (`irq_save`/`irq_restore` around the free list). `fat.c`, `soupyc.c`,
+> `ata.c`, `vga.c`, `vfs.c`, `users.c` and `shell.c` all keep file-scope
+> mutable state and are now interruptible at any instruction. Two tasks
+> inside `fat_write`, or a background task printing while the shell redraws,
+> are races. If you add a background task that touches a driver, wrap the
+> critical region — and see the note on `preempt_disable` below before you
+> reach for it. Tracked in `ROADMAP.txt` → KNOWN BUGS / DEBT.
 
 ### Model
 - `task_init()` converts the booting kernel thread into task 0 ("kernel").
@@ -119,6 +154,27 @@ call it makes) voluntarily invokes `task_yield()`.
   `task_switch(&prev->esp, next->esp)`. No-op if no other task is ready.
 - `task_exit()` marks current DEAD and yield-hlts forever. Reached
   automatically via the seeded return address when an entry function returns.
+
+### Preemption (v0.7.4)
+- `task_preempt_enable()` arms it. `kernel_main` calls it once, after the
+  cooperative self-test and before `shell_run()`.
+- `irq_handler` (`isr.c`) calls `sched_preempt()` on IRQ0 **after** sending
+  the EOI (so the PIC is ready for the next tick) and with interrupts still
+  disabled. `sched_preempt` switches only if preemption is armed, the
+  scheduler is not already locked, and more than one task exists.
+- `sched_locked` is the scheduler's own lock. `task_yield` takes it across
+  the whole pick+switch, so a tick landing mid-switch sees it non-zero and
+  skips. It balances *across* the switch: whoever is switched to runs the
+  matching `sched_unlock` — after its own `task_switch`, or via the
+  first-run trampoline `task_start` — so a running task always sees 0.
+- ⚠️ `preempt_disable()`/`preempt_enable()` increment that **same global**
+  counter. If a `preempt_disable` region ever yields, the decrement is run
+  by whichever task is switched to, leaking the critical section into an
+  unrelated task. Nothing calls it today, so this is latent — but making
+  `sched_locked` per-task is a prerequisite for using it.
+- Demo/proof: `yieldbg` (sleeper, `[bg]` markers every 300 ms) plus `spinbg`
+  (busy loop, never yields, `[spin]` markers). The `[bg]` cadence is
+  unbroken through the `[spin]` window only if IRQ0 is switching tasks.
 
 ### Context switch (src/task_switch.asm)
 Saves only the callee-saved regs (EBX/ESI/EDI/EBP) — caller-saved regs are
@@ -176,10 +232,11 @@ uint32_t task_count(void);
   corner of the VGA text buffer. Proves tasks keep running while you type.
 
 ### OS-ification status
-Steps 1 (cooperative scheduler) and 2 (VFS shim) of `ROADMAP.txt` →
-"OS-IFICATION PATH" are complete. `task_sleep`, the wait-queue
-primitives, and the VFS layer are all live. Next up is step 3
-(ELF loader + ring 3 + syscalls) or step 4 (better panic + log ring).
+All four steps of `ROADMAP.txt` → "OS-IFICATION PATH" are complete
+(scheduler, VFS shim, ring 3 + syscalls + ELF, panic + klog), and v0.7.4
+added timer preemption on top. What remains is depth: making the drivers
+preemption-safe, and per-process page directories so more than one user
+program can exist at a time.
 
 ---
 
