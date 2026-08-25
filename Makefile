@@ -3,8 +3,15 @@ ISO     = soupOS.iso
 DISK    = disk.img
 
 CC      = gcc
+# -mgeneral-regs-only keeps GCC out of the SSE/MMX/x87 register files. Without
+# it, GCC 12+ auto-vectorises ordinary byte loops at -O2 (e.g. zeroing the TSS
+# in gdt_init) into `pxor xmm0,xmm0` and friends. The kernel never enables SSE
+# (no CR4.OSFXSR / FXSAVE area), and QEMU's default `qemu32` CPU does not even
+# expose SSE2 — so the first such instruction is an invalid opcode, which with
+# no IDT loaded yet triple-faults the machine before the GDT is installed.
 CFLAGS  = -m32 -std=gnu99 -ffreestanding -fno-stack-protector -fno-builtin \
           -nostdlib -Wall -Wextra -Iinclude -Isrc \
+          -mgeneral-regs-only \
           -O2 -g -fno-omit-frame-pointer
 
 AS      = nasm
@@ -23,7 +30,7 @@ OBJS    = $(OBJ_C) $(OBJ_ASM)
 # Ring-3 user programs (freestanding, linked high at USER_BASE; see user/user.ld).
 # Each links the user runtime (user/ulib.c) which provides _start + syscalls.
 UCFLAGS  = -m32 -ffreestanding -fno-pie -no-pie -fno-stack-protector \
-           -nostdlib -Isrc -O2
+           -nostdlib -Isrc -mgeneral-regs-only -O2
 USER_ELFS = user/hello.elf user/cat.elf user/echo.elf user/systest.elf user/spin.elf
 
 .PHONY: all clean distclean run run-ai iso disk user
