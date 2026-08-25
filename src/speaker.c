@@ -1,4 +1,4 @@
-/* speaker.c — PC speaker driver for soupOS
+/* speaker.c - PC speaker driver for soupOS
  *
  * Uses PIT channel 2 as a tone generator:
  *   Port 0x43 (PIT command): 0xB6 = channel 2, mode 3 (square wave), binary

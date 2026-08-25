@@ -1,8 +1,8 @@
 #include "pci.h"
 
 /* PCI configuration space is accessed via two 32-bit I/O ports:
-   0xCF8 — CONFIG_ADDRESS
-   0xCFC — CONFIG_DATA
+   0xCF8 - CONFIG_ADDRESS
+   0xCFC - CONFIG_DATA
 
    Address format (32-bit):
      bit 31     : enable bit (must be 1)

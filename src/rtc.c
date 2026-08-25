@@ -1,8 +1,8 @@
 #include "rtc.h"
 
 /* CMOS/RTC is accessed via two I/O ports:
-   0x70 — index register (bit 7 = NMI disable while reading)
-   0x71 — data register */
+   0x70 - index register (bit 7 = NMI disable while reading)
+   0x71 - data register */
 
 static inline void outb(uint16_t port, uint8_t val) {
     __asm__ volatile ("outb %0, %1" : : "a"(val), "Nd"(port));

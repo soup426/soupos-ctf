@@ -1,4 +1,4 @@
-/* spin.c — demonstrates cooperative sys_yield() from ring 3.
+/* spin.c - demonstrates cooperative sys_yield() from ring 3.
  *
  * Runs for ~3 seconds of wall-clock time (measured via sys_ticks), and on
  * every iteration calls sys_yield() so background kernel tasks keep running.
@@ -6,7 +6,7 @@
  *
  * Verify headless: start the `yieldbg` background task in the shell, then
  *   cook spin.elf
- * and watch the serial log — [bg] (kernel task) and [u] (this program)
+ * and watch the serial log - [bg] (kernel task) and [u] (this program)
  * markers interleave, which only happens if SYS_YIELD reaches the scheduler.
  */
 #include "ulib.h"

@@ -103,7 +103,7 @@ void vga_putchar(char c) {
             vga_row--;
             vga_col = VGA_WIDTH - 1;
         } else {
-            /* At top-left — nothing to erase */
+            /* At top-left - nothing to erase */
             update_hw_cursor();
             return;
         }

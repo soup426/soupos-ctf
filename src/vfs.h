@@ -1,19 +1,19 @@
 #pragma once
 #include <stdint.h>
 
-/* vfs.h — thin virtual filesystem shim for soupOS.
+/* vfs.h - thin virtual filesystem shim for soupOS.
  *
  * The VFS gives every consumer one uniform open/read/write/seek/close API
  * regardless of what is behind a path:
  *
- *   - regular files          → the FAT16 backend (fat.c)
- *   - /dev/null, /dev/zero   → in-kernel pseudo devices
- *   - /dev/serial            → COM1 UART (write-only sink)
- *   - /dev/kbd               → PS/2 keyboard (read-only stream)
+ *   - regular files          -> the FAT16 backend (fat.c)
+ *   - /dev/null, /dev/zero   -> in-kernel pseudo devices
+ *   - /dev/serial            -> COM1 UART (write-only sink)
+ *   - /dev/kbd               -> PS/2 keyboard (read-only stream)
  *
  * Each backend supplies a vfs_ops_t table; vfs_open() picks the backend by
  * path and the rest of the API just dispatches through it. fat_* keeps
- * working untouched — the VFS is an additive layer, not a rewrite.
+ * working untouched - the VFS is an additive layer, not a rewrite.
  */
 
 /* Open flags (access mode in the low two bits). */
@@ -22,7 +22,7 @@
 #define VFS_RDWR    0x03
 #define VFS_CREATE  0x04        /* create/truncate a FAT file on open   */
 
-/* seek whence — values match FAT_SEEK_* on purpose. */
+/* seek whence - values match FAT_SEEK_* on purpose. */
 #define VFS_SEEK_SET 0
 #define VFS_SEEK_CUR 1
 #define VFS_SEEK_END 2

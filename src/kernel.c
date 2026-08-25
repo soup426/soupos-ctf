@@ -19,7 +19,7 @@
 #include "ai.h"
 #include "usermode.h"
 
-/* Read a byte from an I/O port — used for the PIC-mask sanity check. */
+/* Read a byte from an I/O port - used for the PIC-mask sanity check. */
 static inline uint8_t inb(uint16_t port) {
     uint8_t r; __asm__ volatile ("inb %1, %0" : "=a"(r) : "Nd"(port)); return r;
 }
@@ -55,7 +55,7 @@ void kernel_main(uint32_t mb_magic, uint32_t mb_info) {
     if (pmm_total_pages() == 0) {
         /* No memory map from bootloader, or all regions were reserved.
          * Enabling paging now would page-fault before we can recover. */
-        klog_puts("[boot] FATAL: PMM found 0 usable pages — halting\n");
+        klog_puts("[boot] FATAL: PMM found 0 usable pages - halting\n");
         vga_set_color(VGA_WHITE, VGA_RED);
         vga_puts("\n  *** BOOT PANIC ***\n  PMM: no usable RAM "
                  "(missing multiboot memory map)\n  System halted.\n");
@@ -81,12 +81,12 @@ void kernel_main(uint32_t mb_magic, uint32_t mb_info) {
     if (fat_ok) klog_puts("[boot] FAT ok\n");
     else if (ata_ok) klog_puts("[boot] FAT: not a FAT16/32 volume\n");
 
-    /* VFS shim — uniform open/read/write over FAT files + /dev nodes.
+    /* VFS shim - uniform open/read/write over FAT files + /dev nodes.
      * Safe to init even without a disk: the /dev backends still work. */
     vfs_init();
     klog_puts("[boot] VFS ok\n");
 
-    /* Kitchen staff — loads /etc/kitchen, seeding a default headchef. */
+    /* Kitchen staff - loads /etc/kitchen, seeding a default headchef. */
     users_init();
     klog_puts("[boot] users ok\n");
 
@@ -133,31 +133,31 @@ void kernel_main(uint32_t mb_magic, uint32_t mb_info) {
     vga_puts("[OK] 8259 PIC remapped (IRQs -> vectors 32-47)\n");
     vga_puts("[OK] Timer running at 100 Hz (IRQ0)\n");
     vga_puts("[OK] Keyboard driver ready (IRQ1)\n");
-    vga_printf("[OK] PMM ready     — %u KB free / %u KB total\n",
+    vga_printf("[OK] PMM ready     - %u KB free / %u KB total\n",
                pmm_free_kb(), pmm_total_kb());
-    vga_printf("[OK] Paging on     — %u MB identity-mapped\n",
+    vga_printf("[OK] Paging on     - %u MB identity-mapped\n",
                pmm_total_kb() / 1024);
-    vga_printf("[OK] Heap ready    — %u KB\n",
+    vga_printf("[OK] Heap ready    - %u KB\n",
                heap_total_bytes() / 1024);
 
     if (ata_ok) {
-        vga_printf("[OK] ATA drive     — %u MB\n",
+        vga_printf("[OK] ATA drive     - %u MB\n",
                    ata_total_sectors() / 2048);
         if (fat_ok)
-            vga_printf("[OK] FAT%d volume   — %s\n",
+            vga_printf("[OK] FAT%d volume   - %s\n",
                        fat_get_type(), fat_label());
         else
             vga_puts("[--] No FAT filesystem on primary master\n");
     } else {
         vga_puts("[--] No ATA drive detected\n");
     }
-    vga_puts("[OK] VFS ready     — files + /dev/{null,zero,serial,kbd}\n");
-    vga_puts("[OK] Kernel log    — ring buffer + serial mirror (see: dmesg)\n");
+    vga_puts("[OK] VFS ready     - files + /dev/{null,zero,serial,kbd}\n");
+    vga_puts("[OK] Kernel log    - ring buffer + serial mirror (see: dmesg)\n");
 
     /* ---- Scheduler bring-up ---- */
     task_init();
     klog_puts("[boot] scheduler ok (kernel is task 0)\n");
-    vga_printf("[OK] Scheduler ok  — kernel is task %u (%s)\n",
+    vga_printf("[OK] Scheduler ok  - kernel is task %u (%s)\n",
                task_current()->id, task_current()->name);
 
     vga_puts("\n[boot] scheduler self-test:\n");

@@ -1,5 +1,5 @@
 #pragma once
-/* doom_libc.h — declarations for the C library shim used by the Doom port.
+/* doom_libc.h - declarations for the C library shim used by the Doom port.
  *
  * Doom source files should NOT include <stdio.h> etc. directly.  Instead
  * they include the thin wrappers in src/stdio.h, src/stdlib.h, etc. which

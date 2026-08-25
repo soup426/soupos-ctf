@@ -36,7 +36,7 @@ void idt_set_gate(uint8_t num, uint32_t handler, uint16_t sel, uint8_t flags) {
     idt[num].flags     = flags;
 }
 
-/* Remap the 8259 PIC so IRQs 0-15 → vectors 32-47 (above CPU exceptions) */
+/* Remap the 8259 PIC so IRQs 0-15 -> vectors 32-47 (above CPU exceptions) */
 static void pic_remap(void) {
     /* Save masks */
     uint8_t mask1 = inb(0x21);
@@ -47,8 +47,8 @@ static void pic_remap(void) {
     outb(0xA0, 0x11);
 
     /* ICW2: vector offsets */
-    outb(0x21, 0x20);   /* master: IRQ0 → vector 32 */
-    outb(0xA1, 0x28);   /* slave:  IRQ8 → vector 40 */
+    outb(0x21, 0x20);   /* master: IRQ0 -> vector 32 */
+    outb(0xA1, 0x28);   /* slave:  IRQ8 -> vector 40 */
 
     /* ICW3: cascade wiring */
     outb(0x21, 0x04);   /* master has slave on IRQ2 */
@@ -58,7 +58,7 @@ static void pic_remap(void) {
     outb(0x21, 0x01);
     outb(0xA1, 0x01);
 
-    /* Restore masks, but force-unmask IRQ0 (timer) and IRQ1 (keyboard) —
+    /* Restore masks, but force-unmask IRQ0 (timer) and IRQ1 (keyboard) -
        GRUB may have left them masked and we need them live */
     outb(0x21, mask1 & 0xFC);  /* clear bits 0 and 1 = unmask IRQ0, IRQ1 */
     outb(0xA1, mask2);

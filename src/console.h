@@ -1,16 +1,16 @@
 #pragma once
 
-/* console.h — serial console.
+/* console.h - serial console.
  *
  * Lets soupOS be driven over COM1 with no PS/2 keyboard and no VGA window,
  * which is what makes it hostable behind a raw TCP socket (`nc host port`).
  *
  * Two halves, independently switchable:
- *   input  — bytes arriving on COM1 are translated from terminal conventions
+ *   input  - bytes arriving on COM1 are translated from terminal conventions
  *            (CR, DEL, ANSI arrow/Home/End escapes) into the same codes the
  *            PS/2 driver produces, then injected into the keyboard queue.
  *            Both input paths stay live, so the QEMU window still works.
- *   output — every character written through vga_putchar is mirrored to COM1,
+ *   output - every character written through vga_putchar is mirrored to COM1,
  *            with LF expanded to CRLF and backspace expanded to "\b \b" so a
  *            real terminal erases the way the VGA text buffer does.
  *
@@ -18,7 +18,7 @@
  * sees; without it a socket-attached client gets a prompt it cannot read.
  *
  * Not mirrored: anything that writes the 0xB8000 cell buffer directly rather
- * than going through vga_putchar — `jot` and the mode-13h demos (bounce,
+ * than going through vga_putchar - `jot` and the mode-13h demos (bounce,
  * cat). Those remain VGA-only by nature.
  */
 

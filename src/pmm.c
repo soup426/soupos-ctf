@@ -9,7 +9,7 @@ static uint32_t bitmap[MAX_PAGES / 32];   /* 32 KB in BSS */
 static uint32_t total_pages_ = 0;
 static uint32_t used_pages_  = 0;
 
-/* Provided by linker.ld — address immediately after the kernel image */
+/* Provided by linker.ld - address immediately after the kernel image */
 extern char kernel_end;
 
 static void set_used(uint32_t p) { bitmap[p / 32] |=  (1u << (p % 32)); }
@@ -24,7 +24,7 @@ void pmm_init(uint32_t mb_info_addr) {
         bitmap[i] = 0xFFFFFFFF;
 
     if (!(mb->flags & (1 << 6)))
-        return;   /* no memory map from bootloader — bail */
+        return;   /* no memory map from bootloader - bail */
 
     uint32_t mmap_end = mb->mmap_addr + mb->mmap_length;
     multiboot_mmap_t *e = (multiboot_mmap_t *)(uintptr_t)mb->mmap_addr;

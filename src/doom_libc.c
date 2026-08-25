@@ -1,4 +1,4 @@
-/* doom_libc.c — C standard library shim for soupOS / Doom port
+/* doom_libc.c - C standard library shim for soupOS / Doom port
  *
  * Provides the hosted-C functions that Doom expects, wired to kernel
  * facilities (heap, FAT file handles, VGA console, timer).
@@ -19,11 +19,11 @@
 /* ── errno ─────────────────────────────────────────────────────────────── */
 int errno = 0;
 
-/* ── kvsnprintf — format-string engine ─────────────────────────────────── */
+/* ── kvsnprintf - format-string engine ─────────────────────────────────── */
 /*
  * Writes at most `size` bytes (including the terminating '\0') to buf.
  * Returns the number of characters that would have been written (not
- * counting '\0') had size been large enough — i.e. the POSIX snprintf
+ * counting '\0') had size been large enough - i.e. the POSIX snprintf
  * return convention.
  *
  * Supported:  %s %c %d %i %u %x %X %p %% %ld %lu %lx %lX
@@ -169,7 +169,7 @@ int kvsnprintf(char *buf, uint32_t size, const char *fmt, va_list ap) {
 }
 
 int kvsprintf(char *buf, const char *fmt, va_list ap) {
-    /* Unbounded — caller must ensure buf is large enough */
+    /* Unbounded - caller must ensure buf is large enough */
     return kvsnprintf(buf, 0x7FFFFFFFu, fmt, ap);
 }
 
@@ -306,7 +306,7 @@ void *doom_calloc (uint32_t n, uint32_t size)  { return kcalloc(n, size);  }
 void doom_exit(int code) {
     (void)code;
     vga_set_color(VGA_LIGHT_RED, VGA_BLACK);
-    vga_puts("\n[DOOM] exit() called — system halted.\n");
+    vga_puts("\n[DOOM] exit() called - system halted.\n");
     vga_set_color(VGA_LIGHT_GREY, VGA_BLACK);
     __asm__ volatile ("cli; hlt");
     for (;;) {}
@@ -359,7 +359,7 @@ void doom_srand(unsigned s)   { rand_state = s; }
 /* NULL-returning getenv */
 char *doom_getenv(const char *n) { (void)n; return (char *)0; }
 
-/* system() — always fails */
+/* system() - always fails */
 int doom_system(const char *cmd) { (void)cmd; return -1; }
 
 /* ── time ──────────────────────────────────────────────────────────────── */
@@ -410,7 +410,7 @@ char *doom_strlwr(char *s) {
     return s;
 }
 
-/* strrchr — find last occurrence of c in s */
+/* strrchr - find last occurrence of c in s */
 char *doom_strrchr(const char *s, int c) {
     const char *last = (char *)0;
     for (; *s; s++) if (*s == (char)c) last = s;

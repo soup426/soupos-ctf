@@ -1,5 +1,5 @@
 #pragma once
-/* string.h — hosted-C shim for the Doom port.
+/* string.h - hosted-C shim for the Doom port.
  * Re-exports everything from str.h and adds the extras in doom_libc. */
 
 #include "str.h"

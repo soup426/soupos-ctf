@@ -1,5 +1,5 @@
 #pragma once
-/* stdlib.h — hosted-C shim for the Doom port.
+/* stdlib.h - hosted-C shim for the Doom port.
  * Maps the standard stdlib API to doom_libc equivalents. */
 
 #include "doom_libc.h"

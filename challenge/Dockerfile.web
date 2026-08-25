@@ -1,0 +1,30 @@
+# soupOS — CTFd-ployer `web` challenge image (browser-based VM console).
+#
+# Players click Start Instance, open the HTTPS subdomain, and get soupOS's
+# actual VGA screen in the browser via noVNC. Unlike the serial/tcp variant
+# this renders everything the OS draws -- the boot banner in colour, the `jot`
+# editor, and the mode-13h demos -- because it is the real framebuffer rather
+# than a character stream.
+#
+# Build from the repo root (ISO and disk image must exist):
+#   make && make disk
+#   docker build -f challenge/Dockerfile.web -t soupos-web .
+FROM debian:bookworm-slim
+
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends \
+        qemu-system-x86 novnc websockify ca-certificates \
+ && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /opt/soupos
+COPY soupOS.iso disk.img /opt/soupos/
+COPY challenge/start-web.sh /usr/local/bin/start-web
+# Auto-connect landing page, so players are not shown noVNC's connect dialog.
+COPY challenge/index.html /usr/share/novnc/index.html
+RUN chmod +x /usr/local/bin/start-web
+
+RUN useradd -m -u 1000 soupos
+USER soupos
+
+EXPOSE 8080
+CMD ["/usr/local/bin/start-web"]

@@ -3,7 +3,7 @@
 #include "task.h"
 #include "console.h"
 
-/* PS/2 scancodes set 1 → ASCII, unshifted */
+/* PS/2 scancodes set 1 -> ASCII, unshifted */
 static const char scancode_table[128] = {
     0,   27,  '1', '2', '3', '4', '5', '6', '7', '8',
     '9', '0', '-', '=', '\b', '\t',
@@ -41,7 +41,7 @@ static const char scancode_shift_table[128] = {
     0, 0, 0, 0, 0, 0, 0, 0,
 };
 
-/* Ring buffer — stores int so KEY_* values (>= 256) fit cleanly */
+/* Ring buffer - stores int so KEY_* values (>= 256) fit cleanly */
 #define KB_BUF_SIZE 256
 static int      kb_buf[KB_BUF_SIZE];
 static uint32_t kb_read  = 0;
@@ -51,7 +51,7 @@ static int shift_held = 0;
 static int ctrl_held  = 0;
 static int e0_prefix  = 0;   /* set when 0xE0 escape byte is received */
 
-/* Live key-state table — 1 = currently pressed, indexed by set-1 scancode.
+/* Live key-state table - 1 = currently pressed, indexed by set-1 scancode.
  * Extended (0xE0-prefixed) keys use index 0x80+ (e0_sc | 0x80). */
 #define KEY_STATE_SIZE 256
 static uint8_t key_state[KEY_STATE_SIZE];
@@ -124,7 +124,7 @@ static void keyboard_irq_handler(registers_t *regs) {
 
     char c = shift_held ? scancode_shift_table[sc] : scancode_table[sc];
     if (c) {
-        /* Ctrl+letter → ASCII control char (Ctrl+A=1 .. Ctrl+Z=26).
+        /* Ctrl+letter -> ASCII control char (Ctrl+A=1 .. Ctrl+Z=26).
          * Skip 0x08/0x09/0x0A/0x0D so backspace/tab/enter still work normally. */
         if (ctrl_held && ((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z'))) {
             int ctl = c & 0x1F;

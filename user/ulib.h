@@ -1,4 +1,4 @@
-/* ulib.h — tiny user-space runtime for soupOS ring-3 programs.
+/* ulib.h - tiny user-space runtime for soupOS ring-3 programs.
  *
  * No libc. A program just defines `int main(void)`; ulib provides _start
  * (which calls main and then exits with its return value) plus thin wrappers

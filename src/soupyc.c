@@ -1,4 +1,4 @@
-/* soupyc — scripting language for soupOS
+/* soupyc - scripting language for soupOS
  *
  * Syntax:
  *   let x = expr              declare variable (always new binding)
@@ -23,18 +23,18 @@
  * Built-in functions (expressions):
  *   len(s)  abs(n)  min(a,b)  max(a,b)  rand()  time()
  *   int(x)  str(x)  chr(n)  ord(s)  substr(s,start,n)  upper(s)  lower(s)
- *   contains(s,sub)  find(s,sub)             — substring test / index (-1)
- *   push(arr,x)  pop(arr)  len(arr)          — array operations
- *   sum(arr)  reverse(arr)  sort(arr)        — fold / in-place reorder
+ *   contains(s,sub)  find(s,sub)             - substring test / index (-1)
+ *   push(arr,x)  pop(arr)  len(arr)          - array operations
+ *   sum(arr)  reverse(arr)  sort(arr)        - fold / in-place reorder
  *
- * Arrays (reference type — sharing a value shares the storage):
+ * Arrays (reference type - sharing a value shares the storage):
  *   let a = [1, 2, 3]         array literal ([] is the empty array)
  *   a[0]                      indexing (expression)
  *   a[1] = 9                  indexed assignment
  *   a[i][j] = x               nested indexed assignment (any depth)
  * String indexing: s[i] yields a 1-character string (read-only).
  *
- * File I/O (via the VFS — works on disk files and /dev nodes):
+ * File I/O (via the VFS - works on disk files and /dev nodes):
  *   let f = open("LOG.TXT", "w")   open for write ("w"); omit arg = read
  *   write(f, "text")               write string, returns bytes written
  *   read(f, n)                     read up to n bytes, returns a string
@@ -85,14 +85,14 @@ enum {
 enum {
     N_NUM, N_STR, N_VAR,
     N_UNARY, N_BINOP,
-    N_ASSIGN,       /* ival=1 → let (always new binding), ival=0 → plain */
+    N_ASSIGN,       /* ival=1 -> let (always new binding), ival=0 -> plain */
     N_IF, N_WHILE,
     N_POUR, N_BREAK, N_INPUT,
     N_FUNC_DEF,     /* ival = index into funcs[] */
     N_CALL,         /* sval = name, left = first arg (args chained via next) */
     N_RETURN,       /* body = return expression (or NULL) */
-    N_BEEP,         /* left = freq expr, right = ms expr (or NULL → 200ms) */
-    N_ARRAY,        /* array literal — elements chained off left via next  */
+    N_BEEP,         /* left = freq expr, right = ms expr (or NULL -> 200ms) */
+    N_ARRAY,        /* array literal - elements chained off left via next  */
     N_INDEX,        /* left = array/string expr, right = index expr        */
     N_INDEX_SET,    /* left = array expr, right = index, body = value       */
     N_FOR,          /* sval = loop var, left = start, right = end, body     */
@@ -100,7 +100,7 @@ enum {
 };
 
 /* ============================================================
- * Node pool  (static — reset between script runs)
+ * Node pool  (static - reset between script runs)
  * ============================================================ */
 #define SVAL_LEN   48
 #define POOL_SIZE 512
@@ -141,8 +141,8 @@ static val_t mkaval(int handle)    { val_t r; r.type=VAL_ARR; r.ival=handle; r.s
  * Arrays
  * ------------------------------------------------------------
  * Arrays are reference types: a val_t of type VAL_ARR carries a
- * handle (index into arrays[]), so copying the value — assignment,
- * passing to a function — shares the same underlying storage. The
+ * handle (index into arrays[]), so copying the value - assignment,
+ * passing to a function - shares the same underlying storage. The
  * pool is fixed and reset between script runs; arrays are never
  * freed mid-run, which is fine for soupyc's bounded programs.
  * ============================================================ */
@@ -182,7 +182,7 @@ static int arr_valid(int h) {
 static struct { char name[32]; val_t val; } vars[MAX_VARS];
 static int nvar;
 
-/* Search backwards — most recent binding wins (inner scope first) */
+/* Search backwards - most recent binding wins (inner scope first) */
 static val_t *var_find(const char *n) {
     for (int i = nvar - 1; i >= 0; i--)
         if (strcmp(vars[i].name, n) == 0) return &vars[i].val;
@@ -227,7 +227,7 @@ static int    nfunc;
 #define MAX_CALL_DEPTH 16
 static int   scope_stack[MAX_CALL_DEPTH];
 static int   call_depth;
-/* Pre-allocated argument slots — one row per call depth level.
+/* Pre-allocated argument slots - one row per call depth level.
  * Keeping these static removes ~448 bytes from every eval_node() stack frame,
  * which is the main cause of stack overflow during deep recursion. */
 static val_t call_args[MAX_CALL_DEPTH][MAX_PARAMS];
@@ -263,7 +263,7 @@ static const char *src;
 static int         src_pos;
 static int         cur_line;
 
-/* include nesting guard — bounds recursion and the kmalloc'd buffer stack */
+/* include nesting guard - bounds recursion and the kmalloc'd buffer stack */
 #define MAX_INCLUDE_DEPTH 4
 static int inc_depth;
 
@@ -447,7 +447,7 @@ static node_t *parse_args(void) {
     return first;
 }
 
-/* parse_atom — a single primary term, without trailing [] indexing. */
+/* parse_atom - a single primary term, without trailing [] indexing. */
 static node_t *parse_atom(void) {
     if (tok.type == TK_NUM) {
         node_t *n = new_node(N_NUM); if (!n) return (void *)0;
@@ -507,7 +507,7 @@ static node_t *parse_atom(void) {
     return (void *)0;
 }
 
-/* parse_primary — an atom followed by zero or more [] index operations,
+/* parse_primary - an atom followed by zero or more [] index operations,
  * so `arr[i]`, `arr[i][j]` and `f()[k]` all parse. */
 static node_t *parse_primary(void) {
     node_t *base = parse_atom();
@@ -582,7 +582,7 @@ static node_t *parse_logical(void) {
 static node_t *parse_expr(void) { return parse_logical(); }
 
 static node_t *parse_stmt(void) {
-    /* include "file.sc" — parse another script's statements inline. Function
+    /* include "file.sc" - parse another script's statements inline. Function
      * definitions in the included file register into the global table; its
      * top-level statements run where the include appears. */
     if (tok.type == TK_INCLUDE) {
@@ -673,7 +673,7 @@ static node_t *parse_stmt(void) {
         consume();
         node_t *n = new_node(N_BEEP); if (!n) return (void *)0;
         n->left = parse_expr(); if (err_flag) return (void *)0;
-        /* Optional ms argument — present if next token starts an expression */
+        /* Optional ms argument - present if next token starts an expression */
         if (tok.type==TK_NUM || tok.type==TK_IDENT || tok.type==TK_LPAREN ||
             tok.type==TK_MINUS) {
             n->right = parse_expr(); if (err_flag) return (void *)0;
@@ -764,7 +764,7 @@ static node_t *parse_stmt(void) {
         n->left=cond; n->body=body; return n;
     }
 
-    /* for <var> in <start>..<end> { body }  — end is exclusive */
+    /* for <var> in <start>..<end> { body }  - end is exclusive */
     if (tok.type == TK_FOR) {
         consume();
         if (tok.type != TK_IDENT) { set_err("expected loop variable"); return (void *)0; }
@@ -801,7 +801,7 @@ static val_t eval_node(node_t *n);
  * when `n` names a builtin; returns 0 to fall through to user funcs. */
 static int call_builtin(node_t *n, val_t *out);
 
-/* Print a value — recurses into arrays as [e1, e2, ...]. */
+/* Print a value - recurses into arrays as [e1, e2, ...]. */
 static void print_val(val_t v) {
     if (v.type == VAL_STR) { vga_puts(v.sval); return; }
     if (v.type == VAL_ARR) {
@@ -932,10 +932,10 @@ static val_t eval_node(node_t *n) {
         case N_ASSIGN: {
             val_t v = eval_node(n->body);
             if (n->ival) {
-                /* let — always create a new binding */
+                /* let - always create a new binding */
                 if (var_bind(n->sval, v) < 0) set_err("too many variables");
             } else {
-                /* plain assignment — update most recent or create */
+                /* plain assignment - update most recent or create */
                 if (var_set(n->sval, v) < 0) set_err("too many variables");
             }
             return v;
@@ -1007,7 +1007,7 @@ static val_t eval_node(node_t *n) {
         }
 
         case N_FUNC_DEF:
-            /* Already registered during parse phase — nothing to do at runtime */
+            /* Already registered during parse phase - nothing to do at runtime */
             return mkival(0);
 
         case N_INCLUDE:
@@ -1065,7 +1065,7 @@ static val_t eval_node(node_t *n) {
             val_t ret = return_flag ? return_val : mkival(0);
             return_flag = 0;
 
-            /* Pop scope — restores all locals including parameters */
+            /* Pop scope - restores all locals including parameters */
             nvar = scope_stack[--call_depth];
 
             return ret;
@@ -1108,7 +1108,7 @@ static val_t eval_node(node_t *n) {
             val_t idx  = eval_node(n->right);
             if (err_flag) return mkival(0);
             int i = as_int(idx);
-            /* String index → 1-character string. */
+            /* String index -> 1-character string. */
             if (base.type == VAL_STR) {
                 int slen = (int)strlen(base.sval);
                 if (i < 0 || i >= slen) {
@@ -1179,7 +1179,7 @@ static int count_args(node_t *call) {
     return k;
 }
 
-/* Textual form of a value — returns v->sval, or writes the integer into
+/* Textual form of a value - returns v->sval, or writes the integer into
  * scratch and returns that. */
 static const char *val_str(const val_t *v, char *scratch, int cap) {
     if (v->type == VAL_STR) return v->sval;
@@ -1187,7 +1187,7 @@ static const char *val_str(const val_t *v, char *scratch, int cap) {
     return scratch;
 }
 
-/* ---- file I/O handle table (soupyc handle int → VFS node) ----
+/* ---- file I/O handle table (soupyc handle int -> VFS node) ----
  * open() returns a small integer handle; the table is closed and
  * cleared between script runs so a script can't leak VFS nodes. */
 #define MAX_SC_FILES 8
@@ -1392,7 +1392,7 @@ static int call_builtin(node_t *n, val_t *out) {
             int k = 0; while (k < nl && hay[i + k] == nee[k]) k++;
             if (k == nl) { at = i; break; }
         }
-        *out = mkival(name[0] == 'f' ? at : (at >= 0));   /* find→index, contains→bool */
+        *out = mkival(name[0] == 'f' ? at : (at >= 0));   /* find->index, contains->bool */
         return 1;
     }
 
@@ -1432,7 +1432,7 @@ static int call_builtin(node_t *n, val_t *out) {
             if (!sc_files[i]) { slot = i; break; }
         if (slot < 0) { set_err("open: too many open files"); return 1; }
         vfs_node_t *nd = vfs_open(a[0].sval, flags);
-        if (!nd) { *out = mkival(-1); return 1; }   /* missing file → -1 */
+        if (!nd) { *out = mkival(-1); return 1; }   /* missing file -> -1 */
         sc_files[slot] = nd;
         *out = mkival(slot);
         return 1;
@@ -1486,7 +1486,7 @@ static int call_builtin(node_t *n, val_t *out) {
         return 1;
     }
 
-    return 0;   /* not a builtin — fall through to user functions */
+    return 0;   /* not a builtin - fall through to user functions */
 }
 
 /* ============================================================

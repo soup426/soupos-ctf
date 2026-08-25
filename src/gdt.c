@@ -69,19 +69,19 @@ void gdt_init(void) {
          bit7 (present=1) bit6-5 (DPL=00) bit4 (S=1, code/data)
          bit3 (executable=1) bit2 (direction=0) bit1 (readable=1) bit0 (accessed=0)
        gran   = 0xCF = 1100_1111b
-         bit7 (granularity=1 → limit in 4KB pages) bit6 (32-bit=1) bit5-4 (0)
-         bits3-0 = upper 4 bits of limit = 0xF  → limit = 0xFFFFF pages = 4GB */
+         bit7 (granularity=1 -> limit in 4KB pages) bit6 (32-bit=1) bit5-4 (0)
+         bits3-0 = upper 4 bits of limit = 0xF  -> limit = 0xFFFFF pages = 4GB */
     gdt_set_entry(1, 0, 0xFFFFFFFF, 0x9A, 0xCF);
 
     /* Entry 2: kernel data segment
        access = 0x92 = 1001_0010b (same as code but executable=0, writable=1) */
     gdt_set_entry(2, 0, 0xFFFFFFFF, 0x92, 0xCF);
 
-    /* Entry 3: user code — like kernel code but DPL=3.
+    /* Entry 3: user code - like kernel code but DPL=3.
        access = 0xFA = 1111_1010b (present, DPL=11, S, exec, readable) */
     gdt_set_entry(3, 0, 0xFFFFFFFF, 0xFA, 0xCF);
 
-    /* Entry 4: user data — DPL=3.  access = 0xF2 = 1111_0010b */
+    /* Entry 4: user data - DPL=3.  access = 0xF2 = 1111_0010b */
     gdt_set_entry(4, 0, 0xFFFFFFFF, 0xF2, 0xCF);
 
     /* Entry 5: the TSS.  access = 0x89 = present, DPL0, type 0x9

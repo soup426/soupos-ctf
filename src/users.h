@@ -1,11 +1,11 @@
 #pragma once
 #include <stdint.h>
 
-/* users.h — the soupOS kitchen staff.
+/* users.h - the soupOS kitchen staff.
  *
  * Accounts live in /etc/kitchen on the FAT volume, one cook per line:
  *     name:uid:hexhash
- * uid 0 is "headchef" — the superuser. Every other account is a "cook".
+ * uid 0 is "headchef" - the superuser. Every other account is a "cook".
  * Passwords ("secrets") are stored as an 8-hex-digit AlphaSOUP-32 hash.
  *
  * If /etc/kitchen is missing at boot it is seeded with a single account,

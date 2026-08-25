@@ -1,4 +1,4 @@
-/* cat.c — print a file's contents. Usage in soupOS: cook cat.elf <file> */
+/* cat.c - print a file's contents. Usage in soupOS: cook cat.elf <file> */
 #include "ulib.h"
 
 int main(void) {

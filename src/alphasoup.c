@@ -1,12 +1,12 @@
-/* alphasoup.c — AlphaSOUP-32 non-cryptographic hash for soupOS
+/* alphasoup.c - AlphaSOUP-32 non-cryptographic hash for soupOS
  *
- * Think of each byte as a letter of pasta getting stirred into a pot —
+ * Think of each byte as a letter of pasta getting stirred into a pot -
  * every letter changes the flavor (hash state).
  *
  * Design:
- *   SOUPSEED  — initial pot flavour (arbitrary odd constant)
- *   NOODLE    — golden-ratio multiplier for avalanche
- *   stir()    — rotate left (mix without losing bits)
+ *   SOUPSEED  - initial pot flavour (arbitrary odd constant)
+ *   NOODLE    - golden-ratio multiplier for avalanche
+ *   stir()    - rotate left (mix without losing bits)
  *   Each byte: XOR into state, rotate, multiply, XOR-shift (season)
  *   Finalise:  3-stage MurmurHash3-style avalanche
  */
@@ -34,7 +34,7 @@ uint32_t alphasoup_hash(const void *data, uint32_t len) {
         h ^= h >> 17;        /* season: XOR-shift */
     }
 
-    /* Final avalanche — ensure every input bit affects every output bit */
+    /* Final avalanche - ensure every input bit affects every output bit */
     h ^= h >> 16;
     h *= 0x85EBCA6Bu;
     h ^= h >> 13;

@@ -1,4 +1,4 @@
-/* klog.c — kernel log ring buffer. See klog.h for the design. */
+/* klog.c - kernel log ring buffer. See klog.h for the design. */
 
 #include "klog.h"
 #include "serial.h"

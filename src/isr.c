@@ -32,7 +32,7 @@ static const char *exception_names[] = {
 };
 
 /* A frame address is "plausible" if it is 4-aligned and within the
- * identity-mapped low 128 MB — so dereferencing it during a panic can
+ * identity-mapped low 128 MB - so dereferencing it during a panic can
  * never itself fault and turn the panic into a triple-fault reboot. */
 static int frame_ok(uint32_t addr) {
     return addr >= 0x1000 && addr < 0x08000000 && (addr & 3) == 0;
@@ -63,7 +63,7 @@ void isr_handler(registers_t *regs) {
     const char *name = (regs->int_no < 20)
                             ? exception_names[regs->int_no]
                             : "Unknown";
-    /* Ring 0 → no privilege change → the CPU did not push SS:ESP, so the
+    /* Ring 0 -> no privilege change -> the CPU did not push SS:ESP, so the
      * interrupted ESP is the address just past the CPU-pushed eflags. */
     uint32_t esp = (uint32_t)&regs->eflags + 4;
 

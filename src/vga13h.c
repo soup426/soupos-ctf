@@ -1,4 +1,4 @@
-/* vga13h.c — VGA mode 13h driver for soupOS
+/* vga13h.c - VGA mode 13h driver for soupOS
  *
  * Switching modes without BIOS:  program the VGA register set
  * directly (Miscellaneous Output, Sequencer, CRTC, Graphics
@@ -29,7 +29,7 @@ static uint8_t sv_misc;
 static uint8_t sv_seq[5];
 static uint8_t sv_crtc[25];
 static uint8_t sv_gc[9];
-static uint8_t sv_dac[768];  /* 256 × (R,G,B) — 6-bit each */
+static uint8_t sv_dac[768];  /* 256 × (R,G,B) - 6-bit each */
 
 static void save_regs(void) {
     sv_misc = inb(0x3CC);   /* Misc Output readable at 0x3CC */
@@ -43,7 +43,7 @@ static void save_regs(void) {
 static void restore_regs(void) {
     outb(0x3C2, sv_misc);
 
-    /* Sequencer — hold in reset while reprogramming */
+    /* Sequencer - hold in reset while reprogramming */
     outb(0x3C4, 0x00); outb(0x3C5, 0x01);  /* synchronous reset */
     for (int i = 1; i < 5; i++) { outb(0x3C4,i); outb(0x3C5, sv_seq[i]); }
     outb(0x3C4, 0x00); outb(0x3C5, sv_seq[0]);  /* release */
@@ -55,7 +55,7 @@ static void restore_regs(void) {
     /* Graphics controller */
     for (int i = 0; i < 9; i++) { outb(0x3CE,i); outb(0x3CF, sv_gc[i]); }
 
-    /* Attribute controller — use known text-mode values (reading AC is tricky) */
+    /* Attribute controller - use known text-mode values (reading AC is tricky) */
     inb(0x3DA);  /* reset address/data flip-flop */
     for (int i = 0; i < 16; i++) { outb(0x3C0,i); outb(0x3C0,i); } /* identity palette */
     outb(0x3C0, 0x10); outb(0x3C0, 0x0C);  /* Mode Control: text + blink */
@@ -182,7 +182,7 @@ void vga13h_line(int x0, int y0, int x1, int y1, uint8_t c) {
     }
 }
 
-/* Midpoint (Bresenham) circle — 8-way symmetry */
+/* Midpoint (Bresenham) circle - 8-way symmetry */
 void vga13h_circle(int cx, int cy, int r, uint8_t c) {
     int x=0, y=r, d=1-r;
     while (x <= y) {
@@ -196,7 +196,7 @@ void vga13h_circle(int cx, int cy, int r, uint8_t c) {
     }
 }
 
-/* Filled circle — scanline fill using integer sqrt */
+/* Filled circle - scanline fill using integer sqrt */
 void vga13h_fill_circle(int cx, int cy, int r, uint8_t c) {
     for (int dy = -r; dy <= r; dy++) {
         int r2 = r*r - dy*dy;

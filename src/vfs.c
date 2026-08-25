@@ -1,11 +1,11 @@
-/* vfs.c — virtual filesystem shim. See vfs.h for the design overview.
+/* vfs.c - virtual filesystem shim. See vfs.h for the design overview.
  *
  * Backends:
- *   fat_read_ops  — read-only view of a FAT16 file (delegates to fat_f*).
- *   mem_file_ops  — write-mode FAT file: writes accumulate in a heap
+ *   fat_read_ops  - read-only view of a FAT16 file (delegates to fat_f*).
+ *   mem_file_ops  - write-mode FAT file: writes accumulate in a heap
  *                   buffer and are flushed with fat_write() on close
  *                   (fat.c has no streaming-write API).
- *   *_dev ops     — /dev/null, /dev/zero, /dev/serial, /dev/kbd.
+ *   *_dev ops     - /dev/null, /dev/zero, /dev/serial, /dev/kbd.
  */
 
 #include "vfs.h"

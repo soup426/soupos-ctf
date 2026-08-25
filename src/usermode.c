@@ -1,4 +1,4 @@
-/* usermode.c — the ring-3 / syscall / ELF-loader side of OS-ification step 3.
+/* usermode.c - the ring-3 / syscall / ELF-loader side of OS-ification step 3.
  *
  * A loaded program lives in high virtual space (USER_BASE and up), well above
  * the identity-mapped low RAM, backed by fresh physical pages marked

@@ -1,9 +1,9 @@
 #pragma once
 #include <stdint.h>
 
-/* Preemptive + cooperative task scheduler — ring 0.
+/* Preemptive + cooperative task scheduler - ring 0.
  * Tasks switch when they call task_yield() (or a blocking call that yields)
- * AND, once preemption is enabled, when the 100 Hz timer IRQ preempts them —
+ * AND, once preemption is enabled, when the 100 Hz timer IRQ preempts them -
  * so a task that never yields can no longer monopolise the CPU. */
 
 typedef enum {
@@ -27,7 +27,7 @@ typedef struct task {
     void         *arg;           /* argument passed to entry             */
 } task_t;
 
-/* Simple intrusive wait queue — FIFO singly-linked list of blocked tasks.
+/* Simple intrusive wait queue - FIFO singly-linked list of blocked tasks.
  * Zero-init or set .head = 0 before first use. */
 typedef struct wait_queue {
     struct task *head;
@@ -47,7 +47,7 @@ void     task_yield(void);
 
 /* Preemption control. task_preempt_enable() arms timer-driven preemption
  * (call once after task_init + at least one spawn). sched_preempt() is the
- * hook the timer IRQ calls each tick — it switches tasks only when it is safe
+ * hook the timer IRQ calls each tick - it switches tasks only when it is safe
  * (preemption armed, not inside the scheduler, more than one task). The
  * preempt_disable/enable pair brackets a region that must not be switched
  * away by the timer (cooperative task_yield still works); they nest. */
@@ -57,7 +57,7 @@ void     preempt_disable(void);
 void     preempt_enable(void);
 
 /* Mark current task DEAD and schedule away forever. Normally you don't
- * call this directly — returning from a task's entry function arrives
+ * call this directly - returning from a task's entry function arrives
  * here via the initial stack frame. */
 void     task_exit(void) __attribute__((noreturn));
 
@@ -81,7 +81,7 @@ char     task_state_letter(task_state_t s);
 
 /* Sleep the current task for at least `ms` milliseconds. Uses the PIT
  * (100 Hz, 10 ms per tick); sub-10ms sleeps are rounded up to one tick.
- * Safe to call before task_init() — falls back to busy-hlt. */
+ * Safe to call before task_init() - falls back to busy-hlt. */
 void     task_sleep(uint32_t ms);
 
 /* Wait-queue primitives. task_block_on marks the current task BLOCKED,

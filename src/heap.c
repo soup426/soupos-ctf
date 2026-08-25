@@ -6,7 +6,7 @@
  *
  * Backing store is a 1 MB static array in BSS.  The PMM sees it as part of
  * the kernel image (it falls before kernel_end in the linker script) so those
- * pages are pre-marked used — no PMM interaction needed at runtime.
+ * pages are pre-marked used - no PMM interaction needed at runtime.
  *
  * Block layout (12 bytes of overhead per allocation):
  *
@@ -16,10 +16,10 @@
  *             header plus at least 4 usable bytes.
  * Free:       mark free, then coalesce with contiguous free neighbours on
  *             both sides. Backward-coalesce walks from heap_head to find
- *             the predecessor — O(n) per free, but keeps the list short.
+ *             the predecessor - O(n) per free, but keeps the list short.
  * --------------------------------------------------------------------------- */
 
-#define HEAP_SIZE (8u * 1024u * 1024u)   /* 8 MB — enough for Doom's zone allocator */
+#define HEAP_SIZE (8u * 1024u * 1024u)   /* 8 MB - enough for Doom's zone allocator */
 #define MIN_SPLIT 4u                /* minimum usable bytes in a split tail */
 
 typedef struct block {
@@ -28,14 +28,14 @@ typedef struct block {
     struct block *next;   /* next block in the list, NULL if last */
 } block_t;
 
-/* 8 MB backing store — 4 KB aligned, zero-initialised by the BSS rules */
+/* 8 MB backing store - 4 KB aligned, zero-initialised by the BSS rules */
 static uint8_t heap_arena[HEAP_SIZE] __attribute__((aligned(4096)));
 static block_t *heap_head = (void *)0;
 
 /* The free list is shared mutable state, so a preemptive task switch in the
  * middle of an allocation could corrupt it. These bracket each heap operation
  * with interrupts disabled (restoring the prior IF), making it atomic with
- * respect to the timer IRQ that drives preemption. Cheap — heap ops are short. */
+ * respect to the timer IRQ that drives preemption. Cheap - heap ops are short. */
 static inline uint32_t irq_save(void) {
     uint32_t f;
     __asm__ volatile ("pushf; pop %0; cli" : "=r"(f) :: "memory");
@@ -119,7 +119,7 @@ void *krealloc(void *ptr, uint32_t size) {
     if (!ptr)  return kmalloc(size);
     if (!size) { kfree(ptr); return (void *)0; }
     uint32_t old = kmalloc_size(ptr);
-    if (old >= size) return ptr;   /* already big enough — no-op */
+    if (old >= size) return ptr;   /* already big enough - no-op */
     void *newptr = kmalloc(size);
     if (!newptr) return (void *)0;
     memcpy(newptr, ptr, old);

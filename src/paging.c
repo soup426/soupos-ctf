@@ -3,12 +3,12 @@
 
 #define PAGE_SIZE 4096
 
-/* Page directory — must be 4KB-aligned.  Lives in BSS so it's zero-initialised
+/* Page directory - must be 4KB-aligned.  Lives in BSS so it's zero-initialised
    before kernel_main is called, but paging_init zeroes it explicitly anyway. */
 static uint32_t page_dir[1024] __attribute__((aligned(4096)));
 
 /* ---------------------------------------------------------------------------
- * map_page — create one virtual→physical mapping.
+ * map_page - create one virtual->physical mapping.
  *
  * Called before paging is enabled, so all pointer arithmetic is physical.
  * After paging is on (via paging_map), identity-mapping keeps phys==virt so
@@ -21,14 +21,14 @@ static void map_page(uint32_t virt, uint32_t phys, uint32_t flags) {
     if (!(page_dir[pdi] & PAGE_PRESENT)) {
         /* Allocate a fresh page table from the physical memory manager */
         uint32_t *pt = (uint32_t *)pmm_alloc_page();
-        if (!pt) return;    /* out of memory — silently skip */
+        if (!pt) return;    /* out of memory - silently skip */
         for (int i = 0; i < 1024; i++) pt[i] = 0;
         page_dir[pdi] = (uint32_t)pt | PAGE_PRESENT | PAGE_WRITE;
     }
 
     /* A page is only user-accessible if BOTH its PDE and PTE allow it (the CPU
      * ANDs privilege across levels). Kernel PTEs keep U=0, so marking the PDE
-     * user-accessible here never exposes kernel pages — it only lets a later
+     * user-accessible here never exposes kernel pages - it only lets a later
      * user PTE under the same 4 MB region take effect. */
     if (flags & PAGE_USER) page_dir[pdi] |= PAGE_USER;
 
@@ -37,7 +37,7 @@ static void map_page(uint32_t virt, uint32_t phys, uint32_t flags) {
 }
 
 /* ---------------------------------------------------------------------------
- * paging_unmap — drop a single mapping. Returns the physical frame that was
+ * paging_unmap - drop a single mapping. Returns the physical frame that was
  * mapped (page-aligned), or 0 if the address was not present. Flushes the TLB.
  * --------------------------------------------------------------------------- */
 uint32_t paging_unmap(uint32_t virt) {
@@ -53,7 +53,7 @@ uint32_t paging_unmap(uint32_t virt) {
 }
 
 /* ---------------------------------------------------------------------------
- * paging_map — public API for mapping a single page after paging is on.
+ * paging_map - public API for mapping a single page after paging is on.
  * Flushes the TLB entry for virt via invlpg.
  * --------------------------------------------------------------------------- */
 void paging_map(uint32_t virt, uint32_t phys, uint32_t flags) {
@@ -62,7 +62,7 @@ void paging_map(uint32_t virt, uint32_t phys, uint32_t flags) {
 }
 
 /* ---------------------------------------------------------------------------
- * paging_init — identity-map all physical RAM then enable paging.
+ * paging_init - identity-map all physical RAM then enable paging.
  *
  * Identity map means virtual address == physical address everywhere, so all
  * existing pointers (stack, kernel code, VGA buffer, PMM bitmap …) remain
@@ -90,7 +90,7 @@ void paging_init(void) {
     /* Point CR3 at our page directory (physical address, no flags needed) */
     __asm__ volatile ("mov %0, %%cr3" : : "r"((uint32_t)page_dir) : "memory");
 
-    /* Set the PG bit (31) in CR0 — paging is now active */
+    /* Set the PG bit (31) in CR0 - paging is now active */
     uint32_t cr0;
     __asm__ volatile ("mov %%cr0, %0" : "=r"(cr0));
     cr0 |= 0x80000000u;

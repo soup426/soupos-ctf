@@ -44,8 +44,8 @@ static void delay400(void) {
 /* The PIO wait loops below yield the CPU periodically so a slow drive
  * doesn't starve the cooperative scheduler. task_yield() is a safe no-op
  * before task_init() (ata_init / fat_init run that early). Yielding only
- * happens while waiting for the drive to become ready — never mid-transfer
- * — and disk access is currently driven by a single task (the shell), so
+ * happens while waiting for the drive to become ready - never mid-transfer
+ * - and disk access is currently driven by a single task (the shell), so
  * no other task can issue an overlapping command in the yield window. */
 static int wait_bsy(void) {
     int t = 2000000;
@@ -75,7 +75,7 @@ int ata_init(void) {
     outb(ATA_DRIVE_HEAD, 0xA0);
     delay400();
 
-    /* Floating bus → no drive */
+    /* Floating bus -> no drive */
     if (inb(ATA_STATUS) == 0xFF) return -1;
 
     /* Zero out task file before IDENTIFY */

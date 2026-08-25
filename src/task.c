@@ -40,7 +40,7 @@ static void list_add(task_t *t) {
 }
 
 /* Wake any BLOCKED task whose task_sleep deadline has passed. O(n)
- * sweep — fine since we typically have < ~10 tasks. */
+ * sweep - fine since we typically have < ~10 tasks. */
 static void wake_expired_sleepers(void) {
     if (!list_head) return;
     uint32_t now = timer_get_ticks();
@@ -64,7 +64,7 @@ static task_t *pick_next(void) {
         if (t->state == TASK_READY) return t;
         t = t->next;
     }
-    /* Nobody else is runnable — stick with current if it still wants CPU. */
+    /* Nobody else is runnable - stick with current if it still wants CPU. */
     if (current->state == TASK_RUNNING || current->state == TASK_READY)
         return current;
     return 0;
@@ -94,7 +94,7 @@ static void reap_one_dead(void) {
 void task_init(void) {
     task_t *t = (task_t *)kmalloc(sizeof(task_t));
     t->esp        = 0;      /* filled on first switch out of this task */
-    t->stack_base = 0;      /* boot stack — never freed */
+    t->stack_base = 0;      /* boot stack - never freed */
     t->stack_size = 0;
     t->id         = next_id++;
     t->state      = TASK_RUNNING;
@@ -231,7 +231,7 @@ task_t *task_by_id(uint32_t id) {
 int task_kill(uint32_t id) {
     task_t *t = task_by_id(id);
     if (!t) return -1;
-    if (t == current) return -1;     /* can't kill self — use exit */
+    if (t == current) return -1;     /* can't kill self - use exit */
     if (t->id == 0)   return -1;     /* can't kill kernel task    */
     t->state = TASK_DEAD;
     return 0;
@@ -250,7 +250,7 @@ char task_state_letter(task_state_t s) {
 /* ---- task_sleep -------------------------------------------------------
  * Design: we record a wake_tick deadline directly on the task_t and mark
  * the task BLOCKED.  wake_expired_sleepers() (called at the top of every
- * task_yield) sweeps the list and moves expired tasks back to READY — no
+ * task_yield) sweeps the list and moves expired tasks back to READY - no
  * separate sleep-list struct needed.  Between yields we hlt so we don't
  * burn CPU while nothing else wants to run either.
  */
@@ -264,7 +264,7 @@ void task_sleep(uint32_t ms) {
         return;
     }
 
-    /* Convert ms → ticks (100 Hz → 10 ms/tick).  Round up so that
+    /* Convert ms -> ticks (100 Hz -> 10 ms/tick).  Round up so that
      * task_sleep(1) waits at least one tick, not zero. */
     uint32_t ticks = (ms + 9) / 10;
     if (ticks == 0) ticks = 1;

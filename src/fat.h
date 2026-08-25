@@ -45,7 +45,7 @@ int fat_read(const char *path, uint8_t *buf, uint32_t bufsize, uint32_t *out_siz
 /* Create or overwrite a file. FAT16 only. Returns 0=ok, -1=error. */
 int fat_write(const char *path, const uint8_t *buf, uint32_t size);
 
-/* Delete a file (not a directory — use fat_rmdir). FAT16 only. */
+/* Delete a file (not a directory - use fat_rmdir). FAT16 only. */
 int fat_delete(const char *path);
 
 /* Create a directory ("bowl"). FAT16 only. Fails if it already exists,
@@ -67,7 +67,7 @@ int fat_exists(const char *path);
  * FAT directory entry. The mode byte's high bit (FAT_PERM_MARK) flags the
  * metadata as present; entries without it (files written by other tools)
  * read back as owned by headchef (uid 0) with default permissions.
- * Enforcement is advisory — done by the shell, since soupOS runs in ring 0.
+ * Enforcement is advisory - done by the shell, since soupOS runs in ring 0.
  * ───────────────────────────────────────────────────────────────────────── */
 #define FAT_PERM_MARK  0x80   /* mode byte: soupOS metadata present  */
 #define FAT_PERM_OR    0x20   /* owner read                          */

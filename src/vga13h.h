@@ -1,7 +1,7 @@
 #pragma once
 #include <stdint.h>
 
-/* VGA Mode 13h — 320×200 pixels, 256 palette colours.
+/* VGA Mode 13h - 320×200 pixels, 256 palette colours.
  * Framebuffer lives at physical 0xA0000 (linear, one byte per pixel).
  * Palette entries are 6-bit (0–63) RGB values written to the DAC. */
 
@@ -11,7 +11,7 @@
 void vga13h_enter(void);   /* switch to mode 13h          */
 void vga13h_exit(void);    /* return to 80×25 text mode   */
 
-/* DAC palette — each component is 0–63 */
+/* DAC palette - each component is 0–63 */
 void vga13h_setpal(uint8_t idx, uint8_t r, uint8_t g, uint8_t b);
 void vga13h_defpal(void);   /* load a full rainbow palette  */
 

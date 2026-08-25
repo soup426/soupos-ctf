@@ -1,5 +1,5 @@
 #pragma once
-/* errno.h — hosted-C shim for the Doom port. */
+/* errno.h - hosted-C shim for the Doom port. */
 
 #include "doom_libc.h"
 

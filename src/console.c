@@ -1,4 +1,4 @@
-/* console.c — serial console: drive soupOS over COM1 with no keyboard.
+/* console.c - serial console: drive soupOS over COM1 with no keyboard.
  *
  * See console.h for the contract. The interesting part is the input side:
  * a terminal on the far end of a socket does not speak PS/2, so the bytes
@@ -26,7 +26,7 @@
 #include "timer.h"
 
 /* A lone ESC is only a lone ESC if nothing follows it promptly. At 100 Hz
- * this is a 20-30 ms grace period — far longer than the sub-millisecond gap
+ * this is a 20-30 ms grace period - far longer than the sub-millisecond gap
  * between bytes of a real escape sequence, and short enough that pressing
  * Escape feels instant. */
 #define ESC_TIMEOUT_TICKS 3
@@ -110,7 +110,7 @@ static void emit_normal(int c) {
         return;
     }
     if (c == '\n') {
-        /* Swallow the LF of a CRLF pair — one keypress, one newline. */
+        /* Swallow the LF of a CRLF pair - one keypress, one newline. */
         if (last_was_cr) { last_was_cr = 0; return; }
         keyboard_inject('\n');
         return;

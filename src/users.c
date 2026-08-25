@@ -23,7 +23,7 @@ static uint32_t hash_secret(const char *s) {
     return alphasoup_hash(s, (uint32_t)strlen(s));
 }
 
-/* uint32 → 8 lowercase hex digits (always 8, zero-padded). */
+/* uint32 -> 8 lowercase hex digits (always 8, zero-padded). */
 static void u32_to_hex(uint32_t v, char *out) {
     static const char d[] = "0123456789abcdef";
     for (int i = 7; i >= 0; i--) { out[i] = d[v & 0xF]; v >>= 4; }
@@ -45,7 +45,7 @@ static uint32_t hex_to_u32(const char *s) {
     return v;
 }
 
-/* uint → decimal text. Returns length written (no NUL). */
+/* uint -> decimal text. Returns length written (no NUL). */
 static int u_to_dec(uint32_t v, char *out) {
     char tmp[12];
     int  n = 0;
@@ -122,7 +122,7 @@ void users_init(void) {
         }
     }
 
-    /* No file, or it had no headchef → seed the default headchef account. */
+    /* No file, or it had no headchef -> seed the default headchef account. */
     if (users_uid_of("headchef") != 0) {
         n_users = 0;
         copy_name(roster[0].name, "headchef");

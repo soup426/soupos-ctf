@@ -1,7 +1,7 @@
 #pragma once
 #include <stdint.h>
 
-/* ai — the soupOS serial bridge to a host-side LLM.
+/* ai - the soupOS serial bridge to a host-side LLM.
  *
  * The OS can't run an LLM in-kernel, so `ai` talks over COM2 to a small host
  * daemon (tools/ai_bridge.py) that forwards the prompt to a real model (e.g.

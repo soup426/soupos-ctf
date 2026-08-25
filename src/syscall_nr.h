@@ -1,5 +1,5 @@
 #pragma once
-/* Syscall numbers — shared by the kernel dispatcher and user programs.
+/* Syscall numbers - shared by the kernel dispatcher and user programs.
  * Convention (int 0x80): eax = number, ebx/ecx/edx = args, eax = return. */
 #define SYS_EXIT   0   /* ebx = exit code                                   */
 #define SYS_WRITE  1   /* ebx = fd, ecx = buf, edx = len; -> bytes written  */

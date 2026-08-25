@@ -1,4 +1,4 @@
-/* ulib.c — user-space runtime. See ulib.h. */
+/* ulib.c - user-space runtime. See ulib.h. */
 #include "ulib.h"
 
 int sys_write(int fd, const char *buf, int len) {

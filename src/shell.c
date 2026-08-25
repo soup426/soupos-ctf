@@ -135,7 +135,7 @@ static int read_line(char *buf, int max, char mask) {
     return len;
 }
 
-/* Switch the active session — both the user layer and the FAT owner stamp. */
+/* Switch the active session - both the user layer and the FAT owner stamp. */
 static void set_session_uid(uint8_t uid) {
     users_set_current(uid);
     fat_set_creator(uid);
@@ -175,7 +175,7 @@ static void deny(const char *path) {
     vga_set_color(VGA_LIGHT_GREY, VGA_BLACK);
 }
 
-/* Login gate — loops until a valid cook clocks in. Used at boot and by
+/* Login gate - loops until a valid cook clocks in. Used at boot and by
  * the `clockout` command. */
 static void do_login(void) {
     char name[USER_NAME_MAX];
@@ -218,7 +218,7 @@ static void hist_push(const char *cmd) {
     if (hist_size < HIST_MAX) hist_size++;
 }
 
-/* offset=1 → most recent, offset=2 → one before that, etc. */
+/* offset=1 -> most recent, offset=2 -> one before that, etc. */
 static const char *hist_get(int offset) {
     if (offset <= 0 || offset > hist_size) return (void *)0;
     int idx = ((hist_head - offset) % HIST_MAX + HIST_MAX) % HIST_MAX;
@@ -238,7 +238,7 @@ static void cursor_to(int buf_pos) {
 }
 
 /* Reprint input[from..len-1], then optionally one trailing space.
-   Does NOT reposition the cursor afterwards — caller must call cursor_to(). */
+   Does NOT reposition the cursor afterwards - caller must call cursor_to(). */
 static void redraw_tail(const char *input, int from, int len, int trail_space) {
     cursor_to(from);
     for (int i = from; i < len; i++) vga_putchar(input[i]);
@@ -326,22 +326,22 @@ static void line_replace(char *input, int *pos, int *len, const char *new_str) {
 /* ===========================================================================
  * Commands
  *
- *   menu        — show this help
- *   wash        — clear the screen
- *   slurp       — echo text
- *   season      — set VGA fg/bg colors
- *   simmer      — uptime since boot
- *   broth       — physical memory stats
- *   ladle       — heap allocator stats
- *   expiry      — current date/time (RTC)
- *   chef        — CPU info (CPUID)
- *   pantry      — PCI device list
- *   taste       — hex dump memory
- *   recipe      — kernel version info
- *   leftovers   — command history
- *   spill       — trigger divide-by-zero
- *   freeze      — halt CPU
- *   reheat      — reboot
+ *   menu        - show this help
+ *   wash        - clear the screen
+ *   slurp       - echo text
+ *   season      - set VGA fg/bg colors
+ *   simmer      - uptime since boot
+ *   broth       - physical memory stats
+ *   ladle       - heap allocator stats
+ *   expiry      - current date/time (RTC)
+ *   chef        - CPU info (CPUID)
+ *   pantry      - PCI device list
+ *   taste       - hex dump memory
+ *   recipe      - kernel version info
+ *   leftovers   - command history
+ *   spill       - trigger divide-by-zero
+ *   freeze      - halt CPU
+ *   reheat      - reboot
  * =========================================================================== */
 
 /* ---- simple pager for long listings (the text screen has no scrollback) ----
@@ -524,7 +524,7 @@ static void cmd_pantry(void) {
                    pci_vendor_str(devs[i].vendor_id),
                    pci_class_str(devs[i].class_code));
     }
-    if (n == 0) vga_puts("  (empty pantry — no PCI devices found)\n");
+    if (n == 0) vga_puts("  (empty pantry - no PCI devices found)\n");
 }
 
 static void cmd_taste(const char *args) {
@@ -638,7 +638,7 @@ static void cmd_pour(const char *args) {
     }
     if (file_size > sizeof(file_buf)) {
         vga_set_color(VGA_YELLOW, VGA_BLACK);
-        vga_printf("  (truncated — showing %u of %u bytes)\n",
+        vga_printf("  (truncated - showing %u of %u bytes)\n",
                    (uint32_t)sizeof(file_buf), file_size);
         vga_set_color(VGA_LIGHT_GREY, VGA_BLACK);
     } else {
@@ -661,7 +661,7 @@ static void cmd_soup(const char *args) {
         return;
     }
 
-    /* soup filename — load from FAT volume */
+    /* soup filename - load from FAT volume */
     static uint8_t fbuf[8192];
     uint32_t fsize = 0;
     char path[FAT_PATH_MAX];
@@ -730,7 +730,7 @@ static void cmd_strain(const char *args) {
     if (fat_delete(path) < 0) {
         vga_set_color(VGA_LIGHT_RED, VGA_BLACK);
         vga_printf("  Cannot strain: %s\n", args);
-        vga_puts("  (not found, or it is a bowl — use rmbowl)\n");
+        vga_puts("  (not found, or it is a bowl - use rmbowl)\n");
         vga_set_color(VGA_LIGHT_GREY, VGA_BLACK);
     } else {
         vga_printf("  Strained out: %s\n", path);
@@ -871,7 +871,7 @@ static void cmd_relabel(const char *args) {
     vga_printf("  Relabelled %s -> %s (%u bytes)\n", src, dst, size);
 }
 
-/* jot <file> — open the full-screen text editor on a file (new or existing).
+/* jot <file> - open the full-screen text editor on a file (new or existing).
  * Editing implies the right to save, so an existing file needs read+write;
  * a new file needs write on its parent bowl. */
 static void cmd_jot(const char *args) {
@@ -895,7 +895,7 @@ static void cmd_jot(const char *args) {
     editor_run(path);
 }
 
-/* ai <prompt> — ask the host-side LLM over the COM2 serial bridge. Streams
+/* ai <prompt> - ask the host-side LLM over the COM2 serial bridge. Streams
  * the reply to the screen as bytes arrive; times out gracefully if no bridge
  * daemon is answering. The assembled reply is also mirrored to the kernel log
  * (and thus COM1) so the round-trip is visible in dmesg / the serial capture. */
@@ -922,7 +922,7 @@ static void cmd_ai(const char *args) {
         if (c < 0) {
             if (!got) {
                 vga_set_color(VGA_LIGHT_RED, VGA_BLACK);
-                vga_puts("  (no reply — is the bridge daemon running?)\n");
+                vga_puts("  (no reply - is the bridge daemon running?)\n");
             }
             break;
         }
@@ -940,7 +940,7 @@ static void cmd_ai(const char *args) {
     vga_set_color(VGA_LIGHT_GREY, VGA_BLACK);
 }
 
-/* cook <program.elf> — load and run an ELF32 binary as a real ring-3
+/* cook <program.elf> - load and run an ELF32 binary as a real ring-3
  * user-mode process. Returns to the shell when the program exits. */
 static void cmd_cook(const char *args) {
     while (*args == ' ') args++;
@@ -984,7 +984,7 @@ static void cmd_cook(const char *args) {
 static void cmd_cd(const char *args) {
     while (*args == ' ') args++;
     char target[FAT_PATH_MAX];
-    if (!*args) { strcpy(cwd, "/"); return; }    /* cd with no arg → root */
+    if (!*args) { strcpy(cwd, "/"); return; }    /* cd with no arg -> root */
     resolve_path(args, target);
     if (!fat_is_dir(target)) {
         vga_set_color(VGA_LIGHT_RED, VGA_BLACK);
@@ -1041,7 +1041,7 @@ static void cmd_rmbowl(const char *args) {
     }
 }
 
-/* bowltest — exercises the bowl (directory) layer end to end and cleans up
+/* bowltest - exercises the bowl (directory) layer end to end and cleans up
  * after itself, so it can be run repeatedly. */
 static void cmd_bowltest(void) {
     int pass = 0, fail = 0;
@@ -1160,8 +1160,8 @@ static void cmd_fire(const char *args) {
     else                         vga_puts("  No such cook (or disk error).\n");
 }
 
-/* perms <file>            — show owner + rwx
- * perms <file> <rwxrwx>   — set permissions (owner or headchef only) */
+/* perms <file>            - show owner + rwx
+ * perms <file> <rwxrwx>   - set permissions (owner or headchef only) */
 static void cmd_perms(const char *args) {
     while (*args == ' ') args++;
     if (!*args) { vga_puts("Usage: perms <file> [rwxrwx]\n"); return; }
@@ -1220,13 +1220,13 @@ static void cmd_perms(const char *args) {
                users_name_of(owner), s);
 }
 
-/* `chef`           — CPU info (the original command)
- * `chef <command>` — run <command> as the headchef (asks for the secret) */
-static void cmd_chef(void);   /* defined earlier — CPU info */
+/* `chef`           - CPU info (the original command)
+ * `chef <command>` - run <command> as the headchef (asks for the secret) */
+static void cmd_chef(void);   /* defined earlier - CPU info */
 
 static void cmd_chef_elevate(const char *args) {
     while (*args == ' ') args++;
-    if (!*args) { cmd_chef(); return; }            /* bare "chef" → CPU info */
+    if (!*args) { cmd_chef(); return; }            /* bare "chef" -> CPU info */
 
     uint8_t saved = users_current_uid();
     if (!users_is_headchef()) {
@@ -1268,16 +1268,16 @@ static void cmd_beep(const char *args) {
 }
 
 static void cmd_mandelbrot(void) {
-/* 78×22 ASCII Mandelbrot — fixed-point arithmetic (SCALE = 1024)
+/* 78×22 ASCII Mandelbrot - fixed-point arithmetic (SCALE = 1024)
  * Viewport: Re [-2.5, 1.0], Im [-1.0, 1.0]
- * At each pixel we check z → z²+c: if it escapes within MAX_ITER
+ * At each pixel we check z -> z²+c: if it escapes within MAX_ITER
  * iterations, pick a char from the palette; otherwise draw '@'.
  * All arithmetic is 32-bit (values bounded by 2×SCALE before check). */
 #define MB_W     78
 #define MB_H     22
 #define MB_ITER  48
 #define MB_SC   1024
-    /* Viewport bounds in fixed-point (×MB_SC): Re -2.5→1.0, Im -1.0→1.0 */
+    /* Viewport bounds in fixed-point (×MB_SC): Re -2.5->1.0, Im -1.0->1.0 */
     static const char pal[] = " .`-,:;=+*i#%@";
     int plen = 14;   /* usable palette entries (not counting final '@') */
 
@@ -1288,7 +1288,7 @@ static void cmd_mandelbrot(void) {
             int cr = -5*MB_SC/2 + 7*MB_SC/2 * col / (MB_W - 1); /* Re axis */
             int zr = 0, zi = 0, it = 0;
             while (it < MB_ITER) {
-                /* Escape check — bounds are safe: |zr|,|zi| ≤ 2×MB_SC here */
+                /* Escape check - bounds are safe: |zr|,|zi| ≤ 2×MB_SC here */
                 if (zr*zr + zi*zi > 4 * MB_SC * MB_SC) break;
                 int nzr = (zr*zr - zi*zi) / MB_SC + cr;
                 int nzi = 2 * zr * zi / MB_SC + ci;
@@ -1300,7 +1300,7 @@ static void cmd_mandelbrot(void) {
                 vga_putchar('@');
                 vga_set_color(VGA_LIGHT_GREY, VGA_BLACK);
             } else {
-                /* Shade by depth — map 0..MB_ITER-1 to palette */
+                /* Shade by depth - map 0..MB_ITER-1 to palette */
                 vga_putchar(pal[it * plen / MB_ITER]);
             }
         }
@@ -1319,7 +1319,7 @@ static void cmd_vgademo(void) {
     uint8_t *fb = vga13h_fb();
 
     /* ── plasma background ───────────────────────────────────── */
-    /* Triangle-wave on x XOR triangle-wave on y → diamond tiling */
+    /* Triangle-wave on x XOR triangle-wave on y -> diamond tiling */
     for (int y = 0; y < VGA13_H; y++) {
         int ty = y & 0x7F; if (ty > 63) ty = 127 - ty;   /* 0..63 */
         for (int x = 0; x < VGA13_W; x++) {
@@ -1332,7 +1332,7 @@ static void cmd_vgademo(void) {
     /* ── soup bowl: stack of filled circles, dark to bright ───── */
     /* Outer shadow */
     vga13h_fill_circle(162, 102, 72, 20);
-    /* Bowl layers — each a little smaller and brighter */
+    /* Bowl layers - each a little smaller and brighter */
     for (int i = 0; i < 12; i++) {
         int r = 70 - i * 5;
         uint8_t c = (uint8_t)(30 + i * 18);
@@ -1384,7 +1384,7 @@ static void tick_delay(uint32_t ticks) {
 }
 
 static void cmd_wipe(void) {
-    /* Sweep a colored bar top→bottom, then clear. */
+    /* Sweep a colored bar top->bottom, then clear. */
     vga_set_color(VGA_BLACK, VGA_LIGHT_CYAN);
     for (int row = 0; row < 25; row++) {
         vga_fill_row(row, ' ');
@@ -1399,7 +1399,7 @@ static void cmd_wipe(void) {
     vga_clear();
 }
 
-/* Simple LCG PRNG — seeded from timer ticks on first use. */
+/* Simple LCG PRNG - seeded from timer ticks on first use. */
 static uint32_t rng_state = 0;
 static uint32_t rng_next(void) {
     if (rng_state == 0) rng_state = timer_get_ticks() | 0xA5A5A5A5u;
@@ -1521,7 +1521,7 @@ static void cmd_kill(const char *args) {
     else        vga_printf("kill: task %d not killable (unknown, self, or kernel)\n", id);
 }
 
-/* Background clock — writes HH:MM:SS directly to the VGA text buffer
+/* Background clock - writes HH:MM:SS directly to the VGA text buffer
  * at row 0, cols 72-79. Doesn't touch vga.c's tracked cursor/color so
  * the shell keeps working underneath. Exits when the task is killed. */
 static void bgclock_task(void *arg) {
@@ -1554,14 +1554,14 @@ static void bgclock_task(void *arg) {
 static void cmd_bgclock(void) {
     task_t *t = task_spawn("bgclock", bgclock_task, 0);
     if (!t) { vga_puts("bgclock: out of memory\n"); return; }
-    vga_printf("bgclock running as task %u — stop with: kill %u\n", t->id, t->id);
+    vga_printf("bgclock running as task %u - stop with: kill %u\n", t->id, t->id);
 }
 
-/* yieldbg — spawn a background task that logs a [bg] marker to the serial
+/* yieldbg - spawn a background task that logs a [bg] marker to the serial
  * port every ~300 ms for ~6 s, then exits. It only makes progress when some
  * other task yields the CPU. Run it, then `cook spin.elf`: the [bg] and [u]
  * markers interleave in the serial log, proving a ring-3 program's sys_yield()
- * reaches the scheduler. (klog mirrors every byte to COM1 → the serial log.) */
+ * reaches the scheduler. (klog mirrors every byte to COM1 -> the serial log.) */
 static void yieldbg_task(void *arg) {
     (void)arg;
     for (int i = 0; i < 20; i++) {
@@ -1577,7 +1577,7 @@ static void cmd_yieldbg(void) {
     vga_printf("yieldbg running as task %u -- markers go to serial (dmesg)\n", t->id);
 }
 
-/* spinbg — a CPU-bound task that NEVER calls task_yield(): it just busy-loops
+/* spinbg - a CPU-bound task that NEVER calls task_yield(): it just busy-loops
  * for ~4 s, logging a [spin] marker to serial each ~0.5 s. Under the old
  * cooperative scheduler this would freeze the whole system until it finished;
  * with timer-driven preemption the shell stays responsive and other tasks
@@ -1605,12 +1605,12 @@ static void cmd_spinbg(void) {
     vga_printf("spinbg running as task %u -- busy-loops ~4s WITHOUT yielding\n", t->id);
 }
 
-/* sleeptest — exercises task_sleep and proves other tasks run while we sleep.
+/* sleeptest - exercises task_sleep and proves other tasks run while we sleep.
  *
  * Sequence:
  *   1. Print start tick.
  *   2. Spawn a bg task that prints "bg tick=N" twice with a 200 ms sleep
- *      between prints — proves the scheduler keeps running during main sleep.
+ *      between prints - proves the scheduler keeps running during main sleep.
  *   3. Main task sleeps 500 ms.
  *   4. Print woke tick + delta (expected ~50 ticks at 100 Hz).
  */
@@ -1636,10 +1636,10 @@ static void cmd_sleeptest(void) {
     vga_printf("sleeptest: woke  tick=%u delta=%u (expect ~50)\n", t1, delta);
 }
 
-/* vfstest — exercises the VFS shim: a /dev char device, a file write/read
- * round-trip, and sizing an existing file — all through one vfs_* API. */
+/* vfstest - exercises the VFS shim: a /dev char device, a file write/read
+ * round-trip, and sizing an existing file - all through one vfs_* API. */
 static void cmd_vfstest(void) {
-    /* 1. character device — write a line to /dev/serial. */
+    /* 1. character device - write a line to /dev/serial. */
     vfs_node_t *s = vfs_open("/dev/serial", VFS_WRONLY);
     if (s) {
         const char *msg = "[vfstest] hello from the VFS via /dev/serial\n";
@@ -1650,7 +1650,7 @@ static void cmd_vfstest(void) {
         vga_puts("  /dev/serial : open FAILED\n");
     }
 
-    /* 2. /dev/zero — read 16 bytes, confirm they all came back zero. */
+    /* 2. /dev/zero - read 16 bytes, confirm they all came back zero. */
     vfs_node_t *z = vfs_open("/dev/zero", VFS_RDONLY);
     if (z) {
         uint8_t b[16];
@@ -1696,7 +1696,7 @@ static void cmd_vfstest(void) {
     }
 }
 
-/* dmesg — dump the kernel log ring buffer (boot messages, panics). */
+/* dmesg - dump the kernel log ring buffer (boot messages, panics). */
 static void cmd_dmesg(void) {
     static char buf[KLOG_SIZE + 1];
     uint32_t n = klog_copy(buf, KLOG_SIZE);
@@ -1718,13 +1718,13 @@ static int days_in_month(int year, int month) {
     return dm[month - 1];
 }
 
-/* Zeller's congruence — returns 0=Sun, 1=Mon, ..., 6=Sat */
+/* Zeller's congruence - returns 0=Sun, 1=Mon, ..., 6=Sat */
 static int day_of_week(int year, int month, int day) {
     if (month < 3) { month += 12; year--; }
     int K = year % 100;
     int J = year / 100;
     int h = (day + 13 * (month + 1) / 5 + K + K / 4 + J / 4 + 5 * J) % 7;
-    /* Convert Zeller (0=Sat) → (0=Sun) */
+    /* Convert Zeller (0=Sat) -> (0=Sun) */
     return (h + 6) % 7;
 }
 
@@ -1796,7 +1796,7 @@ static void cmd_uname(const char *args) {
 static void cmd_cat(void) {
     /* Eight frames of a cat head rotating through 360°. */
     static const char *const frames[][6] = {
-        {   /* 0° — front */
+        {   /* 0° - front */
             "    /\\_/\\    ",
             "   ( o.o )   ",
             "    > ^ <    ",
@@ -1812,7 +1812,7 @@ static void cmd_cat(void) {
             "   ( |    | )",
             "    \\__|__/  ",
         },
-        {   /* 90° — right profile */
+        {   /* 90° - right profile */
             "    /\\_/\\    ",
             "   ( o  . > ",
             "    \\___/    ",
@@ -1828,7 +1828,7 @@ static void cmd_cat(void) {
             "  ( |    | ) ",
             "   \\__|__/   ",
         },
-        {   /* 180° — back */
+        {   /* 180° - back */
             "    /\\_/\\    ",
             "   (  -  )   ",
             "    \\___/    ",
@@ -1844,7 +1844,7 @@ static void cmd_cat(void) {
             "   ( |    | )",
             "    \\__|__/  ",
         },
-        {   /* 270° — left profile */
+        {   /* 270° - left profile */
             "    /\\_/\\    ",
             "   < .  o )  ",
             "    \\___/    ",
@@ -1904,7 +1904,7 @@ static void cmd_cat(void) {
             last = now;
         }
 
-        /* Swallow anything the user types — no escape */
+        /* Swallow anything the user types - no escape */
         keyboard_flush();
         /* Yield so background tasks keep ticking, then park for an IRQ. */
         task_yield();
@@ -2094,11 +2094,11 @@ static void shell_tab_complete(char *input, int *pos, int *len) {
     if (nmatches == 0) return;
 
     if (nmatches == 1) {
-        /* Single match — insert the remaining characters */
+        /* Single match - insert the remaining characters */
         const char *completion = matches[0] + word_len;
         while (*completion) shell_insert(input, pos, len, *completion++);
     } else {
-        /* Multiple matches — list them below, then redraw the prompt */
+        /* Multiple matches - list them below, then redraw the prompt */
         cursor_to(*len);
         vga_putchar('\n');
         for (int i = 0; i < nmatches; i++) {
@@ -2308,7 +2308,7 @@ void shell_run(void) {
         } else if (c == KEY_END || c == 0x05) {   /* Ctrl+E */
             pos = len; cursor_to(len);
 
-        } else if (c == 0x03) {   /* Ctrl+C — cancel current line */
+        } else if (c == 0x03) {   /* Ctrl+C - cancel current line */
             cursor_to(len);
             vga_set_color(VGA_DARK_GREY, VGA_BLACK);
             vga_puts("^C\n");
@@ -2317,10 +2317,10 @@ void shell_run(void) {
             input[0] = saved[0] = '\0';
             prompt();
 
-        } else if (c == 0x15) {   /* Ctrl+U — clear from cursor to start */
+        } else if (c == 0x15) {   /* Ctrl+U - clear from cursor to start */
             shell_kill_to_start(input, &pos, &len);
 
-        } else if (c == 0x17) {   /* Ctrl+W — delete word backwards */
+        } else if (c == 0x17) {   /* Ctrl+W - delete word backwards */
             shell_kill_word(input, &pos, &len);
 
         } else if (c == '\t') {

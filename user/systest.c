@@ -1,4 +1,4 @@
-/* systest.c — exercises the user-mode syscall ABI and reports to the serial
+/* systest.c - exercises the user-mode syscall ABI and reports to the serial
  * port (fd 2) with TESTOUT markers, so the whole thing is verifiable headless.
  * Usage: cook systest.elf <some args> */
 #include "ulib.h"
@@ -13,7 +13,7 @@ int main(void) {
     sys_args(args, sizeof(args));
     emit("args", args);
 
-    /* 2) file open/read — HELLO.TXT ships on the disk */
+    /* 2) file open/read - HELLO.TXT ships on the disk */
     int fd = sys_open("HELLO.TXT", O_READ);
     if (fd < 0) { emit("open", "FAIL"); }
     else {
@@ -24,7 +24,7 @@ int main(void) {
         sys_close(fd);
     }
 
-    /* 3) heap via malloc/sbrk — write a pattern, read it back */
+    /* 3) heap via malloc/sbrk - write a pattern, read it back */
     char *p = (char *)malloc(2000);        /* forces a page from sbrk */
     if (!p) { emit("heap", "FAIL"); }
     else {

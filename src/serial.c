@@ -1,4 +1,4 @@
-/* serial.c — polled COM1 UART driver. */
+/* serial.c - polled COM1 UART driver. */
 
 #include "serial.h"
 #include <stdint.h>
@@ -18,7 +18,7 @@ static inline uint8_t inb(uint16_t port) {
 void serial_init(void) {
     outb(COM1 + 1, 0x00);   /* disable interrupts            */
     outb(COM1 + 3, 0x80);   /* DLAB on                       */
-    outb(COM1 + 0, 0x03);   /* divisor low  — 38400 baud     */
+    outb(COM1 + 0, 0x03);   /* divisor low  - 38400 baud     */
     outb(COM1 + 1, 0x00);   /* divisor high                  */
     outb(COM1 + 3, 0x03);   /* DLAB off, 8 bits, no parity   */
     outb(COM1 + 2, 0xC7);   /* enable + clear FIFO           */
@@ -41,7 +41,7 @@ int serial_getc_nb(void) {
     return -1;
 }
 
-/* ── COM2 — the AI bridge channel ────────────────────────────────────────
+/* ── COM2 - the AI bridge channel ────────────────────────────────────────
  * A second polled UART, kept separate from COM1 so the kernel log mirror
  * never collides with AI traffic. Read + write. Presence is probed via the
  * 16550 scratch register so the `ai` command degrades gracefully (rather

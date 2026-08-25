@@ -1,5 +1,5 @@
 #pragma once
-/* ctype.h — hosted-C shim for the Doom port. */
+/* ctype.h - hosted-C shim for the Doom port. */
 
 #include "doom_libc.h"
 

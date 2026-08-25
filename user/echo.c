@@ -1,4 +1,4 @@
-/* echo.c — print the arguments. Usage: cook echo.elf hello there */
+/* echo.c - print the arguments. Usage: cook echo.elf hello there */
 #include "ulib.h"
 
 int main(void) {

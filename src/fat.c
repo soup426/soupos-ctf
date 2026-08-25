@@ -84,7 +84,7 @@ static uint8_t sec_buf[512] __attribute__((aligned(4)));
 static uint8_t fat_buf[512] __attribute__((aligned(4)));
 static uint32_t fat_cache_lba   = (uint32_t)-1;
 static int      fat_cache_dirty = 0;
-/* Hint for fat_alloc_cluster — start the next probe from here instead of 2.
+/* Hint for fat_alloc_cluster - start the next probe from here instead of 2.
  * Reset to 2 if we wrap. Persisted across calls within a single fat_write. */
 static uint32_t fat_alloc_hint  = 2;
 
@@ -94,7 +94,7 @@ static uint8_t  creator_uid     = 0;
 void fat_set_creator(uint8_t uid) { creator_uid = uid; }
 
 /* The cluster number that represents "the root directory" in this module.
- * On FAT16 the root is a fixed sector range, not a cluster — we use 0 as a
+ * On FAT16 the root is a fixed sector range, not a cluster - we use 0 as a
  * sentinel for it. On FAT32 the root is a normal cluster chain. */
 #define ROOT_DIR_CL  (fs_type_val == 32 ? root_cluster_32 : 0u)
 
@@ -104,7 +104,7 @@ static char to_upper(char c) {
     return (c >= 'a' && c <= 'z') ? (char)(c - ('a' - 'A')) : c;
 }
 
-/* Forward decl — defined further down with the other write-side helpers. */
+/* Forward decl - defined further down with the other write-side helpers. */
 static int fat_flush_cache(void);
 
 static uint32_t fat_get_entry(uint32_t cluster) {
@@ -208,7 +208,7 @@ static void parse_83(const char *name, char fname[8], char fext[3]) {
 }
 
 /* ======================================================================
- * Directory traversal — works for the FAT16 fixed root (cluster 0) and
+ * Directory traversal - works for the FAT16 fixed root (cluster 0) and
  * for ordinary subdirectory cluster chains alike.
  * ====================================================================== */
 
@@ -363,7 +363,7 @@ int fat_init(void) {
     uint32_t data_sec = total_sec - (b->reserved_sectors + (uint32_t)num_fats * fat_size + root_sec);
     cluster_count     = data_sec / spc;
 
-    if      (cluster_count < 4085)  return -1;    /* FAT12 — unsupported */
+    if      (cluster_count < 4085)  return -1;    /* FAT12 - unsupported */
     else if (cluster_count < 65525) fs_type_val = 16;
     else                            fs_type_val = 32;
 
@@ -460,7 +460,7 @@ static int fat_flush_cache(void) {
     return 0;
 }
 
-/* Update a FAT entry in the cached sector. Marks the cache dirty — caller
+/* Update a FAT entry in the cached sector. Marks the cache dirty - caller
  * MUST eventually call fat_flush_cache() before returning to the user. */
 static int fat_set_entry(uint32_t cluster, uint32_t value) {
     uint32_t fat_offset = (fs_type_val == 32) ? cluster * 4 : cluster * 2;
@@ -546,7 +546,7 @@ static int dir_alloc_slot(uint32_t dir_cl, uint32_t *out_lba, int *out_idx) {
             }
         }
     }
-    /* Directory full — the fixed FAT16 root cannot be extended. */
+    /* Directory full - the fixed FAT16 root cannot be extended. */
     if (dir_cl == 0) return -1;
 
     /* Walk to the last cluster of the chain. */
@@ -579,7 +579,7 @@ int fat_write(const char *path, const uint8_t *buf, uint32_t size) {
     char fname[8], fext[3];
     parse_83(leaf, fname, fext);
 
-    /* Existing entry → free its chain and reuse the slot; else find a slot.
+    /* Existing entry -> free its chain and reuse the slot; else find a slot.
      * An overwrite keeps the file's existing owner/mode; a new file is
      * stamped with the current creator uid and default permissions. */
     uint32_t dir_lba    = 0;
@@ -792,7 +792,7 @@ int fat_stat(const char *path, uint8_t *owner, uint8_t *mode) {
 
     uint8_t m = de.reserved;
     uint8_t o = de.crt_time_tenth;
-    if (!(m & FAT_PERM_MARK)) {              /* foreign entry → defaults */
+    if (!(m & FAT_PERM_MARK)) {              /* foreign entry -> defaults */
         m = FAT_PERM_DEFAULT;
         o = 0;
     }

@@ -1,7 +1,7 @@
 #pragma once
 #include <stdint.h>
 
-/* Special key codes returned by keyboard_getchar() — values above ASCII */
+/* Special key codes returned by keyboard_getchar() - values above ASCII */
 #define KEY_UP    256
 #define KEY_DOWN  257
 #define KEY_LEFT  258

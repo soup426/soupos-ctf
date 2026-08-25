@@ -15,7 +15,7 @@ typedef struct {
     uint32_t mmap_addr;       /* physical addr of mmap (if flags[6]) */
 } __attribute__((packed)) multiboot_info_t;
 
-/* Memory map entry — `size` does NOT include itself */
+/* Memory map entry - `size` does NOT include itself */
 typedef struct {
     uint32_t size;
     uint32_t addr_low;
