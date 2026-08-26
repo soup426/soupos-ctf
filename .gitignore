@@ -10,3 +10,5 @@ iso/boot/kernel.elf
 
 # Player handout (build artifact; regenerate with scripts/mk-handout.sh)
 handout/
+
+.build-config

@@ -2041,6 +2041,62 @@ static void cmd_doom(void) {
 }
 #endif /* NO_DOOM */
 
+/* preempttest - prove preempt_disable() actually suppresses preemption, and
+ * that it balances.
+ *
+ * The background task never yields, so it only ever runs if the timer
+ * preempts into it. Phase A leaves preemption on and the counter should move;
+ * phase B holds preempt_disable and it must not; phase C releases and it
+ * should move again, which is what shows the release balanced.
+ *
+ * Before preempt_disable became per-task this could not be tested at all: it
+ * routed through the scheduler's own lock, which is designed to unbalance
+ * across a context switch. */
+static volatile uint32_t pt_counter;
+static volatile int      pt_stop;
+
+static void pt_bg(void *arg) {
+    (void)arg;
+    while (!pt_stop) pt_counter++;      /* deliberately never yields */
+}
+
+static uint32_t pt_spin(uint32_t ticks) {
+    uint32_t start = timer_get_ticks();
+    uint32_t before = pt_counter;
+    while (timer_get_ticks() - start < ticks) { /* burn, never yield */ }
+    return pt_counter - before;
+}
+
+static void cmd_preempttest(void) {
+    pt_counter = 0; pt_stop = 0;
+    task_t *bg = task_spawn("pt_bg", pt_bg, 0);
+    if (!bg) { vga_puts("preempttest: out of memory\n"); return; }
+
+    uint32_t a = pt_spin(30);                 /* A: preemption on   */
+    preempt_disable();
+    uint32_t b = pt_spin(30);                 /* B: must be frozen  */
+    preempt_enable();
+    uint32_t c = pt_spin(30);                 /* C: moving again    */
+
+    pt_stop = 1;
+    task_yield();                             /* let bg observe the flag */
+
+    vga_printf("  A preempt on   : %u\n", a);
+    vga_printf("  B disabled     : %u\n", b);
+    vga_printf("  C re-enabled   : %u\n", c);
+    vga_printf("  depth after    : %d\n", task_current()->preempt_depth);
+    klog("[pt] A=%u B=%u C=%u depth=%d\n", a, b, c,
+         task_current()->preempt_depth);
+
+    int ok = (a > 0) && (b == 0) && (c > 0) &&
+             (task_current()->preempt_depth == 0);
+    vga_set_color(ok ? VGA_LIGHT_GREEN : VGA_LIGHT_RED, VGA_BLACK);
+    vga_puts(ok ? "  [pass] preempt_disable suppresses and balances\n"
+                : "  [FAIL] preempt_disable is not behaving\n");
+    vga_set_color(VGA_LIGHT_GREY, VGA_BLACK);
+    klog(ok ? "[pt] PASS\n" : "[pt] FAIL\n");
+}
+
 /* ---- tab completion ---- */
 
 static void prompt(void);  /* forward declaration */
@@ -2221,6 +2277,7 @@ static void dispatch(const char *buf) {
         const char *a = p + 2; while (*a == ' ') a++;
         cmd_cd(a);
     }
+    else if (str_eq(p, "preempttest")) cmd_preempttest();
     else if (str_eq(p, "whoami"))    cmd_whoami();
 #ifndef NO_CHALLENGE
     else if (str_eq(p, "special"))   challenge_special();

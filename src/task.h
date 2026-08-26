@@ -25,6 +25,7 @@ typedef struct task {
     uint32_t      wake_tick;     /* for task_sleep: PIT tick to wake at  */
     void        (*entry)(void *);/* first-run entry point (via trampoline) */
     void         *arg;           /* argument passed to entry             */
+    int           preempt_depth; /* >0 = this task must not be preempted */
 } task_t;
 
 /* Simple intrusive wait queue - FIFO singly-linked list of blocked tasks.

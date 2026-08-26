@@ -49,6 +49,20 @@ ifeq ($(CHALLENGE),0)
   CFLAGS += -DNO_CHALLENGE
 endif
 
+# Object files do not record the flags they were compiled with, so switching
+# DOOM or CHALLENGE without a clean silently links objects built under the
+# wrong configuration. The failure is confusing: an excluded source is dropped
+# from the link while a stale object still references it, so you get an
+# undefined reference to something you deliberately compiled out. Stamp the
+# config into a file and make every object depend on it.
+CONFIG_SIG := DOOM=$(DOOM) CHALLENGE=$(CHALLENGE)
+
+# Rewrite the stamp during parsing, before any rule runs, so .build-config is
+# just an ordinary prerequisite. Done with $(shell ...) rather than a FORCE
+# target because a FORCE target declared here would become make's default goal.
+$(shell echo '$(CONFIG_SIG)' | cmp -s - .build-config 2>/dev/null || \
+        echo '$(CONFIG_SIG)' > .build-config)
+
 OBJ_C   = $(SRC_C:.c=.o)
 OBJ_ASM = $(SRC_ASM:.asm=.o)
 OBJS    = $(OBJ_C) $(OBJ_ASM)
@@ -69,11 +83,11 @@ user/%.elf: user/%.c user/ulib.c user/ulib.h user/user.ld src/syscall_nr.h
 	$(CC) $(UCFLAGS) -Wl,-T,user/user.ld -o $@ user/ulib.c user/$*.c
 
 # Compile C
-src/%.o: src/%.c
+src/%.o: src/%.c .build-config
 	$(CC) $(CFLAGS) -c $< -o $@
 
 # Assemble
-src/%.o: src/%.asm
+src/%.o: src/%.asm .build-config
 	$(AS) $(ASFLAGS) $< -o $@
 
 # Link (libgcc provides __divdi3/__udivdi3 for 64-bit integer math on 32-bit targets)
@@ -198,7 +212,7 @@ run-tcp: iso $(DISK)
 	    -display none -serial tcp:127.0.0.1:$(CONSOLE_PORT),server
 
 clean:
-	rm -f src/*.o $(TARGET) $(ISO) iso/boot/kernel.elf user/*.elf
+	rm -f src/*.o $(TARGET) $(ISO) iso/boot/kernel.elf user/*.elf .build-config
 
 # Also removes the disk image (user data)
 distclean: clean

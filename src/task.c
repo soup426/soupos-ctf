@@ -25,8 +25,23 @@ static volatile int preempt_armed = 0;
 static inline void sched_lock(void)   { sched_locked++; }
 static inline void sched_unlock(void) { sched_locked--; }
 
-void preempt_disable(void)     { sched_lock(); }
-void preempt_enable(void)      { sched_unlock(); }
+/* preempt_disable/enable are PER-TASK, and deliberately not sched_lock().
+ *
+ * sched_locked is the scheduler's own lock and is designed to unbalance
+ * across a context switch: task_yield takes it, and whoever is switched *to*
+ * runs the matching release. That is exactly right for handing off a switch,
+ * and exactly wrong for a caller-held critical section. Routing
+ * preempt_disable through it meant a region that yielded had its release run
+ * by an unrelated task, leaving that task permanently unpreemptable while the
+ * original ran on with no protection.
+ *
+ * Keeping the depth in task_t means it travels with the task that took it. */
+void preempt_disable(void) {
+    if (current) current->preempt_depth++;
+}
+void preempt_enable(void) {
+    if (current && current->preempt_depth > 0) current->preempt_depth--;
+}
 void task_preempt_enable(void) { preempt_armed = 1; }
 
 static void list_add(task_t *t) {
@@ -103,6 +118,7 @@ void task_init(void) {
     t->wake_tick  = 0;
     t->entry      = 0;
     t->arg        = 0;
+    t->preempt_depth = 0;   /* kmalloc does not zero */
 
     const char nm[] = "kernel";
     for (uint32_t i = 0; i < sizeof(nm); i++) t->name[i] = nm[i];
@@ -126,6 +142,7 @@ task_t *task_spawn(const char *name, void (*entry)(void *), void *arg) {
     t->wake_tick  = 0;
     t->entry      = entry;
     t->arg        = arg;
+    t->preempt_depth = 0;   /* kmalloc does not zero */
 
     uint32_t i = 0;
     while (name && name[i] && i < sizeof(t->name) - 1) {
@@ -187,6 +204,7 @@ static void task_start(void) {
 void sched_preempt(void) {
     if (!preempt_armed || sched_locked) return;   /* not armed / in scheduler */
     if (!current) return;
+    if (current->preempt_depth > 0) return;       /* task holds preempt_disable */
     /* task_yield walks/mutates the list and may task_switch; sched_locked is 0
      * here (checked above) and we run with IF=0, so starting a switch is safe.
      * A timer firing during the switch will see sched_locked != 0 and skip.
