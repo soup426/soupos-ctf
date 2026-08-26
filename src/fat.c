@@ -1,4 +1,15 @@
 #include "fat.h"
+#include "task.h"
+
+/* One lock for the whole FAT layer.
+ *
+ * fat.c keeps its cursor, sector cache, free-cluster hint and fd table in
+ * file-scope state, and since v0.7.4 the timer can switch tasks anywhere.
+ * preempt_disable would not be enough: these operations yield inside the
+ * ATA PIO wait, so another task could still enter voluntarily. The lock is
+ * recursive because these entry points call each other. */
+static mutex_t fat_mtx;
+
 #include "ata.h"
 #include "str.h"
 
@@ -376,7 +387,7 @@ const char *fat_label(void)     { return vol_label;   }
 
 /* ---- Public: fat_ls ---- */
 
-int fat_ls(const char *path, fat_entry_t *out, int max) {
+static int fat_ls_impl(const char *path, fat_entry_t *out, int max) {
     if (!initialized) return -1;
 
     uint32_t dir_cl;
@@ -402,7 +413,7 @@ int fat_ls(const char *path, fat_entry_t *out, int max) {
 
 /* ---- Public: fat_read ---- */
 
-int fat_read(const char *path, uint8_t *buf, uint32_t bufsize, uint32_t *out_size) {
+static int fat_read_impl(const char *path, uint8_t *buf, uint32_t bufsize, uint32_t *out_size) {
     if (!initialized || !path || !buf) return -1;
 
     uint32_t parent_cl;
@@ -569,7 +580,7 @@ static int dir_alloc_slot(uint32_t dir_cl, uint32_t *out_lba, int *out_idx) {
 
 /* ---- Public: fat_write ---- */
 
-int fat_write(const char *path, const uint8_t *buf, uint32_t size) {
+static int fat_write_impl(const char *path, const uint8_t *buf, uint32_t size) {
     if (!initialized || !path || fs_type_val == 32) return -1;
 
     uint32_t parent_cl;
@@ -646,7 +657,7 @@ int fat_write(const char *path, const uint8_t *buf, uint32_t size) {
 
 /* ---- Public: fat_mkdir ---- */
 
-int fat_mkdir(const char *path) {
+static int fat_mkdir_impl(const char *path) {
     if (!initialized || !path || fs_type_val == 32) return -1;
 
     uint32_t parent_cl;
@@ -703,7 +714,7 @@ int fat_mkdir(const char *path) {
 
 /* ---- Public: fat_rmdir ---- */
 
-int fat_rmdir(const char *path) {
+static int fat_rmdir_impl(const char *path) {
     if (!initialized || !path || fs_type_val == 32) return -1;
 
     uint32_t parent_cl;
@@ -752,7 +763,7 @@ empty_ok:
 
 /* ---- Public: fat_is_dir / fat_exists ---- */
 
-int fat_is_dir(const char *path) {
+static int fat_is_dir_impl(const char *path) {
     if (!initialized) return 0;
     uint32_t parent_cl;
     char     leaf[FAT_NAME_MAX];
@@ -764,7 +775,7 @@ int fat_is_dir(const char *path) {
     return (de.attr & FAT_ATTR_DIR) ? 1 : 0;
 }
 
-int fat_exists(const char *path) {
+static int fat_exists_impl(const char *path) {
     if (!initialized) return 0;
     uint32_t parent_cl;
     char     leaf[FAT_NAME_MAX];
@@ -776,7 +787,7 @@ int fat_exists(const char *path) {
 
 /* ---- Public: fat_stat / fat_chmod / fat_chown ---- */
 
-int fat_stat(const char *path, uint8_t *owner, uint8_t *mode) {
+static int fat_stat_impl(const char *path, uint8_t *owner, uint8_t *mode) {
     if (!initialized) return -1;
     uint32_t parent_cl;
     char     leaf[FAT_NAME_MAX];
@@ -818,13 +829,13 @@ static int fat_set_meta(const char *path, uint8_t mode, uint8_t owner) {
     return ata_write_sector(e_lba, sec_buf);
 }
 
-int fat_chmod(const char *path, uint8_t mode) {
+static int fat_chmod_impl(const char *path, uint8_t mode) {
     uint8_t owner, oldmode;
     if (fat_stat(path, &owner, &oldmode) < 0) return -1;
     return fat_set_meta(path, mode, owner);
 }
 
-int fat_chown(const char *path, uint8_t owner) {
+static int fat_chown_impl(const char *path, uint8_t owner) {
     uint8_t oldowner, mode;
     if (fat_stat(path, &oldowner, &mode) < 0) return -1;
     return fat_set_meta(path, mode, owner);
@@ -832,7 +843,7 @@ int fat_chown(const char *path, uint8_t owner) {
 
 /* ---- Public: fat_delete ---- */
 
-int fat_delete(const char *path) {
+static int fat_delete_impl(const char *path) {
     if (!initialized || !path || fs_type_val == 32) return -1;
 
     uint32_t parent_cl;
@@ -875,7 +886,7 @@ static uint32_t chain_advance(uint32_t cl, uint32_t steps) {
     return cl;
 }
 
-int fat_fopen(const char *path) {
+static int fat_fopen_impl(const char *path) {
     if (!initialized || !path) return -1;
 
     int fd = -1;
@@ -902,12 +913,12 @@ int fat_fopen(const char *path) {
     return fd;
 }
 
-void fat_fclose(int fd) {
+static void fat_fclose_impl(int fd) {
     if (fd >= 0 && fd < FAT_MAX_FD)
         fat_fds[fd].open = 0;
 }
 
-int fat_fread(int fd, void *buf, uint32_t count) {
+static int fat_fread_impl(int fd, void *buf, uint32_t count) {
     if (fd < 0 || fd >= FAT_MAX_FD || !fat_fds[fd].open) return -1;
     fat_fd_t *f = &fat_fds[fd];
 
@@ -945,7 +956,7 @@ int fat_fread(int fd, void *buf, uint32_t count) {
     return (int)done_r;
 }
 
-int fat_fseek(int fd, int32_t offset, int whence) {
+static int fat_fseek_impl(int fd, int32_t offset, int whence) {
     if (fd < 0 || fd >= FAT_MAX_FD || !fat_fds[fd].open) return -1;
     fat_fd_t *f = &fat_fds[fd];
 
@@ -987,4 +998,112 @@ uint32_t fat_fsize(int fd) {
 int fat_feof(int fd) {
     if (fd < 0 || fd >= FAT_MAX_FD || !fat_fds[fd].open) return 1;
     return fat_fds[fd].pos >= fat_fds[fd].file_size;
+}
+
+/* ── Locked public entry points ───────────────────────────────────────────
+ * Each real implementation is now static and named *_impl; these thin
+ * wrappers take the FAT lock around it. Wrapping rather than editing every
+ * return path keeps the lock impossible to leak on an error exit. */
+int fat_ls(const char *path, fat_entry_t *out, int max) {
+    mutex_lock(&fat_mtx);
+    int _r = fat_ls_impl(path, out, max);
+    mutex_unlock(&fat_mtx);
+    return _r;
+}
+
+int fat_read(const char *path, uint8_t *buf, uint32_t bufsize, uint32_t *out_size) {
+    mutex_lock(&fat_mtx);
+    int _r = fat_read_impl(path, buf, bufsize, out_size);
+    mutex_unlock(&fat_mtx);
+    return _r;
+}
+
+int fat_write(const char *path, const uint8_t *buf, uint32_t size) {
+    mutex_lock(&fat_mtx);
+    int _r = fat_write_impl(path, buf, size);
+    mutex_unlock(&fat_mtx);
+    return _r;
+}
+
+int fat_mkdir(const char *path) {
+    mutex_lock(&fat_mtx);
+    int _r = fat_mkdir_impl(path);
+    mutex_unlock(&fat_mtx);
+    return _r;
+}
+
+int fat_rmdir(const char *path) {
+    mutex_lock(&fat_mtx);
+    int _r = fat_rmdir_impl(path);
+    mutex_unlock(&fat_mtx);
+    return _r;
+}
+
+int fat_is_dir(const char *path) {
+    mutex_lock(&fat_mtx);
+    int _r = fat_is_dir_impl(path);
+    mutex_unlock(&fat_mtx);
+    return _r;
+}
+
+int fat_exists(const char *path) {
+    mutex_lock(&fat_mtx);
+    int _r = fat_exists_impl(path);
+    mutex_unlock(&fat_mtx);
+    return _r;
+}
+
+int fat_stat(const char *path, uint8_t *owner, uint8_t *mode) {
+    mutex_lock(&fat_mtx);
+    int _r = fat_stat_impl(path, owner, mode);
+    mutex_unlock(&fat_mtx);
+    return _r;
+}
+
+int fat_chmod(const char *path, uint8_t mode) {
+    mutex_lock(&fat_mtx);
+    int _r = fat_chmod_impl(path, mode);
+    mutex_unlock(&fat_mtx);
+    return _r;
+}
+
+int fat_chown(const char *path, uint8_t owner) {
+    mutex_lock(&fat_mtx);
+    int _r = fat_chown_impl(path, owner);
+    mutex_unlock(&fat_mtx);
+    return _r;
+}
+
+int fat_delete(const char *path) {
+    mutex_lock(&fat_mtx);
+    int _r = fat_delete_impl(path);
+    mutex_unlock(&fat_mtx);
+    return _r;
+}
+
+int fat_fopen(const char *path) {
+    mutex_lock(&fat_mtx);
+    int _r = fat_fopen_impl(path);
+    mutex_unlock(&fat_mtx);
+    return _r;
+}
+
+void fat_fclose(int fd) {
+    mutex_lock(&fat_mtx);
+    fat_fclose_impl(fd);
+    mutex_unlock(&fat_mtx);
+}
+
+int fat_fread(int fd, void *buf, uint32_t count) {
+    mutex_lock(&fat_mtx);
+    int _r = fat_fread_impl(fd, buf, count);
+    mutex_unlock(&fat_mtx);
+    return _r;
+}
+
+int fat_fseek(int fd, int32_t offset, int whence) {
+    mutex_lock(&fat_mtx);
+    int _r = fat_fseek_impl(fd, offset, whence);
+    mutex_unlock(&fat_mtx);
+    return _r;
 }

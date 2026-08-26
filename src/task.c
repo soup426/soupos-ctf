@@ -305,6 +305,44 @@ void task_sleep(uint32_t ms) {
 
 /* Mark current task BLOCKED, append it to wq, then yield.
  * Returns once task_wake / task_wake_one moves us back to READY. */
+/* ── Mutex ─────────────────────────────────────────────────────────────── */
+
+void mutex_lock(mutex_t *m) {
+    task_t *me = task_current();
+    if (!m || !me) return;              /* pre-scheduler: nothing to race */
+
+    for (;;) {
+        preempt_disable();              /* make test-and-take atomic vs the timer */
+        if (!m->owner || m->owner == me) {
+            m->owner = me;
+            m->depth++;
+            preempt_enable();
+            return;
+        }
+        /* Held by someone else. Stay unpreemptable across the enqueue so the
+         * owner cannot release and wake an empty queue between our check and
+         * our going to sleep - the classic lost wakeup. task_block_on links
+         * us on before it yields, and task_yield is voluntary so it works
+         * while preemption is disabled. */
+        task_block_on(&m->wq);
+        preempt_enable();               /* woken: retry the loop */
+    }
+}
+
+void mutex_unlock(mutex_t *m) {
+    task_t *me = task_current();
+    if (!m || !me) return;
+    if (m->owner != me) return;         /* not ours: ignore */
+
+    preempt_disable();
+    if (--m->depth <= 0) {
+        m->depth = 0;
+        m->owner = 0;
+        task_wake_one(&m->wq);
+    }
+    preempt_enable();
+}
+
 void task_block_on(wait_queue_t *wq) {
     if (!current || !wq) return;
 

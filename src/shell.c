@@ -2097,6 +2097,64 @@ static void cmd_preempttest(void) {
     klog(ok ? "[pt] PASS\n" : "[pt] FAIL\n");
 }
 
+/* fatstress - two tasks hammering the filesystem at once.
+ *
+ * fat.c keeps its cursor, sector cache, free-cluster hint and fd table in
+ * file-scope state, and the timer can switch tasks anywhere. Each task writes
+ * its own file with a known pattern and reads it straight back; if the layers
+ * interleave, a read comes back as the other task's data or as garbage. */
+#define FS_ITERS 12
+static volatile int fs_bg_errors, fs_bg_done;
+
+static void fs_fill(char *buf, char tag, int i) {
+    for (int k = 0; k < 32; k++) buf[k] = tag;
+    buf[0]  = tag;
+    buf[1]  = (char)('0' + (i % 10));
+    buf[32] = '\0';
+}
+
+static int fs_cycle(const char *path, char tag) {
+    char w[33], r[64];
+    uint32_t got = 0;
+    int errors = 0;
+    for (int i = 0; i < FS_ITERS; i++) {
+        fs_fill(w, tag, i);
+        if (fat_write(path, (const uint8_t *)w, 32) < 0) { errors++; continue; }
+        for (int k = 0; k < (int)sizeof(r); k++) r[k] = 0;
+        if (fat_read(path, (uint8_t *)r, sizeof(r) - 1, &got) < 0) { errors++; continue; }
+        if (got != 32) { errors++; continue; }
+        for (int k = 0; k < 32; k++)
+            if (r[k] != w[k]) { errors++; break; }
+    }
+    return errors;
+}
+
+static void fs_bg(void *arg) {
+    (void)arg;
+    fs_bg_errors = fs_cycle("/FSB.TXT", 'B');
+    fs_bg_done   = 1;
+}
+
+static void cmd_fatstress(void) {
+    fs_bg_errors = 0; fs_bg_done = 0;
+    vga_printf("  two tasks, %d write+verify cycles each...\n", FS_ITERS);
+    task_t *bg = task_spawn("fatstress", fs_bg, 0);
+    if (!bg) { vga_puts("fatstress: out of memory\n"); return; }
+
+    int fg = fs_cycle("/FSA.TXT", 'A');
+    while (!fs_bg_done) { task_yield(); __asm__ volatile ("hlt"); }
+
+    vga_printf("  foreground mismatches: %d\n", fg);
+    vga_printf("  background mismatches: %d\n", fs_bg_errors);
+    int ok = (fg == 0 && fs_bg_errors == 0);
+    vga_set_color(ok ? VGA_LIGHT_GREEN : VGA_LIGHT_RED, VGA_BLACK);
+    vga_puts(ok ? "  [pass] concurrent FAT access stayed consistent\n"
+                : "  [FAIL] FAT state was corrupted by interleaving\n");
+    vga_set_color(VGA_LIGHT_GREY, VGA_BLACK);
+    klog(ok ? "[fatstress] PASS fg=%d bg=%d\n" : "[fatstress] FAIL fg=%d bg=%d\n",
+         fg, fs_bg_errors);
+}
+
 /* ---- tab completion ---- */
 
 static void prompt(void);  /* forward declaration */
@@ -2278,6 +2336,7 @@ static void dispatch(const char *buf) {
         cmd_cd(a);
     }
     else if (str_eq(p, "preempttest")) cmd_preempttest();
+    else if (str_eq(p, "fatstress"))  cmd_fatstress();
     else if (str_eq(p, "whoami"))    cmd_whoami();
 #ifndef NO_CHALLENGE
     else if (str_eq(p, "special"))   challenge_special();

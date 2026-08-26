@@ -43,6 +43,8 @@ python3 scripts/qemu_keys.py "$MON" \
     "headchef" "rosemary" "WAIT:1" \
     "cook systest.elf hello world" "WAIT:3" \
     "cook hello.elf" "WAIT:2" \
+    "preempttest" "WAIT:8" \
+    "fatstress" "WAIT:30" \
     "yieldbg" "cook spin.elf" "WAIT:11" >/dev/null || {
         echo "FAIL: could not drive the QEMU monitor"; exit 1; }
 
@@ -65,6 +67,8 @@ check "ring3 open/read syscall"      'TESTOUT read=Hello from soupOS'
 check "ring3 sbrk syscall"           'TESTOUT heap='
 check "ring3 yield reaches sched"    '\[u\] step'
 check "background task ran"          '\[bg\] done'
+check "preempt_disable works"       'PASS'
+check "concurrent FAT is safe"      '\[fatstress\] PASS'
 
 # The point of preemption: the [bg] sleeper must keep ticking while a
 # ring-3 program is running, i.e. [bg] markers appear on both sides of [u].

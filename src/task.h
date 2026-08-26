@@ -88,6 +88,28 @@ void     task_sleep(uint32_t ms);
 /* Wait-queue primitives. task_block_on marks the current task BLOCKED,
  * links it onto wq, and yields. task_wake / task_wake_one move tasks
  * back to READY. */
+/* ── Mutex ────────────────────────────────────────────────────────────────
+ * A sleeping, recursive lock for driver state.
+ *
+ * preempt_disable is the wrong tool for the drivers: it stops the timer
+ * switching tasks, but a task that yields voluntarily inside the region (and
+ * FAT does, via the ATA PIO wait loop) still lets another task walk straight
+ * into the same critical section. A mutex blocks the second task instead.
+ *
+ * Recursive because the FAT entry points call each other; taking the lock at
+ * each public entry would otherwise self-deadlock.
+ *
+ * Safe before the scheduler exists: with no current task there is no
+ * concurrency, and lock/unlock become no-ops. */
+typedef struct {
+    struct task  *owner;
+    int           depth;
+    wait_queue_t  wq;
+} mutex_t;
+
+void     mutex_lock(mutex_t *m);
+void     mutex_unlock(mutex_t *m);
+
 void     task_block_on(wait_queue_t *wq);
 void     task_wake(wait_queue_t *wq);
 void     task_wake_one(wait_queue_t *wq);
