@@ -233,6 +233,11 @@ against an unfamiliar target with the source in hand.
 
 ---
 
+> **Decided 2026-08-26:** ship the four-stage chain Mise en Place -> Salt to
+> Taste -> Bad Recipe -> Too Many Cooks. Build plan, including how Bad Recipe
+> and Too Many Cooks were split so they do not both end at the same primitive,
+> is in [`challenge-chain-plan.md`](challenge-chain-plan.md).
+
 ## Decisions still needed
 
 **Handout.** Recommendation: full source plus the vulnerable diff. Kernel pwn
