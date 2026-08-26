@@ -54,7 +54,26 @@ after the event, and `docs/challenge-solutions.md` is a full spoiler.
 
 ## 2. Before the event
 
-### Solve the chain from a browser, as a player
+### ~~Solve the chain from a browser, as a player~~ DONE 2026-08-26
+
+Driven entirely through the PS/2 keyboard via QEMU `sendkey`, which is the
+same input path noVNC uses, with screendumps at each step. All four stages
+captured their flags.
+
+The specific worry is resolved: `jot` renders correctly and takes input this
+way. Screendumps show the editor with typed text, the `~` empty-line markers,
+and its status bar (`L.HEX *  Ln 6,C 1  ^S save ESC quit`). Typing the 300
+hex characters for stage 3 through it took about 11 seconds and produced a
+working 150-byte ELF.
+
+One cosmetic note: stage 3 dumps 0x40 bytes, and the flag is 39 characters, so
+about 24 bytes of binary padding print after it and shove the exit message
+around. The flag is plainly readable; it just is not tidy. Shrinking the
+window to 0x30 would clean it up.
+
+Original note below.
+
+### Original: solve the chain from a browser
 
 Everything so far was verified over the **serial console**, plus a screendump
 proving the deployed container boots. The chain has not been solved through
