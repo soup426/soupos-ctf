@@ -1,6 +1,8 @@
 #include "vga.h"
 #include "console.h"
+#ifndef NO_CHALLENGE
 #include "challenge.h"
+#endif
 #include "gdt.h"
 #include "idt.h"
 #include "isr.h"
@@ -91,8 +93,10 @@ void kernel_main(uint32_t mb_magic, uint32_t mb_info) {
     users_init();
     klog_puts("[boot] users ok\n");
 
+#ifndef NO_CHALLENGE
     challenge_init();
     klog_puts("[boot] challenge ok\n");
+#endif
 
     /* AI serial bridge on COM2 (present only when QEMU was given a COM2
      * backend, e.g. `make run-ai`). Safe to probe unconditionally. */

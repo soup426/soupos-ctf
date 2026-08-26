@@ -104,7 +104,8 @@ static void teardown_user_pages(void) {
     nmapped = 0;
 }
 
-static int load_segment(const uint8_t *buf, const elf32_phdr_t *ph) {
+static int load_segment(const uint8_t *buf, uint32_t bufsz,
+                        const elf32_phdr_t *ph) {
     uint32_t va_start = ph->p_vaddr & ~0xFFFu;
     uint32_t va_end   = (ph->p_vaddr + ph->p_memsz + 0xFFFu) & ~0xFFFu;
 
@@ -116,6 +117,20 @@ static int load_segment(const uint8_t *buf, const elf32_phdr_t *ph) {
     if (va_end <= va_start) return -1;                       /* wrapped */
     if (ph->p_vaddr < USER_LO) return -1;
     if (va_end > USER_HI)      return -1;
+
+#ifdef NO_CHALLENGE
+    /* And check where it reads FROM. p_offset is a file offset, so it must
+     * land inside the file we actually loaded; without this the memcpy below
+     * walks off the end of buf and copies arbitrary kernel memory into the
+     * program's own image. Checked for overflow first so p_offset + p_filesz
+     * cannot wrap and look in range. */
+    if (ph->p_offset > bufsz) return -1;
+    if (ph->p_filesz > bufsz - ph->p_offset) return -1;
+#else
+    /* CHALLENGE=1: p_offset is deliberately NOT validated. The loader checks
+     * where it writes but not where it reads from, which is stage 3. */
+    (void)bufsz;
+#endif
     for (uint32_t va = va_start; va < va_end; va += 4096)
         if (map_user_page(va) < 0) return -1;
     /* Zero the whole span (covers .bss), then drop in the file image. */
@@ -149,7 +164,7 @@ int exec_elf(const char *path, const char *args) {
     elf32_phdr_t *ph = (elf32_phdr_t *)(buf + eh->e_phoff);
     for (int i = 0; i < eh->e_phnum; i++) {
         if (ph[i].p_type != PT_LOAD || ph[i].p_memsz == 0) continue;
-        if (load_segment(buf, &ph[i]) < 0) {
+        if (load_segment(buf, size, &ph[i]) < 0) {
             teardown_user_pages(); kfree(buf); return -1;
         }
     }

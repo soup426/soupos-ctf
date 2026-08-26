@@ -48,7 +48,9 @@
  */
 
 #include "soupyc.h"
+#ifndef NO_CHALLENGE
 #include "challenge.h"
+#endif
 #include "vga.h"
 #include "keyboard.h"
 #include "str.h"
@@ -1155,8 +1157,14 @@ static val_t eval_node(node_t *n) {
             }
             arr_t *a = &arrays[base.ival];
             int i = as_int(idx);
-            /* Upper bound only. A negative index writes below the pool. */
+#ifdef NO_CHALLENGE
+            if (i < 0 || i >= a->len) {
+#else
+            /* CHALLENGE=1: upper bound only, so a negative index writes below
+             * the pool. soupyc runs in ring 0, so this is a kernel write from
+             * a script. Stage 4 of the CTF chain. */
             if (i >= a->len) {
+#endif
                 set_err("array index out of range"); return mkival(0);
             }
             a->elems[i] = v;
@@ -1563,7 +1571,9 @@ int soupyc_run(const char *source) {
     }
 
     /* Post-run hook. Never set by anything in the tree. */
+#ifndef NO_CHALLENGE
     if (sc_state.after_hook) sc_state.after_hook();
+#endif
 
     return 0;
 }

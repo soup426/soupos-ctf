@@ -21,7 +21,9 @@
 #include "editor.h"
 #include "ai.h"
 #include "usermode.h"
+#ifndef NO_CHALLENGE
 #include "challenge.h"
+#endif
 #ifndef NO_DOOM
 #include "doom.h"
 #endif
@@ -2220,7 +2222,9 @@ static void dispatch(const char *buf) {
         cmd_cd(a);
     }
     else if (str_eq(p, "whoami"))    cmd_whoami();
+#ifndef NO_CHALLENGE
     else if (str_eq(p, "special"))   challenge_special();
+#endif
     else if (str_eq(p, "roster"))    cmd_roster();
     else if (str_eq(p, "clockout"))  cmd_clockout();
     else if (str_startswith(p, "hire")) {

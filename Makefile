@@ -36,6 +36,19 @@ ifeq ($(DOOM),0)
   CFLAGS += -DNO_DOOM
 endif
 
+# CTF build. OFF by default, and deliberately opt-in: CHALLENGE=1 re-opens two
+# memory-safety holes that exist only so the challenge chain is solvable (a
+# soupyc negative-index kernel write, and an unvalidated ELF p_offset that
+# reads arbitrary kernel memory). A normal soupOS build must not carry those,
+# so the secure path is the default and the vulnerable one has to be asked for.
+#   make                      -> normal soupOS
+#   make CHALLENGE=1 DOOM=0   -> the CTF image
+CHALLENGE ?= 0
+ifeq ($(CHALLENGE),0)
+  SRC_C  := $(filter-out src/challenge.c,$(SRC_C))
+  CFLAGS += -DNO_CHALLENGE
+endif
+
 OBJ_C   = $(SRC_C:.c=.o)
 OBJ_ASM = $(SRC_ASM:.asm=.o)
 OBJS    = $(OBJ_C) $(OBJ_ASM)
