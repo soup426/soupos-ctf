@@ -7,7 +7,15 @@ the work: the event, keeping the project safe, and where soupOS goes next.
 
 ## 1. Do these regardless
 
-### The deliberately planted vulnerabilities are in mainline
+### ~~The deliberately planted vulnerabilities are in mainline~~ DONE 2026-08-26
+
+Fixed in `07c863b`. Both bugs now sit behind `CHALLENGE=1` (default 0), and
+`challenge.c` compiles out entirely. Verified both directions: the default
+build refuses both exploits and contains no flag strings; the `CHALLENGE=1
+DOOM=0` build still captures all four flags. Original note kept below for
+context.
+
+### Original: the planted vulnerabilities were unconditional
 
 This is the important one. Two bugs were planted for the CTF and **neither is
 behind a build flag**:

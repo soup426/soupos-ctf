@@ -276,11 +276,18 @@ by accident:
 
 ## Rebuild checklist
 
-The image is built with Doom excluded:
+The challenge image needs both flags. `CHALLENGE=1` re-opens the two planted
+bugs (stages 3 and 4 do not exist without it) and `DOOM=0` keeps the WAD
+parser out of the image:
 
 ```bash
-make DOOM=0 && make disk
+make CHALLENGE=1 DOOM=0 && make CHALLENGE=1 DOOM=0 disk
 ```
+
+A plain `make` builds normal soupOS: the bounds check and the p_offset
+validation are restored, challenge.c is not compiled in, and none of the four
+stages are solvable. That is the correct default; do not ship it as the
+challenge.
 
 After any kernel change, re-derive: the headchef hash (`pour /etc/kitchen`),
 the stage 3 offset (scan, or log `buf` temporarily), and the stage 4 address
