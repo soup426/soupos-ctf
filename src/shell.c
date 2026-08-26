@@ -21,6 +21,7 @@
 #include "editor.h"
 #include "ai.h"
 #include "usermode.h"
+#include "challenge.h"
 #ifndef NO_DOOM
 #include "doom.h"
 #endif
@@ -41,18 +42,6 @@ static int parse_num(const char *s) {
     int n = 0;
     while (*s >= '0' && *s <= '9') n = n * 10 + (*s++ - '0');
     return n;
-}
-static uint32_t parse_hex(const char *s) {
-    if (s[0] == '0' && (s[1] == 'x' || s[1] == 'X')) s += 2;
-    uint32_t v = 0;
-    while (*s) {
-        char c = *s++;
-        if      (c >= '0' && c <= '9') v = v * 16 + (uint32_t)(c - '0');
-        else if (c >= 'a' && c <= 'f') v = v * 16 + (uint32_t)(c - 'a' + 10);
-        else if (c >= 'A' && c <= 'F') v = v * 16 + (uint32_t)(c - 'A' + 10);
-        else break;
-    }
-    return v;
 }
 
 /* ---- I/O helper for reheat ---- */
@@ -339,7 +328,6 @@ static void line_replace(char *input, int *pos, int *len, const char *new_str) {
  *   expiry      - current date/time (RTC)
  *   chef        - CPU info (CPUID)
  *   pantry      - PCI device list
- *   taste       - hex dump memory
  *   recipe      - kernel version info
  *   leftovers   - command history
  *   spill       - trigger divide-by-zero
@@ -411,7 +399,6 @@ static void cmd_menu(void) {
         {0, "    beep <freq> [ms]   - play PC speaker tone"},
         {0, "    mandelbrot         - ASCII Mandelbrot set"},
         {0, "    vgademo            - mode 13h graphics demo"},
-        {0, "    taste <addr> [len] - hex dump memory"},
         {0, "    uname [-a]         - OS / arch / version"},
         {0, "    cal                - calendar for the current month"},
         {0, "    clock              - live digital clock"},
@@ -533,33 +520,6 @@ static void cmd_pantry(void) {
     if (n == 0) vga_puts("  (empty pantry - no PCI devices found)\n");
 }
 
-static void cmd_taste(const char *args) {
-    if (!args || !args[0]) {
-        vga_puts("Usage: taste <addr> [len]\n"); return;
-    }
-    uint32_t addr = parse_hex(args);
-    while (*args && *args != ' ') args++;
-    while (*args == ' ') args++;
-    uint32_t len = *args ? (uint32_t)parse_num(args) : 64;
-    if (len == 0) len = 64;
-    if (len > 512) len = 512;
-
-    const uint8_t *p = (const uint8_t *)addr;
-    for (uint32_t i = 0; i < len; i += 16) {
-        vga_printf("%08x: ", addr + i);
-        for (uint32_t j = 0; j < 16; j++) {
-            if (i + j < len) vga_printf("%02x ", p[i + j]);
-            else             vga_puts("   ");
-            if (j == 7) vga_putchar(' ');
-        }
-        vga_puts(" |");
-        for (uint32_t j = 0; j < 16 && i + j < len; j++) {
-            uint8_t b = p[i + j];
-            vga_putchar((b >= 0x20 && b < 0x7F) ? (char)b : '.');
-        }
-        vga_puts("|\n");
-    }
-}
 
 /* Left-align a string in a field of `width` characters */
 static void print_padded(const char *s, int width) {
@@ -2091,7 +2051,7 @@ static const char *const cmd_names[] = {
     "menu", "wash", "slurp", "season", "simmer", "broth", "ladle", "expiry",
     "chef", "pantry", "serve", "pour", "stir", "strain", "decant", "relabel",
     "jot", "ai", "cook", "soup", "hash",
-    "beep", "mandelbrot", "vgademo", "taste", "uname", "cal",
+    "beep", "mandelbrot", "vgademo", "uname", "cal",
     "clock", "wipe", "fortune", "bounce", "recipe", "leftovers", "spill",
     "freeze", "reheat", "ps", "kill", "bgclock", "yieldbg", "spinbg", "sleeptest", "vfstest",
     "dmesg", "pwd", "cd", "mkbowl", "rmbowl", "bowltest",
@@ -2260,6 +2220,7 @@ static void dispatch(const char *buf) {
         cmd_cd(a);
     }
     else if (str_eq(p, "whoami"))    cmd_whoami();
+    else if (str_eq(p, "special"))   challenge_special();
     else if (str_eq(p, "roster"))    cmd_roster();
     else if (str_eq(p, "clockout"))  cmd_clockout();
     else if (str_startswith(p, "hire")) {
@@ -2288,10 +2249,6 @@ static void dispatch(const char *buf) {
     }
     else if (str_eq(p, "mandelbrot")) cmd_mandelbrot();
     else if (str_eq(p, "vgademo"))   cmd_vgademo();
-    else if (str_startswith(p, "taste")) {
-        const char *a = p + 5; while (*a == ' ') a++;
-        cmd_taste(a);
-    }
     else if (str_startswith(p, "uname")) {
         const char *a = p + 5; while (*a == ' ') a++;
         cmd_uname(a);

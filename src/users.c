@@ -127,8 +127,15 @@ void users_init(void) {
         n_users = 0;
         copy_name(roster[0].name, "headchef");
         roster[0].uid  = 0;
-        roster[0].hash = hash_secret("soup");
-        n_users = 1;
+        /* Not guessable, and it does not need to be: users_check compares
+         * hashes, so any preimage of this 32-bit hash is accepted. That is
+         * the whole of challenge stage 2. */
+        roster[0].hash = hash_secret("rosemary");
+        /* The account players are given. Ordinary cook, no privileges. */
+        copy_name(roster[1].name, "cook");
+        roster[1].uid  = 1;
+        roster[1].hash = hash_secret("soup");
+        n_users = 2;
         users_save();
     }
 }
