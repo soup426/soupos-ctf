@@ -1817,12 +1817,31 @@ static int los_clear(int32_t x1, int32_t y1, int32_t x2, int32_t y2) {
     if (!lv_lines || !lv_verts) return 1;
     for (int i = 0; i < lv_nlines; i++) {
         const dlinedef_t *ld = &lv_lines[i];
-        if (ld->left_sdef != 0xFFFF) continue;          /* two-sided: see through */
         if (ld->v1 >= lv_nverts || ld->v2 >= lv_nverts) continue;
-        if (seg_crosses(x1, y1, x2, y2,
-                        lv_verts[ld->v1].x, lv_verts[ld->v1].y,
-                        lv_verts[ld->v2].x, lv_verts[ld->v2].y))
-            return 0;
+        if (!seg_crosses(x1, y1, x2, y2,
+                         lv_verts[ld->v1].x, lv_verts[ld->v1].y,
+                         lv_verts[ld->v2].x, lv_verts[ld->v2].y))
+            continue;
+
+        /* One-sided line: solid wall, always blocks. */
+        if (ld->left_sdef == 0xFFFF) return 0;
+
+        /* Two-sided: this is a gap between sectors, so it blocks only when
+         * the gap is shut. Doors are animated by moving the sector ceiling,
+         * so comparing live heights makes a closed door opaque and an open
+         * one transparent for free. Same test the renderer uses to decide
+         * whether a portal is passable. */
+        if (!lv_sdefs || !lv_sectors) return 0;
+        if (ld->right_sdef >= lv_nsdefs || ld->left_sdef >= lv_nsdefs) return 0;
+        uint16_t fs = lv_sdefs[ld->right_sdef].sector;
+        uint16_t bs = lv_sdefs[ld->left_sdef].sector;
+        if (fs >= lv_nsectors || bs >= lv_nsectors) return 0;
+
+        int32_t fc = lv_sectors[fs].ceil_h,  bc = lv_sectors[bs].ceil_h;
+        int32_t ff = lv_sectors[fs].floor_h, bf = lv_sectors[bs].floor_h;
+        int32_t top = (fc < bc) ? fc : bc;      /* lowest ceiling  */
+        int32_t bot = (ff > bf) ? ff : bf;      /* highest floor   */
+        if (top - bot <= 0) return 0;           /* shut: no sight through */
     }
     return 1;
 }
