@@ -7,3 +7,6 @@ iso/boot/kernel.elf
 
 # Large binary assets (shareware WAD — copy in manually, see `make wad`)
 *.WAD
+
+# Player handout (build artifact; regenerate with scripts/mk-handout.sh)
+handout/
