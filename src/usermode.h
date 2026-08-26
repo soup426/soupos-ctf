@@ -14,3 +14,14 @@ void usermode_selftest(void);
 /* Defined in usermode.asm. */
 extern void user_mode_enter(uint32_t entry, uint32_t user_stack_top);
 extern void user_mode_exit(void);
+
+/* Non-zero while a ring-3 program is running. The exception handler uses this
+ * to decide whether a fault kills the program or panics the kernel. */
+int  usermode_in_user(void);
+
+/* Kill the running ring-3 program after a fault. Does not return. */
+void usermode_fault(uint32_t exc, uint32_t err, uint32_t eip, uint32_t cr2);
+
+/* Details of the most recent ring-3 fault, for the shell to report. */
+void usermode_last_fault(uint32_t *exc, uint32_t *err,
+                         uint32_t *eip, uint32_t *cr2);

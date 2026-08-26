@@ -44,7 +44,7 @@ OBJS    = $(OBJ_C) $(OBJ_ASM)
 # Each links the user runtime (user/ulib.c) which provides _start + syscalls.
 UCFLAGS  = -m32 -ffreestanding -fno-pie -no-pie -fno-stack-protector \
            -nostdlib -Isrc -mgeneral-regs-only -O2
-USER_ELFS = user/hello.elf user/cat.elf user/echo.elf user/systest.elf user/spin.elf
+USER_ELFS = user/hello.elf user/cat.elf user/echo.elf user/systest.elf user/spin.elf user/crash.elf
 
 .PHONY: all clean distclean run run-ai run-console run-tcp iso disk user
 
@@ -112,6 +112,7 @@ $(DISK):
 	mcopy -i $(DISK) -o user/echo.elf    ::ECHO.ELF
 	mcopy -i $(DISK) -o user/systest.elf ::SYSTEST.ELF
 	mcopy -i $(DISK) -o user/spin.elf    ::SPIN.ELF
+	mcopy -i $(DISK) -o user/crash.elf   ::CRASH.ELF
 	@if [ -f DOOM1.WAD ]; then \
 	    echo "  Copying DOOM1.WAD to disk image..."; \
 	    mcopy -i $(DISK) DOOM1.WAD ::DOOM1.WAD; \

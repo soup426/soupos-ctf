@@ -1,4 +1,5 @@
 #include "isr.h"
+#include "usermode.h"
 #include "vga.h"
 #include "klog.h"
 #include "task.h"
@@ -63,6 +64,28 @@ void isr_handler(registers_t *regs) {
     const char *name = (regs->int_no < 20)
                             ? exception_names[regs->int_no]
                             : "Unknown";
+
+    /* A fault in ring 3 kills the program, not the machine. CPL lives in the
+     * low two bits of the saved CS; ring 3 can only be reached by a user
+     * program, and usermode_in_user() confirms one is actually running.
+     * Without this, `cook`ing an ELF with a bad instruction panicked and
+     * halted the whole box, which defeats the point of having ring 3. */
+    if ((regs->cs & 3) == 3 && usermode_in_user()) {
+        uint32_t cr2 = 0;
+        if (regs->int_no == 14)
+            __asm__ volatile ("mov %%cr2, %0" : "=r"(cr2));
+        vga_set_color(VGA_LIGHT_RED, VGA_BLACK);
+        vga_printf("\n  [program killed] exception %u: %s\n",
+                   regs->int_no, name);
+        vga_printf("  eip=0x%x err=0x%x", regs->eip, regs->err_code);
+        if (regs->int_no == 14) vga_printf(" cr2=0x%x", cr2);
+        vga_puts("\n");
+        vga_set_color(VGA_LIGHT_GREY, VGA_BLACK);
+        klog("[user] fault exc=%u err=0x%x eip=0x%x cr2=0x%x -> program killed\n",
+             regs->int_no, regs->err_code, regs->eip, cr2);
+        usermode_fault(regs->int_no, regs->err_code, regs->eip, cr2);
+        /* not reached */
+    }
     /* Ring 0 -> no privilege change -> the CPU did not push SS:ESP, so the
      * interrupted ESP is the address just past the CPU-pushed eflags. */
     uint32_t esp = (uint32_t)&regs->eflags + 4;

@@ -59,6 +59,10 @@ typedef struct {
 
 /* ---- per-run state ---- */
 static int          g_exit_code;
+/* Set while a ring-3 program is actually running, so the exception handler can
+ * tell a user fault (kill the program) from a kernel fault (panic). */
+static volatile int g_user_active;
+static uint32_t     g_fault_exc, g_fault_err, g_fault_eip, g_fault_cr2;
 static uint32_t     mapped[MAX_UPAGES];   /* page-aligned virt addrs we mapped */
 static int          nmapped;
 static uint32_t     g_user_brk;           /* current heap break              */
@@ -152,7 +156,9 @@ int exec_elf(const char *path, const char *args) {
     kfree(buf);                       /* segments are already copied out */
 
     g_exit_code = 0;
-    user_mode_enter(entry, USTACK_TOP);   /* returns after the exit syscall */
+    g_user_active = 1;
+    user_mode_enter(entry, USTACK_TOP);   /* returns after exit, or a fault */
+    g_user_active = 0;
 
     for (int i = 0; i < MAX_UFD; i++)     /* close anything left open */
         if (g_ufds[i]) { vfs_close(g_ufds[i]); g_ufds[i] = 0; }
@@ -288,4 +294,27 @@ void usermode_selftest(void) {
     __asm__ volatile ("int $0x80"
                       : : "a"(SYS_WRITE), "b"(2), "c"(msg), "d"(len)
                       : "memory");
+}
+
+/* ---- ring-3 fault handling ------------------------------------------------
+ * A fault in a user program must kill the program, not the machine. Ring 3
+ * exists precisely so a bad program cannot take the kernel down; before this,
+ * `cook`ing an ELF with a bad opcode panicked and halted the whole box. */
+
+int usermode_in_user(void) { return g_user_active; }
+
+void usermode_fault(uint32_t exc, uint32_t err, uint32_t eip, uint32_t cr2) {
+    g_fault_exc = exc; g_fault_err = err;
+    g_fault_eip = eip; g_fault_cr2 = cr2;
+    g_exit_code = -(int)(128u + exc);
+    g_user_active = 0;
+    user_mode_exit();                  /* unwinds into exec_elf; no return */
+}
+
+void usermode_last_fault(uint32_t *exc, uint32_t *err,
+                         uint32_t *eip, uint32_t *cr2) {
+    if (exc) *exc = g_fault_exc;
+    if (err) *err = g_fault_err;
+    if (eip) *eip = g_fault_eip;
+    if (cr2) *cr2 = g_fault_cr2;
 }
