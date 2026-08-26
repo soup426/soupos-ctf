@@ -21,7 +21,9 @@
 #include "editor.h"
 #include "ai.h"
 #include "usermode.h"
+#ifndef NO_DOOM
 #include "doom.h"
+#endif
 
 #define INPUT_MAX   256
 #define HIST_MAX     16
@@ -416,7 +418,9 @@ static void cmd_menu(void) {
         {0, "    wipe               - animated screen clear"},
         {0, "    fortune            - random line from FORTUNE.TXT"},
         {0, "    bounce             - VGA bouncing-ball screensaver"},
+#ifndef NO_DOOM
         {0, "    doom               - it runs Doom (needs DOOM1.WAD, no bg tasks)"},
+#endif
         {0, "    recipe             - kernel info"},
         {0, "    leftovers          - command history"},
         {0, "    spill              - divide-by-zero crash"},
@@ -2040,6 +2044,7 @@ static void cmd_reheat(void) {
     while (1) {}
 }
 
+#ifndef NO_DOOM
 /* doom - the port, un-parked 2026-08-26.
  *
  * Refuses to run while any other task is alive. doom.c has no task_yield() in
@@ -2072,6 +2077,7 @@ static void cmd_doom(void) {
     doom_menu_run();
     vga_clear();
 }
+#endif /* NO_DOOM */
 
 /* ---- tab completion ---- */
 
@@ -2079,7 +2085,9 @@ static void prompt(void);  /* forward declaration */
 
 /* Master list of shell command names. Keep in sync with dispatch(). */
 static const char *const cmd_names[] = {
+#ifndef NO_DOOM
     "doom",
+#endif
     "menu", "wash", "slurp", "season", "simmer", "broth", "ladle", "expiry",
     "chef", "pantry", "serve", "pour", "stir", "strain", "decant", "relabel",
     "jot", "ai", "cook", "soup", "hash",
@@ -2293,7 +2301,9 @@ static void dispatch(const char *buf) {
     else if (str_eq(p, "wipe"))      cmd_wipe();
     else if (str_eq(p, "fortune"))   cmd_fortune();
     else if (str_eq(p, "bounce"))    cmd_bounce();
+#ifndef NO_DOOM
     else if (str_eq(p, "doom"))      cmd_doom();
+#endif
     else if (str_eq(p, "cat"))       cmd_cat();  /* hidden */
     else if (str_eq(p, "ps"))          cmd_ps();
     else if (str_eq(p, "bgclock"))     cmd_bgclock();

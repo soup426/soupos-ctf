@@ -1,9 +1,14 @@
 # Bringing Doom back
 
-> **Pass one landed 2026-08-26 (v0.7.5).** Steps 1 and 2 are done and verified:
-> the port is back in `src/`, `doom` works, and it refuses to start while other
-> tasks are alive. Step 4's two bugs turned out to be already fixed. The enemy
-> AI bug (step 3) and steps 5 to 7 are still open.
+> **Complete 2026-08-26.** All seven steps are done.
+> - Steps 1-2: port re-enabled, refuses to start with other tasks alive (v0.7.5)
+> - Step 3: enemy AI fixed (v0.7.6) - the recorded diagnosis was wrong; the
+>   real causes were a too-small wake radius and no line-of-sight test
+> - Step 4: both bugs were already fixed by the 2026-08-25 vga13h work
+> - Step 5: no heap leak. 56 bytes used before Doom, 20280 after one level,
+>   20280 after two. Retained cache, not growth, against an 8 MB heap
+> - Step 6: runs in a browser over noVNC
+> - Step 7: `DOOM=0` excludes it from the build for the CTF image
 
 Plan to un-park the Doom port (`doom-disabled/`, parked 2026-05-20 at v0.5.0)
 against the current tree (v0.7.4). Written 2026-08-26.

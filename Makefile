@@ -26,6 +26,16 @@ LDFLAGS = -m elf_i386 -T linker.ld --oformat elf32-i386
 SRC_C   = $(wildcard src/*.c)
 SRC_ASM = $(wildcard src/*.asm)
 
+# Doom is in by default (it is the point of the OS). The CTF challenge image
+# builds with DOOM=0: 3000 lines parsing a 4 MB data file is a lot of extra
+# attack surface in an image whose whole value is a precisely specified solve
+# path, and the WAD is 4 MB of a 32 MB disk.
+DOOM   ?= 1
+ifeq ($(DOOM),0)
+  SRC_C  := $(filter-out src/doom.c src/wad.c,$(SRC_C))
+  CFLAGS += -DNO_DOOM
+endif
+
 OBJ_C   = $(SRC_C:.c=.o)
 OBJ_ASM = $(SRC_ASM:.asm=.o)
 OBJS    = $(OBJ_C) $(OBJ_ASM)
