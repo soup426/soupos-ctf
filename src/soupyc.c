@@ -48,6 +48,7 @@
  */
 
 #include "soupyc.h"
+#include "challenge.h"
 #include "vga.h"
 #include "keyboard.h"
 #include "str.h"
@@ -155,7 +156,23 @@ typedef struct {
     val_t elems[ARR_CAP];
 } arr_t;
 
-static arr_t arrays[MAX_ARRAYS];
+/* Interpreter state that sits immediately below the array pool.
+ *
+ * after_hook is called once a script finishes, if set. Nothing in the tree
+ * assigns it: reaching it is challenge stage 4. Laying it out in one struct
+ * with the pool makes the distance from an array's elements to the hook a
+ * fixed number rather than a link-order accident.
+ *
+ * guard exists so a val_t written just below the pool lands its `type` field
+ * here and its `ival` field exactly on after_hook. */
+static struct {
+    uint32_t  guard;                /* +0   */
+    void    (*after_hook)(void);    /* +4   */
+    uint8_t   pad[40];              /* +8   */
+    arr_t     pool[MAX_ARRAYS];     /* +48  */
+} sc_state;
+
+#define arrays sc_state.pool
 
 /* Reserve an array slot. Returns a handle, or -1 if the pool is full. */
 static int arr_alloc(void) {
@@ -1138,7 +1155,8 @@ static val_t eval_node(node_t *n) {
             }
             arr_t *a = &arrays[base.ival];
             int i = as_int(idx);
-            if (i < 0 || i >= a->len) {
+            /* Upper bound only. A negative index writes below the pool. */
+            if (i >= a->len) {
                 set_err("array index out of range"); return mkival(0);
             }
             a->elems[i] = v;
@@ -1543,6 +1561,9 @@ int soupyc_run(const char *source) {
         vga_set_color(VGA_LIGHT_GREY, VGA_BLACK);
         return -1;
     }
+
+    /* Post-run hook. Never set by anything in the tree. */
+    if (sc_state.after_hook) sc_state.after_hook();
 
     return 0;
 }

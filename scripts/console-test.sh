@@ -67,7 +67,7 @@ def send(raw, wait=1.5):
 
 drain(8)                                  # boot + login prompt
 send(b"headchef\r", 1.5)                  # CR is what a terminal sends
-send(b"soup\r", 2.0)
+send(b"rosemary\r", 2.0)
 send(b"whoami\r", 1.5)
 # Line editing over the wire: type a typo, erase it with DEL (0x7f), finish.
 send(b"roste", 0.5)

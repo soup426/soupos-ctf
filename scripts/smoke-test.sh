@@ -40,7 +40,7 @@ sleep 4
 # Log in as the default headchef, then exercise preemption and ring 3.
 # spin.elf runs ~3s and yieldbg ~6s, so they overlap on purpose.
 python3 scripts/qemu_keys.py "$MON" \
-    "headchef" "soup" "WAIT:1" \
+    "headchef" "rosemary" "WAIT:1" \
     "cook systest.elf hello world" "WAIT:3" \
     "cook hello.elf" "WAIT:2" \
     "yieldbg" "cook spin.elf" "WAIT:11" >/dev/null || {
