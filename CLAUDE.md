@@ -3,7 +3,7 @@
 ## What this is
 
 soupOS is a 32-bit x86 hobby OS written in C and NASM assembly (currently
-**v0.7.4**). It boots via GRUB and runs in protected mode with paging, a
+**v0.7.5**). It boots via GRUB and runs in protected mode with paging, a
 physical/heap allocator, and a cooperative scheduler. On top of that:
 
 - **Filesystem**: FAT16 read/write with subdirectories ("bowls") and a VFS shim
@@ -20,11 +20,13 @@ physical/heap allocator, and a cooperative scheduler. On top of that:
 
 Theming note: commands are kitchen-flavoured (`pour`/`stir`/`serve`/`cook`/…).
 
-> **Doom port — currently DISABLED (2026-05-20).** The hand-rolled Doom port
-> is parked in `doom-disabled/` (doom.c, doom.h, wad.c, wad.h) and excluded
-> from the build to focus on core OS work. The `doom` shell command is gone.
-> See `doom-disabled/README.txt` to re-enable. The "Doom Port" and "WAD
-> Structures" sections below describe that parked code for when it returns.
+> **Doom port: re-enabled 2026-08-26 (v0.7.5).** `doom.c/doom.h/wad.c/wad.h`
+> live in `src/` again and the `doom` shell command is back. It **refuses to
+> run while any other task is alive**, because doom.c has no `task_yield()` in
+> its gameplay path and only `heap.c` is preemption-safe. See
+> `docs/doom-reenable-plan.md` for why refusing beats `preempt_disable()` here.
+> Needs `DOOM1.WAD` on the disk (`make wad`). The enemy AI regression noted in
+> `ROADMAP.txt` is still open.
 
 The OS has **no libc**. All standard functions (memcpy, strlen, etc.) are in `src/doom_libc.c` / `src/str.c`. Everything is freestanding.
 
@@ -113,7 +115,7 @@ src/
   fat.c             FAT16 read/write + subdirectories ("bowls")
   vfs.c / vfs.h     VFS shim — uniform open/read/write over FAT + /dev
   users.c / users.h Kitchen staff — accounts, login, /etc/kitchen
-  wad.c / wad.h     Doom WAD reader (index by lump name) — PARKED in doom-disabled/
+  wad.c / wad.h     Doom WAD reader (index by lump name)
   doom.c / doom.h   Doom port (title, menu, level rendering)
   doom_libc.c       Freestanding C library (memcpy, etc.)
   shell.c           Interactive shell

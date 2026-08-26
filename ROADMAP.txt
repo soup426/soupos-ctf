@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.7.4
+Current version: v0.7.5
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,38 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.7.5  (2026-08-26)  - DOOM IS BACK
+  The port is un-parked. doom.c/doom.h/wad.c/wad.h moved from doom-disabled/
+  into src/; shell.c regained the include, cmd_doom(), the dispatch branch,
+  the tab-completion name and a menu line. No Makefile change (it globs
+  src/*.c). Kernel grew 561 KB -> 712 KB.
+  - It needed no porting. Checked before starting: doom.c and wad.c compile
+    with zero errors and zero warnings under the current CFLAGS including
+    -mgeneral-regs-only (the port is pure fixed-point, no float), resolve
+    every symbol against the current kernel, and still work against the
+    fat_f* streaming API. v0.6.0's absolute-path change does not break the
+    bare "DOOM1.WAD" in wad.c because path_split walks from the root.
+  - `doom` refuses to start when task_count() > 1. doom.c has no task_yield()
+    in its gameplay path: it was written for the cooperative scheduler where
+    monopolising the CPU was correct. Since v0.7.4 the timer preempts and
+    only heap.c is preemption-safe, so a background task can be scheduled
+    mid-frame and write to the VGA text buffer while Doom owns mode 13h and
+    the DAC, or race fat.c's file-scope state while Doom streams lumps.
+    Refusing was chosen over preempt_disable() around the session:
+    sched_locked is a single global that unbalances across a context switch,
+    and Doom's menus call keyboard_getchar(), which yields, so wrapping the
+    session would leak the lock into an unrelated task.
+  - Also guards on the WAD being present, pointing at `make wad`.
+  - Verified end to end: WAD loads (1264 lumps), mode 13h entered, menu and
+    episode/skill selection navigate, level loads and renders with textures,
+    flats, sprites and the status bar, movement works, ESC leaves the level,
+    and Quit Game returns to a clean text-mode shell.
+  - Two previously documented Doom bugs turned out to be already fixed by the
+    2026-08-25 vga13h work: the death screen's stuck PLAYPAL (restore_regs
+    restores all 768 DAC bytes) and garbled text after exit (the 8 KB plane-2
+    font is now saved and restored). Confirmed visually.
+  Still open: the enemy AI regression (see below).
 
 v0.7.4  (2026-08-25)  — PREEMPTIVE MULTITASKING + GCC 16 BUILD FIX
   The scheduler stops being cooperative-only: IRQ0 now switches tasks.
@@ -241,9 +273,19 @@ v0.4.0
 PARKED BUG — DOOM ENEMY AI (investigated 2026-04-19)
 ────────────────────────────────────────────────────────────────
 
-NOT a live bug: the Doom port was parked in doom-disabled/ on 2026-05-20
-and is excluded from the build, so nothing below affects the current
-kernel. Kept as the handover note for whoever re-enables it.
+LIVE again as of v0.7.5 (2026-08-26): the port is back in the build, so
+this is a real bug once more.
+
+Note on the leading hypothesis below: thing_ai_t is 4 bytes, so the
+lv_thing_ai allocation is only lv_nthings * 4, about 1 KB for a real level.
+For an 8 MB heap to fail that it must be at 100%, and the suggested fix of
+shrinking MAX_SPRITES is sized for a much larger allocation. Two better
+leads: doom.c sets lv_nthings before the lv_things kmalloc and never resets
+it on failure, so a failed allocation leaves the count non-zero and the AI
+loop dereferences a NULL lv_things -- which does not fault, because the
+kernel identity-maps from address 0, so it silently reads garbage; and the
+int32 overflow in the distance check (see hypothesis 3). See
+docs/doom-reenable-plan.md.
 
 All six Doom gameplay tasks (level exit, enemy ranged attacks, weapon
 flash, sector specials, locked doors, death screen) were implemented in

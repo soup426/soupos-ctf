@@ -21,6 +21,7 @@
 #include "editor.h"
 #include "ai.h"
 #include "usermode.h"
+#include "doom.h"
 
 #define INPUT_MAX   256
 #define HIST_MAX     16
@@ -415,6 +416,7 @@ static void cmd_menu(void) {
         {0, "    wipe               - animated screen clear"},
         {0, "    fortune            - random line from FORTUNE.TXT"},
         {0, "    bounce             - VGA bouncing-ball screensaver"},
+        {0, "    doom               - it runs Doom (needs DOOM1.WAD, no bg tasks)"},
         {0, "    recipe             - kernel info"},
         {0, "    leftovers          - command history"},
         {0, "    spill              - divide-by-zero crash"},
@@ -1783,7 +1785,7 @@ static void cmd_cal(void) {
 static void cmd_uname(const char *args) {
     int show_all = args && (args[0] == '-' && args[1] == 'a');
     if (show_all) {
-        vga_puts("soupOS 0.7.4 i686 soup-kernel protected-mode\n");
+        vga_puts("soupOS 0.7.5 i686 soup-kernel protected-mode\n");
     } else {
         vga_puts("soupOS\n");
     }
@@ -1976,7 +1978,7 @@ static void cmd_bounce(void) {
 
 static void cmd_recipe(void) {
     vga_set_color(VGA_LIGHT_CYAN, VGA_BLACK);
-    vga_puts("  soupOS  v0.7.4\n");
+    vga_puts("  soupOS  v0.7.5\n");
     vga_set_color(VGA_LIGHT_GREY, VGA_BLACK);
     vga_puts("  Architecture:  i686 (IA-32, protected mode)\n");
     vga_puts("  Kernel base:   0x00100000\n");
@@ -2038,12 +2040,46 @@ static void cmd_reheat(void) {
     while (1) {}
 }
 
+/* doom - the port, un-parked 2026-08-26.
+ *
+ * Refuses to run while any other task is alive. doom.c has no task_yield() in
+ * its gameplay path: it was written for the cooperative scheduler, where
+ * monopolising the CPU was correct. Since v0.7.4 the timer preempts, and only
+ * heap.c was made preemption-safe, so a background task can be scheduled
+ * mid-frame and write to the VGA text buffer while Doom owns mode 13h and the
+ * DAC, or race fat.c's file-scope state while Doom streams lumps from the WAD.
+ *
+ * Refusing is deliberately chosen over preempt_disable() around the session:
+ * sched_locked is a single global that unbalances across a context switch, and
+ * Doom's menus call keyboard_getchar(), which yields. Wrapping the session
+ * would leak the lock into an unrelated task the first time a player paused on
+ * a menu. See docs/doom-reenable-plan.md. */
+static void cmd_doom(void) {
+    if (task_count() > 1) {
+        vga_set_color(VGA_YELLOW, VGA_BLACK);
+        vga_puts("  Doom needs the machine to itself.\n");
+        vga_set_color(VGA_LIGHT_GREY, VGA_BLACK);
+        vga_puts("  Stop your background tasks first:  ps, then kill <id>\n");
+        return;
+    }
+    if (!fat_exists("DOOM1.WAD")) {
+        vga_set_color(VGA_YELLOW, VGA_BLACK);
+        vga_puts("  No DOOM1.WAD on disk.\n");
+        vga_set_color(VGA_LIGHT_GREY, VGA_BLACK);
+        vga_puts("  Put the shareware WAD next to the Makefile and run: make wad\n");
+        return;
+    }
+    doom_menu_run();
+    vga_clear();
+}
+
 /* ---- tab completion ---- */
 
 static void prompt(void);  /* forward declaration */
 
 /* Master list of shell command names. Keep in sync with dispatch(). */
 static const char *const cmd_names[] = {
+    "doom",
     "menu", "wash", "slurp", "season", "simmer", "broth", "ladle", "expiry",
     "chef", "pantry", "serve", "pour", "stir", "strain", "decant", "relabel",
     "jot", "ai", "cook", "soup", "hash",
@@ -2257,6 +2293,7 @@ static void dispatch(const char *buf) {
     else if (str_eq(p, "wipe"))      cmd_wipe();
     else if (str_eq(p, "fortune"))   cmd_fortune();
     else if (str_eq(p, "bounce"))    cmd_bounce();
+    else if (str_eq(p, "doom"))      cmd_doom();
     else if (str_eq(p, "cat"))       cmd_cat();  /* hidden */
     else if (str_eq(p, "ps"))          cmd_ps();
     else if (str_eq(p, "bgclock"))     cmd_bgclock();

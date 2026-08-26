@@ -1,5 +1,10 @@
 # Bringing Doom back
 
+> **Pass one landed 2026-08-26 (v0.7.5).** Steps 1 and 2 are done and verified:
+> the port is back in `src/`, `doom` works, and it refuses to start while other
+> tasks are alive. Step 4's two bugs turned out to be already fixed. The enemy
+> AI bug (step 3) and steps 5 to 7 are still open.
+
 Plan to un-park the Doom port (`doom-disabled/`, parked 2026-05-20 at v0.5.0)
 against the current tree (v0.7.4). Written 2026-08-26.
 
