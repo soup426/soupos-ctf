@@ -2155,6 +2155,35 @@ static void cmd_fatstress(void) {
          fg, fs_bg_errors);
 }
 
+/* vgastress - two tasks printing whole lines at once.
+ *
+ * Each task prints a line of a single repeated character. vga_puts is
+ * serialised, so every line must come out pure; if the guard is missing the
+ * timer lands mid-line and the two characters interleave. The mirror to COM1
+ * means the host can check the transcript for mixed lines. */
+#define VS_LINES 40
+static volatile int vs_done;
+
+static void vs_emit(char tag, int n) {
+    char line[42];
+    for (int k = 0; k < 40; k++) line[k] = tag;
+    line[40] = '\n'; line[41] = '\0';
+    for (int i = 0; i < n; i++) { vga_puts(line); task_yield(); }
+}
+
+static void vs_bg(void *arg) { (void)arg; vs_emit('B', VS_LINES); vs_done = 1; }
+
+static void cmd_vgastress(void) {
+    vs_done = 0;
+    klog("[vgastress] begin\n");
+    task_t *bg = task_spawn("vgastress", vs_bg, 0);
+    if (!bg) { vga_puts("vgastress: out of memory\n"); return; }
+    vs_emit('A', VS_LINES);
+    while (!vs_done) { task_yield(); __asm__ volatile ("hlt"); }
+    klog("[vgastress] end\n");
+    vga_puts("  vgastress done - check the transcript for mixed lines\n");
+}
+
 /* ---- tab completion ---- */
 
 static void prompt(void);  /* forward declaration */
@@ -2337,6 +2366,7 @@ static void dispatch(const char *buf) {
     }
     else if (str_eq(p, "preempttest")) cmd_preempttest();
     else if (str_eq(p, "fatstress"))  cmd_fatstress();
+    else if (str_eq(p, "vgastress"))  cmd_vgastress();
     else if (str_eq(p, "whoami"))    cmd_whoami();
 #ifndef NO_CHALLENGE
     else if (str_eq(p, "special"))   challenge_special();

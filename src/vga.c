@@ -1,5 +1,17 @@
 #include "vga.h"
 #include "console.h"
+#include "task.h"
+
+/* Text-mode output is shared state: vga_row, vga_col and vga_attr, plus the
+ * cell buffer itself. Since v0.7.4 the timer can switch tasks anywhere, so a
+ * background task printing mid-line would interleave characters and leave the
+ * cursor wherever the other task moved it.
+ *
+ * preempt_disable is the right tool here, unlike in fat.c: nothing on this
+ * path yields (serial_putc busy-waits on THR-empty), so suppressing the timer
+ * really does make the region atomic. It is a per-task recursive count, so
+ * vga_puts nesting into vga_putchar is fine. */
+
 #include <stdarg.h>
 
 #define VGA_WIDTH   80
@@ -54,7 +66,7 @@ void vga_init(void) {
     vga_clear();
 }
 
-void vga_clear(void) {
+static void vga_clear_impl(void) {
     for (int i = 0; i < VGA_WIDTH * VGA_HEIGHT; i++)
         VGA_BUFFER[i] = make_entry(' ', vga_attr);
     vga_row = 0;
@@ -62,11 +74,11 @@ void vga_clear(void) {
     update_hw_cursor();
 }
 
-void vga_set_color(vga_color_t fg, vga_color_t bg) {
+static void vga_set_color_impl(vga_color_t fg, vga_color_t bg) {
     vga_attr = make_color(fg, bg);
 }
 
-void vga_set_cursor(int row, int col) {
+static void vga_set_cursor_impl(int row, int col) {
     if (row < 0) row = 0;
     if (col < 0) col = 0;
     if (row >= VGA_HEIGHT) row = VGA_HEIGHT - 1;
@@ -79,14 +91,14 @@ void vga_set_cursor(int row, int col) {
 int vga_get_row(void) { return vga_row; }
 int vga_get_col(void) { return vga_col; }
 
-void vga_fill_row(int row, char c) {
+static void vga_fill_row_impl(int row, char c) {
     if (row < 0 || row >= VGA_HEIGHT) return;
     uint16_t cell = make_entry(c, vga_attr);
     for (int col = 0; col < VGA_WIDTH; col++)
         VGA_BUFFER[row * VGA_WIDTH + col] = cell;
 }
 
-void vga_putchar(char c) {
+static void vga_putchar_impl(char c) {
     /* Mirror to the serial console before touching the cell buffer, so a
      * remote client sees exactly the stream a local VGA user would. */
     console_out_char(c);
@@ -130,7 +142,7 @@ void vga_putchar(char c) {
     update_hw_cursor();
 }
 
-void vga_puts(const char *s) {
+static void vga_puts_impl(const char *s) {
     while (*s)
         vga_putchar(*s++);
 }
@@ -138,6 +150,7 @@ void vga_puts(const char *s) {
 /* printf subset: %[0][width]s/c/d/u/x/X/p/%
    Supports zero-padding and minimum field width, e.g. %08x, %02u. */
 void vga_printf(const char *fmt, ...) {
+    preempt_disable();   /* keep a whole formatted line together */
     va_list args;
     va_start(args, fmt);
 
@@ -232,4 +245,45 @@ void vga_printf(const char *fmt, ...) {
     }
 
     va_end(args);
+    preempt_enable();
+}
+
+/* ── Serialised public entry points ───────────────────────────────────────
+ * Wrappers rather than edits to each return path: vga_putchar has an early
+ * exit in its backspace case, and a missed preempt_enable would leave the
+ * task permanently unpreemptable. */
+void vga_clear(void) {
+    preempt_disable();
+    vga_clear_impl();
+    preempt_enable();
+}
+
+void vga_set_color(vga_color_t fg, vga_color_t bg) {
+    preempt_disable();
+    vga_set_color_impl(fg, bg);
+    preempt_enable();
+}
+
+void vga_set_cursor(int row, int col) {
+    preempt_disable();
+    vga_set_cursor_impl(row, col);
+    preempt_enable();
+}
+
+void vga_fill_row(int row, char c) {
+    preempt_disable();
+    vga_fill_row_impl(row, c);
+    preempt_enable();
+}
+
+void vga_putchar(char c) {
+    preempt_disable();
+    vga_putchar_impl(c);
+    preempt_enable();
+}
+
+void vga_puts(const char *s) {
+    preempt_disable();
+    vga_puts_impl(s);
+    preempt_enable();
 }

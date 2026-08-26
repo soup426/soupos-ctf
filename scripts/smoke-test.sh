@@ -45,6 +45,7 @@ python3 scripts/qemu_keys.py "$MON" \
     "cook hello.elf" "WAIT:2" \
     "preempttest" "WAIT:8" \
     "fatstress" "WAIT:30" \
+    "vgastress" "WAIT:25" \
     "yieldbg" "cook spin.elf" "WAIT:11" >/dev/null || {
         echo "FAIL: could not drive the QEMU monitor"; exit 1; }
 
@@ -69,6 +70,17 @@ check "ring3 yield reaches sched"    '\[u\] step'
 check "background task ran"          '\[bg\] done'
 check "preempt_disable works"       'PASS'
 check "concurrent FAT is safe"      '\[fatstress\] PASS'
+
+# vgastress prints whole lines of a single repeated character from two tasks.
+# Any line containing both means vga_puts was interrupted mid-string.
+mixed=$(sed -n '/\[vgastress\] begin/,/\[vgastress\] end/p' "$LOG" \
+        | grep -c 'A.*B\|B.*A' || true)
+if [ "$mixed" = "0" ]; then
+    echo "  ok    vga output not interleaved"
+else
+    echo "  FAIL  vga output interleaved on $mixed lines"
+    fail=1
+fi
 
 # The point of preemption: the [bg] sleeper must keep ticking while a
 # ring-3 program is running, i.e. [bg] markers appear on both sides of [u].
