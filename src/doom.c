@@ -1768,7 +1768,16 @@ static void try_pickups(void) {
 #define AI_IDLE  0
 #define AI_CHASE 1
 #define AI_DEAD  2
-#define ENEMY_SEE_D2  (512*512)   /* squared activation radius */
+/* Squared activation radius. Was 512*512, which is why the AI looked dead:
+ * in E1M1 the nearest monster spawns ~816 units from the player start, so
+ * nothing ever woke unless you walked right up to it. That is the whole of
+ * the "enemies never move toward player" report. */
+#define ENEMY_SEE_D2  (1024*1024)
+/* Max range for the ranged hitscan. Without this an awake monster shoots the
+ * player from anywhere on the map, through walls, because there is no
+ * line-of-sight test: widening SEE_D2 alone killed the player in ~1 second.
+ * Chasing still happens at any distance; only shooting is bounded. */
+#define ENEMY_RNG_D2  (768*768)
 #define ENEMY_MEL_D2  (72*72)     /* squared melee attack range */
 #define ENEMY_SPD     4           /* map units moved per think call */
 #define ENEMY_ATK_CD  50          /* think calls between attacks */
@@ -1781,6 +1790,41 @@ static int is_monster_type(uint16_t t) {
         return 1;
     }
     return 0;
+}
+
+/* ── Line of sight ────────────────────────────────────────────────────────
+ * Without this, monsters shot the player through solid walls: nothing ever
+ * tested visibility, so every woken monster in range had a clear shot from
+ * anywhere. Combined with waking on proximity alone, the whole map converged
+ * on the player and killed them in about a second.
+ *
+ * Only one-sided linedefs block. A linedef with a back sidedef is an opening
+ * between two sectors, so we see through it. That ignores closed doors, which
+ * is a known simplification: a monster can see through a shut door, but it
+ * cannot shoot through a wall, which is the part that mattered. */
+static int seg_crosses(int32_t ax, int32_t ay, int32_t bx, int32_t by,
+                       int32_t cx, int32_t cy, int32_t dx, int32_t dy) {
+    /* int64 throughout: map coordinates are int16 but the cross products of
+     * their differences overflow int32 (see CLAUDE.md pitfall 6). */
+    int64_t d1 = (int64_t)(bx-ax)*(cy-ay) - (int64_t)(by-ay)*(cx-ax);
+    int64_t d2 = (int64_t)(bx-ax)*(dy-ay) - (int64_t)(by-ay)*(dx-ax);
+    int64_t d3 = (int64_t)(dx-cx)*(ay-cy) - (int64_t)(dy-cy)*(ax-cx);
+    int64_t d4 = (int64_t)(dx-cx)*(by-cy) - (int64_t)(dy-cy)*(bx-cx);
+    return ((d1 > 0) != (d2 > 0)) && ((d3 > 0) != (d4 > 0));
+}
+
+static int los_clear(int32_t x1, int32_t y1, int32_t x2, int32_t y2) {
+    if (!lv_lines || !lv_verts) return 1;
+    for (int i = 0; i < lv_nlines; i++) {
+        const dlinedef_t *ld = &lv_lines[i];
+        if (ld->left_sdef != 0xFFFF) continue;          /* two-sided: see through */
+        if (ld->v1 >= lv_nverts || ld->v2 >= lv_nverts) continue;
+        if (seg_crosses(x1, y1, x2, y2,
+                        lv_verts[ld->v1].x, lv_verts[ld->v1].y,
+                        lv_verts[ld->v2].x, lv_verts[ld->v2].y))
+            return 0;
+    }
+    return 1;
 }
 
 static void thing_think(void) {
@@ -1799,10 +1843,14 @@ static void thing_think(void) {
 
         int32_t dx = px - (int32_t)th->x;
         int32_t dy = py - (int32_t)th->y;
-        int32_t d2 = dx*dx + dy*dy;
+        /* int64 like fire_weapon: dx and dy span the map, so dx*dx + dy*dy
+         * overflows int32 for distant things and can come out negative,
+         * which would make the "is the player near?" test pass. */
+        int64_t d2 = (int64_t)dx*dx + (int64_t)dy*dy;
 
         /* Wake up when player is near */
-        if (ai->state == AI_IDLE && d2 <= ENEMY_SEE_D2)
+        if (ai->state == AI_IDLE && d2 <= ENEMY_SEE_D2 &&
+            los_clear((int32_t)th->x, (int32_t)th->y, px, py))
             ai->state = AI_CHASE;
         if (ai->state != AI_CHASE) continue;
 
@@ -1817,7 +1865,8 @@ static void thing_think(void) {
         }
 
         /* Ranged attack: Imp fires fireball, zombies hitscan */
-        if (d2 > ENEMY_MEL_D2 && ai->atk_cd == 0) {
+        if (d2 > ENEMY_MEL_D2 && d2 <= ENEMY_RNG_D2 && ai->atk_cd == 0 &&
+            los_clear((int32_t)th->x, (int32_t)th->y, px, py)) {
             if (th->type == 3001) {
                 spawn_proj((int32_t)th->x, (int32_t)th->y, 8);
             } else if (th->type == 3004) {
@@ -1835,7 +1884,7 @@ static void thing_think(void) {
 
         /* Chase: move toward player if not in melee range */
         if (d2 > ENEMY_MEL_D2) {
-            int32_t dist = isqrt32(d2);
+            int32_t dist = isqrt32((uint32_t)(d2 > 0x7FFFFFFF ? 0x7FFFFFFF : d2));
             if (dist > 0) {
                 th->x = (int16_t)((int32_t)th->x + dx * ENEMY_SPD / dist);
                 th->y = (int16_t)((int32_t)th->y + dy * ENEMY_SPD / dist);
@@ -1851,10 +1900,12 @@ static void thing_think(void) {
 
 static void fire_weapon(void) {
     if (pl_ammo <= 0 || pl_fire_cd > 0) return;
+    /* Check the level is loaded BEFORE spending the round. The old order
+     * decremented ammo and then bailed, so a failed level load looked like
+     * "ammo goes down but the gun does nothing". */
+    if (!lv_things || !lv_thing_ai) return;
     pl_ammo--;
     pl_fire_cd = FIRE_CD_TICKS;
-
-    if (!lv_things || !lv_thing_ai) return;
     int32_t px   = pl_x >> 8, py = pl_y >> 8;
     int32_t fw_x = view_cos[pl_angle];   /* forward vector ×1024 */
     int32_t fw_y = view_sin[pl_angle];

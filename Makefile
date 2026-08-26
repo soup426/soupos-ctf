@@ -68,7 +68,7 @@ $(DISK):
 	mkfs.fat -F 16 -n "SOUPOS" $(DISK) >/dev/null
 	printf 'Hello from soupOS!\nA warm bowl of kernel soup.\n' \
 	    | mcopy -i $(DISK) - ::HELLO.TXT
-	printf 'soupOS v0.7.5\nA 32-bit hobby OS built in C and NASM.\nFeatures: GDT IDT PMM Paging Heap FAT16 bowls users VFS scheduler preempt ring3 syscalls ELF soupyc jot ai\n' \
+	printf 'soupOS v0.7.6\nA 32-bit hobby OS built in C and NASM.\nFeatures: GDT IDT PMM Paging Heap FAT16 bowls users VFS scheduler preempt ring3 syscalls ELF soupyc jot ai\n' \
 	    | mcopy -i $(DISK) - ::README.TXT
 	printf 'Ingredients:\n  - C source code\n  - NASM stubs\n  - A linker script\n  - love\n' \
 	    | mcopy -i $(DISK) - ::RECIPE.TXT

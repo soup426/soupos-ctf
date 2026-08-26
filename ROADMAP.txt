@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.7.5
+Current version: v0.7.6
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,20 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.7.6  (2026-08-26)  — DOOM ENEMY AI FIXED (line of sight)
+  The long-standing "enemy AI completely broken" bug is resolved, and the
+  recorded diagnosis was wrong: nothing was failing to allocate. The wake
+  radius (512 units) was simply smaller than the distance to the nearest
+  monster in E1M1 (about 816), so enemies never activated. Widening it
+  revealed that the AI had no line-of-sight test at all, so every woken
+  monster shot through walls from any range.
+  - New los_clear()/seg_crosses() in doom.c gate both waking and the ranged
+    attack on visibility. int64 cross products; one-sided linedefs block.
+  - ENEMY_SEE_D2 -> 1024*1024, new ENEMY_RNG_D2 (768*768) caps hitscan range.
+  - thing_think distance math moved to int64 (fire_weapon already did this).
+  - fire_weapon checks the level is loaded before spending a round.
+  See the RESOLVED section below for the measurements.
 
 v0.7.5  (2026-08-26)  - DOOM IS BACK
   The port is un-parked. doom.c/doom.h/wad.c/wad.h moved from doom-disabled/
@@ -269,67 +283,64 @@ v0.5.0  (2026-05-20)
 v0.4.0
   - Pre-changelog baseline (FAT16 r/w, soupyc fn/return, Doom port).
 
-────────────────────────────────────────────────────────────────
-PARKED BUG — DOOM ENEMY AI (investigated 2026-04-19)
-────────────────────────────────────────────────────────────────
-
-LIVE again as of v0.7.5 (2026-08-26): the port is back in the build, so
-this is a real bug once more.
-
-Note on the leading hypothesis below: thing_ai_t is 4 bytes, so the
-lv_thing_ai allocation is only lv_nthings * 4, about 1 KB for a real level.
-For an 8 MB heap to fail that it must be at 100%, and the suggested fix of
-shrinking MAX_SPRITES is sized for a much larger allocation. Two better
-leads: doom.c sets lv_nthings before the lv_things kmalloc and never resets
-it on failure, so a failed allocation leaves the count non-zero and the AI
-loop dereferences a NULL lv_things -- which does not fault, because the
-kernel identity-maps from address 0, so it silently reads garbage; and the
-int32 overflow in the distance check (see hypothesis 3). See
-docs/doom-reenable-plan.md.
-
-All six Doom gameplay tasks (level exit, enemy ranged attacks, weapon
-flash, sector specials, locked doors, death screen) were implemented in
-doom.c but enemy AI is completely broken as a regression.
-
-Symptoms (confirmed visually in QEMU):
-  - Enemies never move toward player
-  - Enemies never deal damage (melee or ranged)
-  - Shooting at enemies doesn't kill them
-  - Ammo decrements but fire_weapon() bails early (lv_thing_ai NULL?)
-  - Enemy sprite always shows idle frame 'A', never walk cycle
-
-Root cause hypothesis:
-  lv_thing_ai is NULL because kmalloc fails at level_load time.
-  fire_weapon() decrements ammo before the NULL check, so ammo
-  decrements but nothing else happens. thing_think() also returns
-  immediately. The most likely cause is heap exhaustion — the new
-  g_sec_base_light + g_pistol_flash allocations push the heap over
-  the limit when combined with all the texture/sprite/flat caches.
-
-  Alternatively: something in level_load order is corrupting the
-  lv_thing_ai pointer after allocation.
-
-Suggested fix approach:
-  1. Add a serial debug print after the lv_thing_ai kmalloc to confirm
-     it's NULL:
-       if (!lv_thing_ai) serial_puts("[doom] lv_thing_ai kmalloc FAILED\n");
-     (use outb(0x3F8, c) inline if serial_puts not available in doom.c)
-  2. If NULL: check heap free space before/after level_load. The heap
-     is 8MB. Total texture + sprite + flat + level data might exceed it.
-     Reduce MAX_SPRITES (128→64) or MAX_FLAT_CACHE (32→16) as a quick fix.
-  3. If not NULL: the wake-up distance check (ENEMY_SEE_D2 = 512*512)
-     might have an int32 overflow for enemies far from player — dx*dx+dy*dy
-     can overflow if coordinates are large. Fix: cast to int64 before mul.
-
-Also broken (separate issue):
-  Death/level-complete text screen shows garbled/rainbow pixels because
-  Doom's PLAYPAL is still loaded in the VGA DAC when vga13h_exit() returns
-  to text mode. Fix: before calling vga13h_exit(), reset VGA DAC entries
-  0-15 back to standard CGA colors using vga13h_setpal().
-
+──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+RESOLVED 2026-08-26 (v0.7.6) — DOOM ENEMY AI
 ────────────────────────────────────────────────────────────────
 
-────────────────────────────────────────────────────────────────
+The AI was never broken. Diagnosed by instrumenting level_load and
+thing_think instead of following the hypotheses that were recorded here,
+all of which turned out to be wrong:
+
+  - lv_things and lv_thing_ai both allocate fine. Measured on E1M1:
+    nthings=138, lv_things=0x18af98, lv_thing_ai=0x18b508, 552 bytes. No
+    heap exhaustion. thing_ai_t is 4 bytes, so that allocation is about
+    1 KB; the theory that an 8 MB heap failed it, and the suggested fix of
+    shrinking MAX_SPRITES, were both aimed at an allocation orders of
+    magnitude larger.
+  - thing_think runs every frame and finds all 29 monsters.
+
+The real cause was ENEMY_SEE_D2 = 512*512. In E1M1 the nearest monster
+spawns about 816 units from the player start (measured min_d2 = 665920), so
+nothing ever woke unless you walked into it. That alone produces every
+symptom in the original report: enemies never move toward the player, never
+deal damage, and the walk cycle never starts.
+
+Widening the radius then exposed the bug the small radius had been hiding:
+there was no line-of-sight test anywhere in the AI. Every woken monster
+could shoot the player from any distance, through walls, so raising SEE_D2
+made the whole map converge and kill the player in about a second (health
+100 -> 10 in 120 ticks).
+
+Fixed:
+  [x] los_clear() + seg_crosses() in doom.c — segment intersection against
+      one-sided linedefs, int64 throughout. Both waking and the ranged
+      attack are gated on it, so monsters neither notice nor shoot through
+      walls. Two-sided lines count as see-through, so a monster can see
+      through a closed door; a known simplification.
+  [x] ENEMY_SEE_D2 raised to 1024*1024 so enemies engage at all.
+  [x] ENEMY_RNG_D2 (768*768) bounds the ranged hitscan. Chasing stays
+      unbounded; only shooting is limited.
+  [x] thing_think's distance math moved to int64, matching fire_weapon.
+      dx*dx + dy*dy overflows int32 across a large map and can go negative,
+      which would make the proximity test pass for distant things.
+  [x] fire_weapon now checks the level is loaded BEFORE spending a round.
+      The old order decremented ammo and then bailed, which is exactly the
+      reported "ammo decrements but nothing happens".
+
+Verified in QEMU from status bar readings across one run: 050 ammo / 100%
+health at spawn, 050 / 085% after approaching, 041 / 050% after firing nine
+rounds. Enemies wake on sight, close distance, and deal damage at a
+survivable rate. Death now requires pushing into a room and fighting rather
+than happening within a second of spawn.
+
+Not directly confirmed: a monster dying from player fire. Shots are fired
+and ammo decrements, but no test drove a single enemy to zero HP.
+
+Also fixed earlier, by the 2026-08-25 vga13h work rather than here: the
+death/level-complete screen no longer shows garbled rainbow pixels, because
+restore_regs restores all 768 DAC bytes on exit from mode 13h.
+
+────────────────────
 OS-IFICATION PATH  (make it feel like a real OS, in order)
 ────────────────────────────────────────────────────────────────
 Current gap: soupOS boots, pages, heaps, runs a FS + shell + Doom
