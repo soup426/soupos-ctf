@@ -1880,6 +1880,7 @@ static void cmd_cat(void) {
     int frame = 0;
     int top_row = 7;
     int left_col = (80 - CAT_WIDTH) / 2;
+    int escaped = 0;
     uint32_t last = timer_get_ticks();
 
     while (1) {
@@ -1904,12 +1905,22 @@ static void cmd_cat(void) {
             last = now;
         }
 
-        /* Swallow anything the user types - no escape */
-        keyboard_flush();
+        /* Swallow anything the user types - except ESC. The gag is that he
+         * ignores you; an unescapable command is a different thing. On a
+         * hosted CTF instance it costs the player their box, and `cat` is
+         * exactly what someone types expecting Unix cat (soupOS spells that
+         * `pour`). */
+        while (keyboard_available()) {
+            if (keyboard_getchar() == 27) { escaped = 1; break; }
+        }
+        if (escaped) break;
         /* Yield so background tasks keep ticking, then park for an IRQ. */
         task_yield();
         __asm__ volatile ("hlt");
     }
+    vga_set_color(VGA_LIGHT_GREY, VGA_BLACK);
+    vga_clear();
+    vga_puts("  ...he lets you go, this time.\n");
     #undef N_CAT_FRAMES
     #undef CAT_LINES
     #undef CAT_WIDTH

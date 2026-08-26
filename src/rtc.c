@@ -25,9 +25,16 @@ void rtc_read(rtc_time_t *t) {
        An update takes ~2ms; polling is fine during a shell command. */
     while (cmos_read(0x0A) & 0x80) {}
 
+    /* Register B flag bits (MC146818):
+     *   bit 1 (0x02) = 24/12 : 1 = 24-hour, 0 = 12-hour
+     *   bit 2 (0x04) = DM    : 1 = binary,  0 = BCD
+     * These two were swapped here, which is why every field came back as its
+     * raw BCD byte read as decimal: QEMU sets 24-hour (0x02), the code took
+     * that to mean "binary" and skipped the conversion, so 0x25 printed as
+     * 37 and the clock showed 2038-08-37 33:39:55. */
     uint8_t sb       = cmos_read(0x0B);
-    int     binary   = sb & 0x02;   /* bit 1: 1=binary, 0=BCD */
-    int     h24      = sb & 0x04;   /* bit 2: 1=24-hour, 0=12-hour */
+    int     binary   = sb & 0x04;   /* bit 2: 1=binary, 0=BCD   */
+    int     h24      = sb & 0x02;   /* bit 1: 1=24-hour, 0=12hr */
 
     uint8_t sec      = cmos_read(0x00);
     uint8_t min      = cmos_read(0x02);

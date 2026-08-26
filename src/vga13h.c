@@ -31,6 +31,36 @@ static uint8_t sv_crtc[25];
 static uint8_t sv_gc[9];
 static uint8_t sv_dac[768];  /* 256 × (R,G,B) - 6-bit each */
 
+/* Text-mode font backup. The character generator bitmap lives in plane 2 of
+ * video memory, which mode 13h overwrites with pixel data. Saving and
+ * restoring the registers is not enough: without this the glyphs themselves
+ * are gone, so every text screen after a graphics command renders as garbage
+ * (the symptom was `jot` and `cat` drawing in a tiny broken font). */
+static uint8_t sv_font[8192];   /* 256 glyphs x 32 bytes */
+
+/* Map plane 2 linearly at 0xA0000 so the font can be copied in or out. */
+static void font_access_begin(void) {
+    /* Sequencer: address plane 2 only, sequential (non-chain4) addressing */
+    outb(0x3C4, 0x02); outb(0x3C5, 0x04);
+    outb(0x3C4, 0x04); outb(0x3C5, 0x07);
+    /* Graphics controller: read plane 2, odd/even off, 64K window at 0xA0000 */
+    outb(0x3CE, 0x04); outb(0x3CF, 0x02);
+    outb(0x3CE, 0x05); outb(0x3CF, 0x00);
+    outb(0x3CE, 0x06); outb(0x3CF, 0x04);
+}
+
+static void save_font(void) {
+    font_access_begin();
+    volatile uint8_t *fb = (volatile uint8_t *)0xA0000;
+    for (int i = 0; i < 8192; i++) sv_font[i] = fb[i];
+}
+
+static void restore_font(void) {
+    font_access_begin();
+    volatile uint8_t *fb = (volatile uint8_t *)0xA0000;
+    for (int i = 0; i < 8192; i++) fb[i] = sv_font[i];
+}
+
 static void save_regs(void) {
     sv_misc = inb(0x3CC);   /* Misc Output readable at 0x3CC */
     for (int i = 0; i < 5;  i++) { outb(0x3C4,i); sv_seq[i]  = inb(0x3C5); }
@@ -83,6 +113,7 @@ static const uint8_t m13_gc[9]   = { 0x00,0x00,0x00,0x00,0x00,0x40,0x05,0x0F,0xF
 /* ── public: enter / exit ─────────────────────────────────────── */
 void vga13h_enter(void) {
     save_regs();
+    save_font();      /* plane 2 is about to become pixel data */
 
     outb(0x3C2, 0x63);  /* Miscellaneous Output */
 
@@ -107,9 +138,21 @@ void vga13h_enter(void) {
     outb(0x3C0, 0x13); outb(0x3C0, 0x00);
     outb(0x3C0, 0x14); outb(0x3C0, 0x00);
     outb(0x3C0, 0x20);
+
+    /* Entering a graphics mode should give a defined screen. Without this the
+     * framebuffer keeps whatever the last mode-13h program left in it, so
+     * `bounce` drew its balls over the remains of `vgademo`. */
+    {
+        volatile uint8_t *fb = (volatile uint8_t *)0xA0000;
+        for (uint32_t i = 0; i < (uint32_t)VGA13_W * VGA13_H; i++) fb[i] = 0;
+    }
 }
 
 void vga13h_exit(void) {
+    restore_regs();
+    restore_font();
+    /* font_access_begin reprogrammed the sequencer and graphics controller to
+     * reach plane 2; put the text-mode values back. */
     restore_regs();
 }
 

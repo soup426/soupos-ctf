@@ -145,7 +145,11 @@ void vga_printf(const char *fmt, ...) {
         if (*p != '%') { vga_putchar(*p); continue; }
         p++;
 
-        /* Flags: zero-pad */
+        /* Flags: left-align then zero-pad. Without the '-' case a format
+         * like "%-10s" fell through the switch and printed literally, which
+         * is how `pantry` ended up listing every PCI device as "%-10s". */
+        int left_align = 0;
+        if (*p == '-') { left_align = 1; p++; }
         int zero_pad = 0;
         if (*p == '0') { zero_pad = 1; p++; }
 
@@ -158,15 +162,24 @@ void vga_printf(const char *fmt, ...) {
         #define EMIT_NUM(buf, len, pad_char) do {           \
             int _l = (len), _w = width;                     \
             char _pc = (pad_char);                          \
-            for (int _k = _l; _k < _w; _k++) vga_putchar(_pc); \
+            if (!left_align)                                \
+                for (int _k = _l; _k < _w; _k++) vga_putchar(_pc); \
             for (int _j = _l - 1; _j >= 0; _j--) vga_putchar((buf)[_j]); \
+            if (left_align)                                 \
+                for (int _k = _l; _k < _w; _k++) vga_putchar(' '); \
         } while (0)
 
         switch (*p) {
             case 's': {
                 const char *s = va_arg(args, const char *);
                 if (!s) s = "(null)";
+                int slen = 0;
+                while (s[slen]) slen++;
+                if (!left_align)
+                    for (int k = slen; k < width; k++) vga_putchar(' ');
                 vga_puts(s);
+                if (left_align)
+                    for (int k = slen; k < width; k++) vga_putchar(' ');
                 break;
             }
             case 'c':

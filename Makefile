@@ -74,6 +74,9 @@ $(DISK):
 	    | mcopy -i $(DISK) - ::RECIPE.TXT
 	printf 'The secret ingredient is soup.\n' \
 	    | mcopy -i $(DISK) - ::SECRET.TXT
+	# One fortune per line; cmd_fortune picks a random non-empty line.
+	printf 'A watched pot never boils, but an unwatched one page-faults.\nToo many cooks spoil the broth; too many tasks spoil the scheduler.\nThe secret ingredient is always a well-aligned stack.\nSeason your pointers before dereferencing them.\nA kernel without a bug is a kernel without users.\nSlow down. The soup is not going anywhere, and neither is the deadline.\nEvery great soup begins with a single malloc.\nIf it compiles, it ships. If it boots, it is art.\nMeasure twice, free once.\nThe broth remembers what the recipe forgets.\nNever trust a pointer you did not season yourself.\nA ring-3 process dreams of ring 0.\n' \
+	    | mcopy -i $(DISK) - ::FORTUNE.TXT
 	# Challenge flag. Baked into the image, so it is the same for every
 	# instance. Override at build time:  make disk FLAG='flag{real}'
 	printf '$(FLAG)\n' | mcopy -i $(DISK) - ::FLAG.TXT
