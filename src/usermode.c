@@ -107,6 +107,15 @@ static void teardown_user_pages(void) {
 static int load_segment(const uint8_t *buf, const elf32_phdr_t *ph) {
     uint32_t va_start = ph->p_vaddr & ~0xFFFu;
     uint32_t va_end   = (ph->p_vaddr + ph->p_memsz + 0xFFFu) & ~0xFFFu;
+
+    /* A program header names where to write. Check it lands in user space
+     * before trusting it: map_user_page() happily maps any address, and for
+     * an already-mapped kernel page it returns "already backed" and the
+     * memcpy below then writes straight into the kernel. Reject overflow too,
+     * so p_vaddr + p_memsz cannot wrap past the end and look in-range. */
+    if (va_end <= va_start) return -1;                       /* wrapped */
+    if (ph->p_vaddr < USER_LO) return -1;
+    if (va_end > USER_HI)      return -1;
     for (uint32_t va = va_start; va < va_end; va += 4096)
         if (map_user_page(va) < 0) return -1;
     /* Zero the whole span (covers .bss), then drop in the file image. */
