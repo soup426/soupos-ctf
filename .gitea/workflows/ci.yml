@@ -28,7 +28,7 @@ jobs:
           set -eux
           apt-get update -qq
           apt-get install -y --no-install-recommends \
-              build-essential gcc-multilib nasm mtools xorriso \
+              build-essential gcc-multilib nasm mtools dosfstools xorriso \
               grub-pc-bin grub-common qemu-system-x86 python3 psmisc
           gcc --version | head -1
           qemu-system-i386 --version | head -1
