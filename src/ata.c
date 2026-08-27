@@ -1,6 +1,17 @@
 #include "ata.h"
 #include "task.h"
 
+/* ATA is reached only through fat.c today, and fat.c is already behind its
+ * own lock, so this is defence in depth rather than a live fix. It is worth
+ * having: the module then protects itself instead of depending on an
+ * invariant about who calls it, which is exactly the kind of thing that
+ * quietly stops being true. A mutex rather than preempt_disable because the
+ * PIO wait loop yields.
+ *
+ * Lock order is fat_mtx -> ata_mtx, and ATA never calls back into FAT, so
+ * there is no cycle. */
+static mutex_t ata_mtx;
+
 /* Primary ATA channel I/O ports */
 #define ATA_DATA       0x1F0
 #define ATA_SECCOUNT   0x1F2
@@ -112,7 +123,7 @@ int ata_init(void) {
     return 0;
 }
 
-int ata_read_sector(uint32_t lba, uint8_t *buf) {
+static int ata_read_sector_impl(uint32_t lba, uint8_t *buf) {
     if (!drive_present) return -1;
 
     if (wait_bsy() < 0) return -1;
@@ -137,7 +148,7 @@ int ata_read_sector(uint32_t lba, uint8_t *buf) {
     return 0;
 }
 
-int ata_write_sector(uint32_t lba, const uint8_t *buf) {
+static int ata_write_sector_impl(uint32_t lba, const uint8_t *buf) {
     if (!drive_present) return -1;
 
     if (wait_bsy() < 0) return -1;
@@ -167,3 +178,17 @@ int ata_write_sector(uint32_t lba, const uint8_t *buf) {
 }
 
 uint32_t ata_total_sectors(void) { return total_sec; }
+
+int ata_read_sector(uint32_t lba, uint8_t *buf) {
+    mutex_lock(&ata_mtx);
+    int _r = ata_read_sector_impl(lba, buf);
+    mutex_unlock(&ata_mtx);
+    return _r;
+}
+
+int ata_write_sector(uint32_t lba, const uint8_t *buf) {
+    mutex_lock(&ata_mtx);
+    int _r = ata_write_sector_impl(lba, buf);
+    mutex_unlock(&ata_mtx);
+    return _r;
+}
