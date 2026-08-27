@@ -89,8 +89,13 @@ jobs:
           ./scripts/mk-handout.sh
           tmp=$(mktemp -d)
           tar xzf handout/soupos-handout.tar.gz -C "$tmp"
+          # Read both the flags and the headchef secret out of the sources
+          # rather than naming them here: this file ships to players in the
+          # handout, so a literal would be the very leak it is checking for.
           for f in $(grep -ho 'cdctf{[^"]*}' src/challenge.c); do
               ! grep -rqaF "$f" "$tmp"
           done
-          ! grep -rqaF rosemary "$tmp"
+          secret=$(sed -n 's/.*hash_secret("\([^"]*\)").*/\1/p' src/users.c | sed -n 1p)
+          test -n "$secret"
+          ! grep -rqaF "$secret" "$tmp"
           grep -q serve_the_special "$tmp/symbols.txt"

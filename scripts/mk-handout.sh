@@ -28,6 +28,8 @@ echo "== staging a redacted source tree =="
 rm -rf "$OUT"; mkdir -p "$OUT/soupos"
 git ls-files -z | while IFS= read -r -d '' f; do
     case "$f" in
+        .gitea/*)                    continue ;;   # CI config, and it names
+                                                   # the secret it checks for
         docs/challenge-*.md)         continue ;;   # design + solutions: spoilers
         scripts/mk-handout.sh)       continue ;;   # organiser tool, and it
                                                    # contains the secret it
