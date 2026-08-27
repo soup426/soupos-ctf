@@ -93,8 +93,10 @@ vulnerable diff. Nothing has actually been packaged yet.
 
 ### Housekeeping
 
-- Three 743 MB images sit on the deployer (`soupos-chal`, `soupos-doom`,
-  `soupos-web`). `soupos-web` is the retired placeholder and can go.
+- `soupos-web` (retired placeholder) removed from the deployer 2026-08-26.
+- Doom now ships in the challenge image (2026-08-27), so `soupos-doom` is
+  redundant and the earlier "keep Doom out of the CTF build" advice is
+  superseded.
 - Instance timeout is set to 7200s (2h). Confirm that suits the event length.
 - `crash.elf` ships on the challenge disk. It is a debugging aid, harmless,
   but decide whether it stays.
