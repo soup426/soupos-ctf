@@ -3,6 +3,7 @@
 #include "keyboard.h"
 #include "timer.h"
 #include "pmm.h"
+#include "paging.h"
 #include "heap.h"
 #include "rtc.h"
 #include "pci.h"
@@ -2184,6 +2185,65 @@ static void cmd_vgastress(void) {
     vga_puts("  vgastress done - check the transcript for mixed lines\n");
 }
 
+/* vmtest - prove a second address space is real and isolated.
+ *
+ * The kernel half of every directory is shared by pointer, so switching CR3
+ * mid-execution has to keep working: the code, stack and heap we are running
+ * from are all identity-mapped low. If that sharing were wrong this would
+ * triple-fault instantly rather than print anything.
+ *
+ * The isolation check deliberately asks paging_is_mapped rather than
+ * dereferencing, because reading an unmapped user address would fault. */
+#define VM_PROBE  0xC0000000u
+
+static void cmd_vmtest(void) {
+    uint32_t *kdir = paging_kernel_dir();
+    int fail = 0;
+
+    uint32_t *pdir = paging_new_dir();
+    if (!pdir) { vga_puts("vmtest: could not allocate a directory\n"); return; }
+    vga_printf("  kernel dir %p   new dir %p\n", (void *)kdir, (void *)pdir);
+
+    int mapped_before = paging_is_mapped(VM_PROBE);
+
+    paging_switch(pdir);
+    vga_puts("  switched CR3 to the new space (kernel still running)\n");
+
+    /* Map a user page here and leave a marker in it. */
+    void *frame = pmm_alloc_page();
+    if (!frame) { paging_switch(kdir); paging_free_dir(pdir);
+                  vga_puts("vmtest: out of frames\n"); return; }
+    paging_map(VM_PROBE, (uint32_t)frame, PAGE_PRESENT | PAGE_WRITE | PAGE_USER);
+    *(volatile uint32_t *)VM_PROBE = 0x50555000u;
+    int in_new = paging_is_mapped(VM_PROBE);
+    uint32_t readback = *(volatile uint32_t *)VM_PROBE;
+
+    paging_switch(kdir);
+    int in_kernel = paging_is_mapped(VM_PROBE);
+
+    paging_switch(pdir);
+    uint32_t still = *(volatile uint32_t *)VM_PROBE;
+    paging_switch(kdir);
+
+    paging_free_dir(pdir);
+    int after_free = paging_is_mapped(VM_PROBE);
+
+    vga_printf("  probe mapped in kernel dir before : %d (want 0)\n", mapped_before);
+    vga_printf("  probe mapped in new dir           : %d (want 1)\n", in_new);
+    vga_printf("  marker read back in new dir       : 0x%x\n", readback);
+    vga_printf("  probe mapped in kernel dir after  : %d (want 0)\n", in_kernel);
+    vga_printf("  marker survives a round trip      : 0x%x\n", still);
+    vga_printf("  probe mapped after free           : %d (want 0)\n", after_free);
+
+    fail = (mapped_before != 0) || (in_new != 1) || (in_kernel != 0) ||
+           (readback != 0x50555000u) || (still != 0x50555000u) || (after_free != 0);
+    vga_set_color(fail ? VGA_LIGHT_RED : VGA_LIGHT_GREEN, VGA_BLACK);
+    vga_puts(fail ? "  [FAIL] address spaces are not isolated\n"
+                  : "  [pass] second address space is real and isolated\n");
+    vga_set_color(VGA_LIGHT_GREY, VGA_BLACK);
+    klog(fail ? "[vmtest] FAIL\n" : "[vmtest] PASS\n");
+}
+
 /* ---- tab completion ---- */
 
 static void prompt(void);  /* forward declaration */
@@ -2367,6 +2427,7 @@ static void dispatch(const char *buf) {
     else if (str_eq(p, "preempttest")) cmd_preempttest();
     else if (str_eq(p, "fatstress"))  cmd_fatstress();
     else if (str_eq(p, "vgastress"))  cmd_vgastress();
+    else if (str_eq(p, "vmtest"))     cmd_vmtest();
     else if (str_eq(p, "whoami"))    cmd_whoami();
 #ifndef NO_CHALLENGE
     else if (str_eq(p, "special"))   challenge_special();

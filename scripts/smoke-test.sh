@@ -46,6 +46,7 @@ python3 scripts/qemu_keys.py "$MON" \
     "preempttest" "WAIT:8" \
     "fatstress" "WAIT:30" \
     "vgastress" "WAIT:25" \
+    "vmtest" "WAIT:6" \
     "yieldbg" "cook spin.elf" "WAIT:11" >/dev/null || {
         echo "FAIL: could not drive the QEMU monitor"; exit 1; }
 
@@ -70,6 +71,7 @@ check "ring3 yield reaches sched"    '\[u\] step'
 check "background task ran"          '\[bg\] done'
 check "preempt_disable works"       'PASS'
 check "concurrent FAT is safe"      '\[fatstress\] PASS'
+check "address spaces isolated"     '\[vmtest\] PASS'
 
 # vgastress prints whole lines of a single repeated character from two tasks.
 # Any line containing both means vga_puts was interrupted mid-string.
