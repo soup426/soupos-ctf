@@ -30,10 +30,14 @@ jobs:
           apt-get install -y --no-install-recommends \
               build-essential gcc-multilib nasm mtools dosfstools xorriso \
               grub-pc-bin grub-common qemu-system-x86 python3 psmisc
-          gcc --version | head -1
-          qemu-system-i386 --version | head -1
+          # sed -n 1p, not head -1: head closes the pipe after one line, the
+          # producer takes SIGPIPE (141), and `set -o pipefail` turns that into
+          # a step failure even though everything installed correctly. sed
+          # reads to EOF, so the producer never gets signalled.
+          gcc --version | sed -n 1p
+          qemu-system-i386 --version | sed -n 1p
           nasm -v
-          make --version | head -1
+          make --version | sed -n 1p
 
       - name: Diagnose the workspace
         run: |
@@ -55,15 +59,15 @@ jobs:
         run: |
           set -eux
           make
-          test "$(nm kernel.elf | grep -c serve_the_special)" = "0"
-          test "$(strings kernel.elf | grep -c 'cdctf{')" = "0"
+          test "$(nm kernel.elf | grep -c serve_the_special || true)" = "0"
+          test "$(strings kernel.elf | grep -c 'cdctf{' || true)" = "0"
 
       - name: Assert the challenge build does
         run: |
           set -eux
           make CHALLENGE=1
-          test "$(nm kernel.elf | grep -c serve_the_special)" = "1"
-          test "$(strings kernel.elf | grep -c 'cdctf{')" = "4"
+          test "$(nm kernel.elf | grep -c serve_the_special || true)" = "1"
+          test "$(strings kernel.elf | grep -c 'cdctf{' || true)" = "4"
 
       # Gates run against the normal build. Between them they cover boot, ring 3,
       # preemption, FAT concurrency, address-space isolation and VGA output.
