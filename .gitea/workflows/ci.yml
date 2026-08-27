@@ -32,6 +32,16 @@ jobs:
               grub-pc-bin grub-common qemu-system-x86 python3 psmisc
           gcc --version | head -1
           qemu-system-i386 --version | head -1
+          nasm -v
+          make --version | head -1
+
+      - name: Diagnose the workspace
+        run: |
+          set -eux
+          pwd
+          ls -la src/*.asm || echo "NO ASM FILES IN WORKSPACE"
+          echo "tracked asm:"; git ls-files 'src/*.asm'
+          echo "make would do:"; make -n kernel.elf 2>&1 | tail -5 || true
 
       # Both configurations must build. The .build-config stamp means switching
       # between them here also exercises the rebuild-on-config-change fix.
