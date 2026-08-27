@@ -26,6 +26,7 @@ typedef struct task {
     void        (*entry)(void *);/* first-run entry point (via trampoline) */
     void         *arg;           /* argument passed to entry             */
     int           preempt_depth; /* >0 = this task must not be preempted */
+    uint32_t     *page_dir;      /* address space; kernel's unless in exec */
 } task_t;
 
 /* Simple intrusive wait queue - FIFO singly-linked list of blocked tasks.

@@ -151,22 +151,29 @@ characters), so it will not fit in one `stir`. Use `jot`.
 ### Build it
 
 ```bash
-python3 solve/mkleak.py -0x94 0x40 > leak.hex
+python3 solve/mkleak.py -0xB8 0x60 > leak.hex
 ```
 
 Arguments are the offset from `buf` and how many bytes to copy.
 
-### Where does `-0x94` come from?
+### Where does `-0xB8` come from?
 
 `challenge_init()` runs at boot and does `kmalloc(64)` for the flag. `exec_elf`
 later does `kmalloc(256*1024)` for the file buffer. The heap is a first-fit
 free list, so the flag ends up just below the ELF buffer. In this build the
-flag is at `0x17600c` and `buf` sits `0x94` above it.
+the flag ends up just below the ELF buffer.
 
-**This number moves.** It was `0x90` before Doom was added to the image: the
-larger kernel shifted the heap and the gap grew by four bytes, which showed up
-as the dump starting mid-flag (`f{bad_recipe...`, missing `cdct`). Re-derive it
-after any kernel change.
+**This number moves with every kernel size change**, and it has moved twice
+already: `0x90` originally, `0x94` once Doom was added, `0x98` after the
+paging work. Each time the symptom was the same and easy to misread - the
+leak still fires but starts a few bytes into the flag, printing
+`f{bad_recipe...` with `cdct` missing.
+
+So the reference deliberately does not use the exact offset. `-0xB8 0x60`
+starts 0x20 *before* the flag and dumps 96 bytes, which absorbs that drift at
+the cost of some leading heap noise in the output. If you want a tidy dump for
+a demo, find the exact gap and use `0x40`; if you want something that still
+works after a rebuild, keep the wide window.
 
 Players do not get those numbers. They scan: run with a large window
 (`mkleak.py -0x4000 0x2000`) and look for `cdctf{` in the dump, then narrow.
@@ -231,10 +238,10 @@ Get its address from the handed-out kernel:
 nm kernel.elf | grep serve_the_special
 ```
 ```
-00100970 T serve_the_special
+00100990 T serve_the_special
 ```
 
-`0x00100970` is `1050992` in decimal. soupyc integers are decimal.
+`0x00100990` is `1051024` in decimal. soupyc integers are decimal.
 
 ### Run it
 
@@ -245,7 +252,7 @@ jot /prep/S4.SC
 ```
 ```
 let a = []
-a[-1] = 1050992
+a[-1] = 1051024
 ```
 Ctrl+S, Esc, then:
 

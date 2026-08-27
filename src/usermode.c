@@ -96,13 +96,20 @@ static int map_user_page(uint32_t va) {
     return 0;
 }
 
-static void teardown_user_pages(void) {
-    for (int i = 0; i < nmapped; i++) {
-        uint32_t frame = paging_unmap(mapped[i]);
-        if (frame) pmm_free_page((void *)frame);
-    }
+/* Leave a process address space and reclaim it.
+ *
+ * paging_free_dir frees every present page in the user half, so
+ * teardown_user_pages must NOT also run: they would double-free the same
+ * frames. The page tracker is only kept now for map_user_page's dedup and
+ * its MAX_UPAGES cap, so resetting the count is all that is needed. */
+static void leave_proc_space(uint32_t *kdir, uint32_t *pdir) {
+    task_t *me = task_current();
+    if (me) me->page_dir = kdir;
+    paging_switch(kdir);
+    paging_free_dir(pdir);
     nmapped = 0;
 }
+
 
 static int load_segment(const uint8_t *buf, uint32_t bufsz,
                         const elf32_phdr_t *ph) {
@@ -155,6 +162,16 @@ int exec_elf(const char *path, const char *args) {
         kfree(buf); return -1;
     }
 
+    /* Give the program its own address space. Recorded on the task as well as
+     * loaded into CR3, so that if the timer preempts us mid-program the
+     * scheduler puts this directory back when we are resumed. */
+    uint32_t *kdir = paging_kernel_dir();
+    uint32_t *pdir = paging_new_dir();
+    if (!pdir) { kfree(buf); return -1; }
+    task_t *me_task = task_current();
+    if (me_task) me_task->page_dir = pdir;
+    paging_switch(pdir);
+
     track_reset();
     for (int i = 0; i < MAX_UFD; i++) g_ufds[i] = 0;
     g_user_brk = USER_HEAP;
@@ -165,14 +182,14 @@ int exec_elf(const char *path, const char *args) {
     for (int i = 0; i < eh->e_phnum; i++) {
         if (ph[i].p_type != PT_LOAD || ph[i].p_memsz == 0) continue;
         if (load_segment(buf, size, &ph[i]) < 0) {
-            teardown_user_pages(); kfree(buf); return -1;
+            leave_proc_space(kdir, pdir); kfree(buf); return -1;
         }
     }
 
     /* User stack. */
     for (int i = 0; i < USTACK_PAGES; i++) {
         if (map_user_page(USTACK_TOP - (uint32_t)(i + 1) * 4096) < 0) {
-            teardown_user_pages(); kfree(buf); return -1;
+            leave_proc_space(kdir, pdir); kfree(buf); return -1;
         }
     }
 
@@ -186,7 +203,7 @@ int exec_elf(const char *path, const char *args) {
 
     for (int i = 0; i < MAX_UFD; i++)     /* close anything left open */
         if (g_ufds[i]) { vfs_close(g_ufds[i]); g_ufds[i] = 0; }
-    teardown_user_pages();
+    leave_proc_space(kdir, pdir);
     return g_exit_code;
 }
 

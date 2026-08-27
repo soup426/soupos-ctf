@@ -29,6 +29,9 @@ rm -rf "$OUT"; mkdir -p "$OUT/soupos"
 git ls-files -z | while IFS= read -r -d '' f; do
     case "$f" in
         docs/challenge-*.md)         continue ;;   # design + solutions: spoilers
+        scripts/mk-handout.sh)       continue ;;   # organiser tool, and it
+                                                   # contains the secret it
+                                                   # redacts
         docs/next-steps.md)          continue ;;   # internal
         solve/*)                     continue ;;   # reference exploits
         handout/*)                   continue ;;

@@ -1,6 +1,7 @@
 #include "task.h"
 #include "heap.h"
 #include "timer.h"
+#include "paging.h"
 
 #define DEFAULT_STACK_SIZE (16 * 1024)
 
@@ -119,6 +120,7 @@ void task_init(void) {
     t->entry      = 0;
     t->arg        = 0;
     t->preempt_depth = 0;   /* kmalloc does not zero */
+    t->page_dir      = paging_kernel_dir();
 
     const char nm[] = "kernel";
     for (uint32_t i = 0; i < sizeof(nm); i++) t->name[i] = nm[i];
@@ -143,6 +145,7 @@ task_t *task_spawn(const char *name, void (*entry)(void *), void *arg) {
     t->entry      = entry;
     t->arg        = arg;
     t->preempt_depth = 0;   /* kmalloc does not zero */
+    t->page_dir      = paging_kernel_dir();
 
     uint32_t i = 0;
     while (name && name[i] && i < sizeof(t->name) - 1) {
@@ -185,6 +188,12 @@ void task_yield(void) {
     if (prev->state == TASK_RUNNING) prev->state = TASK_READY;
     next->state = TASK_RUNNING;
     current     = next;
+
+    /* Follow the task into its address space. Safe to do before the stack
+     * swap: kernel PDEs are shared by every directory, so the code and both
+     * stacks stay mapped across the CR3 load. */
+    if (next->page_dir && next->page_dir != prev->page_dir)
+        paging_switch(next->page_dir);
 
     task_switch(&prev->esp, next->esp);
     sched_unlock();
