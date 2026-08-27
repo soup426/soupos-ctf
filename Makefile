@@ -82,12 +82,22 @@ user: $(USER_ELFS)
 user/%.elf: user/%.c user/ulib.c user/ulib.h user/user.ld src/syscall_nr.h
 	$(CC) $(UCFLAGS) -Wl,-T,user/user.ld -o $@ user/ulib.c user/$*.c
 
-# Compile C
-src/%.o: src/%.c .build-config
+# Static pattern rules, not plain pattern rules.
+#
+# Two ordinary pattern rules sharing the target `src/%.o` are ambiguous, and
+# GNU make 4.3 and 4.4 resolve that differently: 4.4 falls through to the
+# second rule when the first rule's source is missing, 4.3 gives up with
+# "No rule to make target 'src/boot.o'". The build therefore worked locally on
+# 4.4 and failed on the Debian bookworm CI runner on 4.3.
+#
+# Binding each recipe to its own explicit object list removes the ambiguity, so
+# both versions agree. Keeping .build-config a normal prerequisite (rather than
+# order-only) is deliberate: order-only prerequisites do not trigger a rebuild
+# when they change, which is the entire point of the config stamp.
+$(OBJ_C): src/%.o: src/%.c .build-config
 	$(CC) $(CFLAGS) -c $< -o $@
 
-# Assemble
-src/%.o: src/%.asm .build-config
+$(OBJ_ASM): src/%.o: src/%.asm .build-config
 	$(AS) $(ASFLAGS) $< -o $@
 
 # Link (libgcc provides __divdi3/__udivdi3 for 64-bit integer math on 32-bit targets)
