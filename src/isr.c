@@ -1,5 +1,6 @@
 #include "isr.h"
 #include "usermode.h"
+#include "proc.h"
 #include "vga.h"
 #include "klog.h"
 #include "task.h"
@@ -148,6 +149,19 @@ void irq_handler(registers_t *regs) {
     if (irq >= 8)
         outb(0xA0, 0x20);   /* slave PIC EOI */
     outb(0x20, 0x20);       /* master PIC EOI */
+
+    /* A kill flagged against the running process takes effect here, but only
+     * if this interrupt arrived from ring 3 ((cs & 3) == 3). Then the program
+     * itself was executing, the kernel holds no locks, and the frame can be
+     * abandoned. An IRQ that interrupted the *kernel* half of a syscall must
+     * not unwind: that code may hold the FAT mutex, and abandoning its frame
+     * would leave the filesystem locked forever. Those kills are taken by
+     * syscall_dispatch instead, which checks on the way in and the way out.
+     *
+     * This is also how a program that makes no syscalls at all gets killed:
+     * the 100 Hz timer is the only thing that ever re-enters the kernel. */
+    if ((regs->cs & 3) == 3 && proc_kill_pending())
+        usermode_killed("irq");         /* does not return */
 
     /* Timer-driven preemption: do it AFTER the EOI (so the PIC is ready for
      * the next tick) and still with interrupts disabled. sched_preempt may

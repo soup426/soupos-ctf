@@ -1,11 +1,24 @@
 #pragma once
 #include <stdint.h>
 
-/* Load an ELF32 executable from the FAT volume, map its PT_LOAD segments into
- * fresh user pages, and run it in ring 3 until it calls the exit syscall.
- * `args` (may be NULL) is the command-line string the program reads via the
- * args syscall. Returns the program's exit code, or -1 on a load error. */
-int exec_elf(const char *path, const char *args);
+struct proc;
+
+/* Load the ELF32 executable named by the process, map its PT_LOAD segments
+ * into fresh user pages of its own address space, and run it in ring 3 until
+ * it exits, faults, or is killed. Returns the program's exit code, or -1 on a
+ * load error.
+ *
+ * Runs on the calling task, which must be the process's own task: the ring-0
+ * resume point and tss.esp0 are that task's. proc_spawn (proc.c) is what sets
+ * that up; this is not called directly from the shell any more.
+ *
+ * Was exec_elf(path, args) before processes existed. */
+int usermode_run(struct proc *pr);
+
+/* Tear down the current process because proc_kill flagged it. Does not return.
+ * Only legal where the kernel holds no locks: syscall entry/exit, or an IRQ
+ * that interrupted ring-3 code. */
+void usermode_killed(const char *where);
 
 /* Boot diagnostic: fire `int 0x80` from ring 0 to prove the syscall gate +
  * dispatcher work, independent of any user program. Writes to COM1. */

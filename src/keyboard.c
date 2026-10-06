@@ -1,6 +1,7 @@
 #include "keyboard.h"
 #include "isr.h"
 #include "task.h"
+#include "proc.h"
 #include "console.h"
 
 /* PS/2 scancodes set 1 -> ASCII, unshifted */
@@ -130,6 +131,16 @@ static void keyboard_irq_handler(registers_t *regs) {
             int ctl = c & 0x1F;
             if (ctl != '\b' && ctl != '\t' && ctl != '\n' && ctl != '\r')
                 c = (char)ctl;
+        }
+        /* Ctrl-C is the terminal driver's job, not the shell's. While a
+         * foreground program runs, the shell is blocked in proc_wait and
+         * nobody is reading keys, so the interrupt has to be raised here, from
+         * the IRQ. Flag the program and swallow the key. With no foreground
+         * program it falls through to the shell, which uses 0x03 to cancel the
+         * input line. */
+        if (c == 0x03) {
+            proc_t *fg = proc_foreground();
+            if (fg) { proc_flag_kill(fg); return; }
         }
         kb_push((int)(unsigned char)c);
     }

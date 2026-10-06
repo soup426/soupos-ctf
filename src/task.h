@@ -76,6 +76,10 @@ void     task_exit(void) __attribute__((noreturn));
 task_t  *task_current(void);
 uint32_t task_count(void);
 
+/* Like task_count(), but ignores DEAD tasks awaiting the reaper. Use this to
+ * ask "is any other task actually running?". */
+uint32_t task_count_alive(void);
+
 /* Iteration. Start at task_list_head() (NULL if no tasks), follow .next
  * until it wraps back to the head. The list is circular so do not
  * dereference past the head a second time. */

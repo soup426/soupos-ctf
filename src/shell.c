@@ -16,6 +16,7 @@
 #include "speaker.h"
 #include "vga13h.h"
 #include "task.h"
+#include "proc.h"
 #include "vfs.h"
 #include "klog.h"
 #include "users.h"
@@ -396,6 +397,9 @@ static void cmd_menu(void) {
         {0, "    clockout           - log out, return to the login prompt"},
         {0, "    ai <prompt>        - ask the host LLM (needs: make run-ai)"},
         {0, "    cook <prog.elf>    - run a ring-3 user-mode program"},
+        {0, "    cook <prog.elf> &  - ... in the background (Ctrl+C kills the"},
+        {0, "                         foreground one; kill <pid> any of them)"},
+        {0, "    jobs               - list processes and their exit codes"},
         {0, "    soup <file.sc>     - run a soupyc script"},
         {0, "    soup -c \"code\"     - run inline soupyc"},
         {0, "    hash <text>        - AlphaSOUP-32 hash"},
@@ -913,7 +917,7 @@ static void cmd_ai(const char *args) {
  * user-mode process. Returns to the shell when the program exits. */
 static void cmd_cook(const char *args) {
     while (*args == ' ') args++;
-    if (!*args) { vga_puts("Usage: cook <program.elf> [args]\n"); return; }
+    if (!*args) { vga_puts("Usage: cook <program.elf> [args] [&]\n"); return; }
     /* Split the program name from the rest of the line (passed to the program). */
     char name[FAT_PATH_MAX];
     int i = 0;
@@ -921,6 +925,20 @@ static void cmd_cook(const char *args) {
     name[i] = '\0';
     const char *prog_args = args + i;
     while (*prog_args == ' ') prog_args++;
+
+    /* A trailing & backgrounds the program. Only a trailing one: an & anywhere
+     * else is the program's own argument, not shell syntax. */
+    char argbuf[PROC_ARGS_MAX];
+    strncpy(argbuf, prog_args, PROC_ARGS_MAX - 1);
+    argbuf[PROC_ARGS_MAX - 1] = '\0';
+    int background = 0;
+    int alen = (int)strlen(argbuf);
+    while (alen > 0 && argbuf[alen - 1] == ' ') argbuf[--alen] = '\0';
+    if (alen > 0 && argbuf[alen - 1] == '&') {
+        background = 1;
+        argbuf[--alen] = '\0';
+        while (alen > 0 && argbuf[alen - 1] == ' ') argbuf[--alen] = '\0';
+    }
 
     char path[FAT_PATH_MAX];
     resolve_path(name, path);
@@ -932,20 +950,75 @@ static void cmd_cook(const char *args) {
     }
     if (!may(path, 'r') || !may(path, 'x')) { deny(path); return; }
 
+    /* The program gets a task of its own either way. Even in the foreground
+     * that matters: the shell stays out of ring 3, so it can be woken to
+     * report the exit code, and a program that never exits can be killed
+     * instead of wedging the shell forever. */
+    uint32_t pid = 0;
+    int rc = proc_spawn(path, argbuf, background, &pid);
+    if (rc == -1) {
+        vga_set_color(VGA_LIGHT_RED, VGA_BLACK);
+        vga_printf("  Too many processes (max %d). Try: jobs\n", PROC_MAX);
+        vga_set_color(VGA_LIGHT_GREY, VGA_BLACK);
+        return;
+    }
+    if (rc < 0) {
+        vga_set_color(VGA_LIGHT_RED, VGA_BLACK);
+        vga_puts("  Out of memory starting the process.\n");
+        vga_set_color(VGA_LIGHT_GREY, VGA_BLACK);
+        return;
+    }
+
+    if (background) {
+        vga_set_color(VGA_DARK_GREY, VGA_BLACK);
+        vga_printf("  [%u] %s\n", pid, path);
+        vga_set_color(VGA_LIGHT_GREY, VGA_BLACK);
+        return;
+    }
+
+    /* Foreground: this process owns the keyboard (so stdin reaches it and
+     * Ctrl-C kills it rather than cancelling our input line), and we block
+     * until it is done. */
+    proc_set_foreground(proc_by_pid(pid));
     vga_set_color(VGA_DARK_GREY, VGA_BLACK);
     vga_printf("  cooking %s in ring 3...\n", path);
     vga_set_color(VGA_LIGHT_GREY, VGA_BLACK);
 
-    int rc = exec_elf(path, prog_args);
-    if (rc < 0) {
+    int code = proc_wait(pid);
+    proc_set_foreground(0);
+
+    if (code == PROC_EXIT_KILLED) {
+        vga_set_color(VGA_YELLOW, VGA_BLACK);
+        vga_printf("  [%s killed]\n", path);
+    } else if (code == -1) {
         vga_set_color(VGA_LIGHT_RED, VGA_BLACK);
         vga_puts("  Not a runnable soupOS program (need a 32-bit i386 ET_EXEC ELF).\n");
-        vga_set_color(VGA_LIGHT_GREY, VGA_BLACK);
     } else {
         vga_set_color(VGA_DARK_GREY, VGA_BLACK);
-        vga_printf("  [%s exited with code %d]\n", path, rc);
-        vga_set_color(VGA_LIGHT_GREY, VGA_BLACK);
+        vga_printf("  [%s exited with code %d]\n", path, code);
     }
+    vga_set_color(VGA_LIGHT_GREY, VGA_BLACK);
+}
+
+/* jobs - the process table. `ps` lists tasks, including the task each process
+ * runs on; this lists processes, which is where background state and exit
+ * codes live. A finished background job stays here until the next prompt
+ * announces it. */
+static void cmd_jobs(void) {
+    int idx = 0, n = 0;
+    proc_t *p;
+    vga_set_color(VGA_YELLOW, VGA_BLACK);
+    vga_puts("  PID  ST  BG  CODE  PROGRAM\n");
+    vga_set_color(VGA_LIGHT_GREY, VGA_BLACK);
+    while ((p = proc_next(&idx)) != 0) {
+        n++;
+        vga_printf("  %3u   %c   %c", p->pid,
+                   proc_state_letter(p->state), p->background ? 'y' : 'n');
+        if (p->state == PROC_ZOMBIE) vga_printf("  %4d", p->exit_code);
+        else                         vga_puts("     -");
+        vga_printf("  %s%s\n", p->name, p->killed ? " (killing)" : "");
+    }
+    if (!n) vga_puts("  (no processes)\n");
 }
 
 /* ---- bowls (directories) ---------------------------------------------- */
@@ -1467,14 +1540,15 @@ static void cmd_ps(void) {
     task_t *head = task_list_head();
     if (!head) { vga_puts("(no tasks)\n"); return; }
     vga_set_color(VGA_YELLOW, VGA_BLACK);
-    vga_puts("  ID  ST  STACK   NAME\n");
+    vga_puts("  ID  ST  STACK  KIND   NAME\n");
     vga_set_color(VGA_LIGHT_GREY, VGA_BLACK);
     task_t *t = head;
     do {
-        vga_printf("  %2u   %c  %5u   %s%s\n",
+        vga_printf("  %2u   %c  %5u  %s   %s%s\n",
                    t->id,
                    task_state_letter(t->state),
                    t->stack_size,
+                   t->proc ? "ring3" : "task ",
                    t->name,
                    (t == task_current()) ? " *" : "");
         t = t->next;
@@ -1483,11 +1557,30 @@ static void cmd_ps(void) {
 
 static void cmd_kill(const char *args) {
     while (*args == ' ') args++;
-    if (!*args) { vga_puts("Usage: kill <id>\n"); return; }
+    if (!*args) { vga_puts("Usage: kill <pid> | kill %  (newest process)\n"); return; }
+    /* `kill %` targets the newest live process, the way a shell's %1 does.
+     * Saves reading `jobs` for a pid, and lets a script kill what it just
+     * started without knowing the number. */
+    if (*args == '%') {
+        proc_t *last = proc_most_recent();
+        if (!last) { vga_puts("kill: no live process\n"); return; }
+        proc_kill(last->pid);
+        vga_printf("killing process %u (%s)\n", last->pid, last->name);
+        return;
+    }
+
     int id = parse_num(args);
-    int r  = task_kill((uint32_t)id);
+    /* A pid IS a task id, so try the process path first: it flags the program
+     * and lets it unwind through its own teardown. Marking the task DEAD
+     * instead would leak the whole address space, because the loader would
+     * never return to free it. */
+    if (proc_kill((uint32_t)id) == 0) {
+        vga_printf("killing process %d\n", id);
+        return;
+    }
+    int r = task_kill((uint32_t)id);
     if (r == 0) vga_printf("killed task %d\n", id);
-    else        vga_printf("kill: task %d not killable (unknown, self, or kernel)\n", id);
+    else        vga_printf("kill: %d not killable (unknown, self, or kernel)\n", id);
 }
 
 /* Background clock - writes HH:MM:SS directly to the VGA text buffer
@@ -2023,7 +2116,7 @@ static void cmd_reheat(void) {
  * would leak the lock into an unrelated task the first time a player paused on
  * a menu. See docs/doom-reenable-plan.md. */
 static void cmd_doom(void) {
-    if (task_count() > 1) {
+    if (task_count_alive() > 1) {
         vga_set_color(VGA_YELLOW, VGA_BLACK);
         vga_puts("  Doom needs the machine to itself.\n");
         vga_set_color(VGA_LIGHT_GREY, VGA_BLACK);
@@ -2258,7 +2351,7 @@ static const char *const cmd_names[] = {
     "jot", "ai", "cook", "soup", "hash",
     "beep", "mandelbrot", "vgademo", "uname", "cal",
     "clock", "wipe", "fortune", "bounce", "recipe", "leftovers", "spill",
-    "freeze", "reheat", "ps", "kill", "bgclock", "yieldbg", "spinbg", "sleeptest", "vfstest",
+    "freeze", "reheat", "ps", "jobs", "kill", "bgclock", "yieldbg", "spinbg", "sleeptest", "vfstest",
     "dmesg", "pwd", "cd", "mkbowl", "rmbowl", "bowltest",
     "whoami", "roster", "clockout", "hire", "fire", "perms",
 };
@@ -2334,7 +2427,21 @@ static void shell_tab_complete(char *input, int *pos, int *len) {
 
 /* ---- prompt & dispatch ---- */
 
+/* How a finished background job is announced, just before the next prompt. */
+static void report_finished_job(const proc_t *p) {
+    vga_set_color(VGA_DARK_GREY, VGA_BLACK);
+    if (p->exit_code == PROC_EXIT_KILLED)
+        vga_printf("  [%u] killed  %s\n", p->pid, p->name);
+    else
+        vga_printf("  [%u] done    %s (exit %d)\n", p->pid, p->name, p->exit_code);
+    vga_set_color(VGA_LIGHT_GREY, VGA_BLACK);
+}
+
 static void prompt(void) {
+    /* Collect background jobs that finished while we were away. Done before
+     * prompt_row is recorded, so the report cannot desync the line editor. */
+    proc_report_finished(report_finished_job);
+
     const char *u = users_current_name();
     prompt_row = vga_get_row();
     vga_set_color(users_is_headchef() ? VGA_LIGHT_RED : VGA_LIGHT_GREEN, VGA_BLACK);
@@ -2474,6 +2581,7 @@ static void dispatch(const char *buf) {
 #endif
     else if (str_eq(p, "cat"))       cmd_cat();  /* hidden */
     else if (str_eq(p, "ps"))          cmd_ps();
+    else if (str_eq(p, "jobs"))        cmd_jobs();
     else if (str_eq(p, "bgclock"))     cmd_bgclock();
     else if (str_eq(p, "yieldbg"))     cmd_yieldbg();
     else if (str_eq(p, "spinbg"))      cmd_spinbg();

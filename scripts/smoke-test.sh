@@ -47,7 +47,14 @@ python3 scripts/qemu_keys.py "$MON" \
     "fatstress" "WAIT:30" \
     "vgastress" "WAIT:25" \
     "vmtest" "WAIT:6" \
-    "yieldbg" "cook spin.elf" "WAIT:11" >/dev/null || {
+    "yieldbg" "cook spin.elf" "WAIT:11" \
+    "cook marker.elf A &" "cook marker.elf B &" "WAIT:7" \
+    "jobs" "WAIT:1" \
+    "cook hog.elf &" "WAIT:2" "kill %" "WAIT:2" \
+    "cook hog.elf" "WAIT:2" "KEY:ctrl-c" "WAIT:2" \
+    "cook systest.elf afterctrlc" "WAIT:3" \
+    "cook systest.elf post" "WAIT:3" \
+    "cook hello.elf" "WAIT:2" "cook hello.elf" "WAIT:2" >/dev/null || {
         echo "FAIL: could not drive the QEMU monitor"; exit 1; }
 
 fail=0
@@ -72,6 +79,93 @@ check "background task ran"          '\[bg\] done'
 check "preempt_disable works"       'PASS'
 check "concurrent FAT is safe"      '\[fatstress\] PASS'
 check "address spaces isolated"     '\[vmtest\] PASS'
+
+check "two processes both ran to completion" '\[p:A\] step 39'
+check "second process ran to completion"    '\[p:B\] step 39'
+check "kill reached a non-cooperating program via the IRQ path" 'killed \(irq\)'
+
+# Two ring-3 programs alive at the same time. marker.elf tags every line with
+# its own argument, so an A line between two B lines can only mean both were
+# live: one process cannot interleave with itself.
+if grep -qE '\[p:A\]' "$LOG" && grep -qE '\[p:B\]' "$LOG"; then
+    firstA=$(grep -nE '\[p:A\]' "$LOG" | head -1 | cut -d: -f1)
+    lastA=$( grep -nE '\[p:A\]' "$LOG" | tail -1 | cut -d: -f1)
+    interleaved=$(awk -v a="$firstA" -v b="$lastA" 'NR>a && NR<b' "$LOG" \
+                  | grep -cE '\[p:B\]' || true)
+    if [ "$interleaved" -gt 0 ]; then
+        echo "  ok    two ring-3 processes interleaved ($interleaved B steps inside A's run)"
+    else
+        echo "  FAIL  no B steps between A's first and last: processes did not overlap"
+        fail=1
+    fi
+else
+    echo "  FAIL  marker.elf tags missing: concurrent processes never ran"
+    fail=1
+fi
+
+# The per-task ring-0 stack, asserted as a number rather than inferred from
+# behaviour. Each process logs the esp0 it entered ring 3 on; the two markers
+# are alive at the same time, so theirs MUST differ. If they matched, one
+# program's trap frame would be landing on the other's.
+esp_for_tag() {   # esp_for_tag <marker arg>
+    local pid
+    pid=$(grep -oE "\[proc [0-9]+\] spawned [^ ]+ $1" "$LOG" \
+          | grep -oE '[0-9]+' | head -1)
+    [ -n "$pid" ] || return 1
+    grep -oE "\[proc $pid\] ring3 esp0=0x[0-9a-fA-F]+" "$LOG" \
+        | grep -oE '0x[0-9a-fA-F]+' | head -1
+}
+espA=$(esp_for_tag A || true)
+espB=$(esp_for_tag B || true)
+if [ -n "$espA" ] && [ -n "$espB" ] && [ "$espA" != "$espB" ]; then
+    echo "  ok    concurrent processes have their own ring-0 stacks ($espA vs $espB)"
+else
+    echo "  FAIL  per-task esp0 not proven (A=${espA:-none} B=${espB:-none})"
+    fail=1
+fi
+
+# Ctrl-C on a FOREGROUND program. Different path from `kill %`: the shell is
+# blocked in proc_wait and reading no keys, so the kill has to be raised by the
+# keyboard IRQ itself. Two kills must have happened by now, and the second one
+# is this.
+kills=$(grep -cE 'killed \(irq\)' "$LOG" || true)
+if [ "$kills" -ge 2 ]; then
+    echo "  ok    Ctrl-C killed the foreground program ($kills IRQ kills total)"
+else
+    echo "  FAIL  Ctrl-C did not kill the foreground program (only $kills IRQ kills)"
+    fail=1
+fi
+
+# The shell has to survive killing a program: a ring-3 program run AFTER the
+# kill must still produce output.
+kill_line=$(grep -nE 'killed \(irq\)' "$LOG" | tail -1 | cut -d: -f1)
+if [ -n "$kill_line" ] && awk -v k="$kill_line" 'NR>k' "$LOG" | grep -qE 'TESTOUT'; then
+    echo "  ok    shell still runs programs after a kill"
+else
+    echo "  FAIL  no ring-3 output after the kill: the shell did not survive it"
+    fail=1
+fi
+
+# Address spaces are actually reclaimed. Every process logs the free page count
+# once its own space is torn down, so two runs of the SAME program with nothing
+# else alive must report the same number. It has to be the same program and no
+# overlap: a process that exits while another is still running legitimately
+# sees fewer free pages, because the other one still holds its space.
+mapfile -t freepages < <(grep -iE '\[proc [0-9]+\] /hello\.elf exited .* pages free' "$LOG" \
+                         | grep -oE '[0-9]+ pages free' | grep -oE '^[0-9]+')
+n=${#freepages[@]}
+if [ "$n" -ge 2 ]; then
+    a=${freepages[$((n-2))]}; b=${freepages[$((n-1))]}
+    if [ "$a" = "$b" ]; then
+        echo "  ok    no address-space leak (two hello.elf runs both ended at $b free pages)"
+    else
+        echo "  FAIL  address space leaked across runs of one program: $a free pages then $b"
+        fail=1
+    fi
+else
+    echo "  FAIL  need two hello.elf exits to compare page counts, found $n"
+    fail=1
+fi
 
 # vgastress prints whole lines of a single repeated character from two tasks.
 # Any line containing both means vga_puts was interrupted mid-string.

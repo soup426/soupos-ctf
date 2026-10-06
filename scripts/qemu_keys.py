@@ -4,7 +4,8 @@ MON = sys.argv[1]
 SCRIPT = sys.argv[2:]
 
 KEYMAP = {' ':'spc', '\n':'ret', '.':'dot', '-':'minus', '_':'shift-minus',
-          '/':'slash', ':':'shift-semicolon'}
+          '/':'slash', ':':'shift-semicolon',
+          '&':'shift-7', '%':'shift-5'}
 
 def keys_for(ch):
     if ch in KEYMAP: return [KEYMAP[ch]]
@@ -35,6 +36,11 @@ def cmd(c):
 for item in SCRIPT:
     if item.startswith('WAIT:'):
         time.sleep(float(item[5:]))
+        continue
+    # KEY:<qemu keyname> sends one raw sendkey, for keys the typing map has no
+    # character for (KEY:ctrl-c, KEY:esc, ...).
+    if item.startswith('KEY:'):
+        cmd('sendkey ' + item[4:])
         continue
     for ch in item:
         for k in keys_for(ch):

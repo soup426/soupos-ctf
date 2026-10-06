@@ -255,6 +255,21 @@ uint32_t task_count(void) {
     return n;
 }
 
+/* Tasks that have not exited. task_count() includes DEAD tasks the reaper has
+ * not collected yet, which is a surprise for a caller asking "is anything else
+ * running?": every finished program left `doom` refusing to start until the
+ * next yield swept it up. */
+uint32_t task_count_alive(void) {
+    if (!list_head) return 0;
+    uint32_t n = 0;
+    task_t *t = list_head;
+    do {
+        if (t->state != TASK_DEAD) n++;
+        t = t->next;
+    } while (t != list_head);
+    return n;
+}
+
 task_t *task_list_head(void) { return list_head; }
 
 task_t *task_by_id(uint32_t id) {
