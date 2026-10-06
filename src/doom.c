@@ -410,8 +410,8 @@ typedef struct { uint8_t state; uint8_t atk_cd; int16_t hp; } thing_ai_t;
 static thing_ai_t *lv_thing_ai = NULL;
 
 /* Player position × 256 (fixed-point sub-unit).
- * pl_angle: fine view angle 0-31 (32 steps, 11.25° each; 0=East, 8=North).
- * pl_dir: coarse 8-direction (= pl_angle / 4) kept for movement tables. */
+ * pl_angle: fine view angle 0-127 (128 steps, 2.8125° each; 0=East).
+ * pl_dir: coarse 8-direction (= pl_angle / ANG_PER_DIR), for sprite rotation. */
 static int32_t pl_x = 0, pl_y = 0;
 static int     pl_angle = 0;
 static int     pl_dir   = 0;
@@ -427,19 +427,58 @@ static const int sin128[8] = {   0,  91, 128,  91,    0, -91, -128, -91 };
 /* ── Fine view angle tables: cos/sin scaled ×1024, 32 steps of 11.25° ──────
  * Index 0 = East (0°), 8 = North (90°), 16 = West, 24 = South.
  * Derived from cos(2πk/32) and sin(2πk/32). */
-static const int16_t view_cos[32] = {
-    1024, 1004,  946,  851,  724,  567,  391,  199,
-       0, -199, -391, -567, -724, -851, -946,-1004,
-   -1024,-1004, -946, -851, -724, -567, -391, -199,
-       0,  199,  391,  567,  724,  851,  946, 1004
-};
-static const int16_t view_sin[32] = {
-       0,  199,  391,  567,  724,  851,  946, 1004,
-    1024, 1004,  946,  851,  724,  567,  391,  199,
-       0, -199, -391, -567, -724, -851, -946,-1004,
-   -1024,-1004, -946, -851, -724, -567, -391, -199
-};
+/* View angles. 128 steps of 2.8125 degrees.
+ *
+ * This was 32 steps (11.25 degrees each), which made turning visibly jump:
+ * the whole world rotated an eighth of a right angle per keypress. The step
+ * count is the only thing that changed; everything derived from it goes
+ * through ANG_* below, so the turn RATE is unchanged (TURN_DELAY drops from 4
+ * ticks to 1, giving 4x as many steps that are each a quarter of the size).
+ *
+ * Tables are cosine/sine x1024, index 0 = East, increasing counter-clockwise. */
+#define ANG_N        128            /* angles in a full turn            */
+#define ANG_MASK     (ANG_N - 1)
+#define ANG_90       (ANG_N / 4)    /* quarter turn, for strafing       */
+#define ANG_270      (ANG_N * 3 / 4)
+#define ANG_PER_DIR  (ANG_N / 8)    /* angles per 8-way sprite rotation */
+#define ANG_SKY_U    (256 / ANG_N)  /* sky texels per angle step        */
 
+static const int16_t view_cos[ANG_N] = {
+     1024,  1023,  1019,  1013,  1004,   993,   980,   964,
+      946,   926,   903,   878,   851,   822,   792,   759,
+      724,   688,   650,   610,   569,   526,   483,   438,
+      392,   345,   297,   249,   200,   150,   100,    50,
+        0,   -50,  -100,  -150,  -200,  -249,  -297,  -345,
+     -392,  -438,  -483,  -526,  -569,  -610,  -650,  -688,
+     -724,  -759,  -792,  -822,  -851,  -878,  -903,  -926,
+     -946,  -964,  -980,  -993, -1004, -1013, -1019, -1023,
+    -1024, -1023, -1019, -1013, -1004,  -993,  -980,  -964,
+     -946,  -926,  -903,  -878,  -851,  -822,  -792,  -759,
+     -724,  -688,  -650,  -610,  -569,  -526,  -483,  -438,
+     -392,  -345,  -297,  -249,  -200,  -150,  -100,   -50,
+        0,    50,   100,   150,   200,   249,   297,   345,
+      392,   438,   483,   526,   569,   610,   650,   688,
+      724,   759,   792,   822,   851,   878,   903,   926,
+      946,   964,   980,   993,  1004,  1013,  1019,  1023
+};
+static const int16_t view_sin[ANG_N] = {
+        0,    50,   100,   150,   200,   249,   297,   345,
+      392,   438,   483,   526,   569,   610,   650,   688,
+      724,   759,   792,   822,   851,   878,   903,   926,
+      946,   964,   980,   993,  1004,  1013,  1019,  1023,
+     1024,  1023,  1019,  1013,  1004,   993,   980,   964,
+      946,   926,   903,   878,   851,   822,   792,   759,
+      724,   688,   650,   610,   569,   526,   483,   438,
+      392,   345,   297,   249,   200,   150,   100,    50,
+        0,   -50,  -100,  -150,  -200,  -249,  -297,  -345,
+     -392,  -438,  -483,  -526,  -569,  -610,  -650,  -688,
+     -724,  -759,  -792,  -822,  -851,  -878,  -903,  -926,
+     -946,  -964,  -980,  -993, -1004, -1013, -1019, -1023,
+    -1024, -1023, -1019, -1013, -1004,  -993,  -980,  -964,
+     -946,  -926,  -903,  -878,  -851,  -822,  -792,  -759,
+     -724,  -688,  -650,  -610,  -569,  -526,  -483,  -438,
+     -392,  -345,  -297,  -249,  -200,  -150,  -100,   -50
+};
 /* Forward declarations — texture/sprite systems are defined in the Stage 6/7 block below */
 static void tex_shutdown(void);
 static void tex_init(void);
@@ -570,8 +609,8 @@ static int level_load(const char *name) {
                     pl_x = (int32_t)lv_things[i].x << 8;
                     pl_y = (int32_t)lv_things[i].y << 8;
                     /* Doom angle (degrees, 0=East) → fine angle (0-31, 32=full) */
-                    pl_angle = ((int)lv_things[i].angle * 32 / 360) & 31;
-                    pl_dir   = pl_angle / 4;
+                    pl_angle = ((int)lv_things[i].angle * ANG_N / 360) & ANG_MASK;
+                    pl_dir   = pl_angle / ANG_PER_DIR;
                     break;
                 }
             }
@@ -897,7 +936,7 @@ static void draw_flats(int psec) {
 
         uint8_t *row = g_backbuf + y * VGA13_W;
 
-        int sky_u_base = ((int)pl_angle * 8) & 255;
+        int sky_u_base = ((int)pl_angle * ANG_SKY_U) & 255;
         int sky_v = y * 128 / VIEW_HALF_H;
         if (sky_v > 127) sky_v = 127;
 
@@ -2374,13 +2413,13 @@ static void lifts_tick(void) {
     }
 }
 
-/* Return the 32-step angle (0-31) from (mx,my) toward the player. */
+/* Return the view angle (0..ANG_N-1) from (mx,my) toward the player. */
 static int angle_to_player_32(int32_t mx, int32_t my) {
     int32_t dx = (pl_x >> 8) - mx;
     int32_t dy = (pl_y >> 8) - my;
     int best = 0;
     int64_t best_dot = (int64_t)view_cos[0]*dx + (int64_t)view_sin[0]*dy;
-    for (int a = 1; a < 32; a++) {
+    for (int a = 1; a < ANG_N; a++) {
         int64_t dot = (int64_t)view_cos[a]*dx + (int64_t)view_sin[a]*dy;
         if (dot > best_dot) { best_dot = dot; best = a; }
     }
@@ -2465,9 +2504,9 @@ static void build_vissprites(void) {
         if (is_monster_type(th->type) && lv_thing_ai
             && lv_thing_ai[i].state != AI_DEAD) {
             int dir = angle_to_player_32((int32_t)th->x, (int32_t)th->y);
-            int mon_facing = (int)(th->angle) * 32 / 360;
-            int delta = (dir - mon_facing + 32) & 31;
-            rot_char = (char)('1' + delta / 4);
+            int mon_facing = (int)(th->angle) * ANG_N / 360;
+            int delta = (dir - mon_facing + ANG_N) & ANG_MASK;
+            rot_char = (char)('1' + delta / ANG_PER_DIR);
         } else {
             rot_char = '0';
         }
@@ -2735,7 +2774,7 @@ void doom_play_level(int ep, int skill) {
 
 #define MOVE_SPEED    8
 #define MOVE_DELAY    1
-#define TURN_DELAY    4
+#define TURN_DELAY    1
 #define ZOOM_DELAY    3
 #define ZOOM_STEP    32
 #define FRAME_TICKS   2
@@ -2804,13 +2843,13 @@ void doom_play_level(int ep, int skill) {
 
             /* ── Strafe ───────────────────────────────────────────────────── */
             if (keyboard_key_pressed(KEY_SC_A)) {
-                int sa = (pl_angle + 8) & 31;
+                int sa = (pl_angle + ANG_90) & ANG_MASK;
                 int32_t dx = (int32_t)view_cos[sa] / 8 * MOVE_SPEED * 2;
                 int32_t dy = (int32_t)view_sin[sa] / 8 * MOVE_SPEED * 2;
                 if (try_move(dx, dy)) moved = 1;
             }
             if (keyboard_key_pressed(KEY_SC_D)) {
-                int sa = (pl_angle + 24) & 31;
+                int sa = (pl_angle + ANG_270) & ANG_MASK;
                 int32_t dx = (int32_t)view_cos[sa] / 8 * MOVE_SPEED * 2;
                 int32_t dy = (int32_t)view_sin[sa] / 8 * MOVE_SPEED * 2;
                 if (try_move(dx, dy)) moved = 1;
@@ -2821,12 +2860,12 @@ void doom_play_level(int ep, int skill) {
             /* ── Turn (rate-limited, fine angle) ─────────────────────────── */
             if (now - turn_last >= TURN_DELAY) {
                 if (keyboard_key_pressed(KEY_SC_LEFT)) {
-                    pl_angle = (pl_angle + 1) & 31;
-                    pl_dir   = pl_angle / 4;
+                    pl_angle = (pl_angle + 1) & ANG_MASK;
+                    pl_dir   = pl_angle / ANG_PER_DIR;
                     turn_last = now; moved = 1;
                 } else if (keyboard_key_pressed(KEY_SC_RIGHT)) {
-                    pl_angle = (pl_angle + 31) & 31;
-                    pl_dir   = pl_angle / 4;
+                    pl_angle = (pl_angle + ANG_MASK) & ANG_MASK;
+                    pl_dir   = pl_angle / ANG_PER_DIR;
                     turn_last = now; moved = 1;
                 }
             }
