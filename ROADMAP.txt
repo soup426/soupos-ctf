@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.7.6
+Current version: v0.8.0
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,63 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.8.0  (2026-10-06)  — CONCURRENT RING-3 PROCESSES
+  A program is a process now, not a coroutine the shell runs on its own task.
+  Several run at once, background jobs work, and a program that refuses to
+  cooperate can be killed.
+  - PER-TASK RING-0 STACK. tss.esp0 was set once at boot to a single static
+    kstack and tss_set_esp0() was never called at all; kernel_resume_esp was
+    one word in .bss. With two programs that is a corruption bug: the timer
+    fires while A is in ring 3, the CPU pushes A's frame onto kstack,
+    sched_preempt switches away with that frame live, then B syscalls onto the
+    same esp0 and lands on top of it. Both are now task_t.user_resume_esp, and
+    task_yield moves tss.esp0 with `current`. It is the resume esp, not the
+    stack top, because user_mode_enter leaves four saved registers on that
+    stack for as long as ring 3 runs. (src/task.c, usermode_asm.asm, gdt.c)
+  - NEW src/proc.c + proc.h. A process IS a kernel task (pid == task id), so
+    the scheduler, wait queues, mutexes and reaper are reused as-is. proc_t
+    holds what used to be file-scope in usermode.c (exit code, fd table, heap
+    break, args, page budget, in-user flag) which is exactly what limited the
+    machine to one program. 8 static slots, no allocation.
+  - The slot outlives the task on purpose: the reaper frees a DEAD task_t and
+    its stack, so an exit code kept there would vanish before the parent read
+    it. Zombie until proc_wait collects it or the next prompt announces it.
+  - exec_elf(path, args) -> usermode_run(proc_t *), called on the process's own
+    task. cmd_cook no longer enters ring 3 on the shell task, which is why a
+    program that never exits no longer wedges the shell.
+  - KILLING. proc_kill only sets a flag; marking the task DEAD would leak the
+    whole address space, because the loader would never return to free it. The
+    flag is taken where no locks are held: syscall entry/exit, and an IRQ that
+    interrupted ring-3 code ((cs & 3) == 3). An IRQ inside the kernel half of a
+    syscall must not unwind - it may hold the FAT mutex, and abandoning that
+    frame would lock the filesystem forever. The IRQ path is also the only way
+    to kill a program that makes no syscalls, which user/hog.c is.
+  - Ctrl-C is raised in the keyboard IRQ, the way a tty does it: while a
+    foreground program runs the shell is blocked in proc_wait and reads no
+    keys. 0x03 flags the foreground process and is swallowed; with no
+    foreground process it still cancels the shell's input line.
+  - stdin belongs to the foreground process; others read EOF instead of
+    stealing keys. That wait is interruptible and sti's first: int 0x80 is an
+    interrupt gate, so waiting with IF clear waited forever for the keyboard
+    IRQ that fills the buffer. (Nothing had exercised ring-3 stdin before.)
+  - mapped[1024]/is_mapped deleted: dedup asks paging_is_mapped, which is
+    authoritative, costs no memory and is not O(n) per page. The counter left
+    is just the per-process budget.
+  - task_count_alive() ignores DEAD tasks, so `doom` no longer refuses to start
+    merely because a program finished before the reaper swept it.
+  - Shell: `cook prog &`, `jobs`, `kill %` (newest process), `ps` marks which
+    tasks are processes, finished background jobs announced before the prompt.
+  - New user programs: marker.elf (tags every step with its argument, so two
+    copies prove concurrency) and hog.elf (loops forever, no syscalls).
+  - Gate grew from 14 checks to 22: two processes interleaving, the per-task
+    esp0 invariant asserted as two different measured numbers, both kill paths,
+    Ctrl-C on a foreground program, shell survival after a kill, and equal free
+    page counts across two runs of one program (no address-space leak).
+  Design notes: docs/superpowers/specs/2026-10-06-concurrent-processes-design.md
+  Still open: fork/exec and pipes, fg/bg and process groups, and the
+  preemption-safety debt below (soupyc, vfs, users, shell still have unguarded
+  file-scope state).
 
 v0.7.6  (2026-08-26)  — DOOM ENEMY AI FIXED (line of sight)
   The long-standing "enemy AI completely broken" bug is resolved, and the
@@ -717,12 +774,11 @@ KNOWN BUGS / DEBT
       The cooperative design put yields at chosen points; IRQ0 removed
       that guarantee. Needs either a big-kernel-lock (preempt_disable
       around driver entry points) or per-subsystem locks.
-  [ ] A ring-3 fault panics and halts the kernel instead of killing the
-      program. Verified: `cook` an ELF containing an invalid opcode and
-      isr.c takes the whole box down (exception 6, cs=0x1b). Ring 3
-      exists precisely so a bad user program cannot do that — the fault
-      handler should check cs & 3 and, for a user fault, tear down the
-      process and return to the shell.
+  [x] A ring-3 fault panics and halts the kernel instead of killing the
+      program. FIXED: isr_handler checks `(cs & 3) == 3 && usermode_in_user()`
+      and calls usermode_fault(), which unwinds into the loader so the program
+      dies with exit code -(128 + exception) and the shell lives. v0.8.0 reuses
+      that same unwind for kills. `cook crash.elf` is the demo.
   [x] RECIPE.TXT shows "FAT16 read-only" — update the string now
       that write is supported
       (already fixed in `recipe` cmd; also bumped README.TXT to v0.4.0)

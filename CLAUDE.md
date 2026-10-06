@@ -3,7 +3,7 @@
 ## What this is
 
 soupOS is a 32-bit x86 hobby OS written in C and NASM assembly (currently
-**v0.7.6**). It boots via GRUB and runs in protected mode with paging, a
+**v0.8.0**). It boots via GRUB and runs in protected mode with paging, a
 physical/heap allocator, and a cooperative scheduler. On top of that:
 
 - **Filesystem**: FAT16 read/write with subdirectories ("bowls") and a VFS shim
@@ -14,9 +14,11 @@ physical/heap allocator, and a cooperative scheduler. On top of that:
   `soupyc` scripting language (functions, arrays, file I/O, `include`, builtins,
   triple-quoted multi-line strings, line-numbered errors; strings cap at 47 ch).
 - **`ai <prompt>`**: a COM2 serial bridge to a host-side LLM (`make run-ai`).
-- **Ring-3 user mode (v0.7.0)**: `cook <prog.elf>` loads and runs ELF32 programs
-  in ring 3 over an `int 0x80` syscall interface, with real (U/S-bit) memory
-  protection. See the "User mode" section below.
+- **Ring-3 processes (v0.7.0, concurrent since v0.8.0)**: `cook <prog.elf>`
+  loads and runs ELF32 programs in ring 3 over an `int 0x80` syscall interface,
+  with real (U/S-bit) memory protection and a private address space each.
+  Several run at once: `cook prog &` backgrounds, `jobs` lists them, `kill` and
+  Ctrl-C end them. See "User mode" and "Processes" below.
 
 Theming note: commands are kitchen-flavoured (`pour`/`stir`/`serve`/`cook`/…).
 
@@ -380,8 +382,16 @@ EBP as a scratch register and the stack walk finds nothing.
 soupOS runs real ring-3 user programs with hardware memory protection.
 
 - **GDT/TSS** (`gdt.c`): user code/data selectors `SEL_UCODE 0x1B` / `SEL_UDATA
-  0x23`, and a TSS (`SEL_TSS 0x28`) holding `ss0`/`esp0` — the dedicated 16 KB
-  kernel stack the CPU switches to on a ring3→ring0 trap. `ltr` at boot.
+  0x23`, and a TSS (`SEL_TSS 0x28`) holding `ss0`/`esp0` — the kernel stack the
+  CPU switches to on a ring3→ring0 trap. `ltr` at boot.
+  **`esp0` is per-task state (v0.8.0)**: it is `task_t.user_resume_esp`, the
+  kernel esp `user_mode_enter` captured after its own pushes, and `task_yield`
+  moves it with `current` on every switch. With two ring-3 programs alive a
+  single `esp0` is a corruption bug: the second program to trap pushes its
+  frame onto the stack where the first one's suspended frame still lives. It is
+  the resume esp rather than the stack top because `user_mode_enter` leaves
+  four callee-saved registers on that stack for as long as ring 3 runs.
+  `tss_boot_esp0()` is the fallback for a task that has never entered ring 3.
 - **Paging** (`paging.c`): `map_page` ORs the user bit into the PDE when a user
   PTE is added; kernel PTEs stay `U=0` so kernel memory is unreachable from
   ring 3 (privilege is AND-ed PDE&PTE). `paging_unmap` frees a mapping.
@@ -391,44 +401,95 @@ soupOS runs real ring-3 user programs with hardware memory protection.
   `SYS_EXIT/WRITE/READ/YIELD/OPEN/CLOSE/SBRK/ARGS/TICKS`.
   - `write` fd 1=screen, 2=serial, fd≥3 → VFS; `read` fd 0=keyboard,
     fd≥3 → VFS.
-  - `open(path, mode)` (0=read, 1=write+create) returns an fd from a
-    per-run 16-slot table (`g_ufds`, fd≥3); `close(fd)` frees it.
-  - `sbrk(incr)` grows/shrinks the user heap break (`g_user_brk`, base
+  - `read` fd 0 only reaches the keyboard for the **foreground** process; any
+    other process gets 0 bytes (EOF) rather than stealing the user's keys. The
+    wait is interruptible, so a killed program sitting in `read` notices, and
+    it enables interrupts first (the gate is an interrupt gate, so waiting
+    with IF clear would wait forever for the IRQ that fills the buffer).
+  - `open(path, mode)` (0=read, 1=write+create) returns an fd from the
+    process's own 16-slot table (`proc_t.ufds`, fd≥3); `close(fd)` frees it.
+  - `sbrk(incr)` grows/shrinks that process's heap break (`proc_t.brk`, base
     `USER_HEAP 0xC4000000`), mapping fresh user pages up to the stack;
     returns the old break (−1 on failure).
-  - `args(buf, max)` copies the `cook` command-line tail (`g_user_args`,
+  - `args(buf, max)` copies the `cook` command-line tail (`proc_t.args`,
     128 B) into the program.
   - `yield` (v0.7.2) re-enables interrupts and calls `task_yield()`, so a
-    ring-3 program can cooperate with background kernel tasks. Safe because
-    only one user program runs at a time, so the frame left on the TSS
-    (esp0) stack can't be clobbered by another ring3→ring0 trap while
-    switched away; iret restores the user's IF from its saved EFLAGS. Demo:
-    shell `yieldbg` + `cook spin.elf` show interleaved serial markers.
+    ring-3 program can cooperate with other tasks. This used to be safe only
+    because one user program ran at a time (nothing else could clobber the
+    frame left on the shared esp0 stack); since v0.8.0 it is safe by
+    construction, because `esp0` follows `current` and every task traps onto
+    its own kernel stack. iret restores the user's IF from its saved EFLAGS.
+    Demo: shell `yieldbg` + `cook spin.elf` show interleaved serial markers.
   - `ticks` (v0.7.2) returns `timer_get_ticks()` (100 Hz uptime) — lets a
     user program pace itself in wall-clock time (see `user/spin.c`).
   - Every user pointer is bounds-checked via `user_ok()` so a buggy or
     hostile program can't make the kernel touch non-user memory.
-- **Transitions** (`usermode_asm.asm`): `user_mode_enter(entry, ustack)` builds
-  an `iret` frame into ring 3; the exit syscall calls `user_mode_exit`, which
-  restores the saved kernel stack and returns out of `exec_elf` (one-shot
-  coroutine swap — no per-process kernel thread yet).
-- **ELF loader** (`exec_elf`): ELF32 ET_EXEC i386 only. Maps each PT_LOAD into
+- **Transitions** (`usermode_asm.asm`): `user_mode_enter(entry, ustack)` records
+  the resume esp on the current task (`usermode_arm_resume`, which also loads
+  `tss.esp0`) and builds an `iret` frame into ring 3. `user_mode_exit` reads
+  that task's resume esp back and returns out of `usermode_run`. It is reached
+  three ways: the exit syscall, the fault handler, and the kill unwind.
+- **ELF loader** (`usermode_run`, was `exec_elf`): ELF32 ET_EXEC i386 only.
+  Takes the `proc_t`, runs on that process's own task. Maps each PT_LOAD into
   fresh user pages at/above `USER_BASE 0xC0000000` (above the identity map, so
   no aliasing), copies the image, zeroes .bss, sets a 16 KB user stack at
   `USTACK_TOP 0xC8000000`, runs, tears the pages down on exit.
-- **Single address space for now**: one user program at a time, mapped into the
-  kernel page directory. Concurrency needs per-process page directories.
+- **Private address space per process**: `paging_new_dir()` per program,
+  recorded on the task so the scheduler restores CR3 when the process is
+  resumed, freed by `paging_free_dir` on exit. Page dedup asks
+  `paging_is_mapped()` rather than a side table; `proc_t.upages` is only the
+  per-process budget (`PROC_PAGE_CAP`, 4 MB).
 - Shell `cook <prog.elf> [args]`. User programs live in `user/` (freestanding,
   talk to the kernel only via `int 0x80`). They link the **user runtime**
   `user/ulib.{c,h}` — `_start` (calls `main`, exits with its return value),
   thin wrappers over every syscall, and conveniences (`print`/`eprint`/
   `print_int`, `strlen_`, a bump `malloc` over `sbrk`). A program is just
-  `int main(void)`. `make user` builds five ELFs: `hello` (prints +
+  `int main(void)`. `make user` builds nine ELFs: `hello` (prints +
   exits), `echo` (prints args), `cat` (open+read+write a file), `systest`
   (exercises args/open/read/sbrk, emits `TESTOUT` markers to serial for
   headless verification), `spin` (loops on `ticks`+`yield` for ~3s to
-  demonstrate cooperative scheduling from ring 3). Link them at `USER_BASE`
-  with `user/user.ld`; the disk recipe mcopies HELLO/CAT/ECHO/SYSTEST/SPIN.ELF.
+  demonstrate cooperative scheduling from ring 3), `crash` (faults on purpose),
+  `unhex` (hex stdin to a file), `marker` (tags every step with its argument so two
+  copies prove concurrency) and `hog` (loops forever making NO syscalls, so
+  only the IRQ kill path can end it). Link them at `USER_BASE` with
+  `user/user.ld`; the disk recipe mcopies each one.
+
+## Processes (`src/proc.c`, v0.8.0)
+
+A process **is** a kernel task plus a `proc_t`, and the pid **is** the task id,
+so `ps` shows one kind of thing and the scheduler, wait queues, mutexes and
+reaper are reused unchanged.
+
+- `proc_spawn(path, args, background, &pid)` claims one of `PROC_MAX` (8)
+  static slots and spawns a task on `proc_entry`, which calls `usermode_run`
+  and then `proc_exit`. Slot claim and task linking happen under
+  `preempt_disable` so two shells cannot take one slot.
+- **The slot outlives the task deliberately.** `task.c`'s reaper frees a DEAD
+  `task_t` and its 16 KB stack, so an exit code kept on the task would vanish
+  before the parent read it. A finished process stays `PROC_ZOMBIE` until
+  `proc_wait` collects it (foreground) or `proc_report_finished` announces it
+  at the next prompt (background).
+- **Foreground** means the shell calls `proc_set_foreground` then blocks in
+  `proc_wait`, which re-checks the child's state inside a `preempt_disable`
+  region before blocking (the same lost-wakeup guard `mutex_lock` uses).
+- **Killing** sets a flag only (`proc_kill` / `proc_flag_kill`). Marking the
+  task DEAD would leak the whole address space, because the loader would never
+  return to free it. The flag is acted on where the kernel holds no locks:
+  - top and bottom of `syscall_dispatch`;
+  - an IRQ that interrupted **ring-3 code**, tested as `(regs->cs & 3) == 3`
+    in `irq_handler`. This is the only way to kill a program that makes no
+    syscalls at all.
+  A timer IRQ that landed in the kernel half of a syscall must **not** unwind:
+  that code may hold the FAT mutex, and abandoning its frame would leave the
+  filesystem locked forever. Teardown then runs through the same unwind as a
+  fault, so fds, address space and task come down normally.
+- **Ctrl-C** is raised in the keyboard IRQ, not the shell: while a foreground
+  program runs the shell is blocked in `proc_wait` and reads no keys, so `0x03`
+  flags the foreground process and is swallowed. With no foreground process it
+  reaches the shell and cancels the input line as before.
+- Shell surface: `cook prog &`, `jobs`, `kill <pid>`, `kill %` (newest
+  process), `ps` marks which tasks are processes, and a finished background job
+  is announced before the next prompt.
 
 ## Doom Port — Architecture
 

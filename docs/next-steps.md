@@ -109,33 +109,39 @@ vulnerable diff. Nothing has actually been packaged yet.
 
 Ordered by how much else they unblock.
 
-### Per-process address spaces
+### ~~Per-process address spaces~~ DONE 2026-08-27 (`86c9060`)
 
-The single biggest architectural limit. Today one user program runs at a time,
-mapped into the kernel page directory and torn down on exit, and `exec_elf`
-is a one-shot coroutine swap rather than a real process.
+Each program gets its own page directory, recorded on the task so the
+scheduler restores CR3 when the process is resumed.
 
-Almost everything future depends on this: running two programs at once, a
-shell that can background a program, real process isolation, a scheduler that
-schedules processes rather than kernel tasks. Everything else in this section
-is smaller than it.
+### ~~Concurrent processes~~ DONE 2026-10-06 (v0.8.0)
 
-### Drivers are not preemption-safe
+A program is a process now: its own task, its own slot in an 8-entry process
+table, its own ring-0 stack to trap onto. `cook prog &` backgrounds, `jobs`
+lists, `kill`/`kill %`/Ctrl-C end a program, and the exit code is reaped by
+the parent. Two things that looked like details turned out to be the whole
+job: `tss.esp0` was global (and `tss_set_esp0()` was never called), and so was
+`kernel_resume_esp`.
 
-v0.7.4 armed timer preemption but only `heap.c` was ever guarded. `fat.c`
-carries 44 file-scope statics, `vga.c` and `ata.c` more. Two tasks in
-`fat_write`, or a background task drawing while the shell redraws, are real
-races today.
+Still open from the original plan here: `fork`/`exec` and pipes, then `fg`/`bg`
+and process groups. See
+`docs/superpowers/specs/2026-10-06-concurrent-processes-design.md`.
 
-This is why Doom refuses to start when another task is alive, and it will
-block any future concurrency work.
+### Drivers are not preemption-safe (partly fixed)
 
-### `sched_locked` is one global, not per-task
+v0.7.4 armed timer preemption but only `heap.c` was guarded. `fat.c` now takes
+a sleeping recursive mutex, `ata.c` takes its own, and `vga.c` serialises text
+output; the smoke gate covers all three. **Still unguarded:** `soupyc.c` (69
+file-scope statics, and the interpreter is not reentrant), plus `vfs`, `users`
+and `shell`.
 
-`preempt_disable()` shares its counter with the scheduler, and the count
-unbalances across a context switch, so a critical section that yields leaks
-into an unrelated task. Nothing calls it today, so it is latent, but it means
-the obvious tool for fixing the point above is itself broken. Fix this first.
+This is still why Doom refuses to start while another task is alive.
+
+### ~~`sched_locked` is one global, not per-task~~ DONE (`ead085c`)
+
+`preempt_disable()` keeps its depth in `task_t`, so it travels with the task
+that took it. `proc_spawn`, `proc_wait`, `proc_exit` and `mutex_lock` all rely
+on that now.
 
 ### soupyc's value model
 
@@ -147,9 +153,14 @@ ELF), and `spawn()` is impossible without a per-invocation context struct.
 
 Heap-backed strings are the unlock.
 
-### Test coverage
+### Test coverage (better, still end-to-end only)
 
-Two scripts, both end-to-end smoke tests. They are genuinely good — they
+The gate is 22 checks now, including concurrency, both kill paths, Ctrl-C, and
+an address-space leak check that compares free page counts across two runs of
+one program. It is still entirely end-to-end: there is no per-subsystem unit
+test, and the in-kernel `selftest` command below is still worth building.
+
+Original note: two scripts, both end-to-end smoke tests. They are genuinely good — they
 caught the credential change breaking every ring-3 check — but there is
 nothing per-subsystem. FAT, the VFS, the heap, the scheduler and soupyc have
 no direct tests, and the audit that found five real bugs was manual.
@@ -157,9 +168,11 @@ no direct tests, and the audit that found five real bugs was manual.
 Worth adding a shell command that runs in-kernel unit tests, so a single boot
 can assert against subsystems rather than scraping serial.
 
-### No CI
+### ~~No CI~~ DONE (`4d3c114`)
 
-Every build, gate run and deploy in this project has been by hand. Given the
+A workflow builds both configurations and runs every gate on push.
+
+Original note: every build, gate run and deploy in this project has been by hand. Given the
 repo is not even pushed anywhere yet, this is downstream of section 1, but a
 runner that does `make && make DOOM=0 && both gates` on push would have caught
 the credential breakage immediately.
