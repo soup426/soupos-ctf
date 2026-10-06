@@ -16,6 +16,7 @@
 #include "vga13h.h"
 #include "keyboard.h"
 #include "timer.h"
+#include "klog.h"
 #include "speaker.h"
 #include "heap.h"
 #include "str.h"
@@ -58,6 +59,50 @@ static void set_doom_palette(void) {
                       playpal[i*3+2] >> 2);
 }
 
+/* ── Frame profiling (build with PROFILE=1) ───────────────────────────────
+ * Diagnostic only: where does a frame's time actually go? Reports to the
+ * serial log every PF_EVERY frames, so it can be read headless. */
+#ifdef DOOM_PROFILE
+static inline uint64_t pf_tsc(void) {
+    uint32_t lo, hi;
+    __asm__ volatile ("rdtsc" : "=a"(lo), "=d"(hi));
+    return ((uint64_t)hi << 32) | lo;
+}
+#define PF_EVERY 50
+static uint64_t pf_flats, pf_bsp, pf_things, pf_sprites, pf_bar;
+static uint64_t pf_vbl, pf_copy, pf_total;
+static uint32_t pf_frames, pf_tick0;
+#define PF_T0(v)        uint64_t v = pf_tsc()
+#define PF_ACC(acc, v)  do { (acc) += pf_tsc() - (v); } while (0)
+
+/* kilocycles per frame */
+static uint32_t pf_kc(uint64_t acc, uint32_t frames) {
+    if (!frames) return 0;
+    return (uint32_t)(acc / frames / 1000);
+}
+
+static void pf_maybe_report(void) {
+    if (++pf_frames < PF_EVERY) return;
+    uint32_t ticks = timer_get_ticks() - pf_tick0;
+    if (ticks == 0) ticks = 1;
+    uint32_t f = pf_frames;
+    klog("[doomprof] fps=%u frame=%uk flats=%uk bsp=%uk things=%uk "
+         "spr=%uk bar=%uk vbl=%uk copy=%uk\n",
+         (f * 100u) / ticks,
+         pf_kc(pf_total, f), pf_kc(pf_flats, f), pf_kc(pf_bsp, f),
+         pf_kc(pf_things, f), pf_kc(pf_sprites, f), pf_kc(pf_bar, f),
+         pf_kc(pf_vbl, f), pf_kc(pf_copy, f));
+    pf_flats = pf_bsp = pf_things = pf_sprites = pf_bar = 0;
+    pf_vbl = pf_copy = pf_total = 0;
+    pf_frames = 0;
+    pf_tick0  = timer_get_ticks();
+}
+#else
+#define PF_T0(v)        do { } while (0)
+#define PF_ACC(acc, v)  do { } while (0)
+#define pf_maybe_report()  do { } while (0)
+#endif
+
 /* ── Double-buffer ────────────────────────────────────────────────────────── */
 static uint8_t g_backbuf[VGA13_W * VGA13_H];
 
@@ -67,10 +112,15 @@ static inline uint8_t vga_inb(uint16_t port) {
 
 static void present_frame(void) {
     /* Wait for vertical blank then copy — eliminates tearing/flicker */
+    PF_T0(t_vbl);
     while ( vga_inb(0x3DA) & 8) {}  /* wait for end of any current vblank */
     while (!(vga_inb(0x3DA) & 8)) {}  /* wait for start of next vblank    */
+    PF_ACC(pf_vbl, t_vbl);
+
+    PF_T0(t_copy);
     uint8_t *fb = vga13h_fb();
     for (int i = 0; i < VGA13_W * VGA13_H; i++) fb[i] = g_backbuf[i];
+    PF_ACC(pf_copy, t_copy);
 }
 
 static void bb_fill_rect(int x, int y, int w, int h, uint8_t c) {
@@ -748,6 +798,68 @@ static void sky_ensure(void) {
 /* Per-row raycaster. Fills floor/ceiling rows before the BSP wall pass.
  * Samples the sector per-column (with a last-sector cache so BSP walks happen
  * only at sector transitions) so flats and sky are correct across boundaries. */
+/* ── Per-row sector runs ──────────────────────────────────────────────────
+ *
+ * find_sector_at() is a BSP descent followed by four dependent lookups
+ * (subsector -> seg -> linedef -> sidedef), roughly 100 cycles. draw_flats
+ * used to call it once per floor/ceiling pixel: 53,760 descents per frame,
+ * which measured at ~87% of the entire frame.
+ *
+ * It does not need to. Along one screen row the visible floor lies on a single
+ * straight line in world space, so the sector can only change where that line
+ * crosses a sector boundary: a handful of times per row at most. Sample every
+ * FLAT_STEP pixels, and when two samples disagree, bisect to find the exact
+ * pixel where it changed.
+ *
+ * Exact at every boundary it finds. The one thing it can miss is a sector
+ * that both starts and ends inside a single FLAT_STEP window, which for floors
+ * means a sliver under 16 pixels wide; that is rare, and the cost of being
+ * wrong is one run of flat drawn with a neighbour's texture.
+ */
+#define FLAT_STEP      16
+#define FLAT_MAX_RUNS  48
+
+static int flat_sec_px(int32_t wx0, int32_t wy0,
+                       int32_t step_x, int32_t step_y, int sx, int psec) {
+    int s = find_sector_at((wx0 + step_x * sx) >> 8,
+                           (wy0 + step_y * sx) >> 8);
+    if (s < 0 || s >= lv_nsectors)
+        s = (psec >= 0 && psec < lv_nsectors) ? psec : -1;
+    return s;
+}
+
+/* Split one row into runs of constant sector. Run i covers pixels up to and
+ * including end[i] and has sector sec[i]. Returns the number of runs. */
+static int flat_row_runs(int32_t wx0, int32_t wy0,
+                         int32_t step_x, int32_t step_y, int psec,
+                         int *end, int *sec) {
+    int n    = 0;
+    int xa   = 0;
+    int seca = flat_sec_px(wx0, wy0, step_x, step_y, 0, psec);
+
+    while (xa < VGA13_W - 1) {
+        int xb = xa + FLAT_STEP;
+        if (xb > VGA13_W - 1) xb = VGA13_W - 1;
+        int secb = flat_sec_px(wx0, wy0, step_x, step_y, xb, psec);
+        if (secb == seca) { xa = xb; continue; }   /* same run, keep going */
+
+        /* A boundary lies in (xa, xb]. Narrow it to one pixel: lo always has
+         * sector seca, hi always has something else. */
+        int lo = xa, hi = xb;
+        while (hi - lo > 1) {
+            int mid  = (lo + hi) / 2;
+            int secm = flat_sec_px(wx0, wy0, step_x, step_y, mid, psec);
+            if (secm == seca) lo = mid;
+            else            { hi = mid; secb = secm; }
+        }
+        if (n < FLAT_MAX_RUNS - 1) { end[n] = lo; sec[n] = seca; n++; }
+        xa = hi; seca = secb;
+    }
+
+    end[n] = VGA13_W - 1; sec[n] = seca; n++;
+    return n;
+}
+
 static void draw_flats(int psec) {
     sky_ensure();
 
@@ -794,11 +906,15 @@ static void draw_flats(int psec) {
         const uint8_t *cmap = NULL;
         int is_sky_here = 0;
 
+        /* Where this row changes sector, found with a few dozen BSP descents
+         * instead of one per pixel. */
+        int run_end[FLAT_MAX_RUNS], run_sec[FLAT_MAX_RUNS];
+        flat_row_runs(wx_fp, wy_fp, step_x, step_y, psec, run_end, run_sec);
+        int ri  = 0;
+        int sec = run_sec[0];
+
         for (int sx = 0; sx < VGA13_W; sx++, wx_fp += step_x, wy_fp += step_y) {
-            int32_t wx_mu = wx_fp >> 8;
-            int32_t wy_mu = wy_fp >> 8;
-            int sec = find_sector_at(wx_mu, wy_mu);
-            if (sec < 0 || sec >= lv_nsectors) sec = (psec >= 0) ? psec : -1;
+            if (sx > run_end[ri]) { ri++; sec = run_sec[ri]; }
             if (sec < 0 || sec >= lv_nsectors) continue;
 
             if (sec != last_sec) {
@@ -2564,30 +2680,48 @@ static void draw_3d(void) {
     if (psec >= 0 && psec < lv_nsectors)
         pl_eye_z = lv_sectors[psec].floor_h + 41;
 
+    PF_T0(t_total);
+
     bb_fill_rect(0,           0, VGA13_W, VIEW_HALF_H,          CEIL_COL);
     bb_fill_rect(0, VIEW_HALF_H, VGA13_W, VIEW_H - VIEW_HALF_H, FLOOR_COL);
 
+    PF_T0(t_flats);
     draw_flats(psec);
+    PF_ACC(pf_flats, t_flats);
 
     spans_reset();
     build_vissprites();
 
+    PF_T0(t_bsp);
     if (lv_nnodes > 0)
         bsp_traverse(lv_nnodes - 1);
     else if (lv_nssects > 0)
         bsp_traverse(0x8000);
+    PF_ACC(pf_bsp, t_bsp);
 
+    PF_T0(t_things);
     doors_tick();
     lifts_tick();
     sectors_tick(psec);
     try_pickups();
     thing_think();
     projs_tick();
+    PF_ACC(pf_things, t_things);
+
+    PF_T0(t_spr);
     draw_vissprites();
     projs_draw();
     draw_weapon();
+    PF_ACC(pf_sprites, t_spr);
+
+    PF_T0(t_bar);
     draw_statusbar();
+    PF_ACC(pf_bar, t_bar);
+
     present_frame();
+
+    PF_ACC(pf_total, t_total);
+    pf_maybe_report();
 }
 
 /* ── doom_play_level ──────────────────────────────────────────────────────── */

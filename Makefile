@@ -43,6 +43,13 @@ endif
 # so the secure path is the default and the vulnerable one has to be asked for.
 #   make                      -> normal soupOS
 #   make CHALLENGE=1 DOOM=0   -> the CTF image
+# Frame profiling for the Doom port: per-phase cycle counts to the serial log.
+# Diagnostic, off by default.
+PROFILE ?= 0
+ifeq ($(PROFILE),1)
+  CFLAGS += -DDOOM_PROFILE
+endif
+
 CHALLENGE ?= 0
 ifeq ($(CHALLENGE),0)
   SRC_C  := $(filter-out src/challenge.c,$(SRC_C))
@@ -55,7 +62,7 @@ endif
 # from the link while a stale object still references it, so you get an
 # undefined reference to something you deliberately compiled out. Stamp the
 # config into a file and make every object depend on it.
-CONFIG_SIG := DOOM=$(DOOM) CHALLENGE=$(CHALLENGE)
+CONFIG_SIG := DOOM=$(DOOM) CHALLENGE=$(CHALLENGE) PROFILE=$(PROFILE)
 
 # Rewrite the stamp during parsing, before any rule runs, so .build-config is
 # just an ordinary prerequisite. Done with $(shell ...) rather than a FORCE

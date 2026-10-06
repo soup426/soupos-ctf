@@ -42,6 +42,11 @@ for item in SCRIPT:
     if item.startswith('KEY:'):
         cmd('sendkey ' + item[4:])
         continue
+    # MON:<command> sends a raw monitor command (screendump, info, ...).
+    if item.startswith('MON:'):
+        cmd(item[4:])
+        time.sleep(0.5)
+        continue
     for ch in item:
         for k in keys_for(ch):
             cmd('sendkey ' + k)
