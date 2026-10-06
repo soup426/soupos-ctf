@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.8.0
+Current version: v0.8.1
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,39 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.8.1  (2026-10-06)  — DOOM IS 23x FASTER
+  "Doom runs horribly." It did, for two independent reasons, one in the port
+  and one in how QEMU was being started. Both were found by measuring rather
+  than guessing: PROFILE=1 builds the port with per-phase rdtsc counters that
+  report fps and kilocycles per phase to the serial log every 50 frames.
+  - THE PORT. Of 6.13M cycles per frame, draw_flats was 5.45M, or 89%. It
+    called find_sector_at() for every floor and ceiling pixel, and that is a
+    BSP descent plus four dependent lookups (subsector -> seg -> linedef ->
+    sidedef), ~100 cycles, 53,760 times per frame. Real Doom knows the sector
+    from the BSP traversal and draws visplanes.
+    Along one screen row the visible floor is a straight line in world space,
+    so the sector only changes where that line crosses a sector boundary.
+    flat_row_runs() samples every 16 pixels and bisects where two samples
+    disagree, giving the exact boundary pixel for a few dozen descents per row
+    instead of 320. Frame 6.13M -> 1.53M cycles (4.0x); flats 5.45M -> 0.86M
+    (6.4x). Verified by screendump: 0 of 256,000 pixels changed.
+  - THE HOST. No accelerator was ever requested, so QEMU emulated every
+    instruction with TCG. The run targets now probe /dev/kvm and use it when
+    it is there, falling back to TCG when it is not. Same scene: 9.9M cycles
+    per frame under TCG against 1.53M with KVM.
+    The smoke test deliberately stays on TCG and the stock qemu32 CPU: that
+    is the configuration whose missing SSE2 caught the v0.7.4 triple-fault,
+    and -cpu host would mask that class of bug.
+  - Together: 35M cycles per frame before, 1.53M after.
+  - TURNING. 32 view angles meant each step rotated the world 11.25 degrees,
+    which looks like stop-motion at any frame rate. Now 128 steps of 2.8125
+    degrees, with TURN_DELAY 4 -> 1 so the turn rate is unchanged. All the
+    derived constants go through ANG_N/ANG_90/ANG_PER_DIR/ANG_SKY_U. The
+    spawn frame is pixel-identical to the 32-angle build.
+  Not changed, measured and found innocent: the vblank spin (~15k cycles,
+  QEMU's default retrace emulation just toggles the bit) and the 64,000-byte
+  copy to VRAM (~33k with KVM). Both are rounding errors next to the renderer.
 
 v0.8.0  (2026-10-06)  — CONCURRENT RING-3 PROCESSES
   A program is a process now, not a coroutine the shell runs on its own task.

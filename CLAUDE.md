@@ -3,7 +3,7 @@
 ## What this is
 
 soupOS is a 32-bit x86 hobby OS written in C and NASM assembly (currently
-**v0.8.0**). It boots via GRUB and runs in protected mode with paging, a
+**v0.8.1**). It boots via GRUB and runs in protected mode with paging, a
 physical/heap allocator, and a cooperative scheduler. On top of that:
 
 - **Filesystem**: FAT16 read/write with subdirectories ("bowls") and a VFS shim
@@ -490,6 +490,28 @@ reaper are reused unchanged.
 - Shell surface: `cook prog &`, `jobs`, `kill <pid>`, `kill %` (newest
   process), `ps` marks which tasks are processes, and a finished background job
   is announced before the next prompt.
+
+## Doom Port — performance notes (v0.8.1)
+
+Measure before changing anything here: `make PROFILE=1` builds the port with
+per-phase `rdtsc` counters that klog fps and kilocycles per phase (flats, bsp,
+thinkers, sprites, status bar, vblank, VRAM copy) every 50 frames, readable
+from the serial log headless.
+
+- **`draw_flats` is the hot path**, and was 89% of the frame when it called
+  `find_sector_at()` per pixel (a BSP descent plus four dependent lookups,
+  53,760 times a frame). `flat_row_runs()` now samples the row every 16 pixels
+  and bisects where samples disagree, because the floor along a screen row is a
+  straight line in world space and changes sector only at boundaries. Still the
+  largest single item, now split between descents and actual texturing.
+- **Run it with KVM.** `make run` probes `/dev/kvm`; TCG costs ~6x. The smoke
+  test stays on TCG with the stock qemu32 CPU on purpose (no SSE2, which is
+  what catches auto-vectorisation regressions).
+- **Innocent until measured:** the vblank spin on port 0x3DA is ~15k cycles
+  (QEMU's default retrace emulation toggles the bit rather than timing it) and
+  the whole 64,000-byte VRAM copy is ~33k. Neither is worth optimising.
+- **Angles are `ANG_N` (128) steps**, not a bare 32. Use `ANG_MASK`, `ANG_90`,
+  `ANG_270`, `ANG_PER_DIR` (8-way sprite rotations) and `ANG_SKY_U`.
 
 ## Doom Port — Architecture
 
