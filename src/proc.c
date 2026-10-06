@@ -146,14 +146,20 @@ void proc_exit(proc_t *p, int exit_code) {
     if (p->task) p->task->proc = 0;
     p->task = 0;
     if (foreground == p) foreground = 0;
-    task_wake(&p->waiters);          /* the parent, if it is waiting */
-    preempt_enable();
 
-    /* Free page count goes in the line on purpose: the address space has
-     * already been torn down by the loader, so two runs of the same program
-     * must report the same number. That is the leak test. */
+    /* Log BEFORE waking the parent, and inside the region. Once the parent
+     * runs it may collect this slot, and the next spawn may reuse and memset
+     * it, so reading p->pid/p->name afterwards could describe a different
+     * process entirely.
+     *
+     * The free page count is in the line on purpose: the loader has already
+     * torn the address space down by now, so two runs of one program must
+     * report the same number. That is the leak test. */
     klog("[proc %u] %s exited with code %d, %u pages free\n",
          p->pid, p->name, exit_code, pmm_free_pages());
+
+    task_wake(&p->waiters);          /* the parent, if it is waiting */
+    preempt_enable();
 }
 
 int proc_wait(uint32_t pid) {
