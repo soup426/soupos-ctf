@@ -11,6 +11,12 @@ int exec_elf(const char *path, const char *args);
  * dispatcher work, independent of any user program. Writes to COM1. */
 void usermode_selftest(void);
 
+/* Called BY usermode_asm.asm around the ring-3 transition: arm records the
+ * kernel esp to resume at on the current task (and in tss.esp0), and
+ * resume_esp reads it back. Not for general use. */
+void     usermode_arm_resume(uint32_t esp);
+uint32_t usermode_resume_esp(void);
+
 /* Defined in usermode.asm. */
 extern void user_mode_enter(uint32_t entry, uint32_t user_stack_top);
 extern void user_mode_exit(void);

@@ -6,6 +6,8 @@
  * AND, once preemption is enabled, when the 100 Hz timer IRQ preempts them -
  * so a task that never yields can no longer monopolise the CPU. */
 
+struct proc;   /* ring-3 process (proc.h); tasks only hold a pointer */
+
 typedef enum {
     TASK_READY   = 0,    /* runnable, waiting for CPU */
     TASK_RUNNING = 1,    /* currently executing */
@@ -27,6 +29,14 @@ typedef struct task {
     void         *arg;           /* argument passed to entry             */
     int           preempt_depth; /* >0 = this task must not be preempted */
     uint32_t     *page_dir;      /* address space; kernel's unless in exec */
+    /* Ring-0 esp to resume at when this task leaves ring 3, and the esp0 the
+     * CPU must load if it traps *from* ring 3. The same word serves both: it
+     * is the kernel esp captured by user_mode_enter after its own pushes, so a
+     * trap frame pushed there lands below the frame user_mode_enter left on
+     * this stack instead of on top of it. Zero when the task has never entered
+     * ring 3. task_yield keeps tss.esp0 in step with it. */
+    uint32_t      user_resume_esp;
+    struct proc  *proc;          /* ring-3 process this task runs, or NULL  */
 } task_t;
 
 /* Simple intrusive wait queue - FIFO singly-linked list of blocked tasks.

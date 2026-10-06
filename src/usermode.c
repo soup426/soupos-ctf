@@ -69,6 +69,27 @@ static uint32_t     g_user_brk;           /* current heap break              */
 static vfs_node_t  *g_ufds[MAX_UFD];      /* open files; index >= 3 used     */
 static char         g_user_args[UARGS_MAX];
 
+/* ---- ring-0 resume point (called from usermode_asm.asm) ------------------
+ * user_mode_enter hands us the kernel esp to come back to. It is recorded on
+ * the task, so each ring-3 program unwinds into its own exec_elf, and loaded
+ * into tss.esp0, so a trap from ring 3 lands on this task's kernel stack
+ * rather than on a stack another process is already using. task_yield keeps
+ * tss.esp0 in step from here on. */
+static uint32_t g_resume_no_task;        /* fallback before task_init() */
+
+void usermode_arm_resume(uint32_t esp) {
+    task_t *me = task_current();
+    if (me) me->user_resume_esp = esp;
+    else    g_resume_no_task    = esp;
+    tss_set_esp0(esp);
+}
+
+uint32_t usermode_resume_esp(void) {
+    task_t *me = task_current();
+    if (me && me->user_resume_esp) return me->user_resume_esp;
+    return g_resume_no_task;
+}
+
 /* A user pointer is acceptable only if it lies entirely within user space, so
  * a buggy/hostile program cannot make the kernel read or write elsewhere. */
 static int user_ok(uint32_t ptr, uint32_t len) {
@@ -200,6 +221,10 @@ int exec_elf(const char *path, const char *args) {
     g_user_active = 1;
     user_mode_enter(entry, USTACK_TOP);   /* returns after exit, or a fault */
     g_user_active = 0;
+    /* Out of ring 3: the saved frame this pointed at is gone, so stop
+     * advertising it as a trap target. */
+    if (me_task) me_task->user_resume_esp = 0;
+    tss_set_esp0(tss_boot_esp0());
 
     for (int i = 0; i < MAX_UFD; i++)     /* close anything left open */
         if (g_ufds[i]) { vfs_close(g_ufds[i]); g_ufds[i] = 0; }

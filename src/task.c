@@ -2,6 +2,7 @@
 #include "heap.h"
 #include "timer.h"
 #include "paging.h"
+#include "gdt.h"
 
 #define DEFAULT_STACK_SIZE (16 * 1024)
 
@@ -120,6 +121,8 @@ void task_init(void) {
     t->entry      = 0;
     t->arg        = 0;
     t->preempt_depth = 0;   /* kmalloc does not zero */
+    t->user_resume_esp = 0; /* never been in ring 3 */
+    t->proc          = 0;
     t->page_dir      = paging_kernel_dir();
 
     const char nm[] = "kernel";
@@ -145,6 +148,8 @@ task_t *task_spawn(const char *name, void (*entry)(void *), void *arg) {
     t->entry      = entry;
     t->arg        = arg;
     t->preempt_depth = 0;   /* kmalloc does not zero */
+    t->user_resume_esp = 0; /* never been in ring 3 */
+    t->proc          = 0;
     t->page_dir      = paging_kernel_dir();
 
     uint32_t i = 0;
@@ -194,6 +199,13 @@ void task_yield(void) {
      * stacks stay mapped across the CR3 load. */
     if (next->page_dir && next->page_dir != prev->page_dir)
         paging_switch(next->page_dir);
+
+    /* Follow the task onto its own ring-0 stack. The TSS holds exactly one
+     * esp0, so with two ring-3 programs alive it has to move with `current`:
+     * otherwise the second program to trap pushes its frame onto the stack
+     * where the first one's suspended frame still lives. */
+    tss_set_esp0(next->user_resume_esp ? next->user_resume_esp
+                                       : tss_boot_esp0());
 
     task_switch(&prev->esp, next->esp);
     sched_unlock();
