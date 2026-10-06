@@ -180,10 +180,25 @@ wad: $(DISK)
 	    echo "Copy the shareware WAD here and run: make wad"; \
 	fi
 
+# Hardware virtualisation for the interactive targets.
+#
+# Without this QEMU emulates every instruction with TCG, which costs about 6x.
+# Measured on the Doom renderer, same scene: 1.53M cycles per frame with KVM
+# against 9.9M under TCG. /dev/kvm is world-accessible on this machine, but the
+# probe keeps the targets working anywhere (CI, a host without KVM) by falling
+# back to TCG rather than failing to start.
+#
+# The smoke test deliberately does NOT use this, for two reasons: its checks are
+# about ordering and timing and should behave the same everywhere, and it keeps
+# QEMU's default qemu32 CPU, which has no SSE2. That is what caught the GCC
+# auto-vectorisation triple-fault in v0.7.4 (see CFLAGS above); `-cpu host`
+# would have masked it by making the invalid opcode valid.
+ACCEL := $(shell test -w /dev/kvm && echo '-accel kvm -cpu host' || echo '-accel tcg')
+
 # Run with VGA window (interactive — click the window to type, Ctrl+Alt+G to release)
 # Primary master (index=0) = disk.img   Secondary master (index=2) = cdrom
 run: iso $(DISK)
-	qemu-system-i386 \
+	qemu-system-i386 $(ACCEL) \
 	    -drive file=$(DISK),format=raw,if=ide,index=0 \
 	    -cdrom $(ISO) -boot d \
 	    -m 128M -no-reboot -no-shutdown \
@@ -197,7 +212,7 @@ run-ai: iso $(DISK)
 	@rm -f /tmp/soupos-ai.sock
 	@echo "soupOS + AI bridge.  (AI_FAKE=1 for offline replies; else needs Ollama)"
 	@python3 tools/ai_bridge.py /tmp/soupos-ai.sock & echo $$! > /tmp/soupos-ai.pid; \
-	qemu-system-i386 \
+	qemu-system-i386 $(ACCEL) \
 	    -drive file=$(DISK),format=raw,if=ide,index=0 \
 	    -cdrom $(ISO) -boot d \
 	    -m 128M -no-reboot -no-shutdown \
@@ -213,7 +228,7 @@ run-ai: iso $(DISK)
 # Console on this terminal. Ctrl+A X quits QEMU.
 run-console: iso $(DISK)
 	@echo "soupOS console on this terminal.  (Ctrl+A then X to quit QEMU)"
-	qemu-system-i386 \
+	qemu-system-i386 $(ACCEL) \
 	    -drive file=$(DISK),format=raw,if=ide,index=0 \
 	    -cdrom $(ISO) -boot d \
 	    -m 128M -no-reboot -no-shutdown \
@@ -225,7 +240,7 @@ run-console: iso $(DISK)
 CONSOLE_PORT ?= 4444
 run-tcp: iso $(DISK)
 	@echo "soupOS console on tcp/$(CONSOLE_PORT) — connect with:  nc 127.0.0.1 $(CONSOLE_PORT)"
-	qemu-system-i386 \
+	qemu-system-i386 $(ACCEL) \
 	    -drive file=$(DISK),format=raw,if=ide,index=0 \
 	    -cdrom $(ISO) -boot d \
 	    -m 128M -no-reboot -no-shutdown \
