@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.11.2
+Current version: v0.12.0
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,35 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.12.0 (2026-10-07)  — A REAL FRAMEBUFFER, STAGE ONE
+  Night-queue item 9, the detection-and-drawing half. GRUB hands over a linear
+  framebuffer; soupOS maps it and draws, verified pixel by pixel.
+  - boot.asm's multiboot header can request video (make FB=1), kernel_main
+    reads address, pitch, width, height and depth from the multiboot info, and
+    fb.c maps the thing - at 0xFD000000 on QEMU, the first memory soupOS has
+    ever touched outside the identity-mapped low range.
+  - THE WRONG ASSUMPTION, CAUGHT BY THE GATE. I believed grub.cfg's gfxpayload
+    decides the mode and the header only states a preference. It is the
+    OPPOSITE: a header that requests video gets a linear framebuffer even from
+    a menu entry that says gfxpayload=text. The first attempt shipped the
+    request unconditionally, and the ordinary text boot came up in 1024x768
+    graphics - the gate caught it as a failing VGA scroll self-test, because
+    0xB8000 stops behaving like a text buffer in a graphics mode. So the
+    request is a build flag, the framebuffer is its own image (make iso-fb),
+    and the reason is written in boot.asm where the next person will look.
+    Runtime switching is not possible from protected mode and the note says
+    why.
+  - Pitch is bytes per scanline, NOT width times bytes per pixel: a row starts
+    at y * pitch. Assuming otherwise shears the picture down the screen.
+  - scripts/framebuffer-test.sh boots the FB image, screendumps, and checks
+    four regions of a drawn pattern pixel-exactly: three colour bands and a
+    white centre square. A wrong pitch or a swapped colour order fails there.
+  - sample's VGA scroll test now skips itself on a framebuffer build, because
+    there is no text buffer to scroll; checked rather than left to fail.
+  - Gate still 66 on the text image; all four configurations build.
+  Left in item 9: the console on top - the 8x16 font blitter behind the same
+  vga_* interface. That is stage two.
 
 v0.11.2 (2026-10-07)  — FIX: DOOM=0 DID NOT BUILD
   v0.11.1 broke two of the four build configurations and I committed it anyway.

@@ -212,7 +212,7 @@ silence to the ear and obvious in the capture. Now 440.00 Hz over 172 periods.
   to whatever rate the card is set to. Mixing more than one effect at a time is
   a third milestone, not part of the second.
 
-## 9. A real framebuffer
+## 9. A real framebuffer — stage 1 DONE (v0.12.0); console blitter left
 
 soupOS is 80x25 text plus 320x200 mode 13h, both of which are as old as the
 hardware they imitate. GRUB can hand us a linear framebuffer at boot through
@@ -228,6 +228,16 @@ the multiboot header, with no real-mode BIOS calls needed from protected mode.
   shell through it and mode 13h is what Doom uses.
 - This is the item most likely to sprawl. If it starts touching Doom or the
   gate's screen handling, stop and write a note.
+
+**2026-10-07, stage 1: done, v0.12.0, 66 checks green on the text image.**
+Detection, mapping and drawing, verified pixel-exactly by screendump
+(scripts/framebuffer-test.sh). The item DID touch the gate, exactly as warned:
+the multiboot header's video request overrides gfxpayload, so the first
+attempt put the ordinary text boot into graphics mode, caught by the VGA
+scroll self-test failing. Resolution: FB=1 build flag, separate iso-fb image,
+reasons written in boot.asm. Stage 2 (the 8x16 font console behind the vga_*
+interface) is still open, and the sprawl warning stands: it means touching
+every vga_* call path, so it wants a tick of its own.
 
 ---
 

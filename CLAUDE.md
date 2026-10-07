@@ -3,7 +3,7 @@
 ## What this is
 
 soupOS is a 32-bit x86 hobby OS written in C and NASM assembly (currently
-**v0.11.2**). It boots via GRUB and runs in protected mode with paging, a
+**v0.12.0**). It boots via GRUB and runs in protected mode with paging, a
 physical/heap allocator, and a cooperative scheduler. On top of that:
 
 - **Filesystem**: FAT16 read/write with subdirectories ("bowls") and a VFS shim
@@ -527,6 +527,17 @@ VGA cells doubles the work. `vga.c`'s `scroll()` copies 32-bit words (two cells
 per store) and is about twice as fast as the original cell-at-a-time loop;
 `memmove` measured 47% slower than that original. `sample` guards the row
 movement. The same caution applies anywhere a wide copy looks tempting.
+
+## The framebuffer (`src/fb.c`, v0.12.0)
+
+`make FB=1` requests a linear framebuffer in the multiboot header; `make
+iso-fb` builds that image, and `scripts/framebuffer-test.sh` verifies it by
+screendump. **The header's video request OVERRIDES grub.cfg's gfxpayload** -
+the opposite of the obvious assumption - so the request must never be in the
+default build or the text console (which the gate drives) comes up in graphics
+mode with nowhere to draw. Pitch is bytes per scanline, not width*4: a row
+starts at `y * pitch`. The framebuffer lives at ~0xFD000000 and must be
+`paging_map`ped before the first write.
 
 ## Adding a file that needs the WAD (v0.11.2)
 

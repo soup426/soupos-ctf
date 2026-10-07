@@ -19,6 +19,7 @@
 #include "net.h"
 #include "str.h"
 #include "vga.h"
+#include "fb.h"
 #include "klog.h"
 
 static int t_run, t_fail;
@@ -164,6 +165,9 @@ static void test_fat_roundtrip(void) {
 /* ── VGA ──────────────────────────────────────────────────────────────────
  * The scroll is a hand-written word copy over the frame buffer. */
 static void test_vga(void) {
+    /* The scroll works on the text buffer at 0xB8000. On a framebuffer build
+     * there is no text console there, so testing it would be testing nothing. */
+    if (fb_present()) return;
     check("vga scroll moves 24 rows", vga_scroll_selftest());
 }
 

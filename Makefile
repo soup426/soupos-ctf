@@ -30,6 +30,16 @@ SRC_ASM = $(wildcard src/*.asm)
 # builds with DOOM=0: 3000 lines parsing a 4 MB data file is a lot of extra
 # attack surface in an image whose whole value is a precisely specified solve
 # path, and the WAD is 4 MB of a 32 MB disk.
+# FB=1 asks GRUB for a linear framebuffer in the multiboot header. Off by
+# default: the request overrides grub.cfg's gfxpayload, so a kernel that asks
+# gets graphics even from the text menu entry, and the text console (which the
+# smoke gate drives) would have nowhere to draw.
+FB     ?= 0
+ifeq ($(FB),1)
+  CFLAGS  += -DFB_REQUEST
+  ASFLAGS += -DFB_REQUEST
+endif
+
 DOOM   ?= 1
 ifeq ($(DOOM),0)
   SRC_C  := $(filter-out src/doom.c src/wad.c src/doomsnd.c,$(SRC_C))
@@ -62,7 +72,7 @@ endif
 # from the link while a stale object still references it, so you get an
 # undefined reference to something you deliberately compiled out. Stamp the
 # config into a file and make every object depend on it.
-CONFIG_SIG := DOOM=$(DOOM) CHALLENGE=$(CHALLENGE) PROFILE=$(PROFILE)
+CONFIG_SIG := DOOM=$(DOOM) CHALLENGE=$(CHALLENGE) PROFILE=$(PROFILE) FB=$(FB)
 
 # Rewrite the stamp during parsing, before any rule runs, so .build-config is
 # just an ordinary prerequisite. Done with $(shell ...) rather than a FORCE
@@ -117,6 +127,19 @@ $(TARGET): $(OBJS)
 iso: $(TARGET)
 	cp $(TARGET) iso/boot/kernel.elf
 	grub-mkrescue -o $(ISO) iso 2>/dev/null
+
+# The same kernel booted into the framebuffer menu entry instead of the text
+# one. A separate image rather than a build flag, because the difference is
+# entirely GRUB's gfxpayload: the kernel is identical and decides at runtime.
+ISO_FB  = soupOS-fb.iso
+iso-fb:
+	$(MAKE) clean >/dev/null
+	$(MAKE) FB=1 $(TARGET)
+	rm -rf .iso-fb && cp -r iso .iso-fb
+	cp $(TARGET) .iso-fb/boot/kernel.elf
+	grub-mkrescue -o $(ISO_FB) .iso-fb 2>/dev/null
+	rm -rf .iso-fb
+	$(MAKE) clean >/dev/null
 
 # Create FAT16 disk image with test files (32 MB, primary master)
 $(DISK):

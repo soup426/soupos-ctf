@@ -19,6 +19,7 @@
 #include "net.h"
 #include "mouse.h"
 #include "ac97.h"
+#include "fb.h"
 #include "task.h"
 #include "serial.h"
 #include "klog.h"
@@ -170,6 +171,18 @@ void kernel_main(uint32_t mb_magic, uint32_t mb_info) {
         vga_puts("[OK] Mouse         - PS/2 auxiliary device on IRQ 12\n");
     else
         vga_puts("[--] No PS/2 mouse\n");
+
+    if (fb_init(mb_info) == 0) {
+        vga_printf("[OK] Framebuffer   - %ux%u at %u bpp\n",
+                   fb_width(), fb_height(), fb_bits());
+        /* Proof of life until the glyph blitter lands: three bands and a white
+         * square, at known coordinates so a screendump can be checked. */
+        fb_clear(0x00101828);
+        fb_fill(0,                 0, fb_width() / 3, fb_height(), 0x00C01010);
+        fb_fill(fb_width() / 3,    0, fb_width() / 3, fb_height(), 0x0010C010);
+        fb_fill(2 * fb_width() / 3,0, fb_width() / 3, fb_height(), 0x001010C0);
+        fb_fill(fb_width() / 2 - 64, fb_height() / 2 - 64, 128, 128, 0x00FFFFFF);
+    }
 
     if (ac97_init() == 0)
         vga_printf("[OK] Sound         - AC97 at %u Hz\n", ac97_rate());
