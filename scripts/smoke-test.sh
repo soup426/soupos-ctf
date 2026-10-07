@@ -125,7 +125,8 @@ python3 scripts/qemu_keys.py "$MON" \
     "holler 10.0.2.2 19001 souptcp" "WAIT:8" \
     "takeout 10.0.2.2:19002 /soup" "WAIT:9" \
     "soup LONGSTR.SC" "WAIT:6" \
-    "soup RUNAWAY.SC" "WAIT:22" "pwd" "WAIT:2" >/dev/null || {
+    "soup RUNAWAY.SC" "WAIT:22" "pwd" "WAIT:2" \
+    "soup SPAWN.SC" "WAIT:1" "ps" "WAIT:5" >/dev/null || {
         echo "FAIL: could not drive the QEMU monitor"; exit 1; }
 
 fail=0
@@ -395,6 +396,19 @@ check "soupyc reads 100 bytes of a file"  'file 100'
 # And the budget has to fail cleanly rather than taking the kernel with it:
 # the shell has to still be there afterwards.
 check "runaway strings fail cleanly" 'out of string memory'
+
+# spawn: a script function running as its own task. The five things that have
+# to be true, each of which fails differently if the context work is wrong.
+check "spawn returns a task id"            '\[parent\] spawned [0-9]+'
+# ps catching it mid-flight is the proof it outlives the `soup` command: the
+# shell got its prompt back and ran another command while the child ticked.
+check "the spawned script is a live task"  'soup:ticker'
+# The array pool is SHARED (its layout is fixed for the challenge) with
+# per-context ownership of slots. These two prove neither script clears the
+# other's: the parent's array is intact after the child allocated one.
+check "parent keeps its arrays"            '\[parent\] array still 2 2'
+check "child gets arrays of its own"       '\[child\] array 3 8'
+check "the spawned script finishes"        '\[child\] done'
 
 # vgastress prints whole lines of a single repeated character from two tasks.
 # Any line containing both means vga_puts was interrupted mid-string.

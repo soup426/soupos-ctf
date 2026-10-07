@@ -419,6 +419,7 @@ static void cmd_menu(void) {
         {0, "                         (Ctrl+Z stops the foreground program)"},
         {0, "    soup <file.sc>     - run a soupyc script"},
         {0, "    soup -c \"code\"     - run inline soupyc"},
+        {0, "      spawn(\"fn\")      - in soupyc: run fn() as a background task"},
         {0, "    hash <text>        - AlphaSOUP-32 hash"},
         {0, "    beep <freq> [ms]   - play PC speaker tone"},
         {0, "    mandelbrot         - ASCII Mandelbrot set"},

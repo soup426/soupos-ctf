@@ -3,7 +3,7 @@
 ## What this is
 
 soupOS is a 32-bit x86 hobby OS written in C and NASM assembly (currently
-**v0.10.1**). It boots via GRUB and runs in protected mode with paging, a
+**v0.10.2**). It boots via GRUB and runs in protected mode with paging, a
 physical/heap allocator, and a cooperative scheduler. On top of that:
 
 - **Filesystem**: FAT16 read/write with subdirectories ("bowls") and a VFS shim
@@ -520,6 +520,15 @@ compiled in (10.0.2.15, gateway 10.0.2.2) rather than discovered by DHCP.
 - Shell: `faucet`, `plumbing [ip|dhcp]`, `table`, `sip <host> [count]`,
   `sniff <host>`, `reserve <host> <port>`.
 
+## soupyc spawn (v0.10.2)
+
+`spawn("fn")` runs a no-argument function on its own task and returns the task
+id (`ps` lists it, `kill` takes it). The child gets an **independent copy** of
+the code, because `soupyc_run` frees the parent context on the way out and the
+child is meant to outlive the `soup` command. `clone_code` relocates node links
+by a fixed delta (one contiguous pool) and re-interns literals into the child's
+store. `sleep(ms)` exists too, bounded at 10 s.
+
 ## soupyc is reentrant (v0.10.1)
 
 State lives in `soupyc_ctx_t`, one per running script, allocated in
@@ -530,7 +539,9 @@ current task, which is why the interpreter body reads as plain names.
 Consequences when editing `soupyc.c`:
 
 - A new piece of interpreter state goes in the context plus a macro beside the
-  others, never a new file-scope static.
+  others, never a new file-scope static. **Members carry an `m_` prefix** so
+  that code holding a context pointer can say `ctx->m_x`; without it the bare
+  name expands into the member position.
 - **A macro name must not collide with any struct member name**, or it expands
   into the member position and the error points at the `#define`. That is why
   `sc_state`'s array member is called `arr_slots`.

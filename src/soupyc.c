@@ -87,69 +87,74 @@
  * ============================================================ */
 typedef struct soupyc_ctx {
     /* node pool */
-    node_t   pool[POOL_SIZE];
-    int      pool_used;
+    node_t   m_pool[POOL_SIZE];
+    int      m_pool_used;
     /* string store (see the ownership note on val_t) */
-    str_blk_t *str_head;
-    uint32_t   str_used;
+    str_blk_t *m_str_head;
+    uint32_t   m_str_used;
     /* symbols */
-    struct { char name[32]; val_t val; } vars[MAX_VARS];
-    int      nvar;
-    func_t   funcs[MAX_FUNCS];
-    int      nfunc;
+    struct { char name[32]; val_t val; } m_vars[MAX_VARS];
+    int      m_nvar;
+    func_t   m_funcs[MAX_FUNCS];
+    int      m_nfunc;
     /* call stack */
-    int      scope_stack[MAX_CALL_DEPTH];
-    int      call_depth;
-    val_t    call_args[MAX_CALL_DEPTH][MAX_PARAMS];
+    int      m_scope_stack[MAX_CALL_DEPTH];
+    int      m_call_depth;
+    val_t    m_call_args[MAX_CALL_DEPTH][MAX_PARAMS];
     /* control flow and errors */
-    int      err_flag;
-    char     err_msg[64];
-    int      break_flag;
-    int      return_flag;
-    val_t    return_val;
-    int      g_err_line;
-    int      err_line;
+    int      m_err_flag;
+    char     m_err_msg[64];
+    int      m_break_flag;
+    int      m_return_flag;
+    val_t    m_return_val;
+    int      m_g_err_line;
+    int      m_err_line;
     /* lexer */
-    const char *src;
-    int      src_pos;
-    int      cur_line;
-    int      inc_depth;
-    tok_t    tok;
+    const char *m_src;
+    int      m_src_pos;
+    int      m_cur_line;
+    int      m_inc_depth;
+    tok_t    m_tok;
     /* open file handles, closed when the script ends */
-    vfs_node_t *sc_files[MAX_SC_FILES];
+    vfs_node_t *m_sc_files[MAX_SC_FILES];
     /* which slots of the global array pool belong to this script */
-    uint32_t arr_owned;
+    uint32_t m_arr_owned;
+    /* spawned scripts only: index into m_funcs of the function to run */
+    int      m_entry_func;
 } soupyc_ctx_t;
 
 static inline soupyc_ctx_t *cur_ctx(void) {
     return (soupyc_ctx_t *)task_current()->soupyc;
 }
 
-#define pool         (cur_ctx()->pool)
-#define pool_used    (cur_ctx()->pool_used)
-#define str_head     (cur_ctx()->str_head)
-#define str_used     (cur_ctx()->str_used)
-#define vars         (cur_ctx()->vars)
-#define nvar         (cur_ctx()->nvar)
-#define funcs        (cur_ctx()->funcs)
-#define nfunc        (cur_ctx()->nfunc)
-#define scope_stack  (cur_ctx()->scope_stack)
-#define call_depth   (cur_ctx()->call_depth)
-#define call_args    (cur_ctx()->call_args)
-#define err_flag     (cur_ctx()->err_flag)
-#define err_msg      (cur_ctx()->err_msg)
-#define break_flag   (cur_ctx()->break_flag)
-#define return_flag  (cur_ctx()->return_flag)
-#define return_val   (cur_ctx()->return_val)
-#define g_err_line   (cur_ctx()->g_err_line)
-#define err_line     (cur_ctx()->err_line)
-#define src          (cur_ctx()->src)
-#define src_pos      (cur_ctx()->src_pos)
-#define cur_line     (cur_ctx()->cur_line)
-#define inc_depth    (cur_ctx()->inc_depth)
-#define tok          (cur_ctx()->tok)
-#define sc_files     (cur_ctx()->sc_files)
-#define arr_owned    (cur_ctx()->arr_owned)
+/* The members carry an m_ prefix so that code holding a context pointer
+ * explicitly - the clone below, the child entry point - can say ctx->m_x
+ * without the bare name expanding into the member position. */
+#define pool         (cur_ctx()->m_pool)
+#define pool_used    (cur_ctx()->m_pool_used)
+#define str_head     (cur_ctx()->m_str_head)
+#define str_used     (cur_ctx()->m_str_used)
+#define vars         (cur_ctx()->m_vars)
+#define nvar         (cur_ctx()->m_nvar)
+#define funcs        (cur_ctx()->m_funcs)
+#define nfunc        (cur_ctx()->m_nfunc)
+#define scope_stack  (cur_ctx()->m_scope_stack)
+#define call_depth   (cur_ctx()->m_call_depth)
+#define call_args    (cur_ctx()->m_call_args)
+#define err_flag     (cur_ctx()->m_err_flag)
+#define err_msg      (cur_ctx()->m_err_msg)
+#define break_flag   (cur_ctx()->m_break_flag)
+#define return_flag  (cur_ctx()->m_return_flag)
+#define return_val   (cur_ctx()->m_return_val)
+#define g_err_line   (cur_ctx()->m_g_err_line)
+#define err_line     (cur_ctx()->m_err_line)
+#define src          (cur_ctx()->m_src)
+#define src_pos      (cur_ctx()->m_src_pos)
+#define cur_line     (cur_ctx()->m_cur_line)
+#define inc_depth    (cur_ctx()->m_inc_depth)
+#define tok          (cur_ctx()->m_tok)
+#define sc_files     (cur_ctx()->m_sc_files)
+#define arr_owned    (cur_ctx()->m_arr_owned)
 
 
 /* ============================================================
@@ -232,24 +237,32 @@ static node_t *new_node(int type);   /* forward */
 static const char str_empty[] = "";
 
 static void set_err(const char *m);     /* forward */
+static int  soupyc_spawn(int func_index);  /* forward: see the spawn section */
 
 /* A writable, NUL-terminated buffer of `len` bytes in the store. */
-static char *str_alloc(uint32_t len) {
-    if (str_used + len + 1 > STR_BUDGET) { set_err("out of string memory"); return 0; }
+static char *str_alloc_in(soupyc_ctx_t *c, uint32_t len) {
+    if (c->m_str_used + len + 1 > STR_BUDGET) return 0;
     str_blk_t *b = (str_blk_t *)kmalloc(sizeof(str_blk_t) + len + 1);
-    if (!b) { set_err("out of string memory"); return 0; }
-    b->next = str_head; str_head = b;
-    str_used += len + 1;
+    if (!b) return 0;
+    b->next = c->m_str_head; c->m_str_head = b;
+    c->m_str_used += len + 1;
     b->data[len] = '\0';
     return b->data;
 }
 
-static void str_store_reset(void) {
-    str_blk_t *b = str_head;
-    while (b) { str_blk_t *n = b->next; kfree(b); b = n; }
-    str_head = 0;
-    str_used = 0;
+static char *str_alloc(uint32_t len) {
+    char *b = str_alloc_in(cur_ctx(), len);
+    if (!b) set_err("out of string memory");
+    return b;
 }
+
+static void str_store_reset_in(soupyc_ctx_t *c) {
+    str_blk_t *b = c->m_str_head;
+    while (b) { str_blk_t *n = b->next; kfree(b); b = n; }
+    c->m_str_head = 0;
+    c->m_str_used = 0;
+}
+static void str_store_reset(void) { str_store_reset_in(cur_ctx()); }
 
 static val_t mkival(int v)      { val_t r; r.type=VAL_INT; r.ival=v; r.sval=str_empty; r.slen=0; return r; }
 static val_t mkaval(int handle) { val_t r; r.type=VAL_ARR; r.ival=handle; r.sval=str_empty; r.slen=0; return r; }
@@ -1526,6 +1539,38 @@ static int call_builtin(node_t *n, val_t *out) {
         return 1;
     }
 
+    /* sleep(ms) - yield the CPU. A spawned script that spins would still work,
+     * since the scheduler preempts, but it would burn the machine to do it. */
+    if (strcmp(name, "sleep") == 0) {
+        if (count_args(n) != 1) { set_err("sleep expects 1 arg"); return 1; }
+        eval_args(n, a, 1);
+        if (err_flag) return 1;
+        int ms = as_int(a[0]);
+        if (ms < 0)     ms = 0;
+        if (ms > 10000) ms = 10000;   /* a typo should not park a task for an hour */
+        task_sleep((uint32_t)ms);
+        *out = mkival(0);
+        return 1;
+    }
+
+    /* spawn("worker") - run a no-argument function as a background task.
+     * Returns its task id, which `ps` lists and `kill` accepts. */
+    if (strcmp(name, "spawn") == 0) {
+        if (count_args(n) != 1) { set_err("spawn expects 1 arg"); return 1; }
+        eval_args(n, a, 1);
+        if (err_flag) return 1;
+        const char *fname = val_str(&a[0], scratch, SVAL_LEN);
+        int idx = -1;
+        for (int i = 0; i < nfunc; i++)
+            if (strcmp(funcs[i].name, fname) == 0) { idx = i; break; }
+        if (idx < 0)                      { set_err("spawn: no such function"); return 1; }
+        if (funcs[idx].nparam != 0)       { set_err("spawn: function must take no arguments"); return 1; }
+        int id = soupyc_spawn(idx);
+        if (id < 0)                       { set_err("spawn: could not start a task"); return 1; }
+        *out = mkival(id);
+        return 1;
+    }
+
     if (strcmp(name, "ai") == 0) {
         eval_args(n, a, 1);
         if (err_flag) return 1;
@@ -1691,6 +1736,97 @@ static int soupyc_exec(const char *source) {
 #endif
 
     return 0;
+}
+
+/* ============================================================
+ * spawn: a script function as a background task
+ * ------------------------------------------------------------
+ * The child gets a context of its own, and - this is the whole design - an
+ * INDEPENDENT COPY of the code it needs. Borrowing the parent's node pool
+ * would have been cheaper, but then the child could not outlive the `soup`
+ * command that spawned it: soupyc_run frees the parent context on the way
+ * out, and the child would be walking freed nodes. Copying means the shell
+ * gets its prompt back while the child keeps running, which is the point.
+ *
+ * Node pointers all point inside the pool, which is one contiguous array, so
+ * copying the pool and adding a fixed delta to every link relocates the whole
+ * tree. String literals are the exception - they live in the string store, not
+ * the pool - so each one is re-interned into the child's own store.
+ * ============================================================ */
+static void clone_code(soupyc_ctx_t *dst, soupyc_ctx_t *src_ctx) {
+    int used = src_ctx->m_pool_used;
+    memcpy(dst->m_pool, src_ctx->m_pool, (uint32_t)used * sizeof(node_t));
+    dst->m_pool_used = used;
+
+    long delta = (char *)dst->m_pool - (char *)src_ctx->m_pool;
+    for (int i = 0; i < used; i++) {
+        node_t *nd = &dst->m_pool[i];
+        if (nd->next)  nd->next  = (node_t *)((char *)nd->next  + delta);
+        if (nd->left)  nd->left  = (node_t *)((char *)nd->left  + delta);
+        if (nd->right) nd->right = (node_t *)((char *)nd->right + delta);
+        if (nd->body)  nd->body  = (node_t *)((char *)nd->body  + delta);
+        if (nd->else_) nd->else_ = (node_t *)((char *)nd->else_ + delta);
+        if (nd->lit) {
+            char *b = str_alloc_in(dst, nd->litlen);
+            if (b) { memcpy(b, nd->lit, nd->litlen); nd->lit = b; }
+            else   { nd->lit = str_empty; nd->litlen = 0; }
+        }
+    }
+
+    memcpy(dst->m_funcs, src_ctx->m_funcs, sizeof dst->m_funcs);
+    dst->m_nfunc = src_ctx->m_nfunc;
+    for (int i = 0; i < dst->m_nfunc; i++)
+        if (dst->m_funcs[i].body)
+            dst->m_funcs[i].body = (node_t *)((char *)dst->m_funcs[i].body + delta);
+}
+
+static void release_ctx(soupyc_ctx_t *c) {
+    str_store_reset_in(c);
+    for (int i = 0; i < MAX_SC_FILES; i++)
+        if (c->m_sc_files[i]) { vfs_close(c->m_sc_files[i]); c->m_sc_files[i] = 0; }
+    for (int i = 0; i < MAX_ARRAYS; i++)
+        if (c->m_arr_owned & (1u << i)) arrays[i].used = 0;
+}
+
+static void soupyc_child(void *arg) {
+    soupyc_ctx_t *ctx = (soupyc_ctx_t *)arg;
+    task_current()->soupyc = ctx;
+
+    eval_block(funcs[ctx->m_entry_func].body);
+
+    if (err_flag) {
+        vga_set_color(VGA_LIGHT_RED, VGA_BLACK);
+        vga_printf("\nsoupyc: spawned %s failed (line %d): %s\n",
+                   funcs[ctx->m_entry_func].name, err_line, err_msg);
+        vga_set_color(VGA_LIGHT_GREY, VGA_BLACK);
+    }
+
+    release_ctx(ctx);
+    task_current()->soupyc = 0;
+    kfree(ctx);
+    task_exit();
+}
+
+/* Returns the new task id, or -1. */
+static int soupyc_spawn(int func_index) {
+    soupyc_ctx_t *parent = cur_ctx();
+    soupyc_ctx_t *child  = (soupyc_ctx_t *)kmalloc(sizeof *child);
+    if (!child) return -1;
+    memset(child, 0, sizeof *child);
+
+    clone_code(child, parent);
+    child->m_entry_func = func_index;
+
+    char tname[16];
+    tname[0] = 's'; tname[1] = 'o'; tname[2] = 'u'; tname[3] = 'p'; tname[4] = ':';
+    int k = 5;
+    const char *fn = parent->m_funcs[func_index].name;
+    for (int i = 0; fn[i] && k < 15; i++) tname[k++] = fn[i];
+    tname[k] = '\0';
+
+    task_t *t = task_spawn(tname, soupyc_child, child);
+    if (!t) { release_ctx(child); kfree(child); return -1; }
+    return (int)t->id;
 }
 
 /* ============================================================

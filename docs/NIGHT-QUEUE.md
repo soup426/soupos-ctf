@@ -121,7 +121,7 @@ mouse driver is built first". This is that driver, and it is self-contained.
 - Gate: inject packets through the QEMU monitor (`mouse_move`, `mouse_button`)
   and assert the cursor position and a resulting selection length in the log.
 
-## 6. soupyc's value model — strings + context DONE (v0.10.0, v0.10.1); spawn open
+## 6. soupyc's value model — DONE (v0.10.0, v0.10.1, v0.10.2)
 
 The longest-standing limitation in the tree, flagged in `docs/next-steps.md`:
 strings are a fixed `char[48]`, so the language caps every value at 47

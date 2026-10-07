@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.10.1
+Current version: v0.10.2
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,35 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.10.2 (2026-10-07)  — spawn(): A SCRIPT FUNCTION AS A TASK
+  Night-queue item 6, finished. This is what the context work was for.
+  - spawn("worker") runs a no-argument soupyc function on a task of its own and
+    returns the task id, which `ps` lists and `kill` accepts.
+  - THE LIFETIME DECISION. The child gets an INDEPENDENT COPY of the code, not
+    a borrowed pointer into the parent's node pool. Borrowing would have been
+    a memcpy cheaper, but soupyc_run frees the parent context on the way out,
+    so the child could not then outlive the `soup` command - and the shell
+    getting its prompt back while the child keeps printing is the entire point.
+    Node links all point inside one contiguous pool, so copying it and adding
+    a fixed delta to every link relocates the whole tree; string literals live
+    in the string store rather than the pool, so each is re-interned into the
+    child's own store.
+  - sleep(ms) as well, bounded at 10 s. A spinning child would work, since the
+    scheduler preempts, but it would burn the machine to do it.
+  - The struct members now carry an m_ prefix. Code that holds a context
+    pointer explicitly - the clone, the child's entry - has to say ctx->m_x,
+    and without the prefix the bare name expanded into the member position.
+    Same class of collision as sc_state.pool in v0.10.1, now impossible.
+  - Gate 54 -> 59 checks, and they test the properties rather than the happy
+    path: that spawn returns an id, that `ps` catches the child mid-flight
+    (which is the proof it outlived its parent), that the parent's arrays
+    survive the child allocating its own and vice versa (the pool is shared,
+    with per-context ownership of slots), and that the child finishes.
+  - Nothing was wrong with `ps` - it lists blocked tasks fine. My first two
+    attempts to see the child there ran `ps` at the exact moment the child was
+    exiting. Check the timing before suspecting the code; that is twice in two
+    nights.
 
 v0.10.1 (2026-10-07)  — soupyc IS REENTRANT
   Night-queue item 6, second part. The preemption audit named this as the one
