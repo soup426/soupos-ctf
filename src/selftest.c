@@ -23,6 +23,7 @@
 #include "task.h"
 #include "klog.h"
 #include "sha256.h"
+#include "random.h"
 
 static int t_run, t_fail;
 
@@ -263,6 +264,40 @@ static void test_sha256(void) {
     check("hmac key longer than block", hex_eq(d, "60e431591ee0b67f0d8a26aacbf5b77f8e0bc6213728c5140546040f0ee37f54"));
 }
 
+/* ── Entropy ──────────────────────────────────────────────────────────────
+ * No vector exists for randomness. Two draws must differ, and 64 KB of
+ * output must look balanced: ones within 3 sigma of half (sigma = sqrt(n)/2
+ * = 362 bits for 524288), and bit runs within 3 sigma of n/2 likewise. A
+ * pool that was somehow outputting its counter would pass the first check
+ * and fail both the others. The cross-boot check lives in random-test.sh. */
+static void test_random(void) {
+    uint8_t a[32], b[32];
+    random_bytes(a, 32);
+    random_bytes(b, 32);
+    check("random draws differ", memcmp(a, b, 32) != 0);
+    char hex[17];
+    for (int i = 0; i < 8; i++) {
+        hex[2*i]   = "0123456789abcdef"[a[i] >> 4];
+        hex[2*i+1] = "0123456789abcdef"[a[i] & 15];
+    }
+    hex[16] = '\0';
+    klog("[sample] random draw: %s\n", hex);
+
+    static uint8_t big[65536];
+    random_bytes(big, sizeof(big));
+    uint32_t ones = 0, runs = 1;
+    int prev = big[0] & 1;
+    for (uint32_t i = 0; i < sizeof(big) * 8; i++) {
+        int bit = (big[i >> 3] >> (i & 7)) & 1;
+        ones += (uint32_t)bit;
+        if (i && bit != prev) runs++;
+        prev = bit;
+    }
+    klog("[sample] random 64KB: %u ones, %u runs\n", ones, runs);
+    check("random monobit", ones > 262144 - 1086 && ones < 262144 + 1086);
+    check("random runs",    runs > 262144 - 1086 && runs < 262144 + 1086);
+}
+
 int selftest_run(void) {
     t_run = t_fail = 0;
 
@@ -279,6 +314,7 @@ int selftest_run(void) {
     test_services();
     test_str();
     test_sha256();
+    test_random();
 
     vga_set_color(t_fail ? VGA_LIGHT_RED : VGA_LIGHT_GREEN, VGA_BLACK);
     vga_printf("  %d tests, %d failed\n", t_run, t_fail);

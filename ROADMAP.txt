@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.23.0
+Current version: v0.24.0
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,26 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.24.0 (2026-10-07)  — AN ENTROPY POOL
+  Stage S2. Key generation needs bytes nobody can predict, and a kernel
+  that boots identically every time has almost none; this matters more
+  than any of the ciphers.
+  - src/random.c: a 32-byte pool folded through SHA-256. Fed by RDRAND
+    when CPUID says the CPU has it (mixed into every output block, not
+    only at boot), the TSC at every timer tick and keyboard interrupt, and
+    the RTC once. The interrupt side is one XOR into a 16-word block; the
+    hash runs only when the block wraps, about six times a second.
+  - Output is hash(pool, counter, tsc, rdrand), and the pool is re-hashed
+    after every draw so a leaked output does not give away earlier ones.
+  - THERE IS NO TEST VECTOR FOR RANDOMNESS, so the checks are the ones
+    that exist: `sample` requires two draws to differ and 64 KB of output
+    to sit within three sigma on a monobit and a runs count (measured:
+    262215 ones and 262002 runs out of 524288, inside one sigma). But a
+    pool seeded from nothing passes those too, since SHA-256 of a constant
+    is as balanced as SHA-256 of a secret. scripts/random-test.sh checks
+    the property that matters: two boots draw different bytes. They do.
+  - Gate 72; sample is 32 tests.
 
 v0.23.0 (2026-10-07)  — SHA-256: THE FIRST SSH PRIMITIVE
   Stage S1 of the SSH plan. A hash is where everything else in the protocol

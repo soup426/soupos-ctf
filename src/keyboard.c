@@ -1,4 +1,5 @@
 #include "keyboard.h"
+#include "random.h"
 #include "isr.h"
 #include "task.h"
 #include "proc.h"
@@ -80,6 +81,7 @@ void keyboard_inject(int c) { kb_push(c); }
 static void keyboard_irq_handler(registers_t *regs) {
     (void)regs;
     uint8_t sc = inb(0x60);
+    random_stir(sc);        /* keystroke timing feeds the pool */
 
     /* Extended key sequence prefix */
     if (sc == 0xE0) { e0_prefix = 1; return; }

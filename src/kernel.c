@@ -9,6 +9,7 @@
 #include "keyboard.h"
 #include "shell.h"
 #include "timer.h"
+#include "random.h"
 #include "pmm.h"
 #include "paging.h"
 #include "heap.h"
@@ -63,6 +64,7 @@ void kernel_main(uint32_t mb_magic, uint32_t mb_info) {
     idt_init();      klog_puts("[boot] IDT ok\n");
     timer_init();    klog_puts("[boot] timer ok\n");
     keyboard_init(); klog_puts("[boot] keyboard ok\n");
+    random_init();
 
     pmm_init(mb_info);
     if (pmm_total_pages() == 0) {

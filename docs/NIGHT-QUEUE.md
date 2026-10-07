@@ -138,7 +138,7 @@ which matters more than any of the ciphers, so that comes early.
 FIPS 180-4 vectors for the hash ("abc", the 448-bit and million-'a' cases),
 RFC 4231 vectors for HMAC. `sample` runs them.
 
-### S2. Entropy
+### S2. Entropy  — DONE v0.24.0
 A `random.c` that mixes RDRAND when CPUID says it exists, timer and keyboard
 timing jitter, and the RTC, through SHA-256 into a pool. The check is not a
 test vector - there is none - but that two boots produce different output and
