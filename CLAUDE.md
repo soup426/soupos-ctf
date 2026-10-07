@@ -3,7 +3,7 @@
 ## What this is
 
 soupOS is a 32-bit x86 hobby OS written in C and NASM assembly (currently
-**v0.17.0**). It boots via GRUB and runs in protected mode with paging, a
+**v0.18.0**). It boots via GRUB and runs in protected mode with paging, a
 physical/heap allocator, and a cooperative scheduler. On top of that:
 
 - **Filesystem**: FAT16 read/write with subdirectories ("bowls") and a VFS shim
@@ -527,6 +527,26 @@ VGA cells doubles the work. `vga.c`'s `scroll()` copies 32-bit words (two cells
 per store) and is about twice as fast as the original cell-at-a-time loop;
 `memmove` measured 47% slower than that original. `sample` guards the row
 movement. The same caution applies anywhere a wide copy looks tempting.
+
+## The boot logo (v0.18.0)
+
+`assets/logo.txt` is the source of truth; `scripts/gen-logo.py` generates
+`src/logo.h` (committed, so Python is not needed to build). **Never put UTF-8
+in a C string meant for the screen** - VGA prints one glyph per byte, so each
+block becomes three garbage characters. The screen gets CP437 via
+`vga_puts_screen_only` (no serial mirror); the log gets UTF-8 via `klog`.
+
+## The framebuffer console is 128x48 (v0.18.0)
+
+Set in `fb_early` from the framebuffer size, **before the first character is
+printed**: the cell store's row stride is the column count, so resizing later
+re-interprets text already written. A text boot stays 80x25, where the boot log
+scrolls the logo off - that is known and accepted, not a bug to fix by making
+the logo smaller.
+
+**Tests that place the mouse must not assume a screen size.** The pointer
+starts at the console's centre. Drive it into a corner, where it clamps, then
+move a known amount.
 
 ## Music (`src/music.c`, v0.17.0)
 

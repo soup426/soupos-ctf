@@ -94,16 +94,21 @@ static void fbcon_task(void *arg) {
 int fbcon_start(void) {
     if (!fb_present()) return -1;
 
-    ox = (fb_width()  - COLS * GW) / 2;
-    oy = (fb_height() - ROWS * GH) / 2;
+    /* Centred, which is a no-op when the console fills the screen - 128x48 of
+     * 8x16 glyphs is exactly 1024x768 - and still correct if a future mode
+     * leaves a remainder. */
+    ox = (fb_width()  - (uint32_t)COLS * GW) / 2;
+    oy = (fb_height() - (uint32_t)ROWS * GH) / 2;
 
     fb_clear(0x00101828);                 /* calm border around the console */
     for (int i = 0; i < COLS * ROWS; i++)
         shadow[i] = 0xFFFF;               /* != any real cell: paint everything */
 
     if (!task_spawn("fbcon", fbcon_task, 0)) return -1;
-    klog("[fbcon] 80x25 console at %u,%u on the %ux%u framebuffer\n",
-         ox, oy, fb_width(), fb_height());
+    /* Print the real geometry, not a literal: the console is 128x48 on a
+       1024x768 framebuffer and 80x25 was stale the moment it could resize. */
+    klog("[fbcon] %dx%d console at %u,%u on the %ux%u framebuffer\n",
+         COLS, ROWS, ox, oy, fb_width(), fb_height());
     return 0;
 }
 

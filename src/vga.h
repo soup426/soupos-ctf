@@ -55,6 +55,11 @@ int  vga_cols(void);
 int  vga_rows(void);
 void vga_set_geometry(int cols, int rows);
 
+/* Like vga_puts, but NOT mirrored to the serial console. For bytes that are
+ * glyph codes rather than text - the boot logo's CP437 blocks - where a
+ * terminal would show noise. Send the log its own encoding separately. */
+void vga_puts_screen_only(const char *s);
+
 /* The cell store: the hardware text buffer on an ordinary boot, a RAM array
  * on a framebuffer boot (where the legacy window is dead). Anything that
  * pokes cells directly must go through this rather than 0xB8000. */

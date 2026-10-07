@@ -52,6 +52,16 @@ void fb_early(uint32_t mb_info_addr) {
     if (mb->framebuffer_type == MULTIBOOT_FB_EGA) return;
     for (int i = 0; i < VGA_COLS_MAX * VGA_ROWS_MAX; i++) text_backing[i] = 0x0720;
     vga_set_backing(text_backing);
+
+    /* And the geometry, HERE, before a single character is printed. The cell
+     * store's row stride is the column count, so changing it later would
+     * re-interpret text already written at the old stride and scramble the
+     * screen. 1024x768 with an 8x16 font is exactly 128x48. */
+    uint32_t cols = (uint32_t)mb->framebuffer_width  / 8;
+    uint32_t rows = (uint32_t)mb->framebuffer_height / 16;
+    if (cols > VGA_COLS_MAX) cols = VGA_COLS_MAX;
+    if (rows > VGA_ROWS_MAX) rows = VGA_ROWS_MAX;
+    if (cols >= 40 && rows >= 10) vga_set_geometry((int)cols, (int)rows);
 }
 
 int fb_init(uint32_t mb_info_addr) {

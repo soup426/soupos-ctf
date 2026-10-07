@@ -115,9 +115,10 @@ python3 scripts/qemu_keys.py "$MON" \
     "cook wc.elf < P.TXT" "WAIT:3" \
     "cook hog.elf | wc.elf &" "WAIT:2" "kill %" "WAIT:2" "kill %" "WAIT:2" \
     "sample" "WAIT:6" \
-    "MON:mouse_move 40 -20" "MON:mouse_move 40 -20" "skewer" "WAIT:2" \
+    "MON:mouse_move -120 -120" "MON:mouse_move -120 -120" "MON:mouse_move -120 -120" \
+    "MON:mouse_move 40 20" "skewer" "WAIT:2" \
     "strain MOUSE.TXT" "jot MOUSE.TXT" "WAIT:2" "TYPE:abcdefghij" "WAIT:1" \
-    "MON:mouse_move -100 -48" "MON:mouse_move -100 0" "MON:mouse_move -100 0" "WAIT:1" \
+    "MON:mouse_move -120 -120" "MON:mouse_move -120 -120" "MON:mouse_move -120 -120" "WAIT:1" \
     "MON:mouse_button 1" "WAIT:1" "MON:mouse_move 20 0" "WAIT:1" "MON:mouse_button 0" "WAIT:1" \
     "KEY:ctrl-c" "WAIT:1" "KEY:ctrl-s" "WAIT:1" "KEY:esc" "WAIT:2" "scraps" "WAIT:2" \
     "strain CLIP.TXT" "WAIT:1" \
@@ -405,14 +406,20 @@ check "the connection closed gracefully"  '\[tcp\] closed cleanly'
 # touching the gate.
 check "in-kernel self-test passes" '\[sample\] [0-9]+ tests, 0 failed'
 
-# The mouse, driven through the QEMU monitor rather than by hand: it starts
-# centred at 40,12, and two injections of (40,-20) move it ten cells right and
-# five up each. Exact, so a sign error or a scaling change shows up here.
-check "mouse tracks injected movement" '\[mouse\] at 60,2 '
+# The mouse, driven through the QEMU monitor rather than by hand. The pointer
+# starts at the middle of the console, which is 40,12 on a text boot and 64,24
+# on the framebuffer, so it is first driven hard into the top-left corner,
+# where it clamps, and only then moved a known amount: 40 raw is ten cells at
+# four counts per cell, and a POSITIVE dy moves down the screen. That lands on
+# 10,5 whatever size the console is, and still catches a sign error or a
+# change of scaling.
+check "mouse tracks injected movement" '\[mouse\] at 10,5 '
 
 # Drag-select: press at the start of the line, drag five cells right, release,
-# then the ordinary ^C. Three leftward moves because a PS/2 delta is clamped to
-# a byte, and the pointer stops at the edge, so this lands on 0,0 from anywhere.
+# then the ordinary ^C. Three moves into the corner because a PS/2 delta is
+# clamped to a byte and the pointer stops at the edge, so this reaches 0,0 from
+# anywhere - including the middle of a 128x48 console, which is further from
+# the corner than a 80x25 one and needs the extra vertical travel.
 # Asserting the content, not the length: a mapping off by one still copies five
 # bytes, just the wrong five.
 check "mouse drag-select feeds the clipboard" '\[clip\] 5 bytes: abcde'

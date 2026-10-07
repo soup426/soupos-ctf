@@ -20,6 +20,7 @@
 #include "mouse.h"
 #include "ac97.h"
 #include "fb.h"
+#include "logo.h"
 #include "fbcon.h"
 #include "vga13h.h"
 #include "mixer.h"
@@ -124,16 +125,24 @@ void kernel_main(uint32_t mb_magic, uint32_t mb_info) {
     (void)m2;
 
     /* ---- Boot banner ---- */
+    /* The logo is CP437 glyph codes (see src/logo.h, generated from
+     * assets/logo.txt), so it goes to the screen unmirrored and the serial log
+     * gets the UTF-8 form - the same picture in the encoding each side reads. */
     vga_set_color(VGA_LIGHT_CYAN, VGA_BLACK);
-    vga_puts(" ____                        ___  ____\n");
-    vga_puts("/ ___|  ___  _   _ _ __     / _ \\/ ___|\n");
-    vga_puts("\\___ \\ / _ \\| | | | '_ \\   | | | \\___ \\\n");
-    vga_puts(" ___) | (_) | |_| | |_) |  | |_| |___) |\n");
-    vga_puts("|____/ \\___/ \\__,_| .__/    \\___/|____/\n");
-    vga_puts("                  |_|\n");
+    for (int i = 0; i < LOGO_ROWS; i++) {
+        vga_puts_screen_only(logo_cp437[i]);
+        vga_puts_screen_only("\n");
+        klog("%s\n", logo_utf8[i]);
+    }
 
     vga_set_color(VGA_DARK_GREY, VGA_BLACK);
-    vga_puts("                 a shitty kernel\n\n");
+    {
+        static const char tag[] = "a shitty kernel";
+        int pad = (LOGO_COLS - (int)(sizeof(tag) - 1)) / 2;
+        for (int i = 0; i < pad; i++) vga_puts(" ");
+        vga_puts(tag);
+        vga_puts("\n\n");
+    }
 
     vga_set_color(VGA_LIGHT_GREY, VGA_BLACK);
 
@@ -215,7 +224,8 @@ void kernel_main(uint32_t mb_magic, uint32_t mb_info) {
         vga_puts("[OK] Mixer         - 4 voices into the AC97 ring\n");
 
     if (fb_present() && fbcon_start() == 0)
-        vga_puts("[OK] Console       - 80x25 on the framebuffer\n");
+        vga_printf("[OK] Console       - %dx%d on the framebuffer\n",
+                   vga_cols(), vga_rows());
     klog_puts("[boot] scheduler ok (kernel is task 0)\n");
     vga_printf("[OK] Scheduler ok  - kernel is task %u (%s)\n",
                task_current()->id, task_current()->name);

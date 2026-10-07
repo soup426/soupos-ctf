@@ -55,7 +55,9 @@ void vga_set_geometry(int cols, int rows) {
     v_rows = rows;
     if (vga_row >= rows) vga_row = rows - 1;
     if (vga_col >= cols) vga_col = cols - 1;
-}static uint8_t vga_attr;  /* high nibble = bg, low nibble = fg */
+}
+
+static uint8_t vga_attr;  /* high nibble = bg, low nibble = fg */
 
 static uint8_t make_color(vga_color_t fg, vga_color_t bg) {
     return (uint8_t)((bg << 4) | fg);
@@ -169,10 +171,15 @@ static void vga_fill_row_impl(int row, char c) {
         VGA_BUFFER[row * VGA_WIDTH + col] = cell;
 }
 
+/* Set while printing bytes that are GLYPH CODES rather than text - the boot
+ * logo's CP437 blocks - which a serial terminal would render as noise. The
+ * caller sends its own encoding to the log instead. */
+static int mirror_suppressed;
+
 static void vga_putchar_impl(char c) {
     /* Mirror to the serial console before touching the cell buffer, so a
      * remote client sees exactly the stream a local VGA user would. */
-    console_out_char(c);
+    if (!mirror_suppressed) console_out_char(c);
 
     if (c == '\n') {
         vga_col = 0;
@@ -356,5 +363,13 @@ void vga_putchar(char c) {
 void vga_puts(const char *s) {
     preempt_disable();
     vga_puts_impl(s);
+    preempt_enable();
+}
+
+void vga_puts_screen_only(const char *s) {
+    preempt_disable();
+    mirror_suppressed = 1;
+    vga_puts_impl(s);
+    mirror_suppressed = 0;
     preempt_enable();
 }

@@ -120,6 +120,16 @@ user/%.elf: user/%.c user/ulib.c user/ulib.h user/user.ld src/syscall_nr.h
 $(OBJ_C): src/%.o: src/%.c .build-config
 	$(CC) $(CFLAGS) -c $< -o $@
 
+# The boot logo. assets/logo.txt is the source of truth; src/logo.h is
+# generated from it and COMMITTED, so a build without Python still works. This
+# rule only fires when the asset is newer than the header.
+src/logo.h: assets/logo.txt scripts/gen-logo.py
+	@command -v python3 >/dev/null 2>&1 \
+	  && python3 scripts/gen-logo.py \
+	  || echo "  (no python3: keeping the committed src/logo.h)"
+
+src/kernel.o: src/logo.h
+
 $(OBJ_ASM): src/%.o: src/%.asm .build-config
 	$(AS) $(ASFLAGS) $< -o $@
 

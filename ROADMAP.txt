@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.17.0
+Current version: v0.18.0
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,42 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.18.0 (2026-10-07)  — THE soupOS LOGO, AND A CONSOLE THAT FITS IT
+  Queue item 5's second half, and the new boot logo, which turned out to need
+  each other.
+  - assets/logo.txt is the source of truth, UTF-8, eight rows and sixty-nine
+    columns of block characters. scripts/gen-logo.py turns it into src/logo.h
+    and REFUSES anything outside the four glyphs it is made of, so a stray
+    non-breaking space cannot reach the screen as whatever CP437 has at that
+    code point. The header is committed, so a build without Python still works.
+  - TWO ENCODINGS, ON PURPOSE. VGA text mode prints one glyph per byte, so
+    UTF-8 in a C string becomes three garbage characters per block: the screen
+    gets CP437 (0xDB, 0xDC, 0xDF) through a new vga_puts_screen_only, which
+    does NOT mirror to the serial console, and the log gets the UTF-8 form via
+    klog. Checked: the serial log holds all eight rows as readable UTF-8.
+  - Checked before writing any of it that the embedded 8x16 font really is
+    CP437 at those three code points - full block, lower half, upper half -
+    rather than assuming, because a Latin-1 font would have rendered the logo
+    as a row of accented letters.
+  - THE LOGO DID NOT FIT, AND THAT IS WHY THE CONSOLE GREW. Eight rows plus a
+    tagline plus seventeen boot lines is twenty-seven rows on a twenty-five row
+    console: the logo scrolled off before the login prompt, and screendumps at
+    0.35 s already showed it gone. The framebuffer console is now 128x48 -
+    1024x768 of 8x16 glyphs, exactly - and the geometry is set in fb_early,
+    BEFORE the first character, because the cell store's row stride is the
+    column count and changing it later re-interprets text already written.
+    Content now ends at row 43 of 48, so nothing scrolls. On a FB=0 text boot
+    the logo still scrolls off; the queue item said to say so rather than
+    shrink it.
+  - Two boot messages were lying - both said "80x25" as a literal while the
+    console was 128x48 - and now print the real geometry.
+  - The gate's two mouse checks assumed an 80x25 screen: the pointer starts at
+    the console's centre, which moved. They now drive it into the corner, where
+    it clamps, and move a known amount from there, so they hold at any size.
+  - VERIFIED BY LOOKING. The screendump shows SOUPOS in solid cyan blocks with
+    the grey tagline centred beneath and the boot log below; every block is
+    solid and there are no stray characters. assets/boot-screenshot.png.
 
 v0.17.0 (2026-10-07)  — DOOM'S MUSIC
   New queue item 4. `hum D_E1M1` plays a tune, and a level now plays its own.

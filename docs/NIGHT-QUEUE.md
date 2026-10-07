@@ -113,7 +113,7 @@ breaks: DOOM=0 needed music.c in its filter (as doomsnd.c did), and the gate's
 audio timing had to move to its own script because QEMU writes only while the
 card is active.
 
-## 5. A console that uses the whole screen
+## 5. A console that uses the whole screen — DONE (v0.18.0)
 
 80x25 glyphs on 1024x768 leaves most of the display as border. 8x16 glyphs
 give 128x48, which is a much better machine to use.
@@ -124,6 +124,12 @@ give 128x48, which is a much better machine to use.
   is a one-line follow-up.
 - This is the sprawl-prone item in this queue. The text-mode build must stay
   80x25 because that is what the hardware is.
+
+**2026-10-07: done, v0.18.0.** The sprawl did not happen: generalising the
+dimensions first (v0.18.0's parent commit) was five files' worth of constants
+and changed no behaviour, after which the resize was setting the geometry in
+one place. The one real subtlety: it must be set BEFORE any output, because the
+cell store's row stride is the column count. The text build stays 80x25.
 
 ## 6. Per-task CPU accounting
 
