@@ -58,6 +58,7 @@
 #include "speaker.h"
 #include "timer.h"
 #include "vfs.h"
+#include "fat.h"
 #include "heap.h"
 #include "ai.h"
 #include "soupyc_types.h"
@@ -1536,6 +1537,18 @@ static int call_builtin(node_t *n, val_t *out) {
             if (k == nl) { at = i; break; }
         }
         *out = mkival(name[0] == 'f' ? at : (at >= 0));   /* find->index, contains->bool */
+        return 1;
+    }
+
+    /* remove(path) - delete a file. The language could create files but not
+     * get rid of them, which made a script that fills the disk impossible to
+     * clean up after. Returns 1 on success, 0 on failure. */
+    if (strcmp(name, "remove") == 0) {
+        if (count_args(n) != 1) { set_err("remove expects 1 arg"); return 1; }
+        eval_args(n, a, 1);
+        if (err_flag) return 1;
+        const char *path = val_str(&a[0], scratch, SVAL_LEN);
+        *out = mkival(fat_delete(path) >= 0 ? 1 : 0);
         return 1;
     }
 

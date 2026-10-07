@@ -148,7 +148,7 @@ $(DISK):
 	    | mcopy -i $(DISK) - ::ARRAY.SC
 	printf '# soupyc file I/O demo - run with: soup FILEIO.SC\nlet f = open("NOTE.TXT", "w")\nwrite(f, "soup is best served hot")\nclose(f)\npour "wrote NOTE.TXT"\nlet g = open("NOTE.TXT")\npour "read back: " + read(g, 40)\nclose(g)\nlet log = open("/dev/serial", "w")\nwrite(log, "FILEIO.SC logged this on the serial port\\n")\nclose(log)\npour "logged a line to /dev/serial"\n' \
 	    | mcopy -i $(DISK) - ::FILEIO.SC
-	printf '# Heap-backed strings - run with: soup LONGSTR.SC\n# Every line here would have failed or truncated at 47 characters.\nlet s = ""\nfor i in 1..21 {\n    s = s + "soup "\n}\npour "built " + len(s)\nlet lit = "this one literal is far longer than the forty-seven characters a soupyc string value used to hold"\npour "literal " + len(lit)\nlet f = open("README.TXT")\nlet body = read(f, 100)\nclose(f)\npour "file " + len(body)\npour "upper " + len(upper(s))\npour "slice " + len(substr(s, 0, 73))\npour "tail " + substr(s, 90, 10)\n' \
+	printf '# Heap-backed strings - run with: soup LONGSTR.SC\n# Every line here would have failed or truncated at 47 characters.\nlet s = ""\nfor i in 1..21 {\n    s = s + "soup "\n}\npour "built " + len(s)\nlet lit = "this one literal is far longer than the forty-seven characters a soupyc string value used to hold"\npour "literal " + len(lit)\nlet f = open("README.TXT")\nlet body = read(f, 100)\nclose(f)\npour "file " + len(body)\npour "upper " + len(upper(s))\npour "slice " + len(substr(s, 0, 73))\npour "tail " + substr(s, 90, 10)\nlet w = open("RMTEST.TMP", "w")\nwrite(w, "bye")\nclose(w)\npour "removed " + remove("RMTEST.TMP")\n' \
 	    | mcopy -i $(DISK) - ::LONGSTR.SC
 	printf '# Runaway strings - must fail cleanly, not take the kernel down\nlet s = "x"\nlet n = 0\nwhile n < 100000 {\n    s = s + "xxxxxxxxxx"\n    n = n + 1\n}\npour "never gets here"\n' \
 	    | mcopy -i $(DISK) - ::RUNAWAY.SC
@@ -156,6 +156,8 @@ $(DISK):
 	    | mcopy -i $(DISK) - ::SPAWN.SC
 	printf '# scroll timing: 600 lines, in ticks (10 ms each)\nlet t0 = time()\nlet i = 0\nwhile i < 600 {\n    pour "scroll line " + i\n    i = i + 1\n}\nlet t1 = time()\npour "SCROLLTICKS " + (t1 - t0)\n' \
 	    | mcopy -i $(DISK) - ::SCROLL.SC
+	printf '# Fill the disk past full, then clean up. Free space must come back.\n# A write that runs out of room halfway used to strand its clusters.\n# NOTE: f and n are declared ONCE. A `let` inside a loop body makes a\n# fresh binding every iteration and runs out of variables at 64.\nlet s = "x"\nlet i = 0\nwhile i < 18 {\n    s = s + s\n    i = i + 1\n}\npour "CHUNK " + len(s)\nlet f = 0\nlet n = 0\nwhile n < 130 {\n    f = open("FZ" + n + ".TMP", "w")\n    write(f, s)\n    close(f)\n    n = n + 1\n}\npour "FILLED"\nlet gone = 0\nn = 0\nwhile n < 130 {\n    if remove("FZ" + n + ".TMP") == 1 {\n        gone = gone + 1\n    }\n    n = n + 1\n}\npour "CLEANED " + gone\n' \
+	    | mcopy -i $(DISK) - ::FILLDISK.SC
 	printf '# a tiny library - included by INCLUDE.SC\nfn cube(n) { return n * n * n }\n' \
 	    | mcopy -i $(DISK) - ::MATHLIB.SC
 	printf '# include + new builtins demo - run with: soup INCLUDE.SC\ninclude "MATHLIB.SC"\npour "cube(3)  = " + cube(3)\nlet nums = [5, 2, 9, 1, 7]\nsort(nums)\npour "sorted   ="\npour nums\npour "sum      = " + sum(nums)\nreverse(nums)\npour "reversed ="\npour nums\npour "find OS  = " + find("soupOS", "OS")\n' \

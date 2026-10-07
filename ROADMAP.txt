@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.10.3
+Current version: v0.10.4
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,40 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.10.4 (2026-10-07)  — ITEM 7 FINISHED: THE LEAK, PROVEN
+  The cluster leak fixed in v0.10.3 was established by reading all five
+  failure paths. Now it is demonstrated, and the demonstration is repeatable.
+  - scripts/fullness-test.sh builds a 32 MB image that is already nearly full
+    (a 64 KB file to copy, filler leaving 22 KB free), then copies the 64 KB
+    file, which cannot fit. WITH THE LEAK: 22 KB free before, 0 KB after -
+    every remaining cluster allocated to a file whose directory entry never
+    got written, referenced by nothing, gone until a reformat. WITH THE FIX:
+    22 KB before, 22 KB after. The script was then checked the other way, by
+    putting the leak back and confirming it reports FAIL; a test that cannot
+    fail is worth nothing.
+    Not in smoke-test.sh because it needs a disk of its own. Filling the real
+    image from inside soupOS (soup FILLDISK.SC) also works but takes minutes.
+  - TAB COMPLETION: MEASURED, AND DELIBERATELY NOT CACHED. The entry has asked
+    for a per-directory cache since v0.7. A directory scan, the thing a Tab
+    press pays for, measured 1.9 ms on a normal root (33 entries) and 5.5 ms
+    on a crowded one (128). Both are far below anything a person can feel, so
+    a cache would buy nothing and cost an invalidation bug surface that got
+    worse the moment spawn() made another task able to write files while the
+    shell holds a listing. Closed as won't-do, with the numbers, rather than
+    left open to tempt someone.
+  - soupyc's remove(path), because writing FILLDISK.SC turned up that the
+    language could create files but not delete them, so a script that fills a
+    disk cannot clean up after itself.
+  - FOUND WHILE WRITING THAT SCRIPT: a `let` inside a loop body makes a fresh
+    binding on every iteration, and MAX_VARS is 64, so any loop that declares
+    a variable dies after 64 passes with "too many variables". Scopes are only
+    popped on function return, not at the end of a block. Queued as its own
+    item; FILLDISK.SC hoists its declarations and says why.
+  - Gate 60 -> 61 checks.
+  Item 7 is now closed: of its five entries, four were resolved by measuring
+  or reading rather than by assuming, and one was a real bug that was
+  mis-described.
 
 v0.10.3 (2026-10-07)  — THE KNOWN-BUGS SWEEP, VERIFIED FIRST
   Night-queue item 7, taking the list seriously enough to check it. Two of the
@@ -1366,9 +1400,10 @@ KNOWN BUGS / DEBT
       that write is supported
       (already fixed in `recipe` cmd; also bumped README.TXT to v0.4.0)
   [x] Tab completion only matches filenames, not command names
-  [ ] shell_tab_complete rescans FAT on every Tab press — cache it
-      (still open; measure a Tab press before adding a cache and its
-      invalidation bugs. v0.10.3 did not get to this one.)
+  [x] shell_tab_complete rescans FAT on every Tab press — cache it
+      WON'T DO, measured v0.10.4: a directory scan is 1.9 ms on a normal root
+      and 5.5 ms on a 128-entry one, far below what anyone can feel. A cache
+      would add invalidation bugs for no gain, and spawn() makes those worse.
   [x] soupyc recursion depth raised from 8 to 16 (MAX_CALL_DEPTH); the
       call_args table is sized off it, so it grew automatically
   [x] beep busy-waited with pause; now calls task_sleep(ms)

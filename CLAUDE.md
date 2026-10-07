@@ -3,7 +3,7 @@
 ## What this is
 
 soupOS is a 32-bit x86 hobby OS written in C and NASM assembly (currently
-**v0.10.3**). It boots via GRUB and runs in protected mode with paging, a
+**v0.10.4**). It boots via GRUB and runs in protected mode with paging, a
 physical/heap allocator, and a cooperative scheduler. On top of that:
 
 - **Filesystem**: FAT16 read/write with subdirectories ("bowls") and a VFS shim
@@ -527,6 +527,21 @@ VGA cells doubles the work. `vga.c`'s `scroll()` copies 32-bit words (two cells
 per store) and is about twice as fast as the original cell-at-a-time loop;
 `memmove` measured 47% slower than that original. `sample` guards the row
 movement. The same caution applies anywhere a wide copy looks tempting.
+
+## soupyc: `let` in a loop runs out of variables (v0.10.4)
+
+A `let` inside a loop body creates a **fresh binding every iteration**, and
+`MAX_VARS` is 64, so a loop that declares a variable fails after 64 passes with
+"too many variables". Scopes are popped on function return, not at the end of a
+block. Declare outside the loop and assign inside. Worth fixing properly one
+day by popping the scope at block exit.
+
+## Verifying the FAT cluster leak (v0.10.3, proven v0.10.4)
+
+`scripts/fullness-test.sh` builds a nearly-full image and copies a file that
+cannot fit. It is not in the main gate because it needs its own disk. With the
+leak it reports 22 KB free then 0 KB; with the fix, 22 KB both times. If you
+touch `fat_write`'s failure paths, run it.
 
 ## FAT free space (v0.10.3)
 

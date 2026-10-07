@@ -139,7 +139,7 @@ is not reentrant.
 - Gate: a script that builds a string longer than 47 characters and prints it,
   and a `spawn` whose output interleaves with the shell's.
 
-## 7. The known-bugs sweep — 3 of 4 done (v0.10.3)
+## 7. The known-bugs sweep — DONE (v0.10.3, v0.10.4)
 
 `ROADMAP.txt` carries a KNOWN BUGS / DEBT list, several items of which are
 small and independently testable. Take them as one commit each:
@@ -171,6 +171,22 @@ with `larder` added because free space was previously unobservable. Left: the
 tab-complete cache (measure first), and the empirical nearly-full repro of the
 leak, which `larder` now makes cheap - fill the disk from a script, delete the
 files, and free space must return to its starting value.
+
+**2026-10-07, item 7 CLOSED, v0.10.4, 61 checks green.** The leak is now
+demonstrated by scripts/fullness-test.sh (22 KB free -> 0 KB with the leak,
+unchanged with the fix), and that script was checked in reverse by putting the
+leak back. Tab completion is closed as won't-do with numbers: 1.9 ms per scan
+normally, 5.5 ms on a 128-entry directory, both below perception, and a cache's
+invalidation surface got worse when spawn() landed.
+
+### New item, found while writing the fill script
+
+`let` inside a loop body creates a fresh binding per iteration and MAX_VARS is
+64, so any loop declaring a variable dies after 64 passes. Scopes are popped on
+function return, not at block exit. The fix is to record nvar at block entry in
+eval_block and restore it on the way out, which is a few lines, but it changes
+the language's scoping rules, so it wants its own commit and a test that a
+variable declared in a loop is not visible after it.
 
 ## 8. Sound
 

@@ -417,6 +417,10 @@ check "the spawned script finishes"        '\[child\] done'
 # took, which is the shape that leak had.
 check "larder reports disk space" 'clusters used \([0-9]+ KB each\)'
 
+# remove() closed a real gap: soupyc could create files but not delete them,
+# so a script that filled the disk could not clean up after itself.
+check "soupyc can delete a file" 'removed 1'
+
 # vgastress prints whole lines of a single repeated character from two tasks.
 # Any line containing both means vga_puts was interrupted mid-string.
 mixed=$(sed -n '/\[vgastress\] begin/,/\[vgastress\] end/p' "$LOG" \
