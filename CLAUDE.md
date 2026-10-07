@@ -3,7 +3,7 @@
 ## What this is
 
 soupOS is a 32-bit x86 hobby OS written in C and NASM assembly (currently
-**v0.18.0**). It boots via GRUB and runs in protected mode with paging, a
+**v0.18.1**). It boots via GRUB and runs in protected mode with paging, a
 physical/heap allocator, and a cooperative scheduler. On top of that:
 
 - **Filesystem**: FAT16 read/write with subdirectories ("bowls") and a VFS shim
@@ -527,6 +527,15 @@ VGA cells doubles the work. `vga.c`'s `scroll()` copies 32-bit words (two cells
 per store) and is about twice as fast as the original cell-at-a-time loop;
 `memmove` measured 47% slower than that original. `sample` guards the row
 movement. The same caution applies anywhere a wide copy looks tempting.
+
+## CPU accounting (v0.18.1)
+
+`ps` shows a CPU% column: the timer charges each tick to the running task, and
+the 100-tick window makes the figure a percentage directly. **It measures who
+held the CPU, not who did work** - a task halted at a prompt still counts, so
+the shell reads 100% when idle. Use it to ask whether a background service is
+costing too much, which is what `sample` asserts (no service above 50%).
+Measured idle: fbcon 0%.
 
 ## The boot logo (v0.18.0)
 

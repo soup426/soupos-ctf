@@ -20,6 +20,7 @@
 #include "str.h"
 #include "vga.h"
 #include "fb.h"
+#include "task.h"
 #include "klog.h"
 
 static int t_run, t_fail;
@@ -170,6 +171,30 @@ static void test_vga(void) {
     check("vga scroll moves 24 rows", vga_scroll_selftest());
 }
 
+/* ── Background services ──────────────────────────────────────────────────
+ * The console renderer repaints thirty times a second and the mixer wakes a
+ * hundred times a second, so it is worth knowing they are not costing real
+ * time. Measured on an idle machine the renderer is 0%; the threshold is
+ * generous because `sample` itself is printing while this runs, which gives
+ * the renderer actual work to do. */
+static void test_services(void) {
+    task_t *head = task_list_head();
+    int worst = 0;
+    const char *worst_name = "none";
+    if (head) {
+        task_t *t = head;
+        do {
+            if (t->service && (int)t->cpu_last > worst) {
+                worst = (int)t->cpu_last;
+                worst_name = t->name;
+            }
+            t = t->next;
+        } while (t != head);
+    }
+    klog("[sample] busiest service: %s at %d%%\n", worst_name, worst);
+    check("services are not busy", worst <= 50);
+}
+
 /* ── The hand-written libc ────────────────────────────────────────────────
  * Everything above is built on these, and memmove's overlap behaviour is the
  * one that goes unnoticed until it corrupts something far away. */
@@ -205,6 +230,7 @@ int selftest_run(void) {
     test_checksum();
     test_fat_roundtrip();
     test_vga();
+    test_services();
     test_str();
 
     vga_set_color(t_fail ? VGA_LIGHT_RED : VGA_LIGHT_GREEN, VGA_BLACK);

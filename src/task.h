@@ -41,6 +41,10 @@ typedef struct task {
     int           service;       /* a background service (fbcon, mixer): it
                                   * is alive, but it is not another program
                                   * competing for the machine */
+    uint32_t      cpu_window;    /* timer ticks held in the second so far   */
+    uint32_t      cpu_last;      /* ... and in the second just finished:
+                                  * the window is 100 ticks, so this IS a
+                                  * percentage, no division needed          */
 } task_t;
 
 /* Simple intrusive wait queue - FIFO singly-linked list of blocked tasks.
@@ -90,6 +94,15 @@ uint32_t task_count_users(void);
 
 /* Mark the calling task a background service. */
 void     task_set_service(void);
+
+/* Charge this timer tick to whichever task is running, and roll the window
+ * once a second. Called from the timer interrupt and nowhere else.
+ *
+ * It measures WHO HELD THE CPU, which is not the same as who did work: a task
+ * halted in a wait loop is still the current task, so the shell sitting at a
+ * prompt reads as busy. What the number is good for is the opposite question -
+ * whether a background service is costing more than it should. */
+void     task_cpu_tick(void);
 
 /* Iteration. Start at task_list_head() (NULL if no tasks), follow .next
  * until it wraps back to the head. The list is circular so do not

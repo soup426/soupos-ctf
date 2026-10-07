@@ -478,6 +478,9 @@ check "a Doom sound lump was decoded" '\[doomsnd\] DSPISTOL: 5661 samples at 110
 # silence. scripts/music-test.sh checks the notes are the RIGHT notes.
 check "a MUS score was parsed" '\[music\] D_E1M1: 17237 bytes of score, 3 channels'
 check "the mixer came up" '\[mixer\] 4 voices'
+# What the background services actually cost. The renderer repaints 30x a
+# second and the mixer wakes 100x; measured idle, the renderer is 0%.
+check "a service's cpu share is reported" '\[sample\] busiest service: '
 
 # The fine-grained audio measurements - the tone's frequency and the effect's
 # length - moved to scripts/sound-test.sh. They need a capture containing

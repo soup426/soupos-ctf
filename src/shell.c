@@ -2329,13 +2329,17 @@ static void cmd_ps(void) {
     task_t *head = task_list_head();
     if (!head) { vga_puts("(no tasks)\n"); return; }
     vga_set_color(VGA_YELLOW, VGA_BLACK);
-    vga_puts("  ID  ST  STACK  KIND   NAME\n");
+    vga_puts("  ID  ST  CPU%  STACK  KIND   NAME\n");
     vga_set_color(VGA_LIGHT_GREY, VGA_BLACK);
     task_t *t = head;
     do {
-        vga_printf("  %2u   %c  %5u  %s   %s%s\n",
+        /* cpu_last is ticks out of a 100-tick second, so it is already a
+         * percentage. It says who HELD the cpu: a task halted at a prompt
+         * still counts, which is why the shell reads high when idle. */
+        vga_printf("  %2u   %c  %3u%%  %5u  %s   %s%s\n",
                    t->id,
                    task_state_letter(t->state),
+                   t->cpu_last > 100 ? 100 : t->cpu_last,
                    t->stack_size,
                    t->proc ? "ring3" : "task ",
                    t->name,

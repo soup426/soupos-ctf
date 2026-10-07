@@ -261,6 +261,24 @@ uint32_t task_count(void) {
  * next yield swept it up. */
 void task_set_service(void) { if (current) current->service = 1; }
 
+void task_cpu_tick(void) {
+    static uint32_t in_second;
+    if (current) current->cpu_window++;
+
+    if (++in_second < 100) return;          /* 100 Hz timer, so one second */
+    in_second = 0;
+
+    /* Roll every task's window at once, so the figures in a listing all
+     * describe the same second rather than drifting apart. */
+    if (!list_head) return;
+    task_t *t = list_head;
+    do {
+        t->cpu_last   = t->cpu_window;
+        t->cpu_window = 0;
+        t = t->next;
+    } while (t != list_head);
+}
+
 /* Alive, minus the background services. A framebuffer console and a sound
  * mixer are permanent now, so "is anything else running?" has to mean
  * "is another PROGRAM running?" or nothing can ever claim the machine. */

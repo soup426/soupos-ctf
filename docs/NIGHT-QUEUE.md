@@ -131,7 +131,7 @@ and changed no behaviour, after which the resize was setting the geometry in
 one place. The one real subtlety: it must be set BEFORE any output, because the
 cell store's row stride is the column count. The text build stays 80x25.
 
-## 6. Per-task CPU accounting
+## 6. Per-task CPU accounting — DONE (v0.18.1)
 
 `ps` shows what each task is doing but not what it costs, and the next
 performance question will want that.
@@ -142,6 +142,12 @@ performance question will want that.
   actually costs, and it repaints thirty times a second.
 - `sample` should assert something about it - an idle machine must not show the
   console renderer burning a large share.
+
+**2026-10-07: done, v0.18.1.** The renderer costs 0% idle, which answers the
+question the item was built around. The figure measures who HELD the cpu rather
+than who worked - a task halted at a prompt still counts, so the shell reads
+100% - which is stated in ps's own comment and in CLAUDE.md, because it is the
+sort of number that invites a wrong reading.
 
 ## 7. A warnings sweep, then -Werror
 

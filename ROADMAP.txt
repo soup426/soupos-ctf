@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.18.0
+Current version: v0.18.1
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,31 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.18.1 (2026-10-07)  — WHAT EACH TASK COSTS
+  New queue item 6. `ps` grew a CPU% column, and the question the item was
+  really asking - what does the console renderer cost, repainting thirty times
+  a second? - has an answer: NOTHING MEASURABLE. It reads 0%.
+  - The timer interrupt charges each tick to the running task. The window is a
+    hundred ticks of a 100 Hz timer, so the figure IS a percentage with no
+    division, and every task's window rolls at the same instant, which means
+    the numbers in one listing all describe the same second instead of
+    drifting apart.
+  - WHAT IT MEASURES, SAID PLAINLY: who HELD the cpu, not who did work. A task
+    halted in a wait loop is still the current task, so the shell sitting at a
+    prompt reads 100%. That makes the figure useless for "how busy is the
+    machine" and exactly right for "is a background service costing more than
+    it should", which is the question that prompted the item.
+  - Idle, on the framebuffer build: kernel 100%, fbcon 0%. The renderer diffs
+    two thousand cells thirty times a second and almost nothing changes, so
+    the work is in the comparison rather than the drawing.
+  - `sample` asserts no background service exceeds 50% and logs the busiest
+    one by name, so a renderer that starts spinning fails the gate rather than
+    being noticed eventually. 21 -> 22 assertions, gate 69 -> 70.
+  - Also fixed the throwaway runshell helper to boot a COPY of disk.img, like
+    the committed scripts already do: an interactive QEMU window holds a write
+    lock on the image, and the helper had been failing with "cannot connect to
+    monitor" whenever one was open.
 
 v0.18.0 (2026-10-07)  — THE soupOS LOGO, AND A CONSOLE THAT FITS IT
   Queue item 5's second half, and the new boot logo, which turned out to need
