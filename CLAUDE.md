@@ -3,7 +3,7 @@
 ## What this is
 
 soupOS is a 32-bit x86 hobby OS written in C and NASM assembly (currently
-**v0.18.2**). It boots via GRUB and runs in protected mode with paging, a
+**v0.19.0**). It boots via GRUB and runs in protected mode with paging, a
 physical/heap allocator, and a cooperative scheduler. On top of that:
 
 - **Filesystem**: FAT16 read/write with subdirectories ("bowls") and a VFS shim
@@ -527,6 +527,17 @@ VGA cells doubles the work. `vga.c`'s `scroll()` copies 32-bit words (two cells
 per store) and is about twice as fast as the original cell-at-a-time loop;
 `memmove` measured 47% slower than that original. `sample` guards the row
 movement. The same caution applies anywhere a wide copy looks tempting.
+
+## Volume, and the mixer's latency (v0.19.0)
+
+`hush [0-100]` is the master level, applied to the **sum** before saturation,
+so turning down removes clipping and keeps the music/effects balance.
+
+**A voice added while playback is under way is first heard up to 63 ms later**
+(the mixer's three-chunk lead on the card's read position). Whether two sounds
+started in one command align exactly is a race against the second lump's WAD
+read. `mixer-test.sh` searches offsets rather than assuming zero latency - if
+it ever fails, check the reported offset before suspecting the mixer.
 
 ## Warnings are errors (v0.18.2)
 

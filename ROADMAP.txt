@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.18.2
+Current version: v0.19.0
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,38 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.19.0 (2026-10-07)  — VOLUME, AND WHAT A FAILING TEST ACTUALLY MEANT
+  New queue item 8, the last in that queue. `hush [0-100]` sets how loud the
+  kitchen gets; bare `hush` reports it.
+  - The level is applied to the SUM, not to each voice, which is what makes it
+    a volume control rather than a per-sound one: the balance between music
+    and effects stays put as it moves. And it is applied BEFORE the
+    saturation, so turning down removes clipping instead of scaling a signal
+    that has already clipped.
+  - Both properties measured, as the item asked. The same tone at 100 then at
+    50 peaks 32767 then 16383, exactly half. Two overlapping effects clip 12
+    samples at full and zero at 40, where the peak is 13824.
+  - THE MIXER TEST THEN FAILED, AND THE CAUSE WAS NOT THE CHANGE. Its envelope
+    correlation dropped from 1.0000 to 0.9384 - still a better match to the
+    sum than to the louder lump alone, so mixing plainly worked, but under the
+    0.97 threshold. Rather than loosen it, I searched for the alignment that
+    fits: 0.9999 with the pistol delayed 63 ms, which is exactly three ring
+    chunks of 21 ms. That is the mixer's three-chunk lead on the card's read
+    position doing its job - a voice added once playback is under way is first
+    heard three chunks later. The old 1.0000 was the lucky case where both
+    voices were added before the ring started, and whether that happens is a
+    race against the WAD read for the second lump.
+  - So the test now searches offsets and asserts what matters: the best fit is
+    excellent, needs only a few chunks, and beats the single lump. That is a
+    better test than the one that passed by luck, and it came from
+    understanding the failure rather than adjusting a number until it went
+    green.
+  - sound-test.sh gained the volume check, which immediately broke its own
+    effect-duration measurement: it spans a contiguous capture and now had a
+    third sound in it, so 513 ms read as 853. The tone lengths are subtracted
+    by a named constant with a note that adding a sound means updating it.
+  THE QUEUE IS EMPTY AGAIN. Eight items, all closed.
 
 v0.18.2 (2026-10-07)  — WARNINGS ARE ERRORS NOW
   New queue item 7. One tolerated warning teaches the eye to skip the

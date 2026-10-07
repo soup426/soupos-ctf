@@ -1693,6 +1693,20 @@ static void cmd_sizzle(const char *args) {
 }
 #endif /* NO_DOOM: sizzle reads DS* lumps, so it needs the WAD reader */
 
+/* hush [0-100] - how loud the kitchen gets. Bare `hush` reports the level. */
+static void cmd_hush(const char *args) {
+    while (*args == ' ') args++;
+    if (!*args) {
+        vga_printf("  the kitchen is at %d of 100\n", mixer_master());
+        return;
+    }
+    int level = 0;
+    while (*args >= '0' && *args <= '9') level = level * 10 + (*args++ - '0');
+    mixer_set_master(level);
+    vga_printf("  hushed to %d of 100%s\n", mixer_master(),
+               mixer_master() == 0 ? " (silent)" : "");
+}
+
 /* whistle - a tone through the sound card, as the kettle would.
  * `beep` is the PC speaker; this is the AC97. */
 static void cmd_whistle(const char *args) {
@@ -3146,7 +3160,7 @@ static const char *const cmd_names[] = {
     "jot", "ai", "cook", "soup", "hash",
     "beep", "mandelbrot", "vgademo", "uname", "cal",
     "clock", "wipe", "fortune", "bounce", "recipe", "leftovers", "spill",
-    "freeze", "reheat", "ps", "orders", "plate", "steep", "kill", "scraps", "sample", "skewer", "larder", "whistle", "hatch",
+    "freeze", "reheat", "ps", "orders", "plate", "steep", "kill", "scraps", "sample", "skewer", "larder", "whistle", "hatch", "hush",
 #ifndef NO_DOOM
     "sizzle", "hum",
 #endif
@@ -3389,6 +3403,7 @@ static void dispatch(const char *buf) {
     else if (str_eq(p, "skewer"))      cmd_skewer();
     else if (str_eq(p, "larder"))      cmd_larder();
     else if (str_startswith(p, "whistle")) cmd_whistle(p + 7);
+    else if (str_startswith(p, "hush"))    cmd_hush(p + 4);
 #ifndef NO_DOOM
     else if (str_startswith(p, "sizzle"))  cmd_sizzle(p + 6);
     else if (str_startswith(p, "hum"))     cmd_hum(p + 3);

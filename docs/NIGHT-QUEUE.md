@@ -175,7 +175,7 @@ whether the kernel is late taking the stop at a safe point, or whether the
 check is simply tighter than the stop can be - and do NOT loosen it until that
 is known.
 
-## 8. Volume, for the mixer
+## 8. Volume, for the mixer — DONE (v0.19.0)
 
 `whistle` and `sizzle` play at full scale, which is why two of them clip.
 
@@ -185,6 +185,12 @@ is known.
 - Verify with the capture, not the ear: half gain should halve the measured
   amplitude, and the clipping harmonic from two overlapping tones should
   disappear.
+
+**2026-10-07: done, v0.19.0. THE QUEUE IS EMPTY.** Both properties measured:
+32767 -> 16383 at half, and 12 clipped samples -> 0 at 40. The interesting part
+was the mixer test failing afterwards for an unrelated reason - the second
+voice starts up to 63 ms late, which is the ring's three-chunk lead - and
+fixing the test by understanding that rather than by lowering its threshold.
 
 ---
 

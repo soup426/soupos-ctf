@@ -53,6 +53,12 @@ typedef struct {
 } voice_t;
 
 static voice_t  voices[NVOICES];
+
+/* 0-100, applied to the SUM rather than to each voice, which is what makes it
+ * a volume control rather than a per-sound one: the balance between music and
+ * effects stays put as it moves. Applied before the saturation, so turning it
+ * down also removes clipping instead of just scaling a clipped signal. */
+static int master_level = 100;
 static uint32_t next_seq;
 static int      ring_live;
 static int      fill_next;
@@ -85,6 +91,7 @@ static void mix_chunk(int16_t *out, uint32_t samples) {
                 vo->frames_left--;
             }
         }
+        if (master_level != 100) acc = (acc * master_level) / 100;
         if (acc >  32767) acc =  32767;
         if (acc < -32768) acc = -32768;
         out[f * 2]     = (int16_t)acc;
@@ -168,4 +175,13 @@ int mixer_tone(uint32_t hz, uint32_t ms) {
     v->kind        = V_TONE;
     klog("[mixer] tone %u Hz for %u ms\n", hz, ms);
     return 0;
+}
+
+int  mixer_master(void) { return master_level; }
+
+void mixer_set_master(int level) {
+    if (level < 0)   level = 0;
+    if (level > 100) level = 100;
+    master_level = level;
+    klog("[mixer] master level %d\n", level);
 }
