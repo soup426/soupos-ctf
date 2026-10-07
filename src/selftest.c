@@ -25,8 +25,10 @@
 #include "sha256.h"
 #include "random.h"
 #include "chacha.h"
+#include "curve25519.h"
+#include "timer.h"
 
-static int t_run, t_fail;
+static int t_run, t_fail, t_slow;
 
 static void check(const char *name, int ok) {
     t_run++;
@@ -359,8 +361,59 @@ static void test_chacha(void) {
     check("aead refuses a flipped bit", chacha20poly1305_decrypt(key, n2, aad, 12, buf, 114, tag) == -1);
 }
 
-int selftest_run(void) {
+/* ── X25519 ───────────────────────────────────────────────────────────────
+ * RFC 7748 section 5.2: two scalar multiplications and the iterated test,
+ * in which k and u start at 9 and each round feeds (k*u, k) back in. The
+ * single vectors can pass by luck with a carry bug that only bites for some
+ * inputs; a thousand chained rounds give such a bug every chance to show.
+ * The time is logged because this arithmetic is deliberately the simple,
+ * slow kind, and a key exchange should stay well under a second. The
+ * thousand rounds take 1.5 s on a quiet machine and far longer on a busy
+ * one, so they run only under `sample slow` (scripts/x25519-test.sh). */
+static void hex32(uint8_t *out, const char *hex) {
+    for (int i = 0; i < 32; i++) {
+        unsigned hi = hex[2*i], lo = hex[2*i+1];
+        hi = hi >= 'a' ? hi - 'a' + 10 : hi - '0';
+        lo = lo >= 'a' ? lo - 'a' + 10 : lo - '0';
+        out[i] = (uint8_t)((hi << 4) | lo);
+    }
+}
+static void test_x25519(void) {
+    uint8_t k[32], u[32], q[32];
+    hex32(k, "a546e36bf0527c9d3b16154b82465edd62144c0ac1fc5a18506a2244ba449ac4");
+    hex32(u, "e6db6867583030db3594c1a424b15f7c726624ec26b3353b10a903a6d0ab1c4c");
+    uint32_t t0 = timer_get_ticks();
+    x25519(q, k, u);
+    uint32_t t1 = timer_get_ticks();
+    check("x25519 rfc7748 #1", bytes_eq(q, "c3da55379de9c6908e94ea4df28d084f32eccf03491c71f754b4075577a28552", 32));
+    klog("[sample] x25519 took %u ticks\n", t1 - t0);
+
+    hex32(k, "4b66e9d4d1b4673c5ad22691957d6af5c11b6421e0ea01d42ca4169e7918ba0d");
+    hex32(u, "e5210f12786811d3f4b7959d0538ae2c31dbe7106fc03c3efc4cd549c715a493");
+    x25519(q, k, u);
+    check("x25519 rfc7748 #2", bytes_eq(q, "95cbde9476e8907d7aade45cb4b873f88b595a68799fa152e6f8f7647aac7957", 32));
+
+    memset(k, 0, 32); k[0] = 9;
+    memcpy(u, k, 32);
+    x25519(q, k, u);
+    memcpy(u, k, 32);
+    memcpy(k, q, 32);
+    check("x25519 iterated once", bytes_eq(k, "422c8e7a6227d7bca1350b3e2bb7279f7897b87bb6854b783c60e80311ae3079", 32));
+    if (!t_slow) return;
+
+    t0 = timer_get_ticks();
+    for (int i = 1; i < 1000; i++) {
+        x25519(q, k, u);
+        memcpy(u, k, 32);
+        memcpy(k, q, 32);
+    }
+    klog("[sample] x25519 1000 rounds took %u ticks\n", timer_get_ticks() - t0);
+    check("x25519 iterated 1000x", bytes_eq(k, "684cf59ba83309552800ef566f2f4d3c1c3887c49360e3875f2eb94d99532c51", 32));
+}
+
+int selftest_run(int slow) {
     t_run = t_fail = 0;
+    t_slow = slow;
 
     vga_set_color(VGA_YELLOW, VGA_BLACK);
     vga_puts("  tasting the soup...\n");
@@ -377,6 +430,7 @@ int selftest_run(void) {
     test_sha256();
     test_random();
     test_chacha();
+    test_x25519();
 
     vga_set_color(t_fail ? VGA_LIGHT_RED : VGA_LIGHT_GREEN, VGA_BLACK);
     vga_printf("  %d tests, %d failed\n", t_run, t_fail);

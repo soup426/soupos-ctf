@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.25.0
+Current version: v0.26.0
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,28 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.26.0 (2026-10-07)  — X25519
+  Stage S4. The key exchange, and the bulk of the arithmetic.
+  - src/curve25519.c: the field in sixteen 16-bit limbs held in signed
+    64-bit words. Every product fits an int64, the carry is one pass, and
+    the reduction uses only 2^256 = 38 mod p. Slow next to a radix-2^25.5
+    implementation and a key exchange happens once a connection, so that
+    is the right trade here: one exchange is under a tick.
+  - RFC 7748 vectors in `sample`: both scalar multiplications and the
+    iterated test at one round. The THOUSAND-ROUND chain is what catches a
+    carry bug the single vectors get lucky on; it passed, but it takes
+    1.5 s on a quiet machine, so it runs under `sample slow` with its own
+    scripts/x25519-test.sh rather than in the gate.
+  - That split was forced by a finding, not a preference. With the chain
+    in plain `sample` the gate failed its mouse checks: the rounds took
+    1812 ticks instead of 151, because `ps` later in the same run showed
+    hog.elf at 90% CPU. The gate's `cook hog.elf | wc.elf &` then `kill %`
+    twice never kills the hog: both kills land on wc.elf, which is blocked
+    in a pipe read and never unwinds to honour the flag, so it stays the
+    most recent process. The gate has been running its back half under a
+    hog for as long as that line has existed. Queued as the next item.
+  - Gate 72; sample is 41 tests, 42 under slow.
 
 v0.25.0 (2026-10-07)  — CHACHA20-POLY1305
   Stage S3. The cipher SSH will actually run traffic through.

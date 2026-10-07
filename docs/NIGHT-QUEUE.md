@@ -148,11 +148,22 @@ that a megabyte of it passes a simple monobit and runs test.
 RFC 8439 vectors, including the AEAD construction (section 2.8.2), because
 SSH's chacha20-poly1305@openssh.com uses it in a particular way.
 
-### S4. Curve25519
+### S4. Curve25519  — DONE v0.26.0
 RFC 7748 vectors: the two scalar-multiplication cases and the iterated one
 (1, 1000 iterations; the million is optional). Needs 255-bit field
 arithmetic in 32-bit limbs, which is the bulk of the work and where a bug
 hides silently - the iterated vector is what catches it.
+
+### S4b. kill cannot reach a process blocked in a pipe read (found v0.26.0; do BEFORE S5)
+`cook hog.elf | wc.elf &` then `kill %`: the kill flags wc.elf, which is
+blocked in `vfs_read` on the pipe and never returns to the point that checks
+the flag, so it neither dies nor stops being the "most recent" process. The
+hog is never targeted and runs at 90% for the rest of the gate, which is why
+the x25519 chain measured 12x slower there and may be the real cause of the
+flaky job-control check (queue item 1). Fix: a kill must wake a blocked
+reader (and writer) so the unwind runs; `kill %` on a pipeline should take
+the whole pipeline. Gate check: after the two kills, `ps` must show no
+hog.elf, and the smoke run's back half should get faster.
 
 ### S5. Ed25519
 RFC 8032 vectors, for the host key. Shares the field arithmetic with S4.

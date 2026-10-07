@@ -1804,9 +1804,11 @@ static void cmd_skewer(void) {
          x, y, b, moves, resyncs);
 }
 
-/* sample - taste the soup: run the in-kernel subsystem checks. */
-static void cmd_sample(void) {
-    int failed = selftest_run();
+/* sample - taste the soup: run the in-kernel subsystem checks. `sample slow`
+ * adds the ones that take seconds, which the gate leaves to their own script. */
+static void cmd_sample(const char *args) {
+    while (*args == ' ') args++;
+    int failed = selftest_run(str_eq(args, "slow"));
     if (failed) {
         vga_set_color(VGA_LIGHT_RED, VGA_BLACK);
         vga_puts("  something is off in the kitchen.\n");
@@ -3442,7 +3444,7 @@ static void dispatch(const char *buf) {
     else if (str_eq(p, "ps"))          cmd_ps();
     else if (str_eq(p, "orders"))      cmd_orders();
     else if (str_eq(p, "scraps"))      cmd_scraps();
-    else if (str_eq(p, "sample"))      cmd_sample();
+    else if (str_startswith(p, "sample")) cmd_sample(p + 6);
     else if (str_eq(p, "skewer"))      cmd_skewer();
     else if (str_eq(p, "larder"))      cmd_larder();
     else if (str_startswith(p, "whistle")) cmd_whistle(p + 7);
