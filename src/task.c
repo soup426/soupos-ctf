@@ -426,7 +426,8 @@ void task_block_on(wait_queue_t *wq) {
         tail->wq_next = current;
     }
 
-    current->state = TASK_BLOCKED;
+    current->state      = TASK_BLOCKED;
+    current->blocked_on = wq;
 
     /* Yield until someone calls task_wake / task_wake_one for us. */
     while (current->state == TASK_BLOCKED) {
@@ -434,6 +435,21 @@ void task_block_on(wait_queue_t *wq) {
         if (current->state == TASK_BLOCKED)
             __asm__ volatile ("hlt");
     }
+    current->blocked_on = 0;
+}
+
+void task_unblock(task_t *t) {
+    if (!t || t->state != TASK_BLOCKED || !t->blocked_on) return;
+    wait_queue_t *wq = t->blocked_on;
+    if (wq->head == t) {
+        wq->head = t->wq_next;
+    } else {
+        for (task_t *q = wq->head; q; q = q->wq_next)
+            if (q->wq_next == t) { q->wq_next = t->wq_next; break; }
+    }
+    t->wq_next    = 0;
+    t->blocked_on = 0;
+    t->state      = TASK_READY;
 }
 
 /* Wake ALL tasks on the queue. */

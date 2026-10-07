@@ -130,8 +130,14 @@ user/%.elf: user/%.c user/ulib.c user/ulib.h user/user.ld src/syscall_nr.h
 # both versions agree. Keeping .build-config a normal prerequisite (rather than
 # order-only) is deliberate: order-only prerequisites do not trigger a rebuild
 # when they change, which is the entire point of the config stamp.
+# -MMD writes a .d file of the headers each object actually included, and the
+# -include below reads them back, so a change to a header rebuilds everything
+# that uses it. Without this, editing a struct in task.h recompiled task.c
+# alone and left every other object with the old layout: the kernel booted,
+# ran, and hung the moment a process trapped. That cost an hour in v0.27.0.
 $(OBJ_C): src/%.o: src/%.c .build-config
-	$(CC) $(CFLAGS) -c $< -o $@
+	$(CC) $(CFLAGS) -MMD -MP -c $< -o $@
+-include $(OBJ_C:.o=.d)
 
 # The boot logo. assets/logo.txt is the source of truth; src/logo.h is
 # generated from it and COMMITTED, so a build without Python still works. This
@@ -332,7 +338,7 @@ run-tcp: iso $(DISK)
 	    -display none -serial tcp:127.0.0.1:$(CONSOLE_PORT),server
 
 clean:
-	rm -f src/*.o $(TARGET) $(ISO) iso/boot/kernel.elf user/*.elf .build-config
+	rm -f src/*.o src/*.d $(TARGET) $(ISO) iso/boot/kernel.elf user/*.elf .build-config
 
 # Also removes the disk image (user data)
 distclean: clean

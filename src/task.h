@@ -24,6 +24,7 @@ typedef struct task {
     task_state_t  state;
     struct task  *next;          /* intrusive circular ready list        */
     struct task  *wq_next;       /* linkage on a wait_queue_t (or NULL)  */
+    struct wait_queue *blocked_on; /* the queue we are parked on, or NULL */
     uint32_t      wake_tick;     /* for task_sleep: PIT tick to wake at  */
     void        (*entry)(void *);/* first-run entry point (via trampoline) */
     void         *arg;           /* argument passed to entry             */
@@ -152,3 +153,8 @@ void     mutex_unlock(mutex_t *m);
 void     task_block_on(wait_queue_t *wq);
 void     task_wake(wait_queue_t *wq);
 void     task_wake_one(wait_queue_t *wq);
+/* Pull one task off whatever queue it is blocked on and make it ready. For a
+ * kill: a process parked in a pipe read never reaches the point that honours
+ * the flag unless something wakes it. Every block site loops and re-checks
+ * its condition, so an early wake is always safe. */
+void     task_unblock(task_t *t);

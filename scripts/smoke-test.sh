@@ -414,6 +414,14 @@ check "the connection closed gracefully"  '\[tcp\] closed cleanly'
 # pipe ring across its wrap, a known-answer checksum, a filesystem round trip
 # and the hand-written string routines. One line, so the count can grow without
 # touching the gate.
+# `kill %` on a backgrounded pipeline. The flag lands on the newest process,
+# wc.elf, which is blocked in a pipe read; it must be woken to die, or it stays
+# the newest process and the second kill hits it again while hog.elf runs on
+# at 90% for the rest of this run (which is exactly what happened, unnoticed,
+# until the x25519 chain measured 12x slow here).
+check "killing a reader blocked on a pipe works" '/wc.elf exited with code -137'
+check "the second kill then reaches the hog" 'killing process [0-9]+ \(/hog.elf\)'
+
 check "in-kernel self-test passes" '\[sample\] [0-9]+ tests, 0 failed'
 
 # The mouse, driven through the QEMU monitor rather than by hand. The pointer

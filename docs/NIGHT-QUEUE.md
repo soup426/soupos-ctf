@@ -154,7 +154,7 @@ RFC 7748 vectors: the two scalar-multiplication cases and the iterated one
 arithmetic in 32-bit limbs, which is the bulk of the work and where a bug
 hides silently - the iterated vector is what catches it.
 
-### S4b. kill cannot reach a process blocked in a pipe read (found v0.26.0; do BEFORE S5)
+### S4b. kill cannot reach a process blocked in a pipe read  — DONE v0.27.0 (gate 74; Makefile header deps added)
 `cook hog.elf | wc.elf &` then `kill %`: the kill flags wc.elf, which is
 blocked in `vfs_read` on the pipe and never returns to the point that checks
 the flag, so it neither dies nor stops being the "most recent" process. The

@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.26.0
+Current version: v0.27.0
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,35 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.27.0 (2026-10-07)  — KILL REACHES A PROCESS BLOCKED IN THE KERNEL
+  The hog the gate never killed (found in v0.26.0), fixed at the root.
+  - proc_kill set the flag and relied on the process reaching a safe point
+    to notice. A process blocked in a pipe read never does: it sits on the
+    pipe's wait queue until its peer writes, and if the peer is the thing
+    you are trying to get rid of, that is never. So `kill %` on
+    `hog.elf | wc.elf &` flagged wc, wc stayed parked AND stayed the newest
+    process, the second `kill %` flagged it again, and hog ran on at 90%.
+  - Now a task records which queue it is parked on (task_t.blocked_on),
+    and proc_kill pulls a running-but-blocked target off it with
+    task_unblock. Every block site in the kernel loops and re-checks its
+    condition, so an early wake is safe at all of them; the pipe loops
+    already check the kill flag and return, and the syscall exit does the
+    teardown. Reproduced before, verified after: wc dies on the first
+    kill, the second reaches the hog, `ps` shows neither.
+  - Two new gate checks assert exactly that. The gate's back half no
+    longer runs under a hog, which is also the likeliest cause of the
+    flaky job-control check (queue item 1); watch it.
+  - A DETOUR WORTH RECORDING: the first build of this fix hung the shell
+    the moment a process trapped, and so did a build with only the new
+    field and no logic. The kernel stacks were at the same addresses as
+    before, which ruled out heap layout and pointed at the build: the
+    Makefile had no header dependencies, so editing task.h recompiled
+    task.c alone and left twenty-two other objects with the old struct
+    layout. -MMD/-MP with -include fixes that; touching task.h now
+    rebuilds 23 objects. The lesson, for the next time an unrelated-
+    looking change "breaks" the kernel: make clean first.
+  - Gate 74.
 
 v0.26.0 (2026-10-07)  — X25519
   Stage S4. The key exchange, and the bulk of the arithmetic.

@@ -270,6 +270,15 @@ int proc_kill(uint32_t pid) {
         p->state = PROC_RUNNING;
         task_wake(&p->cont_wq);
         preempt_enable();
+    } else if (p->task) {
+        /* A running process blocked in the kernel - a pipe read with nothing
+         * to read, say - is just as parked, and would stay there as long as
+         * its peer did. The gate's `kill %` on a pipeline hit this: the flag
+         * went to the reader, the reader never woke, and the hog on the other
+         * end kept 90% of the machine for the rest of the run. */
+        preempt_disable();
+        task_unblock(p->task);
+        preempt_enable();
     }
     klog("[proc %u] kill flagged\n", pid);
     return 0;

@@ -621,6 +621,15 @@ suspecting the directory parser.
 
 Writing long names is not implemented: a new file still gets a mangled 8.3 name.
 
+## Kill wakes a blocked task (v0.27.0)
+
+`proc_kill` calls `task_unblock` on a target parked on a wait queue
+(`task_t.blocked_on`), so a process blocked in a pipe read dies instead of
+sitting there as the "newest process" forever. Every block site loops and
+re-checks, so early wakes are safe; keep it that way. The Makefile now tracks
+header dependencies (`-MMD`); before that, a header edit left stale objects and
+produced a kernel that hung on the first ring-3 trap.
+
 ## Crypto primitives (v0.23.0 onward)
 
 Each primitive lands with published test vectors in `selftest.c` (expected
