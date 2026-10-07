@@ -37,6 +37,7 @@ typedef struct task {
      * ring 3. task_yield keeps tss.esp0 in step with it. */
     uint32_t      user_resume_esp;
     struct proc  *proc;          /* ring-3 process this task runs, or NULL  */
+    void         *soupyc;        /* soupyc_ctx_t while this task interprets  */
 } task_t;
 
 /* Simple intrusive wait queue - FIFO singly-linked list of blocked tasks.

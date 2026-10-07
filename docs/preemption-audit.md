@@ -39,6 +39,11 @@ yielding, and an interrupt handler could not wait on a lock anyway.
 
 ### Safe today, with the reason and the trigger that would change it
 
+**`soupyc.c`** — FIXED 2026-10-07 in v0.10.1: state now lives in a
+per-invocation context hung off the task, so the trigger described below no
+longer applies and `spawn()` is unblocked. The array pool remains shared, with
+per-context ownership of slots. Original finding follows.
+
 **`soupyc.c`** — 69 file-scope statics and a non-reentrant tree walker, the
 scariest-looking file in the tree. It is reached from exactly two call sites,
 both in `shell.c`, both the `soup` command, both on the shell task. No syscall

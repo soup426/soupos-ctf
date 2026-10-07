@@ -3,7 +3,7 @@
 ## What this is
 
 soupOS is a 32-bit x86 hobby OS written in C and NASM assembly (currently
-**v0.10.0**). It boots via GRUB and runs in protected mode with paging, a
+**v0.10.1**). It boots via GRUB and runs in protected mode with paging, a
 physical/heap allocator, and a cooperative scheduler. On top of that:
 
 - **Filesystem**: FAT16 read/write with subdirectories ("bowls") and a VFS shim
@@ -519,6 +519,26 @@ compiled in (10.0.2.15, gateway 10.0.2.2) rather than discovered by DHCP.
   outliving our close. The gate uses a separate listener port per check.
 - Shell: `faucet`, `plumbing [ip|dhcp]`, `table`, `sip <host> [count]`,
   `sniff <host>`, `reserve <host> <port>`.
+
+## soupyc is reentrant (v0.10.1)
+
+State lives in `soupyc_ctx_t`, one per running script, allocated in
+`soupyc_run` and hung off `task_current()->soupyc`. **The state names are
+accessor macros** (`pool`, `tok`, `src`, ...), each resolving through the
+current task, which is why the interpreter body reads as plain names.
+
+Consequences when editing `soupyc.c`:
+
+- A new piece of interpreter state goes in the context plus a macro beside the
+  others, never a new file-scope static.
+- **A macro name must not collide with any struct member name**, or it expands
+  into the member position and the error points at the `#define`. That is why
+  `sc_state`'s array member is called `arr_slots`.
+- Inside `soupyc_run`, reach state through the macro, not `ctx->member`.
+- `sc_state` stays global because the challenge's stage 4 depends on its
+  layout; a compile-time assertion freezes the two offsets. Each context
+  releases only the array slots it allocated, and there is deliberately no
+  blanket clear at startup.
 
 ## soupyc strings are heap-backed (v0.10.0)
 

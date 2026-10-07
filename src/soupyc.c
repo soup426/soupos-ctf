@@ -60,6 +60,97 @@
 #include "vfs.h"
 #include "heap.h"
 #include "ai.h"
+#include "soupyc_types.h"
+#include "task.h"
+
+/* ============================================================
+ * Per-invocation context
+ * ------------------------------------------------------------
+ * Everything the interpreter mutates used to be a file-scope static, which
+ * made soupyc safe to call from exactly one task - the shell's. The
+ * preemption audit (docs/preemption-audit.md) called that out as the thing
+ * standing between soupyc and a background `spawn`, and this is it: one
+ * context per running script, hung off the task that is running it, so two
+ * interpreters never share a variable table, a node pool or a lexer position.
+ *
+ * The accessor macros below mean the ~1500 lines of interpreter underneath
+ * did not have to change: `pool`, `tok`, `src` and the rest still read as
+ * plain names, and each now resolves through the current task.
+ *
+ * WHAT DELIBERATELY STAYS GLOBAL:
+ *   - sc_state (the array pool). Its layout is load-bearing for the CTF
+ *     challenge, which reaches after_hook by a fixed distance from an array's
+ *     elements, so it cannot move onto the heap. Instead each context records
+ *     which slots it allocated (arr_owned) and releases only those, so two
+ *     scripts can hold arrays at the same time without clearing each other's.
+ *   - rng_state, which is shared entropy and wants to be.
+ * ============================================================ */
+typedef struct soupyc_ctx {
+    /* node pool */
+    node_t   pool[POOL_SIZE];
+    int      pool_used;
+    /* string store (see the ownership note on val_t) */
+    str_blk_t *str_head;
+    uint32_t   str_used;
+    /* symbols */
+    struct { char name[32]; val_t val; } vars[MAX_VARS];
+    int      nvar;
+    func_t   funcs[MAX_FUNCS];
+    int      nfunc;
+    /* call stack */
+    int      scope_stack[MAX_CALL_DEPTH];
+    int      call_depth;
+    val_t    call_args[MAX_CALL_DEPTH][MAX_PARAMS];
+    /* control flow and errors */
+    int      err_flag;
+    char     err_msg[64];
+    int      break_flag;
+    int      return_flag;
+    val_t    return_val;
+    int      g_err_line;
+    int      err_line;
+    /* lexer */
+    const char *src;
+    int      src_pos;
+    int      cur_line;
+    int      inc_depth;
+    tok_t    tok;
+    /* open file handles, closed when the script ends */
+    vfs_node_t *sc_files[MAX_SC_FILES];
+    /* which slots of the global array pool belong to this script */
+    uint32_t arr_owned;
+} soupyc_ctx_t;
+
+static inline soupyc_ctx_t *cur_ctx(void) {
+    return (soupyc_ctx_t *)task_current()->soupyc;
+}
+
+#define pool         (cur_ctx()->pool)
+#define pool_used    (cur_ctx()->pool_used)
+#define str_head     (cur_ctx()->str_head)
+#define str_used     (cur_ctx()->str_used)
+#define vars         (cur_ctx()->vars)
+#define nvar         (cur_ctx()->nvar)
+#define funcs        (cur_ctx()->funcs)
+#define nfunc        (cur_ctx()->nfunc)
+#define scope_stack  (cur_ctx()->scope_stack)
+#define call_depth   (cur_ctx()->call_depth)
+#define call_args    (cur_ctx()->call_args)
+#define err_flag     (cur_ctx()->err_flag)
+#define err_msg      (cur_ctx()->err_msg)
+#define break_flag   (cur_ctx()->break_flag)
+#define return_flag  (cur_ctx()->return_flag)
+#define return_val   (cur_ctx()->return_val)
+#define g_err_line   (cur_ctx()->g_err_line)
+#define err_line     (cur_ctx()->err_line)
+#define src          (cur_ctx()->src)
+#define src_pos      (cur_ctx()->src_pos)
+#define cur_line     (cur_ctx()->cur_line)
+#define inc_depth    (cur_ctx()->inc_depth)
+#define tok          (cur_ctx()->tok)
+#define sc_files     (cur_ctx()->sc_files)
+#define arr_owned    (cur_ctx()->arr_owned)
+
 
 /* ============================================================
  * Tokens
@@ -107,24 +198,6 @@ enum {
  * ============================================================ */
 /* Identifier and token length. This is NOT a limit on string values any
  * more: those are heap-backed (see val_t). */
-#define SVAL_LEN   48
-#define POOL_SIZE 512
-
-typedef struct node {
-    int   type, op, ival;
-    int   line;          /* source line where this node began (for errors) */
-    char  sval[SVAL_LEN];       /* identifier / variable / function name */
-    const char *lit;            /* N_STR: interned literal, any length */
-    uint32_t    litlen;
-    struct node *next;   /* next stmt in a block / next arg in a call */
-    struct node *left;   /* binop LHS / if–cond / while–cond / beep freq */
-    struct node *right;  /* binop RHS / beep ms */
-    struct node *body;   /* if then-block / while body / pour/return/unary expr */
-    struct node *else_;  /* if else-block */
-} node_t;
-
-static node_t pool[POOL_SIZE];
-static int    pool_used;
 
 static node_t *new_node(int type);   /* forward */
 
@@ -153,13 +226,9 @@ static node_t *new_node(int type);   /* forward */
  * kernel heap that Doom's zone allocator needs. Literals are interned once at
  * parse time and referenced, not copied, so a loop over a constant costs
  * nothing. */
-typedef struct { int type; int ival; const char *sval; uint32_t slen; } val_t;
 
 #define STR_BUDGET (2u * 1024u * 1024u)
 
-typedef struct str_blk { struct str_blk *next; char data[]; } str_blk_t;
-static str_blk_t *str_head;
-static uint32_t   str_used;
 static const char str_empty[] = "";
 
 static void set_err(const char *m);     /* forward */
@@ -207,14 +276,6 @@ static val_t mksval(const char *s) { return mksvaln(s, (uint32_t)strlen(s)); }
  * pool is fixed and reset between script runs; arrays are never
  * freed mid-run, which is fine for soupyc's bounded programs.
  * ============================================================ */
-#define MAX_ARRAYS 24
-#define ARR_CAP    48          /* elements per array */
-
-typedef struct {
-    int   used;
-    int   len;
-    val_t elems[ARR_CAP];
-} arr_t;
 
 /* Interpreter state that sits immediately below the array pool.
  *
@@ -225,19 +286,28 @@ typedef struct {
  *
  * guard exists so a val_t written just below the pool lands its `type` field
  * here and its `ival` field exactly on after_hook. */
-static struct {
+static struct sc_state_s {
     uint32_t  guard;                /* +0   */
     void    (*after_hook)(void);    /* +4   */
     uint8_t   pad[40];              /* +8   */
-    arr_t     pool[MAX_ARRAYS];     /* +48  */
+    arr_t     arr_slots[MAX_ARRAYS];/* +48  */
 } sc_state;
 
-#define arrays sc_state.pool
+/* Stage 4 of the challenge reaches after_hook from an array's elements by a
+ * fixed distance. Freeze the two offsets that distance is made of, so an edit
+ * to this struct fails to build instead of quietly breaking the challenge.
+ * (A negative array size rather than _Static_assert: this is gnu99.) */
+typedef char sc_state_layout_is_frozen[
+    (__builtin_offsetof(struct sc_state_s, after_hook) == 4 &&
+     __builtin_offsetof(struct sc_state_s, arr_slots)  == 48) ? 1 : -1];
+
+#define arrays sc_state.arr_slots
 
 /* Reserve an array slot. Returns a handle, or -1 if the pool is full. */
 static int arr_alloc(void) {
     for (int i = 0; i < MAX_ARRAYS; i++) {
         if (!arrays[i].used) {
+            arr_owned |= (1u << i);   /* released when THIS script ends */
             arrays[i].used = 1;
             arrays[i].len  = 0;
             return i;
@@ -254,10 +324,6 @@ static int arr_valid(int h) {
 /* ============================================================
  * Symbol table
  * ============================================================ */
-#define MAX_VARS 64
-
-static struct { char name[32]; val_t val; } vars[MAX_VARS];
-static int nvar;
 
 /* Search backwards - most recent binding wins (inner scope first) */
 static val_t *var_find(const char *n) {
@@ -285,44 +351,21 @@ static int var_set(const char *n, val_t v) {
 /* ============================================================
  * Function table
  * ============================================================ */
-#define MAX_FUNCS   16
-#define MAX_PARAMS   8
-
-typedef struct {
-    char    name[32];
-    char    params[MAX_PARAMS][32];
-    int     nparam;
-    node_t *body;
-} func_t;
-
-static func_t funcs[MAX_FUNCS];
-static int    nfunc;
 
 /* ============================================================
  * Call stack (for scope restoration and arg buffering)
  * ============================================================ */
-#define MAX_CALL_DEPTH 16
-static int   scope_stack[MAX_CALL_DEPTH];
-static int   call_depth;
 /* Pre-allocated argument slots - one row per call depth level.
  * Keeping these static removes ~448 bytes from every eval_node() stack frame,
  * which is the main cause of stack overflow during deep recursion. */
-static val_t call_args[MAX_CALL_DEPTH][MAX_PARAMS];
 
 /* ============================================================
  * Runtime state
  * ============================================================ */
-static int   err_flag;
-static char  err_msg[64];
-static int   break_flag;
-static int   return_flag;
-static val_t return_val;
 
 /* Best-known source line for the next error. The lexer keeps it pointed at
  * the current token during parsing; eval_node points it at the running node
  * during execution. set_err() snapshots it into err_line. */
-static int  g_err_line;
-static int  err_line;
 
 static void set_err(const char *msg) {
     if (!err_flag) {
@@ -336,21 +379,9 @@ static void set_err(const char *msg) {
 /* ============================================================
  * Lexer
  * ============================================================ */
-static const char *src;
-static int         src_pos;
-static int         cur_line;
 
 /* include nesting guard - bounds recursion and the kmalloc'd buffer stack */
-#define MAX_INCLUDE_DEPTH 4
-static int inc_depth;
 
-typedef struct {
-    int type, ival, line;
-    char sval[SVAL_LEN];        /* identifiers and keywords */
-    const char *str;            /* TK_STR: interned literal, any length */
-    uint32_t    slen;
-} tok_t;
-static tok_t tok;
 
 static int is_digit(char c) { return c>='0' && c<='9'; }
 static int is_alpha(char c) { return (c>='a'&&c<='z')||(c>='A'&&c<='Z')||c=='_'; }
@@ -1292,8 +1323,6 @@ static const char *val_str(const val_t *v, char *scratch, int cap) {
 /* ---- file I/O handle table (soupyc handle int -> VFS node) ----
  * open() returns a small integer handle; the table is closed and
  * cleared between script runs so a script can't leak VFS nodes. */
-#define MAX_SC_FILES 8
-static vfs_node_t *sc_files[MAX_SC_FILES];
 
 static void sc_files_reset(void) {
     for (int i = 0; i < MAX_SC_FILES; i++) {
@@ -1598,7 +1627,7 @@ static int call_builtin(node_t *n, val_t *out) {
  * Public API
  * ============================================================ */
 
-int soupyc_run(const char *source) {
+static int soupyc_exec(const char *source) {
     /* Reset all state */
     pool_used   = 0;
     nvar        = 0;
@@ -1617,8 +1646,10 @@ int soupyc_run(const char *source) {
      * the same breath. */
     str_store_reset();
     return_val  = mkival(0);
-    for (int i = 0; i < MAX_ARRAYS; i++) arrays[i].used = 0;
-    sc_files_reset();   /* close any files a previous run leaked */
+    /* No blanket clear of the array pool here. The pool is shared (its layout
+     * is fixed for the challenge), so wiping it would pull the rug from under
+     * a script running on another task. Each script releases its own slots
+     * when it finishes - see soupyc_run below. */
 
     src      = source;
     src_pos  = 0;
@@ -1660,4 +1691,42 @@ int soupyc_run(const char *source) {
 #endif
 
     return 0;
+}
+
+/* ============================================================
+ * Entry point
+ * ------------------------------------------------------------
+ * One context per running script, allocated here and hung off the task that
+ * is interpreting, which is what lets two scripts run at once. The previous
+ * value is saved and restored so a nested call (a script run from inside
+ * another, should that ever exist) does not lose its parent's state.
+ * ============================================================ */
+int soupyc_run(const char *source) {
+    task_t *t = task_current();
+    soupyc_ctx_t *prev = (soupyc_ctx_t *)t->soupyc;
+
+    soupyc_ctx_t *ctx = (soupyc_ctx_t *)kmalloc(sizeof *ctx);
+    if (!ctx) {
+        vga_set_color(VGA_LIGHT_RED, VGA_BLACK);
+        vga_puts("soupyc: not enough memory for an interpreter context\n");
+        vga_set_color(VGA_LIGHT_GREY, VGA_BLACK);
+        return -1;
+    }
+    memset(ctx, 0, sizeof *ctx);
+    t->soupyc = ctx;
+
+    int rc = soupyc_exec(source);
+
+    /* Everything this script owns goes back now: its strings, its open files,
+     * and only the array slots it allocated itself. */
+    str_store_reset();
+    sc_files_reset();
+    /* Through the accessor, not ctx->, because the names below are macros
+     * that resolve through the current task - which is still this context. */
+    for (int i = 0; i < MAX_ARRAYS; i++)
+        if (arr_owned & (1u << i)) arrays[i].used = 0;
+
+    t->soupyc = prev;
+    kfree(ctx);
+    return rc;
 }
