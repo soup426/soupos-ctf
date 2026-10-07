@@ -188,7 +188,7 @@ eval_block and restore it on the way out, which is a few lines, but it changes
 the language's scoping rules, so it wants its own commit and a test that a
 variable declared in a loop is not visible after it.
 
-## 8. Sound
+## 8. Sound — milestone 1 DONE (v0.11.0); Doom effects next
 
 The PCI groundwork from the network card (BARs, bus mastering, interrupt
 lines) is exactly what a sound card needs, so this is cheaper now than it has
@@ -201,6 +201,12 @@ ever been.
 - First milestone is a sine wave at a known frequency, verified by dumping the
   samples QEMU writes (`-audiodev wav`) and checking the wave's period on the
   host rather than by ear.
+**2026-10-07, milestone 1: done, v0.11.0, 64 checks green.** The driver, the
+`whistle` command, and a host-side frequency check in the gate. The queue's
+insistence on measuring rather than listening paid for itself immediately: a
+phase-step error of 256x played a 1.7 Hz wave at full amplitude, which is
+silence to the ear and obvious in the capture. Now 440.00 Hz over 172 periods.
+
 - Second milestone is the obvious one: Doom's sound effects. The WAD's `DS*`
   lumps are 11025 Hz unsigned 8-bit with a short header, which needs resampling
   to whatever rate the card is set to. Mixing more than one effect at a time is

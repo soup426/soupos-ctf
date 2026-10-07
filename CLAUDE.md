@@ -3,7 +3,7 @@
 ## What this is
 
 soupOS is a 32-bit x86 hobby OS written in C and NASM assembly (currently
-**v0.10.5**). It boots via GRUB and runs in protected mode with paging, a
+**v0.11.0**). It boots via GRUB and runs in protected mode with paging, a
 physical/heap allocator, and a cooperative scheduler. On top of that:
 
 - **Filesystem**: FAT16 read/write with subdirectories ("bowls") and a VFS shim
@@ -527,6 +527,24 @@ VGA cells doubles the work. `vga.c`'s `scroll()` copies 32-bit words (two cells
 per store) and is about twice as fast as the original cell-at-a-time loop;
 `memmove` measured 47% slower than that original. `sample` guards the row
 movement. The same caution applies anywhere a wide copy looks tempting.
+
+## AC97 sound (`src/ac97.c`, v0.11.0)
+
+`whistle <hz> <ms>` plays a tone; `beep` is still the PC speaker. The card
+walks a **buffer descriptor list** itself, unlike the RTL8139's one-buffer-per-
+packet. Three things to keep in mind:
+
+- **A descriptor's length is a count of SAMPLES**, not bytes and not frames.
+  Wrong here plays the right sound at the wrong speed.
+- **Volume is attenuation**: 0 is loudest, 0x8000 is mute.
+- The BDL and sample buffers are read by the card, so they need physical
+  addresses. Static storage works because the kernel is identity-mapped, the
+  same reason the RTL8139 driver uses static buffers.
+
+**Verify audio from the captured samples, never by ear.** The gate runs QEMU
+with `-audiodev wav` and measures the tone's frequency on the host. A phase-step
+error of 256x produced a 1.7 Hz wave at full amplitude, which is inaudible and
+would have passed any listening test.
 
 ## soupyc loop scoping (fixed v0.10.5)
 

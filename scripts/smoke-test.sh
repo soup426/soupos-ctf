@@ -15,12 +15,13 @@ cd "$(dirname "$0")/.."
 LISTENER_PIDS=""
 LOG=$(mktemp /tmp/soupos-smoke.XXXXXX.log)
 MON=$(mktemp -u /tmp/soupos-smoke.XXXXXX.sock)
+WAV=$(mktemp -u /tmp/soupos-smoke.XXXXXX.wav)
 QEMU_PID=""
 
 cleanup() {
     [ -n "$LISTENER_PIDS" ] && kill $LISTENER_PIDS 2>/dev/null
     [ -n "$QEMU_PID" ] && kill "$QEMU_PID" 2>/dev/null
-    rm -f "$MON"
+    rm -f "$MON" "$WAV"
     if [ "${KEEP:-0}" = "1" ]; then echo "serial log kept at $LOG"; else rm -f "$LOG"; fi
 }
 trap cleanup EXIT
@@ -73,6 +74,7 @@ qemu-system-i386 \
     -cdrom soupOS.iso -boot d \
     -m 128M -no-reboot -no-shutdown \
     -netdev user,id=n0 -device rtl8139,netdev=n0 \
+    -audiodev wav,id=a0,path="$WAV" -device AC97,audiodev=a0 \
     -display none \
     -serial "file:$LOG" \
     -monitor "unix:$MON,server,nowait" >/dev/null 2>&1 &
@@ -128,7 +130,8 @@ python3 scripts/qemu_keys.py "$MON" \
     "soup SCOPE.SC" "WAIT:4" \
     "soup RUNAWAY.SC" "WAIT:22" "pwd" "WAIT:2" \
     "soup SPAWN.SC" "WAIT:1" "ps" "WAIT:5" \
-    "larder" "WAIT:2" >/dev/null || {
+    "larder" "WAIT:2" \
+    "whistle 440 300" "WAIT:4" >/dev/null || {
         echo "FAIL: could not drive the QEMU monitor"; exit 1; }
 
 fail=0
@@ -426,6 +429,38 @@ check "soupyc can delete a file" 'removed 1'
 # MAX_VARS, which is 64. 200 iterations, and the exact sum, so a scoping change
 # that drops the wrong bindings shows up as a wrong total rather than a crash.
 check "a let inside a loop survives 200 passes" 'SCOPE total 39800'
+
+check "the sound card accepted a tone" '\[ac97\] tone 440 Hz'
+
+# And the tone is checked on the HOST, from the samples QEMU captured, rather
+# than by ear: this is the only check here that proves the DMA, the descriptor
+# list, the mixer and the oscillator all did the right thing together. The
+# header sizes are not patched because QEMU gets killed, so the PCM is read
+# past the fixed 44-byte header directly.
+tone_hz=$(python3 - "$WAV" <<'PYTONE' 2>/dev/null
+import struct, sys
+try:
+    d = open(sys.argv[1], "rb").read()
+    ch = struct.unpack("<H", d[22:24])[0]
+    sr = struct.unpack("<I", d[24:28])[0]
+    pcm = d[44:]
+    s = struct.unpack("<" + "h" * (len(pcm) // 2), pcm[:len(pcm) // 2 * 2])
+    left = s[0::ch]
+    a = next(i for i, v in enumerate(left) if abs(v) > 1000)
+    b = next(i for i in range(len(left) - 1, 0, -1) if abs(left[i]) > 1000)
+    t = left[a:b + 1]
+    xs = [i for i in range(1, len(t)) if t[i - 1] < 0 <= t[i]]
+    print(round(sr / ((xs[-1] - xs[0]) / (len(xs) - 1))))
+except Exception:
+    print(0)
+PYTONE
+)
+if [ "${tone_hz:-0}" -ge 438 ] && [ "${tone_hz:-0}" -le 442 ]; then
+    echo "  ok    the captured tone measures ${tone_hz} Hz"
+else
+    echo "  FAIL  the captured tone measures ${tone_hz:-0} Hz, expected 440"
+    fail=1
+fi
 
 # vgastress prints whole lines of a single repeated character from two tasks.
 # Any line containing both means vga_puts was interrupted mid-string.

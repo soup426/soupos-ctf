@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.10.5
+Current version: v0.11.0
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,37 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.11.0 (2026-10-07)  — SOUND: AC97, AND A TONE THAT IS MEASURED
+  Night-queue item 8, first milestone. The PCI groundwork from the network card
+  was most of it: find the device, enable bus mastering, read two BARs.
+  - What is different is the shape of the DMA. The RTL8139 takes one buffer per
+    packet; AC97 reads a BUFFER DESCRIPTOR LIST of up to 32 entries, each
+    naming a block of samples, and walks it itself. Hand it the list, say which
+    entry is last, set the run bit.
+  - `whistle <hz> <ms>` plays a sine through it (`beep` remains the PC
+    speaker). Boot reports the card and its rate.
+  - THE BUG THE MEASUREMENT CAUGHT, which is the whole reason the queue said to
+    verify this on the host rather than by ear. The phase accumulator's full
+    32-bit range is one period, so the step is hz * 2^32 / rate; I wrote 2^24.
+    That plays a 1.7 Hz wave: inaudible, full amplitude, and indistinguishable
+    from silence by ear. The capture showed it immediately - a signal with NO
+    zero crossings in 0.39 s and no spectral peak anywhere near 440 Hz. After
+    the fix: 440.00 Hz measured over 172 periods, with 60x the power of its
+    neighbouring bins.
+  - The step is computed as hz * (0xFFFFFFFF / rate) so every operation stays
+    32-bit and the kernel needs no 64-bit division helper.
+  - Volume on AC97 is attenuation, so 0 is loudest and 0x8000 is mute, which
+    reads backwards from every other volume control in existence.
+  - A descriptor's length is a count of SAMPLES, not bytes and not frames.
+    Getting it wrong plays the right sound at the wrong speed, which is easy to
+    mistake for a sample-rate problem.
+  - Gate 62 -> 64 checks: one that the card accepted the tone, and one that
+    runs on the HOST over the samples QEMU captured (-audiodev wav) and asserts
+    438-442 Hz. That second one is the only check here that proves the DMA, the
+    descriptor list, the mixer and the oscillator all worked together.
+  Next in item 8: Doom's DS* lumps (11025 Hz unsigned 8-bit) resampled to the
+  card's rate. Mixing several at once is a milestone after that.
 
 v0.10.5 (2026-10-07)  — A `let` IN A while LOOP STOPS RUNNING OUT
   Found while writing the disk-fill script in v0.10.4, which died at iteration

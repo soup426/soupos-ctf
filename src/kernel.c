@@ -18,6 +18,7 @@
 #include "rtl8139.h"
 #include "net.h"
 #include "mouse.h"
+#include "ac97.h"
 #include "task.h"
 #include "serial.h"
 #include "klog.h"
@@ -169,6 +170,11 @@ void kernel_main(uint32_t mb_magic, uint32_t mb_info) {
         vga_puts("[OK] Mouse         - PS/2 auxiliary device on IRQ 12\n");
     else
         vga_puts("[--] No PS/2 mouse\n");
+
+    if (ac97_init() == 0)
+        vga_printf("[OK] Sound         - AC97 at %u Hz\n", ac97_rate());
+    else
+        vga_puts("[--] No AC97 sound card\n");
 
     if (rtl8139_init() == 0) {
         const uint8_t *m = rtl8139_mac();
