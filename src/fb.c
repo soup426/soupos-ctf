@@ -26,7 +26,10 @@
 #include "fb.h"
 #include "multiboot.h"
 #include "paging.h"
+#include "vga.h"
 #include "klog.h"
+
+static uint16_t text_backing[80 * 25];   /* the cell store on FB boots */
 
 static uint8_t *fb;              /* mapped base            */
 static uint32_t fb_pitch, fb_w, fb_h;
@@ -38,6 +41,18 @@ uint32_t fb_width (void)  { return fb_w; }
 uint32_t fb_height(void)  { return fb_h; }
 uint32_t fb_pitch_bytes(void) { return fb_pitch; }
 uint8_t  fb_bits(void)    { return fb_bpp; }
+
+/* Called FIRST THING in kernel_main, before a single character is printed:
+ * if this boot has a pixel framebuffer, the text window at 0xB8000 is dead,
+ * and every cell written before the switch would vanish. Needs nothing set
+ * up - no paging, no heap - which is the point. */
+void fb_early(uint32_t mb_info_addr) {
+    multiboot_info_t *mb = (multiboot_info_t *)mb_info_addr;
+    if (!(mb->flags & MULTIBOOT_FLAG_FRAMEBUFFER)) return;
+    if (mb->framebuffer_type == MULTIBOOT_FB_EGA) return;
+    for (int i = 0; i < 80 * 25; i++) text_backing[i] = 0x0720;
+    vga_set_backing(text_backing);
+}
 
 int fb_init(uint32_t mb_info_addr) {
     multiboot_info_t *mb = (multiboot_info_t *)mb_info_addr;

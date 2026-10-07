@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.12.0
+Current version: v0.12.1
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,43 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.12.1 (2026-10-07)  — THE FRAMEBUFFER CONSOLE
+  Night-queue item 9 finished: a full 80x25 text console rendered in the
+  classic 8x16 font on the linear framebuffer, and nothing above vga.c knows.
+  - THE DESIGN IS ONE SENTENCE: the 80x25 cell buffer stays the authoritative
+    console, and a task repaints changed cells as glyphs thirty times a
+    second. The shell, the editor, the clock, the whole stack keep writing
+    text cells exactly as before; the renderer just watches. The diff is 2000
+    uint16 compares a frame, which is nothing.
+  - WHAT KILLED THE FIRST VERSION: the legacy window at 0xB8000 is DEAD in a
+    linear mode on QEMU's VGA - writes discarded, reads all-ones. My aliasing
+    test before building had checked that text writes did not corrupt the
+    picture, which proved the window was not aliased into VRAM, and silently
+    did not prove it stored anything. I tested the failure I feared instead of
+    the property I relied on. The heartbeat that settled it was one line: the
+    task cycling happily, painting zero cells, because every read came back
+    0xFFFF and matched the 0xFFFF the shadow was seeded with.
+  - So the cell store is now a POINTER in vga.c: the hardware buffer on a text
+    boot, a RAM array on a framebuffer boot, switched by fb_early() before the
+    first character is printed. The editor and the bgclock, which poked
+    0xB8000 directly, go through vga_cells() now - the only two callers
+    outside vga.c, found by grep rather than assumed.
+  - The font is the classic 8x16 (kbd's default8x16), embedded as a C array:
+    a kernel booted straight into graphics has no text mode to steal the VGA
+    character generator from, so the plane-2 trick vga13h.c uses is not
+    available. Mode 13h commands (doom, vgademo, bounce) decline politely on
+    a framebuffer boot, with the reason printed.
+  - VERIFIED GLYPH-FOR-GLYPH: framebuffer-test.sh logs in through the rendered
+    console, types a command, and finds the typed text in a screendump
+    pixel-identical to the same font rendered on the host - at (344,184),
+    which is exactly cell 19 of row 0. One matcher lesson recorded in the
+    script: anchor the search on the glyphs' mid-height row, because the top
+    row of most letters is blank and an all-black anchor matches the first
+    black run in the image instead of the text.
+  - The scroll self-test runs in both modes again, since the cell store is
+    real memory either way. Gate still 66 on the text image; all four
+    configurations build from clean.
 
 v0.12.0 (2026-10-07)  — A REAL FRAMEBUFFER, STAGE ONE
   Night-queue item 9, the detection-and-drawing half. GRUB hands over a linear

@@ -8,6 +8,10 @@
  * Pitch is bytes per scanline and is NOT width * 4: a row starts at
  * y * pitch. */
 
+/* Call before ANY console output: switches the text cell store to RAM when
+ * this boot has a pixel framebuffer (the 0xB8000 window is dead there). */
+void     fb_early(uint32_t mb_info_addr);
+
 int      fb_init(uint32_t mb_info_addr);
 int      fb_present(void);
 uint32_t fb_width(void);

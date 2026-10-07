@@ -20,6 +20,7 @@
 #include "mouse.h"
 #include "ac97.h"
 #include "fb.h"
+#include "fbcon.h"
 #include "task.h"
 #include "serial.h"
 #include "klog.h"
@@ -48,6 +49,7 @@ static void counter_task(void *arg) {
     klog_puts("\n[boot] counter task exited\n");
 }
 void kernel_main(uint32_t mb_magic, uint32_t mb_info) {
+    fb_early(mb_info);   /* before the first character: see fb.c */
     vga_init();
     serial_init();
     console_init();          /* COM1 console: input + output mirror */
@@ -175,13 +177,7 @@ void kernel_main(uint32_t mb_magic, uint32_t mb_info) {
     if (fb_init(mb_info) == 0) {
         vga_printf("[OK] Framebuffer   - %ux%u at %u bpp\n",
                    fb_width(), fb_height(), fb_bits());
-        /* Proof of life until the glyph blitter lands: three bands and a white
-         * square, at known coordinates so a screendump can be checked. */
-        fb_clear(0x00101828);
-        fb_fill(0,                 0, fb_width() / 3, fb_height(), 0x00C01010);
-        fb_fill(fb_width() / 3,    0, fb_width() / 3, fb_height(), 0x0010C010);
-        fb_fill(2 * fb_width() / 3,0, fb_width() / 3, fb_height(), 0x001010C0);
-        fb_fill(fb_width() / 2 - 64, fb_height() / 2 - 64, 128, 128, 0x00FFFFFF);
+        /* The console (fbcon_start, after task_init) paints from here on. */
     }
 
     if (ac97_init() == 0)
@@ -210,6 +206,9 @@ void kernel_main(uint32_t mb_magic, uint32_t mb_info) {
 
     /* ---- Scheduler bring-up ---- */
     task_init();
+
+    if (fb_present() && fbcon_start() == 0)
+        vga_puts("[OK] Console       - 80x25 on the framebuffer\n");
     klog_puts("[boot] scheduler ok (kernel is task 0)\n");
     vga_printf("[OK] Scheduler ok  - kernel is task %u (%s)\n",
                task_current()->id, task_current()->name);

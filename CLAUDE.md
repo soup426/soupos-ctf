@@ -3,7 +3,7 @@
 ## What this is
 
 soupOS is a 32-bit x86 hobby OS written in C and NASM assembly (currently
-**v0.12.0**). It boots via GRUB and runs in protected mode with paging, a
+**v0.12.1**). It boots via GRUB and runs in protected mode with paging, a
 physical/heap allocator, and a cooperative scheduler. On top of that:
 
 - **Filesystem**: FAT16 read/write with subdirectories ("bowls") and a VFS shim
@@ -527,6 +527,16 @@ VGA cells doubles the work. `vga.c`'s `scroll()` copies 32-bit words (two cells
 per store) and is about twice as fast as the original cell-at-a-time loop;
 `memmove` measured 47% slower than that original. `sample` guards the row
 movement. The same caution applies anywhere a wide copy looks tempting.
+
+## The framebuffer console (`src/fbcon.c`, v0.12.1)
+
+A task diffs the 80x25 cell store against a shadow ~30x/s and repaints changed
+glyphs (embedded 8x16 font, `src/font8x16.h`). **The cell store is a pointer**:
+`vga_cells()` / `vga_set_backing()` in vga.c. On a framebuffer boot the legacy
+0xB8000 window is DEAD (writes discarded, reads all-ones), so `fb_early()`
+switches the store to a RAM array before the first character prints. Anything
+poking cells directly must use `vga_cells()`, never a 0xB8000 literal. Mode 13h
+commands decline on FB boots via `no_mode13h()`.
 
 ## The framebuffer (`src/fb.c`, v0.12.0)
 

@@ -212,7 +212,7 @@ silence to the ear and obvious in the capture. Now 440.00 Hz over 172 periods.
   to whatever rate the card is set to. Mixing more than one effect at a time is
   a third milestone, not part of the second.
 
-## 9. A real framebuffer — stage 1 DONE (v0.12.0); console blitter left
+## 9. A real framebuffer — DONE (v0.12.0 detection, v0.12.1 console)
 
 soupOS is 80x25 text plus 320x200 mode 13h, both of which are as old as the
 hardware they imitate. GRUB can hand us a linear framebuffer at boot through

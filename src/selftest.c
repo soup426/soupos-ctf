@@ -165,9 +165,8 @@ static void test_fat_roundtrip(void) {
 /* ── VGA ──────────────────────────────────────────────────────────────────
  * The scroll is a hand-written word copy over the frame buffer. */
 static void test_vga(void) {
-    /* The scroll works on the text buffer at 0xB8000. On a framebuffer build
-     * there is no text console there, so testing it would be testing nothing. */
-    if (fb_present()) return;
+    /* Runs in both modes now: the cell store is real memory either way (the
+     * hardware buffer on a text boot, the RAM backing on a framebuffer one). */
     check("vga scroll moves 24 rows", vga_scroll_selftest());
 }
 

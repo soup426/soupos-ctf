@@ -14,7 +14,7 @@
 #define VGA_H      25
 #define TEXT_ROWS  24
 #define STATUS_ROW 24
-#define VGA_MEM    ((volatile uint16_t *)0xB8000)
+#define VGA_MEM    (vga_cells())   /* never 0xB8000: dead on FB boots */
 
 #define ATTR(fg, bg) ((uint8_t)(((bg) << 4) | (fg)))
 

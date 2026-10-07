@@ -39,3 +39,9 @@ void vga_fill_row(int row, char c);
 /* Checks that scroll() moves exactly 24 rows and blanks the last one. Saves
  * and restores the real screen; returns 1 on pass. Used by `sample`. */
 int vga_scroll_selftest(void);
+
+/* The 80x25 cell store: the hardware text buffer on an ordinary boot, a RAM
+ * array on a framebuffer boot (where the legacy window is dead). Anything
+ * that pokes cells directly must go through this rather than 0xB8000. */
+uint16_t *vga_cells(void);
+void      vga_set_backing(uint16_t *cells);

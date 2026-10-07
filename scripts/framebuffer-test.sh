@@ -1,13 +1,11 @@
 #!/usr/bin/env bash
-# Does GRUB's linear framebuffer work, and did we draw into it correctly?
+# Boot the framebuffer image, log in through the rendered console, type a
+# command, and verify the glyphs from a screendump - pixel-identically against
+# the same font the kernel embeds.
 #
-# Not part of smoke-test.sh, which boots the TEXT menu entry: the difference
-# between the two is entirely grub.cfg's gfxpayload, so testing the other one
-# means booting a second image. The kernel is identical in both.
-#
-# Checks the pattern kernel_main draws at known coordinates, from a screendump,
-# so a wrong pitch (which shears the picture down the screen) or a wrong colour
-# order fails here rather than looking plausible.
+# Not part of smoke-test.sh, which boots the text image: the two differ only in
+# the multiboot header's video request (make FB=1), which OVERRIDES grub.cfg's
+# gfxpayload, so testing the framebuffer means booting a second image.
 set -uo pipefail
 cd "$(dirname "$0")/.."
 
@@ -26,7 +24,12 @@ qemu-system-i386 -accel kvm -cpu host \
     -m 128M -no-reboot -no-shutdown -display none \
     -serial "file:$LOG" -monitor "unix:$MON,server,nowait" >/dev/null 2>&1 &
 PID=$!
-sleep 6
+sleep 5
+
+python3 scripts/qemu_keys.py "$MON" \
+    "headchef" "rosemary" "WAIT:1" \
+    "wash" "WAIT:1" "hash FBHELLO" "WAIT:2" >/dev/null 2>&1 \
+    || { echo "  FAIL  could not drive QEMU"; exit 1; }
 
 python3 - "$MON" "$SHOT" >/dev/null 2>&1 <<'PYQ'
 import socket, sys, time
@@ -34,30 +37,55 @@ s = socket.socket(socket.AF_UNIX); s.connect(sys.argv[1]); time.sleep(0.4); s.re
 s.sendall(("screendump " + sys.argv[2] + "\n").encode()); time.sleep(1.5)
 PYQ
 
-grep -E "^\[fb\]" "$LOG" | sed 's/^/  /'
+grep -E "^\[fb\]|^\[fbcon\]" "$LOG" | sed 's/^/  /'
 
 python3 - "$SHOT" <<'PYCHECK'
-import sys
+import gzip, struct, sys
 try:
+    d = gzip.open("/usr/share/kbd/consolefonts/default8x16.psfu.gz", "rb").read()
+    hdr = struct.unpack("<8I", d[:32]); glyphs = d[hdr[2]:]
+    def glyph(ch): return glyphs[ord(ch)*16:(ord(ch)+1)*16]
+
     f = open(sys.argv[1], "rb")
     assert f.readline().strip() == b"P6"
     line = f.readline()
     while line.startswith(b"#"): line = f.readline()
     w, h = map(int, line.split()); f.readline()
-    d = f.read()
-    def px(x, y):
-        o = (y * w + x) * 3
-        return tuple(d[o:o + 3])
-    want = [("left band", w // 6, h // 4, (0xC0, 0x10, 0x10)),
-            ("middle band", w // 2, h // 8, (0x10, 0xC0, 0x10)),
-            ("right band", 5 * w // 6, h // 4, (0x10, 0x10, 0xC0)),
-            ("centre square", w // 2, h // 2, (0xFF, 0xFF, 0xFF))]
-    bad = [n for n, x, y, c in want if any(abs(a - b) > 2 for a, b in zip(px(x, y), c))]
-    if bad:
-        print("  FAIL  wrong pixels: " + ", ".join(bad)); sys.exit(1)
-    print(f"  ok    {w}x{h} framebuffer drew the expected pattern")
+    img = f.read()
+
+    FG, BG = (0xAA, 0xAA, 0xAA), (0x00, 0x00, 0x00)
+    text = "hash FBHELLO"
+    def strip_row(y):
+        out = bytearray()
+        for ch in text:
+            bits = glyph(ch)[y]
+            for x in range(8):
+                out += bytes(FG if bits & (0x80 >> x) else BG)
+        return bytes(out)
+
+    # Anchor on the glyphs' MID-HEIGHT row: every letter has ink there. The
+    # top row of most letters is blank, and anchoring on an all-black row
+    # matches the first black run in the image instead of the text.
+    ANCHOR = 8
+    rowa = strip_row(ANCHOR)
+    rows = [strip_row(r) for r in range(16)]
+    found = None
+    for y in range(ANCHOR, h - 16 + ANCHOR):
+        base = (y * w) * 3
+        i = img.find(rowa, base, base + w * 3)
+        while i >= 0 and not found:
+            x = (i - base) // 3
+            y0 = y - ANCHOR
+            if all(img[((y0+r)*w + x)*3 : ((y0+r)*w + x)*3 + len(rowa)] == rows[r]
+                   for r in range(16)):
+                found = (x, y0)
+            i = img.find(rowa, i + 3, base + w * 3)
+        if found: break
+    if not found:
+        print("  FAIL  the typed command's glyphs are not on screen"); sys.exit(1)
+    print(f"  ok    typed text rendered pixel-exactly at {found}")
 except SystemExit:
     raise
 except Exception as e:
-    print(f"  FAIL  could not read the screendump: {e}"); sys.exit(1)
+    print(f"  FAIL  could not check the screendump: {e}"); sys.exit(1)
 PYCHECK

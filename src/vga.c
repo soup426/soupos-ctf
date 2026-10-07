@@ -17,7 +17,19 @@
 
 #define VGA_WIDTH   80
 #define VGA_HEIGHT  25
-#define VGA_BUFFER  ((uint16_t *)0xB8000)
+/* The cell store. On an ordinary boot this is the text-mode hardware at
+ * 0xB8000. On a framebuffer boot that window is DEAD - reads come back as all
+ * ones and writes are discarded, because the card is scanning out the linear
+ * framebuffer and does not back the legacy window with memory - so the store
+ * is switched to a RAM array before the first character is printed, and the
+ * framebuffer console renders from there. Everything in this file goes
+ * through the pointer; so do the editor and the stress test, via vga_cells().
+ */
+static uint16_t *vga_buffer = (uint16_t *)0xB8000;
+#define VGA_BUFFER  vga_buffer
+
+uint16_t *vga_cells(void) { return vga_buffer; }
+void vga_set_backing(uint16_t *cells) { vga_buffer = cells; }
 
 /* I/O port helpers */
 static inline void outb(uint16_t port, uint8_t val) {
