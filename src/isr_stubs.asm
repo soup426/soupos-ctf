@@ -8,9 +8,21 @@ extern syscall_dispatch
 ; Common ISR stub: state is already on stack (int_no + err_code pushed by macro)
 isr_common:
     pusha                   ; push eax, ecx, edx, ebx, esp, ebp, esi, edi
+    mov ax, ds              ; save the interrupted context's data selector
+    push eax
+    mov ax, 0x10            ; kernel data segment for the handler
+    mov ds, ax
+    mov es, ax
+    mov fs, ax
+    mov gs, ax
     push esp                ; pass registers_t * as argument (cdecl)
     call isr_handler
     add esp, 4              ; clean up argument
+    pop eax                 ; restore the caller's data selector
+    mov ds, ax
+    mov es, ax
+    mov fs, ax
+    mov gs, ax
     popa
     add esp, 8              ; pop int_no and err_code
     iret
@@ -18,9 +30,21 @@ isr_common:
 ; Common IRQ stub
 irq_common:
     pusha
+    mov ax, ds              ; save the interrupted context's data selector
+    push eax
+    mov ax, 0x10            ; kernel data segment for the handler
+    mov ds, ax
+    mov es, ax
+    mov fs, ax
+    mov gs, ax
     push esp                ; pass registers_t * as argument (cdecl)
     call irq_handler
     add esp, 4              ; clean up argument
+    pop eax                 ; restore the caller's data selector
+    mov ds, ax
+    mov es, ax
+    mov fs, ax
+    mov gs, ax
     popa
     add esp, 8
     iret
@@ -34,9 +58,21 @@ isr128:
     push dword 0
     push dword 128
     pusha
+    mov ax, ds              ; save the interrupted context's data selector
+    push eax
+    mov ax, 0x10            ; kernel data segment for the handler
+    mov ds, ax
+    mov es, ax
+    mov fs, ax
+    mov gs, ax
     push esp
     call syscall_dispatch
     add esp, 4
+    pop eax                 ; restore the caller's data selector
+    mov ds, ax
+    mov es, ax
+    mov fs, ax
+    mov gs, ax
     popa
     add esp, 8
     iret

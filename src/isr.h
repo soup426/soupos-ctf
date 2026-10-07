@@ -4,6 +4,11 @@
 /* Pushed by the ISR stubs onto the stack before calling the C handler.
    Layout must exactly match what isr_stubs.asm pushes. */
 typedef struct {
+    /* Pushed by our stub, after pusha: the interrupted context's data
+     * selector. The stub then loads kernel selectors, so the kernel always
+     * runs with a known DS regardless of what it interrupted, and restores
+     * this one on the way out. */
+    uint32_t ds;
     /* Pushed by pusha */
     uint32_t edi, esi, ebp, esp_dummy;
     uint32_t ebx, edx, ecx, eax;
