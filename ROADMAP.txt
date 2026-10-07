@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.9.4
+Current version: v0.9.5
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,37 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.9.5  (2026-10-07)  — TCP, STAGE THREE: CLOSE, AND AN HTTP CLIENT
+  Night-queue item 2c, and the end of the TCP arc. `takeout example.com /`
+  fetches a page.
+  - The close state machine: FIN_WAIT_1, FIN_WAIT_2, CLOSE_WAIT, LAST_ACK and
+    TIME_WAIT, with both the active close (we hang up first) and the passive
+    one (they do) handled. Our FIN occupies a sequence number, exactly like the
+    SYN, and is retired when the peer's acknowledgement reaches snd_nxt.
+  - TIME_WAIT lingers 200 ms rather than the two minutes a real stack waits.
+    The trade is written down in the file: soupOS uses a fresh ephemeral port
+    per connection, so a late duplicate has nothing to be confused with, and a
+    shell that froze for two minutes after every close would be unusable.
+  - `takeout <host>[:port] [path]`: HTTP/1.0 with Connection: close, so the end
+    of the body is the end of the connection and there is no Content-Length or
+    chunked decoding to write for a command whose job is to prove TCP works.
+  - TWO BUGS, both found by reading a packet capture rather than the code:
+      1. The input path began with `if (state != ESTABLISHED) return;`, so the
+         moment the peer's FIN arrived we went deaf - including to the
+         acknowledgement of data we were still retransmitting. One early return
+         caused both symptoms; the capture showed the request going out three
+         times while the server sat there having already answered it.
+      2. A close that timed out waiting for the peer's FIN marked the
+         connection CLOSED and said nothing, leaving it half-open at the other
+         end still holding a socket. It now sends a RST, which also stopped the
+         gate's listener stalling for five seconds after every `reserve`.
+  - A THIRD THING, recorded rather than fixed: three connections in a row to
+    the same SLIRP port leave the third unanswered, with no RST and no SYN|ACK.
+    Each works alone and the frames are identical, so this is QEMU-side state
+    outliving our close. The gate gives each check its own listener port.
+  - Gate 45 -> 47 checks: an HTTP page fetched over TCP, and a connection that
+    closed cleanly in both directions.
 
 v0.9.4  (2026-10-07)  — TCP, STAGE TWO: DATA
   Night-queue item 2b. `holler 10.0.2.2 19100 souptcp` sends over TCP and

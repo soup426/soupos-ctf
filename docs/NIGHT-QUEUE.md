@@ -44,7 +44,7 @@ working on a network that is not QEMU's.
 - Gate: boot with no compiled-in address and assert the log shows a lease
   being taken and the address matching 10.0.2.15.
 
-## 2. TCP, in three separate commits
+## 2. TCP, in three separate commits — ALL DONE (v0.9.3-v0.9.5)
 
 The real mountain. Do **not** attempt it in one pass; each stage below should
 build, gate and commit on its own.
@@ -66,7 +66,7 @@ build, gate and commit on its own.
   flight at a time". Say so in the comments; a hobby stack that is honest about
   its limits is more useful than one that pretends.
 
-### 2c. Close, and something to show for it
+### 2c. Close, and something to show for it — DONE (v0.9.5)
 
 - FIN/ACK both directions, and the TIME_WAIT that follows.
 - Then the payoff: `takeout <host> [path]`, an HTTP GET that prints the

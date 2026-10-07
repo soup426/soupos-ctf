@@ -42,6 +42,7 @@ static struct {
     volatile uint16_t peer_window;
     volatile int      refused;      /* peer sent RST                  */
     volatile int      peer_fin;     /* peer has finished sending      */
+    int               fin_sent;     /* we have sent ours              */
 } tcb;
 
 /* Received data waiting for a reader. Written by the interrupt handler, drained
@@ -124,7 +125,11 @@ void tcp_input(uint32_t src_ip, const uint8_t *seg, uint16_t len) {
         return;
     }
 
-    if (tcb.state != TCP_ESTABLISHED) return;
+    /* Everything from here on applies to any open connection, not just an
+     * established one: acknowledgements and even data keep arriving after a
+     * FIN has been seen in either direction, and ignoring them leaves both
+     * sides retransmitting at each other until they give up. */
+    if (tcb.state == TCP_CLOSED || tcb.state == TCP_SYN_SENT) return;
 
     if (t->flags & TCP_ACK) {
         uint32_t a = ntoh32(t->ack);
@@ -132,6 +137,13 @@ void tcp_input(uint32_t src_ip, const uint8_t *seg, uint16_t len) {
          * wrong once the numbers pass 2^31. */
         if ((int32_t)(a - tcb.snd_una) > 0) tcb.snd_una = a;
         tcb.peer_window = ntoh16(t->window);
+
+        /* Our FIN consumed a sequence number, so it is acknowledged once
+         * snd_una reaches snd_nxt. */
+        if (tcb.fin_sent && (int32_t)(tcb.snd_una - tcb.snd_nxt) >= 0) {
+            if (tcb.state == TCP_FIN_WAIT_1) tcb.state = TCP_FIN_WAIT_2;
+            else if (tcb.state == TCP_LAST_ACK) tcb.state = TCP_CLOSED;
+        }
     }
 
     uint16_t hlen  = (uint16_t)((t->off_rsv >> 4) * 4);
@@ -153,11 +165,17 @@ void tcp_input(uint32_t src_ip, const uint8_t *seg, uint16_t len) {
     }
 
     if ((t->flags & TCP_FIN) && seq == tcb.rcv_nxt) {
-        /* Noted, not handled: the close sequence is stage 2c. Acknowledging
-         * the FIN here stops the peer retransmitting it at us. */
+        /* Their FIN occupies a sequence number too, so acknowledge one past
+         * it. Where that leaves us depends on whether we have already sent
+         * ours: if we have, both sides are done; if not, they have stopped
+         * talking but we may still have something to say. */
         tcb.peer_fin = 1;
         tcb.rcv_nxt  = seq + 1;
         tcp_send_flags(TCP_ACK, tcb.snd_nxt, tcb.rcv_nxt);
+
+        if (tcb.state == TCP_ESTABLISHED)      tcb.state = TCP_CLOSE_WAIT;
+        else if (tcb.state == TCP_FIN_WAIT_1)  tcb.state = TCP_LAST_ACK;
+        else if (tcb.state == TCP_FIN_WAIT_2)  tcb.state = TCP_TIME_WAIT;
     }
 }
 
@@ -197,6 +215,8 @@ int tcp_send(const void *data, uint16_t len) {
     klog("[tcp] sent %u bytes\n", sent);
     return (int)sent;
 }
+
+int tcp_peer_done(void) { return tcb.peer_fin; }
 
 int tcp_recv(uint8_t *out, uint16_t max, uint32_t ticks) {
     if (!out || !max) return 0;
@@ -244,6 +264,7 @@ int tcp_connect(uint32_t dst_ip, uint16_t dst_port) {
     tcb.rcv_nxt     = 0;
     tcb.refused     = 0;
     tcb.peer_fin    = 0;
+    tcb.fin_sent    = 0;
     rx_len          = 0;
     tcb.state       = TCP_SYN_SENT;
 
@@ -285,11 +306,62 @@ int tcp_connect(uint32_t dst_ip, uint16_t dst_port) {
     return -1;
 }
 
-void tcp_close(void) {
+void tcp_abort(void) {
     if (tcb.state == TCP_CLOSED) return;
-    /* A RST, not a FIN: the graceful close belongs to stage 2c, and pretending
-     * otherwise here would leave a half-closed connection nobody handles. */
     tcp_send_flags(TCP_RST | TCP_ACK, tcb.snd_nxt, tcb.rcv_nxt);
     tcb.state = TCP_CLOSED;
-    klog("[tcp] closed (rst)\n");
+    klog("[tcp] aborted (rst)\n");
+}
+
+void tcp_close(void) {
+    if (tcb.state == TCP_CLOSED) return;
+
+    /* Send our FIN. It occupies a sequence number, like the SYN did, so
+     * snd_nxt moves past it and the peer's acknowledgement of that number is
+     * what retires it. */
+    if (!tcb.fin_sent) {
+        uint32_t seq = tcb.snd_nxt;
+        tcb.snd_nxt  = seq + 1;
+        tcb.fin_sent = 1;
+        tcb.state    = (tcb.state == TCP_CLOSE_WAIT) ? TCP_LAST_ACK : TCP_FIN_WAIT_1;
+        tcp_send_seg(TCP_FIN | TCP_ACK, seq, tcb.rcv_nxt, 0, 0);
+    }
+
+    /* Wait for the exchange to finish, but not forever: a peer that vanishes
+     * must not wedge the shell. */
+    uint32_t until = timer_get_ticks() + 200;        /* 2 s */
+    while (timer_get_ticks() < until) {
+        if (tcb.state == TCP_CLOSED || tcb.state == TCP_TIME_WAIT) break;
+        if (tcb.refused) break;
+        task_yield();
+    }
+
+    /* TIME_WAIT exists so a late duplicate of the last segment cannot be
+     * mistaken for part of a new connection on the same port pair. A real
+     * stack lingers for twice the maximum segment lifetime, two minutes or so.
+     * soupOS lingers for 200 ms, because it uses a fresh ephemeral port for
+     * every connection and a shell that froze for two minutes after every
+     * close would be unusable. The trade is written down rather than hidden:
+     * reusing a port pair within that window could confuse a peer. */
+    if (tcb.state == TCP_TIME_WAIT) {
+        uint32_t linger = timer_get_ticks() + 20;
+        while (timer_get_ticks() < linger) task_yield();
+        tcb.state = TCP_CLOSED;
+        klog("[tcp] closed cleanly\n");
+        return;
+    }
+
+    /* The peer never sent its FIN. Forgetting the connection here would leave
+     * it half-open at the other end, still holding a socket and retransmitting
+     * a FIN at a TCB that no longer exists - which is exactly what made a
+     * third connection to the same listener hang: the first one was still
+     * lingering on the host side. A RST says so explicitly. */
+    if (tcb.state != TCP_CLOSED) {
+        tcp_send_flags(TCP_RST | TCP_ACK, tcb.snd_nxt, tcb.rcv_nxt);
+        tcb.state = TCP_CLOSED;
+        klog("[tcp] closed (peer never finished; reset)\n");
+        return;
+    }
+
+    klog("[tcp] closed cleanly\n");
 }

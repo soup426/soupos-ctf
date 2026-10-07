@@ -12,13 +12,13 @@
 set -uo pipefail
 cd "$(dirname "$0")/.."
 
-LISTENER_PID=""
+LISTENER_PIDS=""
 LOG=$(mktemp /tmp/soupos-smoke.XXXXXX.log)
 MON=$(mktemp -u /tmp/soupos-smoke.XXXXXX.sock)
 QEMU_PID=""
 
 cleanup() {
-    [ -n "$LISTENER_PID" ] && kill "$LISTENER_PID" 2>/dev/null
+    [ -n "$LISTENER_PIDS" ] && kill $LISTENER_PIDS 2>/dev/null
     [ -n "$QEMU_PID" ] && kill "$QEMU_PID" 2>/dev/null
     rm -f "$MON"
     if [ "${KEEP:-0}" = "1" ]; then echo "serial log kept at $LOG"; else rm -f "$LOG"; fi
@@ -28,29 +28,38 @@ trap cleanup EXIT
 [ -f soupOS.iso ] || { echo "soupOS.iso missing — run 'make' first"; exit 1; }
 [ -f disk.img ]   || { echo "disk.img missing — run 'make disk' first"; exit 1; }
 
-# Something for the TCP check to connect to. QEMU's user networking maps the
+# Something for the TCP checks to connect to. QEMU's user networking maps the
 # guest's 10.0.2.2 to the host's loopback, so a local listener is reachable
 # from inside soupOS without any external network being involved.
-python3 -c "
-import socket
+#
+# One port per check, deliberately. Three connections in a row to the SAME
+# SLIRP port leave the third unanswered - QEMU-side state that outlives our
+# close, reproducible by hand and not worth working around in the kernel.
+for port in 19000 19001 19002; do
+    python3 -c "
+import socket, sys
+port = int(sys.argv[1])
 s = socket.socket()
 s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-s.bind(('127.0.0.1', 19000)); s.listen(8); s.settimeout(300)
+s.bind(('127.0.0.1', port)); s.listen(8); s.settimeout(300)
 try:
     while True:
         c, _ = s.accept()
         c.settimeout(5)
-        try:                       # echo, so the data path can be checked too
-            d = c.recv(512)
-            if d:
+        try:
+            d = c.recv(1024)
+            if d.startswith(b'GET'):          # serve the takeout check
+                c.sendall(b'HTTP/1.0 200 OK\\r\\n\\r\\nsoup is served\\n')
+            elif d:                           # echo, for the data-path check
                 c.sendall(d.upper())
         except Exception:
             pass
         c.close()
 except Exception:
     pass
-" >/dev/null 2>&1 &
-LISTENER_PID=$!
+" "$port" >/dev/null 2>&1 &
+    LISTENER_PIDS="$LISTENER_PIDS $!"
+done
 
 echo "booting soupOS headless..."
 qemu-system-i386 \
@@ -101,7 +110,8 @@ python3 scripts/qemu_keys.py "$MON" \
     "sip 10.0.2.2 3" "WAIT:8" \
     "sniff example.com" "WAIT:6" \
     "reserve 10.0.2.2 19000" "WAIT:6" \
-    "holler 10.0.2.2 19000 souptcp" "WAIT:8" >/dev/null || {
+    "holler 10.0.2.2 19001 souptcp" "WAIT:8" \
+    "takeout 10.0.2.2:19002 /soup" "WAIT:9" >/dev/null || {
         echo "FAIL: could not drive the QEMU monitor"; exit 1; }
 
 fail=0
@@ -337,6 +347,11 @@ check "a TCP connection was established" '\[tcp\] established with 10\.0\.2\.2:1
 # in sequence and handed to the reader.
 check "TCP carried data and got a reply" '\[tcp\] sent 7 bytes'
 check "TCP received the echo"            '\[tcp\] rx 7 bytes'
+
+# The whole stack, end to end: DNS-free connect, an HTTP/1.0 request, a body
+# read until the server hangs up, and a FIN exchange in both directions.
+check "an HTTP page was fetched over TCP" '\[tcp\] takeout 3[0-9] bytes'
+check "the connection closed gracefully"  '\[tcp\] closed cleanly'
 
 # vgastress prints whole lines of a single repeated character from two tasks.
 # Any line containing both means vga_puts was interrupted mid-string.

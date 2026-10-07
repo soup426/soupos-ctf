@@ -15,14 +15,20 @@
  * segment is dropped so the peer resends it. On a virtual network with a
  * millisecond of latency that costs nothing; on a real one it would.
  *
- * Still to come: the graceful close (stage 2c). tcp_close() sends a RST, which
- * is a legitimate way to end a connection and an honest placeholder for the
- * FIN exchange that replaces it. */
+ * Stage three closes properly: FIN in both directions, with the active close
+ * (we hang up first) and the passive one (they do) both handled. TIME_WAIT is
+ * deliberately short rather than the two-minute 2*MSL a real stack waits -
+ * see the note in tcp.c for what that trades away. */
 
 typedef enum {
     TCP_CLOSED = 0,
     TCP_SYN_SENT,
     TCP_ESTABLISHED,
+    TCP_FIN_WAIT_1,     /* we sent FIN, waiting for it to be acknowledged */
+    TCP_FIN_WAIT_2,     /* ours acknowledged, waiting for theirs          */
+    TCP_CLOSE_WAIT,     /* theirs arrived first; ours still to send       */
+    TCP_LAST_ACK,       /* we answered theirs, waiting for the last ack   */
+    TCP_TIME_WAIT,      /* both sides done; linger briefly                */
 } tcp_state_t;
 
 /* Open a connection. Returns 0 once established, -1 on timeout or refusal.
@@ -37,8 +43,15 @@ int         tcp_send(const void *data, uint16_t len);
  * some to arrive. Returns the byte count, 0 if nothing came. */
 int         tcp_recv(uint8_t *out, uint16_t max, uint32_t ticks);
 
-/* Tear the connection down (RST for now; see the note above). */
+/* Close politely: FIN, wait for theirs, linger briefly. Returns when the
+ * connection is fully closed or the wait times out. */
 void        tcp_close(void);
+
+/* Abort: RST and done. For when the peer is misbehaving or we gave up. */
+void        tcp_abort(void);
+
+/* Has the peer finished sending? True once its FIN has been seen. */
+int         tcp_peer_done(void);
 
 tcp_state_t tcp_state(void);
 

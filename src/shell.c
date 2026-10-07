@@ -1385,6 +1385,86 @@ static void cmd_holler(const char *args) {
     tcp_close();
 }
 
+/* takeout <host>[:port] [path] - fetch a page over HTTP and print it.
+ *
+ * HTTP/1.0 with Connection: close, so the server hangs up when it is done and
+ * the end of the body is simply the end of the connection. That avoids parsing
+ * Content-Length or chunked encoding, which is a lot of machinery for a
+ * command whose job is to prove TCP works. */
+static void cmd_takeout(const char *args) {
+    while (*args == ' ') args++;
+    if (!*args) { vga_puts("  Usage: takeout <host>[:port] [path]\n"); return; }
+
+    char host[64];
+    int i = 0;
+    while (args[i] && args[i] != ' ' && args[i] != ':' && i < (int)sizeof(host) - 1) {
+        host[i] = args[i]; i++;
+    }
+    host[i] = '\0';
+
+    const char *rest = args + i;
+    int port = 80;
+    if (*rest == ':') { rest++; port = parse_num(rest); while (*rest && *rest != ' ') rest++; }
+    while (*rest == ' ') rest++;
+    const char *path = *rest ? rest : "/";
+    if (port <= 0 || port > 65535) { vga_puts("  Usage: takeout <host>[:port] [path]\n"); return; }
+
+    uint32_t ip;
+    if (net_dns_resolve(host, &ip) < 0) {
+        vga_set_color(VGA_LIGHT_RED, VGA_BLACK);
+        vga_printf("  could not resolve %s\n", host);
+        vga_set_color(VGA_LIGHT_GREY, VGA_BLACK);
+        return;
+    }
+
+    vga_puts("  collecting from "); print_ip(ip); vga_printf(":%d%s\n", port, path);
+    if (tcp_connect(ip, (uint16_t)port) < 0) {
+        vga_set_color(VGA_LIGHT_RED, VGA_BLACK);
+        vga_puts("  nobody answered\n");
+        vga_set_color(VGA_LIGHT_GREY, VGA_BLACK);
+        return;
+    }
+
+    char req[256];
+    int n = 0;
+    const char *p1 = "GET ";
+    while (*p1) req[n++] = *p1++;
+    for (const char *q = path; *q && n < 180; q++) req[n++] = *q;
+    const char *p2 = " HTTP/1.0\r\nHost: ";
+    while (*p2) req[n++] = *p2++;
+    for (const char *q = host; *q && n < 240; q++) req[n++] = *q;
+    const char *p3 = "\r\nConnection: close\r\n\r\n";
+    while (*p3) req[n++] = *p3++;
+
+    if (tcp_send(req, (uint16_t)n) < 0) {
+        vga_puts("  the request did not get through\n");
+        tcp_abort();
+        return;
+    }
+
+    /* Read until the server hangs up. Printed as it arrives rather than
+     * buffered: a page can be larger than anything worth holding here. */
+    uint32_t total = 0;
+    uint8_t  buf[512];
+    vga_set_color(VGA_DARK_GREY, VGA_BLACK);
+    for (;;) {
+        int got = tcp_recv(buf, (uint16_t)(sizeof(buf) - 1), 200);
+        if (got <= 0) {
+            if (tcp_peer_done()) break;
+            break;
+        }
+        total += (uint32_t)got;
+        for (int k = 0; k < got; k++) {
+            char c = (char)buf[k];
+            if (c == '\n' || (c >= ' ' && c < 127)) vga_putchar(c);
+        }
+    }
+    vga_set_color(VGA_LIGHT_GREY, VGA_BLACK);
+    vga_printf("\n  %u bytes collected\n", total);
+    klog("[tcp] takeout %u bytes\n", total);
+    tcp_close();
+}
+
 static void cmd_sniff(const char *args) {
     while (*args == ' ') args++;
     if (!*args) { vga_puts("  Usage: sniff <hostname>\n"); return; }
@@ -2820,7 +2900,8 @@ static const char *const cmd_names[] = {
     "beep", "mandelbrot", "vgademo", "uname", "cal",
     "clock", "wipe", "fortune", "bounce", "recipe", "leftovers", "spill",
     "freeze", "reheat", "ps", "orders", "plate", "steep", "kill", "scraps",
-    "faucet", "plumbing", "table", "sip", "sniff", "reserve", "holler", "bgclock", "yieldbg", "spinbg", "sleeptest", "vfstest",
+    "faucet", "plumbing", "table", "sip", "sniff", "reserve", "holler",
+    "takeout", "bgclock", "yieldbg", "spinbg", "sleeptest", "vfstest",
     "dmesg", "pwd", "cd", "mkbowl", "rmbowl", "bowltest",
     "whoami", "roster", "clockout", "hire", "fire", "perms",
 };
@@ -3057,6 +3138,7 @@ static void dispatch(const char *buf) {
     else if (str_startswith(p, "sniff"))    { const char *a = p + 5; cmd_sniff(a); }
     else if (str_startswith(p, "reserve")) { const char *a = p + 7; cmd_reserve(a); }
     else if (str_startswith(p, "holler"))  { const char *a = p + 6; cmd_holler(a); }
+    else if (str_startswith(p, "takeout")) { const char *a = p + 7; cmd_takeout(a); }
     else if (str_startswith(p, "plumbing")) { const char *a = p + 8; cmd_plumbing(a); }
     else if (str_startswith(p, "sip"))      { const char *a = p + 3; cmd_sip(a); }
     else if (str_startswith(p, "plate")) { const char *a = p + 5; cmd_plate(a); }

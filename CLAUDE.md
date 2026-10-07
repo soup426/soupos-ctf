@@ -3,7 +3,7 @@
 ## What this is
 
 soupOS is a 32-bit x86 hobby OS written in C and NASM assembly (currently
-**v0.9.4**). It boots via GRUB and runs in protected mode with paging, a
+**v0.9.5**). It boots via GRUB and runs in protected mode with paging, a
 physical/heap allocator, and a cooperative scheduler. On top of that:
 
 - **Filesystem**: FAT16 read/write with subdirectories ("bowls") and a VFS shim
@@ -508,6 +508,15 @@ compiled in (10.0.2.15, gateway 10.0.2.2) rather than discovered by DHCP.
   next. Sequence comparisons use `(int32_t)(a - b) > 0`, never a plain `>`,
   because the sequence space wraps. The receive buffer is written by the
   interrupt handler and drained with interrupts off.
+- **Close (v0.9.5)**: full FIN state machine, active and passive. `tcp_input`
+  must **not** early-return on anything but CLOSED/SYN_SENT - acknowledgements
+  keep arriving after a FIN, and going deaf there made us retransmit data the
+  peer had already answered. A close that times out waiting for the peer's FIN
+  sends RST rather than silently forgetting the connection, which would leave
+  it half-open at the other end. TIME_WAIT is 200 ms, not 2*MSL, on purpose.
+- **QEMU quirk**: three connections to the same SLIRP port leave the third
+  unanswered. Each works alone, the frames are identical; it is QEMU-side state
+  outliving our close. The gate uses a separate listener port per check.
 - Shell: `faucet`, `plumbing [ip|dhcp]`, `table`, `sip <host> [count]`,
   `sniff <host>`, `reserve <host> <port>`.
 
