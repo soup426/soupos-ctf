@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.16.0
+Current version: v0.17.0
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,42 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.17.0 (2026-10-07)  — DOOM'S MUSIC
+  New queue item 4. `hum D_E1M1` plays a tune, and a level now plays its own.
+  - A D_* lump is MUS: a header, an instrument list, then a score of events on
+    sixteen channels timed in ticks of 140 Hz, with a variable-length delay
+    after any event whose top bit is set. Five event types actually occur -
+    play, release, pitch bend, controller, end - which I confirmed by walking
+    D_E1M1 on the host before writing any of it.
+  - Square waves, one per channel, scaled by channel volume. Doom's music was
+    written for an OPL2 and emulating one is a project rather than a feature;
+    square waves carry the tune, the rhythm and the harmony, which is what
+    makes a level feel like that level. The instrument list is read and
+    ignored, pitch bend is ignored, and channel 15 (percussion, where the note
+    selects a drum rather than a pitch) is skipped, because no drums beats
+    wrong drums. All three are said out loud in music.h.
+  - NOT A MIXER VOICE, and that was the design question worth getting right.
+    Sixteen channels do not fit in four, and music is not an effect: it runs
+    continuously, it loops, and it must not be stolen when three doors open at
+    once. So the mixer asks music.c for one sample per frame and adds it,
+    which leaves all four voices free and keeps the channel count private.
+  - VERIFIED AGAINST THE SCORE, not by ear. scripts/music-test.sh parses
+    D_E1M1 on the host, works out which notes should sound in the first second
+    (MIDI 40, 50, 52 -> 82, 147, 165 Hz) and finds all three in the capture,
+    each far above a frequency the score never uses. Then it plays two effects
+    over the music and checks the envelope rises and returns: music 1291, with
+    effects 3978, music again 1554.
+  - TWO SELF-INFLICTED BREAKS, both caught by the gate. DOOM=0 stopped
+    linking, because music.c needs the WAD reader - the same mistake doomsnd.c
+    made in v0.11.1, so the mixer now stubs music out under NO_DOOM. And the
+    gate's sound-effect measurement read 4251 ms, because QEMU writes only
+    while the card is active, so a tone, an effect and music land contiguously
+    in one capture and a span-based measurement sweeps in whatever played
+    next. Those two measurements moved to scripts/sound-test.sh, which plays
+    exactly two things; in isolation they read 440 Hz and 533 ms.
+  - Gate 70 -> 69 (two measurements left for their own script, one MUS check
+    arrived), seven test scripts green, four configurations clean.
 
 v0.16.0 (2026-10-07)  — LONG FILENAMES, READ SIDE
   New queue item 3. `serve` lists the name a person actually typed, and `pour`

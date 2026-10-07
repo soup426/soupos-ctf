@@ -90,7 +90,7 @@ in two files - next_component in fat.c and normalize_path in shell.c - so the
 name was truncated before the directory parser was ever reached. Writing long
 names remains open and is still worth its own item.
 
-## 4. Doom's music: the D_* lumps through the mixer
+## 4. Doom's music — DONE (v0.17.0)
 
 The mixer has four voices and a ring; music is what it was really for.
 
@@ -102,6 +102,16 @@ The mixer has four voices and a ring; music is what it was really for.
   writing code: 16 MUS channels into 4 voices needs either more voices or a
   dedicated music voice that sums its own channels before handing over a
   single stream. The second is probably right.
+
+**2026-10-07: done, v0.17.0.** The second option was right: music is not a
+voice at all, the mixer just adds one sample per frame from music.c, so all four
+voices stay free. Square waves; instruments, pitch bend and percussion ignored
+and documented. Verified against the score rather than by ear - the notes the
+score says should sound in the first second are all in the capture - and the
+envelope proves effects play over music without stopping it. Two self-inflicted
+breaks: DOOM=0 needed music.c in its filter (as doomsnd.c did), and the gate's
+audio timing had to move to its own script because QEMU writes only while the
+card is active.
 
 ## 5. A console that uses the whole screen
 

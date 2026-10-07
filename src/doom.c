@@ -13,6 +13,7 @@
 #include "doom.h"
 #include "wad.h"
 #include "doomsnd.h"
+#include "music.h"
 #include "fb.h"
 #include "vga.h"
 #include "vga13h.h"
@@ -2801,7 +2802,8 @@ void doom_play_level(int ep, int skill) {
         g_level_exit = 0;
 
         if (level_load(mapname) < 0) {
-            vga13h_exit();
+            music_stop();
+    vga13h_exit();
             vga_set_cursor(vga_get_row(), vga_get_col());
             vga_set_color(VGA_LIGHT_RED, VGA_BLACK);
             vga_printf("  %s not found in WAD.\n", mapname);
@@ -2811,6 +2813,13 @@ void doom_play_level(int ep, int skill) {
             vga13h_enter(); set_doom_palette();
             break;
         }
+
+        /* The level's own music: D_ plus the map name, looping. Started after
+         * the load succeeds, so a missing map does not leave a tune playing
+         * over the error. */
+        char mustune[8] = {'D','_',0,0,0,0,0,0};
+        for (int mi = 0; mi < 4; mi++) mustune[2 + mi] = mapname[mi];
+        music_play(mustune, 1);
 
         am_fit();
         am_cx = pl_x >> 8;
@@ -2934,7 +2943,8 @@ void doom_play_level(int ep, int skill) {
 
         if (g_level_exit) {
             /* Brief level-complete screen in text mode, then load next map */
-            vga13h_exit();
+            music_stop();
+    vga13h_exit();
             vga_set_cursor(vga_get_row(), vga_get_col());
             vga_set_color(VGA_YELLOW, VGA_BLACK);
             vga_printf("\n  ** E%dM%d COMPLETE! **\n", ep + 1, map);
@@ -2959,7 +2969,8 @@ void doom_play_level(int ep, int skill) {
 
         if (pl_health <= 0) {
             /* Death screen: red text, 2.5-second pause, then back to menu */
-            vga13h_exit();
+            music_stop();
+    vga13h_exit();
             vga_set_cursor(vga_get_row(), vga_get_col());
             vga_set_color(VGA_LIGHT_RED, VGA_BLACK);
             vga_puts("\n  YOU DIED.\n");
@@ -3100,6 +3111,7 @@ void doom_menu_run(void) {
         if (running) draw_frame();
     }
 
+    music_stop();
     vga13h_exit();
     vga_set_cursor(vga_get_row(), vga_get_col());
 }
@@ -3132,6 +3144,7 @@ void doom_titlescreen(void) {
     keyboard_flush();
     keyboard_getchar();
 
+    music_stop();
     vga13h_exit();
     vga_set_cursor(vga_get_row(), vga_get_col());
 }

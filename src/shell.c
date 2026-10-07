@@ -26,6 +26,9 @@
 #include "ac97.h"
 #include "mixer.h"
 #ifndef NO_DOOM
+#include "music.h"
+#endif
+#ifndef NO_DOOM
 #include "doomsnd.h"
 #include "wad.h"
 #endif
@@ -1636,21 +1639,39 @@ static void cmd_hatch(const char *args) {
     vga_printf("  hatch closed after %d file%s\n", served, served == 1 ? "" : "s");
 }
 
+/* The WAD stays open once loaded, so repeated sizzles and hums are cheap.
+ * Shared by both, because either can be the first to need it. */
+static int wad_ready_for_shell(void) {
+    static int opened = 0;
+    if (!opened && wad_init("DOOM1.WAD") == 0) opened = 1;
+    return opened;
+}
+
+/* hum <LUMP> - play one of Doom's MUS tunes; bare `hum` stops it. */
+static void cmd_hum(const char *args) {
+    if (!ac97_present()) { vga_puts("  No sound card. QEMU needs -device AC97.\n"); return; }
+    while (*args == ' ') args++;
+
+    if (!*args) {
+        if (music_playing()) { music_stop(); vga_puts("  stopped humming\n"); }
+        else vga_puts("  Usage: hum <LUMP>   e.g. hum D_E1M1\n");
+        return;
+    }
+    if (!wad_ready_for_shell()) { vga_puts("  No DOOM1.WAD on the disk.\n"); return; }
+    if (music_play(args, 1) < 0) {
+        vga_printf("  Could not play %s (is it a D_* lump?)\n", args);
+        return;
+    }
+    vga_printf("  humming %s - `hum` on its own stops it\n", args);
+}
+
 /* sizzle - play one of Doom's sound effects (a DS* lump from the WAD). */
 static void cmd_sizzle(const char *args) {
     if (!ac97_present()) { vga_puts("  No sound card. QEMU needs -device AC97.\n"); return; }
     while (*args == ' ') args++;
     if (!*args) { vga_puts("  Usage: sizzle <LUMP>   e.g. sizzle DSPISTOL\n"); return; }
 
-    /* The WAD stays open once loaded, so repeated sizzles are cheap. */
-    static int wad_open = 0;
-    if (!wad_open) {
-        if (wad_init("DOOM1.WAD") < 0) {
-            vga_puts("  No DOOM1.WAD on the disk.\n");
-            return;
-        }
-        wad_open = 1;
-    }
+    if (!wad_ready_for_shell()) { vga_puts("  No DOOM1.WAD on the disk.\n"); return; }
     /* Several lumps at once, because that is what the mixer is for - and
      * because typing two commands takes the better part of two seconds, so
      * overlap cannot be demonstrated any other way. */
@@ -3119,7 +3140,7 @@ static const char *const cmd_names[] = {
     "clock", "wipe", "fortune", "bounce", "recipe", "leftovers", "spill",
     "freeze", "reheat", "ps", "orders", "plate", "steep", "kill", "scraps", "sample", "skewer", "larder", "whistle", "hatch",
 #ifndef NO_DOOM
-    "sizzle",
+    "sizzle", "hum",
 #endif
     "faucet", "plumbing", "table", "sip", "sniff", "reserve", "holler",
     "takeout", "bgclock", "yieldbg", "spinbg", "sleeptest", "vfstest",
@@ -3362,6 +3383,7 @@ static void dispatch(const char *buf) {
     else if (str_startswith(p, "whistle")) cmd_whistle(p + 7);
 #ifndef NO_DOOM
     else if (str_startswith(p, "sizzle"))  cmd_sizzle(p + 6);
+    else if (str_startswith(p, "hum"))     cmd_hum(p + 3);
     else if (str_startswith(p, "hatch"))   cmd_hatch(p + 5);
 #endif
     else if (str_eq(p, "faucet"))      cmd_faucet();

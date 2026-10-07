@@ -46,7 +46,7 @@ endif
 
 DOOM   ?= 1
 ifeq ($(DOOM),0)
-  SRC_C  := $(filter-out src/doom.c src/wad.c src/doomsnd.c,$(SRC_C))
+  SRC_C  := $(filter-out src/doom.c src/wad.c src/doomsnd.c src/music.c,$(SRC_C))
   CFLAGS += -DNO_DOOM
 endif
 

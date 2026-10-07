@@ -142,7 +142,8 @@ python3 scripts/qemu_keys.py "$MON" \
     "soup SPAWN.SC" "WAIT:1" "ps" "WAIT:5" \
     "larder" "WAIT:2" \
     "whistle 440 300" "WAIT:4" \
-    "sizzle DSPISTOL" "WAIT:4" >/dev/null || {
+    "sizzle DSPISTOL" "WAIT:4" \
+    "hum D_E1M1" "WAIT:3" "hum" "WAIT:2" >/dev/null || {
         echo "FAIL: could not drive the QEMU monitor"; exit 1; }
 
 fail=0
@@ -466,58 +467,18 @@ check "the 8.3 alias opens it as well"   -c2 'A file whose name does not fit in 
 
 check "the mixer accepted a tone" '\[mixer\] tone 440 Hz'
 check "a Doom sound lump was decoded" '\[doomsnd\] DSPISTOL: 5661 samples at 11025 Hz'
+# The score's own numbers, so a mis-parsed header shows up here rather than as
+# silence. scripts/music-test.sh checks the notes are the RIGHT notes.
+check "a MUS score was parsed" '\[music\] D_E1M1: 17237 bytes of score, 3 channels'
 check "the mixer came up" '\[mixer\] 4 voices'
 
-# Both sounds are checked on the HOST, from the samples QEMU captured, rather
-# than by ear. These are the only checks here that prove the DMA, the
-# descriptor list, the mixer and the resampler worked together.
-#
-# QEMU's wav backend writes only while the card is active, so the two sounds
-# land back to back with no silence between them: one burst of about 813 ms,
-# being the 300 ms tone followed by the 513 ms gunshot. Measuring zero
-# crossings across the whole thing averages a sine with a gunshot and reports
-# 585 Hz, so the tone is measured over the first 250 ms and the effect is what
-# is left after the tone's known length. The header sizes are not patched,
-# because QEMU is killed rather than asked to quit, so the PCM is read straight
-# past the fixed 44-byte header.
-read -r tone_hz sfx_ms <<<"$(python3 - "$WAV" <<'PYAUDIO' 2>/dev/null
-import struct, sys
-try:
-    d = open(sys.argv[1], "rb").read()
-    ch = struct.unpack("<H", d[22:24])[0]
-    sr = struct.unpack("<I", d[24:28])[0]
-    pcm = d[44:]
-    s = struct.unpack("<" + "h" * (len(pcm) // 2), pcm[:len(pcm) // 2 * 2])
-    left = s[0::ch]
-    a = next(i for i, v in enumerate(left) if abs(v) > 400)
-    b = next(i for i in range(len(left) - 1, a, -1) if abs(left[i]) > 400)
-    t = left[a:a + sr // 4]                      # 250 ms, inside the tone
-    xs = [i for i in range(1, len(t)) if t[i - 1] < 0 <= t[i]]
-    hz = round(sr / ((xs[-1] - xs[0]) / (len(xs) - 1))) if len(xs) > 2 else 0
-    print(hz, round((b - a) * 1000 / sr) - 300)
-except Exception:
-    print(0, 0)
-PYAUDIO
-)"
-
-if [ "${tone_hz:-0}" -ge 438 ] && [ "${tone_hz:-0}" -le 442 ]; then
-    echo "  ok    the captured tone measures ${tone_hz} Hz"
-else
-    echo "  FAIL  the captured tone measures ${tone_hz:-0} Hz, expected 440"
-    fail=1
-fi
-
-# DSPISTOL is 5661 samples at 11025 Hz, so 513 ms of sound. The window is
-# wider on the upper side because the mixer's ring drains two or three 21 ms
-# chunks after the voice itself has ended, which shows up as about 35 ms of
-# extra tail. Getting the resample ratio backwards would give 118 ms or 2.2 s,
-# both far outside this.
-if [ "${sfx_ms:-0}" -ge 470 ] && [ "${sfx_ms:-0}" -le 620 ]; then
-    echo "  ok    the Doom sound effect lasts ${sfx_ms} ms"
-else
-    echo "  FAIL  the Doom sound effect lasts ${sfx_ms:-0} ms, expected about 513"
-    fail=1
-fi
+# The fine-grained audio measurements - the tone's frequency and the effect's
+# length - moved to scripts/sound-test.sh. They need a capture containing
+# nothing else, and this gate now plays a tone, an effect AND music into one
+# file: QEMU writes only while the card is active, so three activations land
+# contiguously and any span-based measurement sweeps in whatever played next.
+# It reported a 4251 ms sound effect before this moved out. What stays here is
+# what the serial log can answer on its own.
 
 # vgastress prints whole lines of a single repeated character from two tasks.
 # Any line containing both means vga_puts was interrupted mid-string.

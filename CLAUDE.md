@@ -3,7 +3,7 @@
 ## What this is
 
 soupOS is a 32-bit x86 hobby OS written in C and NASM assembly (currently
-**v0.16.0**). It boots via GRUB and runs in protected mode with paging, a
+**v0.17.0**). It boots via GRUB and runs in protected mode with paging, a
 physical/heap allocator, and a cooperative scheduler. On top of that:
 
 - **Filesystem**: FAT16 read/write with subdirectories ("bowls") and a VFS shim
@@ -527,6 +527,23 @@ VGA cells doubles the work. `vga.c`'s `scroll()` copies 32-bit words (two cells
 per store) and is about twice as fast as the original cell-at-a-time loop;
 `memmove` measured 47% slower than that original. `sample` guards the row
 movement. The same caution applies anywhere a wide copy looks tempting.
+
+## Music (`src/music.c`, v0.17.0)
+
+`hum <LUMP>` plays a MUS tune; a Doom level plays its own. **Music is not a
+mixer voice** - sixteen channels do not fit in four, and it must not be stolen
+by an effect - so the mixer asks for one sample per frame and adds it. Square
+waves only; instruments, pitch bend and percussion (channel 15) are ignored on
+purpose. Needs the WAD, so it is in the `DOOM=0` filter and the mixer stubs it
+out under `NO_DOOM`.
+
+## Audio timing has to be measured in isolation (v0.17.0)
+
+QEMU's wav backend writes **only while the card is active**, so several sounds
+played in one session land contiguously with no silence between them, and any
+span-based measurement sweeps in whatever played next (a 513 ms effect read as
+4251 ms). Fine-grained timing lives in `scripts/sound-test.sh`, which plays
+exactly two things. The main gate checks only what the serial log can answer.
 
 ## Long filenames (v0.16.0, read side)
 

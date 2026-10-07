@@ -24,6 +24,14 @@
 #include "ac97.h"
 #include "task.h"
 #include "klog.h"
+#ifndef NO_DOOM
+#include "music.h"
+#else
+/* Music lives in the WAD reader, which a DOOM=0 build does not have. The
+ * mixer still works; there is simply nothing to add. */
+static inline int     music_playing(void) { return 0; }
+static inline int16_t music_sample(void)  { return 0; }
+#endif
 #include "str.h"
 
 #define NVOICES    4
@@ -51,6 +59,9 @@ static int      fill_next;
 static int      started;
 
 static int any_active(void) {
+    /* Music counts: it is not a voice, but the ring has to keep running while
+     * it plays or the card drains and halts mid-tune. */
+    if (music_playing()) return 1;
     for (int i = 0; i < NVOICES; i++)
         if (voices[i].kind != V_FREE) return 1;
     return 0;
@@ -59,7 +70,7 @@ static int any_active(void) {
 static void mix_chunk(int16_t *out, uint32_t samples) {
     uint32_t frames = samples / 2;
     for (uint32_t f = 0; f < frames; f++) {
-        int32_t acc = 0;
+        int32_t acc = music_sample();     /* zero when nothing is playing */
         for (int v = 0; v < NVOICES; v++) {
             voice_t *vo = &voices[v];
             if (vo->kind == V_LUMP) {
