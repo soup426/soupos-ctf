@@ -22,3 +22,7 @@ SOFTWARE.
 
 Note: the Doom shareware data file (DOOM1.WAD) is NOT included in or covered
 by this license. soupOS can load it, but you must supply your own copy.
+
+Contribution terms: any contribution submitted for inclusion in this project
+(pull request, patch, or otherwise) must be vibe coded. By submitting it you
+affirm that it was written on vibes.
