@@ -117,6 +117,9 @@ static const int16_t sine_q15[256] = {
      -6393,  -5602,  -4808,  -4011,  -3212,  -2410,  -1608,   -804,
 };
 
+/* One sample of the sine, for the mixer's tone voices. */
+int16_t ac97_sine_sample(uint32_t phase) { return sine_q15[phase >> 24]; }
+
 /* Phase accumulator whose FULL 32-bit range is one period, so the top 8 bits
  * are the table index and wrapping is free.
  *
@@ -226,6 +229,56 @@ static int ac97_run(int nbuf, uint32_t last_samples, int wait) {
     }
     outb_((uint16_t)cr, 0);
     return 0;
+}
+
+/* ── Cyclic ring, for the mixer ─────────────────────────────────────────────
+ *
+ * The one-shot path above hands the card a finite descriptor list and lets it
+ * halt at the end. The ring reuses the same staging memory as 32 chunks of
+ * 2048 samples (about 21 ms each) and never lets the card reach the last
+ * valid index: the mixer task reads the card's position (CIV) and keeps LVI a
+ * few chunks ahead, filling each chunk it advances over. Stop feeding it and
+ * the card drains what is queued and halts on its own, which is the idle
+ * state. No interrupt needed: the scheduler already wakes a task far more
+ * often than a 21 ms chunk empties. */
+#define RING_CHUNKS        32
+#define RING_CHUNK_SAMPLES ((AC97_NBUF * AC97_BUF_SAMPLES) / RING_CHUNKS)
+
+int16_t *ac97_ring_chunk(int i) {
+    return (int16_t *)pcm + (uint32_t)(i % RING_CHUNKS) * RING_CHUNK_SAMPLES;
+}
+
+uint32_t ac97_ring_chunk_samples(void) { return RING_CHUNK_SAMPLES; }
+
+/* Start the ring with `prefilled` chunks already mixed into chunks 0.. */
+int ac97_ring_start(int prefilled) {
+    if (!present || prefilled < 1) return -1;
+    uint16_t cr = (uint16_t)(nabm + NABM_PO_CR);
+
+    outb_(cr, CR_RESET);
+    for (int i = 0; i < 1000 && (inb_(cr) & CR_RESET); i++) task_sleep(1);
+
+    for (int i = 0; i < RING_CHUNKS; i++) {
+        bdl[i].addr    = (uint32_t)ac97_ring_chunk(i);
+        bdl[i].samples = (uint16_t)RING_CHUNK_SAMPLES;
+        bdl[i].flags   = 0;
+    }
+    outl_((uint16_t)(nabm + NABM_PO_BDBAR), (uint32_t)bdl);
+    outb_((uint16_t)(nabm + NABM_PO_LVI), (uint8_t)(prefilled - 1));
+    outw_((uint16_t)(nabm + NABM_PO_SR), 0x1C);
+    outb_(cr, CR_RUN);
+    return 0;
+}
+
+int  ac97_ring_civ(void) { return inb_((uint16_t)(nabm + NABM_PO_CIV)); }
+void ac97_ring_set_lvi(int lvi) {
+    outb_((uint16_t)(nabm + NABM_PO_LVI), (uint8_t)(lvi % RING_CHUNKS));
+}
+int  ac97_ring_halted(void) {
+    return (inw_((uint16_t)(nabm + NABM_PO_SR)) & SR_DCH) ? 1 : 0;
+}
+void ac97_ring_stop(void) {
+    outb_((uint16_t)(nabm + NABM_PO_CR), 0);
 }
 
 /* Play `samples` int16s already sitting in the staging area. */

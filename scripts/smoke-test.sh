@@ -21,7 +21,7 @@ QEMU_PID=""
 cleanup() {
     [ -n "$LISTENER_PIDS" ] && kill $LISTENER_PIDS 2>/dev/null
     [ -n "$QEMU_PID" ] && kill "$QEMU_PID" 2>/dev/null
-    rm -f "$MON" "$WAV"
+    rm -f "$MON" "$TESTDISK" "$WAV"
     if [ "${KEEP:-0}" = "1" ]; then echo "serial log kept at $LOG"; else rm -f "$LOG"; fi
 }
 trap cleanup EXIT
@@ -69,8 +69,15 @@ except Exception:
 done
 
 echo "booting soupOS headless..."
+# A throwaway copy of the disk, for two reasons: an interactive QEMU window
+# holding disk.img must not block the tests (the image is write-locked), and
+# a hermetic disk means no state leaks between runs - stale files in the
+# image have caused a flaky check before.
+TESTDISK=$(mktemp /tmp/soupos-testdisk.XXXXXX.img)
+cp disk.img "$TESTDISK"
+
 qemu-system-i386 \
-    -drive file=disk.img,format=raw,if=ide,index=0 \
+    -drive "file=$TESTDISK,format=raw,if=ide,index=0" \
     -cdrom soupOS.iso -boot d \
     -m 128M -no-reboot -no-shutdown \
     -netdev user,id=n0 -device rtl8139,netdev=n0 \
@@ -431,8 +438,9 @@ check "soupyc can delete a file" 'removed 1'
 # that drops the wrong bindings shows up as a wrong total rather than a crash.
 check "a let inside a loop survives 200 passes" 'SCOPE total 39800'
 
-check "the sound card accepted a tone" '\[ac97\] tone 440 Hz'
+check "the mixer accepted a tone" '\[mixer\] tone 440 Hz'
 check "a Doom sound lump was decoded" '\[doomsnd\] DSPISTOL: 5661 samples at 11025 Hz'
+check "the mixer came up" '\[mixer\] 4 voices'
 
 # Both sounds are checked on the HOST, from the samples QEMU captured, rather
 # than by ear. These are the only checks here that prove the DMA, the
@@ -473,9 +481,12 @@ else
     fail=1
 fi
 
-# DSPISTOL is 5661 samples at 11025 Hz, so 513 ms. Getting the resample ratio
-# backwards would give 118 ms or 2.2 s, both far outside this window.
-if [ "${sfx_ms:-0}" -ge 470 ] && [ "${sfx_ms:-0}" -le 555 ]; then
+# DSPISTOL is 5661 samples at 11025 Hz, so 513 ms of sound. The window is
+# wider on the upper side because the mixer's ring drains two or three 21 ms
+# chunks after the voice itself has ended, which shows up as about 35 ms of
+# extra tail. Getting the resample ratio backwards would give 118 ms or 2.2 s,
+# both far outside this.
+if [ "${sfx_ms:-0}" -ge 470 ] && [ "${sfx_ms:-0}" -le 620 ]; then
     echo "  ok    the Doom sound effect lasts ${sfx_ms} ms"
 else
     echo "  FAIL  the Doom sound effect lasts ${sfx_ms:-0} ms, expected about 513"

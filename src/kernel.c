@@ -21,6 +21,7 @@
 #include "ac97.h"
 #include "fb.h"
 #include "fbcon.h"
+#include "mixer.h"
 #include "task.h"
 #include "serial.h"
 #include "klog.h"
@@ -206,6 +207,9 @@ void kernel_main(uint32_t mb_magic, uint32_t mb_info) {
 
     /* ---- Scheduler bring-up ---- */
     task_init();
+
+    if (mixer_start() == 0)
+        vga_puts("[OK] Mixer         - 4 voices into the AC97 ring\n");
 
     if (fb_present() && fbcon_start() == 0)
         vga_puts("[OK] Console       - 80x25 on the framebuffer\n");

@@ -20,6 +20,7 @@
  */
 #include "doomsnd.h"
 #include "ac97.h"
+#include "mixer.h"
 #include "wad.h"
 #include "klog.h"
 #include "str.h"
@@ -45,32 +46,8 @@ int doomsnd_play(const char *lump) {
     if (fmt != 3 || !srate) { klog("[doomsnd] %s is not DMX format 3\n", lump); return -1; }
     if (count > (uint32_t)got - 8) count = (uint32_t)got - 8;   /* trust the lump size */
 
-    const uint8_t *src = ds_raw + 8;
-    uint32_t dst_rate  = ac97_rate();
-
-    uint32_t max = 0;
-    int16_t *out = ac97_staging(&max);
-
-    /* Output frames, from input samples: count * dst_rate / srate. Done in
-     * two steps so a long lump cannot overflow a 32-bit multiply. */
-    uint32_t frames = (count / srate) * dst_rate + ((count % srate) * dst_rate) / srate;
-    if (frames * 2 > max) frames = max / 2;
-
-    /* Source cursor in Q16 input-samples per output frame. */
-    uint32_t step = (uint32_t)(((uint64_t)srate << 16) / dst_rate);
-    uint32_t cur  = 0;
-
-    for (uint32_t i = 0; i < frames; i++) {
-        uint32_t si = cur >> 16;
-        if (si >= count) si = count - 1;
-        /* 128 is silence in the lump; widen to fill the 16-bit range. */
-        int16_t s = (int16_t)(((int)src[si] - 128) << 8);
-        out[i * 2]     = s;
-        out[i * 2 + 1] = s;
-        cur += step;
-    }
-
-    klog("[doomsnd] %s: %u samples at %u Hz -> %u frames at %u Hz\n",
-         lump, count, srate, frames, dst_rate);
-    return ac97_play(frames * 2, 0);
+    /* The mixer keeps the lump in this raw form and resamples on the way
+     * out, so all that is left to do here is hand it over. */
+    klog("[doomsnd] %s: %u samples at %u Hz -> mixer voice\n", lump, count, srate);
+    return mixer_play_raw(ds_raw + 8, count, srate);
 }

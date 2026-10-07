@@ -13,13 +13,20 @@ LOG=$(mktemp /tmp/soupos-fb.XXXXXX.log)
 MON=$(mktemp -u /tmp/soupos-fb.XXXXXX.sock)
 SHOT=$(mktemp -u /tmp/soupos-fb.XXXXXX.ppm)
 PID=""
-cleanup() { [ -n "$PID" ] && kill "$PID" 2>/dev/null; rm -f "$MON" "$LOG" "$SHOT"; }
+cleanup() { [ -n "$PID" ] && kill "$PID" 2>/dev/null; rm -f "$MON" "$TESTDISK" "$LOG" "$SHOT"; }
 trap cleanup EXIT
 
 make iso-fb >/dev/null 2>&1 || { echo "  FAIL  could not build the framebuffer ISO"; exit 1; }
 
+# A throwaway copy of the disk, for two reasons: an interactive QEMU window
+# holding disk.img must not block the tests (the image is write-locked), and
+# a hermetic disk means no state leaks between runs - stale files in the
+# image have caused a flaky check before.
+TESTDISK=$(mktemp /tmp/soupos-testdisk.XXXXXX.img)
+cp disk.img "$TESTDISK"
+
 qemu-system-i386 -accel kvm -cpu host \
-    -drive file=disk.img,format=raw,if=ide,index=0 \
+    -drive "file=$TESTDISK,format=raw,if=ide,index=0" \
     -cdrom soupOS-fb.iso -boot d \
     -m 128M -no-reboot -no-shutdown -display none \
     -serial "file:$LOG" -monitor "unix:$MON,server,nowait" >/dev/null 2>&1 &

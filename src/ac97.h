@@ -19,6 +19,7 @@ int      ac97_tone(uint32_t hz, uint32_t ms);
 /* Fill `samples` int16s of interleaved stereo sine into `out`, carrying the
  * phase accumulator across calls. Exposed for tests. */
 int      ac97_fill_tone(int16_t *out, uint32_t samples, uint32_t hz, uint32_t *phase);
+int16_t  ac97_sine_sample(uint32_t phase);
 
 /* The staging area the card plays from: write interleaved 16-bit stereo here,
  * then call ac97_play. One sound at a time, which is what the hardware's
@@ -32,3 +33,14 @@ int      ac97_play(uint32_t samples, int wait);
 
 /* Is the card still playing? */
 int      ac97_busy(void);
+
+/* The cyclic ring the software mixer feeds: 32 chunks of about 21 ms over the
+ * same staging memory. The mixer keeps LVI ahead of CIV; when it stops, the
+ * card drains and halts on its own. See mixer.c for the only caller. */
+int16_t *ac97_ring_chunk(int i);
+uint32_t ac97_ring_chunk_samples(void);
+int      ac97_ring_start(int prefilled);
+int      ac97_ring_civ(void);
+void     ac97_ring_set_lvi(int lvi);
+int      ac97_ring_halted(void);
+void     ac97_ring_stop(void);

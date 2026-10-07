@@ -188,7 +188,7 @@ eval_block and restore it on the way out, which is a few lines, but it changes
 the language's scoping rules, so it wants its own commit and a test that a
 variable declared in a loop is not visible after it.
 
-## 8. Sound — milestones 1 and 2 DONE (v0.11.0, v0.11.1); mixing left
+## 8. Sound — DONE (v0.11.0 driver, v0.11.1 Doom effects, v0.13.0 mixing)
 
 The PCI groundwork from the network card (BARs, bus mastering, interrupt
 lines) is exactly what a sound card needs, so this is cheaper now than it has

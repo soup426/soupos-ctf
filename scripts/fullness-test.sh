@@ -20,7 +20,6 @@ PID=""
 cleanup() {
     [ -n "$PID" ] && kill "$PID" 2>/dev/null
     rm -rf "$WORK" "$MON" "$LOG"
-    [ -f disk.img.fullnessbak ] && mv -f disk.img.fullnessbak disk.img
 }
 trap cleanup EXIT
 
@@ -35,11 +34,10 @@ mcopy -i "$IMG" "$WORK/big.bin" ::BIG.BIN
 dd if=/dev/zero of="$WORK/filler.bin" bs=1K count=32596 2>/dev/null
 mcopy -i "$IMG" "$WORK/filler.bin" ::FILLER.BIN
 
-[ -f disk.img ] && cp disk.img disk.img.fullnessbak
-cp "$IMG" disk.img
+DISK="$IMG"
 
 qemu-system-i386 -accel kvm -cpu host \
-    -drive file=disk.img,format=raw,if=ide,index=0 \
+    -drive "file=$DISK,format=raw,if=ide,index=0" \
     -cdrom soupOS.iso -boot d \
     -m 128M -no-reboot -no-shutdown -display none \
     -serial "file:$LOG" -monitor "unix:$MON,server,nowait" >/dev/null 2>&1 &

@@ -24,6 +24,7 @@
 #include "selftest.h"
 #include "mouse.h"
 #include "ac97.h"
+#include "mixer.h"
 #ifndef NO_DOOM
 #include "doomsnd.h"
 #include "wad.h"
@@ -1541,11 +1542,22 @@ static void cmd_sizzle(const char *args) {
         }
         wad_open = 1;
     }
-    if (doomsnd_play(args) < 0) {
-        vga_printf("  Could not play %s (is it a DS* lump?)\n", args);
-        return;
+    /* Several lumps at once, because that is what the mixer is for - and
+     * because typing two commands takes the better part of two seconds, so
+     * overlap cannot be demonstrated any other way. */
+    char name[16];
+    int started = 0;
+    while (*args) {
+        while (*args == ' ') args++;
+        int k = 0;
+        while (*args && *args != ' ' && k < (int)sizeof(name) - 1)
+            name[k++] = *args++;
+        name[k] = '\0';
+        if (!k) break;
+        if (doomsnd_play(name) < 0) vga_printf("  Could not play %s\n", name);
+        else { vga_printf("  sizzling %s\n", name); started++; }
     }
-    vga_printf("  sizzling %s\n", args);
+    if (started > 1) vga_printf("  %d voices at once\n", started);
 }
 #endif /* NO_DOOM: sizzle reads DS* lumps, so it needs the WAD reader */
 
@@ -1564,7 +1576,9 @@ static void cmd_whistle(const char *args) {
     if (!hz) hz = 440;
     if (!ms) ms = 300;
     vga_printf("  whistling %u Hz for %u ms...\n", hz, ms);
-    if (ac97_tone(hz, ms) < 0) vga_puts("  the kettle would not whistle\n");
+    /* A mixer voice, so two whistles - or a whistle over a sizzle - overlap
+     * instead of queueing. Returns at once; the mixer task does the rest. */
+    if (mixer_tone(hz, ms) < 0) vga_puts("  the kettle would not whistle\n");
 }
 
 /* larder - how much room is left on the disk. */

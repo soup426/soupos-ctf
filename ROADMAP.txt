@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.12.1
+Current version: v0.13.0
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,49 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.13.0 (2026-10-07)  — THE MIXER: SEVERAL SOUNDS AT ONCE
+  Night-queue item 8's third milestone, and the last open item in the queue.
+  The AC97 plays exactly one stream, so overlapping sounds are summed in
+  software: four voices into one cyclic ring.
+  - A voice is either a Doom lump kept in its RAW form - unsigned 8-bit at the
+    lump's own rate, resampled on the way out - or a generated tone, which is
+    a phase accumulator and no storage at all. Keeping lumps raw makes a slot
+    64 KB instead of 200. A fifth sound steals the oldest voice.
+  - The ring is 32 chunks of about 21 ms over the same staging memory, topped
+    up by a task that keeps a three-chunk lead on the card's read position.
+    NO INTERRUPT: the scheduler already wakes a task every 10 ms, which is
+    five times more often than a chunk empties, and a polled task cannot lose
+    a wakeup the way a blocked one can. Idle, the card drains and halts on its
+    own, and the task just looks less often.
+  - Summing saturates through a 32-bit accumulator. Two full-scale sounds clip
+    audibly, on purpose, rather than wrapping - which sounds like the machine
+    dying. The clipping is visible in the capture as an 880 Hz harmonic when
+    440 and 660 overlap.
+  - `whistle` and `sizzle` both became voices, so there is one audio path
+    instead of two, and `sizzle` now takes several lumps at once.
+  - TWO MEASUREMENT TRAPS, BOTH WORTH MORE THAN THE FEATURE. First, DURATION
+    CANNOT TELL YOU WHETHER SOUNDS MIXED: a pistol that queues behind a saw
+    and a pistol that is silently dropped both leave the saw's length on the
+    clock, and my first reading of "1802 ms, about right" was worthless. The
+    test that works renders both lumps on the host, sums them with the same
+    saturation, and correlates envelopes - mixed output matches the SUM
+    (1.0000) better than the louder lump alone (0.8717). Second, THE
+    KEYSTROKE DRIVER TAKES ABOUT TWO SECONDS PER COMMAND, which is longer
+    than most of these sounds, so two typed sizzles never overlap at all.
+    That artefact looked exactly like a mixing bug for a while. Both lumps now
+    start from one command, which is why `sizzle` takes a list.
+  - scripts/mixer-test.sh carries that correlation check. The main gate's tone
+    check moved to the mixer's log line, and the effect's duration window grew
+    on the upper side because the ring drains ~35 ms after a voice ends.
+  - ALSO FIXED: every test script now boots a throwaway COPY of disk.img.
+    An interactive QEMU window holds a write lock on the image, so running a
+    test while one is open failed with "Failed to get write lock" - and a
+    hermetic disk also stops state leaking between runs, which has caused a
+    flaky check before.
+  - Gate 66 -> 67 checks, four test scripts green, all four configurations
+    build from clean.
+  THE NIGHT QUEUE IS NOW EMPTY.
 
 v0.12.1 (2026-10-07)  — THE FRAMEBUFFER CONSOLE
   Night-queue item 9 finished: a full 80x25 text console rendered in the

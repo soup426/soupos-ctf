@@ -3,7 +3,7 @@
 ## What this is
 
 soupOS is a 32-bit x86 hobby OS written in C and NASM assembly (currently
-**v0.12.1**). It boots via GRUB and runs in protected mode with paging, a
+**v0.13.0**). It boots via GRUB and runs in protected mode with paging, a
 physical/heap allocator, and a cooperative scheduler. On top of that:
 
 - **Filesystem**: FAT16 read/write with subdirectories ("bowls") and a VFS shim
@@ -527,6 +527,27 @@ VGA cells doubles the work. `vga.c`'s `scroll()` copies 32-bit words (two cells
 per store) and is about twice as fast as the original cell-at-a-time loop;
 `memmove` measured 47% slower than that original. `sample` guards the row
 movement. The same caution applies anywhere a wide copy looks tempting.
+
+## The sound mixer (`src/mixer.c`, v0.13.0)
+
+Four voices summed with saturation into a cyclic AC97 ring (32 chunks of
+~21 ms), topped up by a task holding a three-chunk lead - no interrupt, because
+the 100 Hz scheduler tick is five times faster than a chunk empties. Lumps stay
+raw and resample on the way out. `whistle` and `sizzle` are both voices now, so
+there is one audio path; `sizzle` takes several lumps.
+
+**Testing overlap: duration proves nothing.** A dropped voice and a queued
+voice both leave the longer sound's length on the clock. Render both sources on
+the host, sum them with the same saturation, and correlate envelopes - the mix
+matches the sum (1.0000) over the louder source alone (0.87). That is what
+`scripts/mixer-test.sh` does. Also: **the keystroke driver takes ~2 s per
+command**, longer than most effects, so two typed commands never overlap - put
+both sounds in one command.
+
+## Every test script boots a copy of disk.img (v0.13.0)
+
+An interactive QEMU window write-locks the image, so a test sharing it fails
+with "Failed to get write lock". The copy also keeps runs hermetic.
 
 ## The framebuffer console (`src/fbcon.c`, v0.12.1)
 
