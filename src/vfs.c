@@ -22,15 +22,23 @@
 /* ---- open-handle table ---- */
 static vfs_node_t nodes[VFS_MAX_OPEN];
 
+/* Claiming a slot is a read-modify-write on shared state, and several
+ * processes can be in vfs_open or vfs_pipe at once now. Without the guard, two
+ * of them can both see slot i free and both take it, so two unrelated files
+ * end up sharing one handle. preempt_disable is enough and is cheaper than a
+ * mutex: the scan never yields, so no other task can run inside it. */
 static vfs_node_t *alloc_node(void) {
+    preempt_disable();
     for (int i = 0; i < VFS_MAX_OPEN; i++) {
         if (!nodes[i].used) {
             memset(&nodes[i], 0, sizeof(nodes[i]));
             nodes[i].used       = 1;
             nodes[i].backend_fd = -1;
+            preempt_enable();
             return &nodes[i];
         }
     }
+    preempt_enable();
     return 0;   /* table full */
 }
 

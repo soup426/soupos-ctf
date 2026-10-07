@@ -69,7 +69,8 @@ python3 scripts/qemu_keys.py "$MON" \
     "KEY:home" "KEY:ctrl-b" "KEY:end" "KEY:ctrl-c" "KEY:ctrl-v" \
     "KEY:ctrl-s" "WAIT:1" "KEY:esc" "WAIT:1" \
     "cook wc.elf < CLIP.TXT" "WAIT:3" \
-    "TYPE:clip" "KEY:ctrl-u" "KEY:ctrl-v" "KEY:ret" "WAIT:2" >/dev/null || {
+    "TYPE:clip" "KEY:ctrl-u" "KEY:ctrl-v" "KEY:ret" "WAIT:2" \
+    "cook memtest.elf A | memtest.elf B | memtest.elf C" "WAIT:14" >/dev/null || {
         echo "FAIL: could not drive the QEMU monitor"; exit 1; }
 
 fail=0
@@ -266,6 +267,16 @@ check "jot copies and pastes a marked span" 'WCOUT lines=0 words=3 bytes=14'
 # clipboard and pasted straight back, so the command only runs at all if
 # Ctrl+V put it there.
 check "Ctrl+V pastes at the prompt" '\[clip\] 4 bytes: clip'
+
+# ── Concurrent allocation ─────────────────────────────────────────────────
+# Three processes started back-to-back by one pipeline, so their ELF loads and
+# their sbrk calls are inside the physical page allocator at the same time.
+# Each fills its own pages with its own tag, yields, and checks they still say
+# what it wrote: if the allocator ever hands one frame to two processes, the
+# tags collide and whoever checks second sees the other's letter.
+for tag in A B C; do
+    check "concurrent process $tag kept its own pages" "MEMTEST OK tag=$tag"
+done
 
 # vgastress prints whole lines of a single repeated character from two tasks.
 # Any line containing both means vga_puts was interrupted mid-string.

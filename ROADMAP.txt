@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.8.4
+Current version: v0.8.5
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,39 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.8.5  (2026-10-06)  — THE PAGE ALLOCATOR WAS NOT SAFE FOR TWO PROCESSES
+  pmm_alloc_page() was completely unguarded:
+
+      for (i = 1; i < MAX_PAGES; i++)
+          if (!is_used(i)) { set_used(i); used_pages_++; return ...; }
+
+  A read-modify-write on shared state. That was fine while one program ran at
+  a time, and stopped being fine in v0.8.0: every proc_spawn calls
+  paging_new_dir, and every ELF load and every sbrk calls map_user_page, so
+  since then several processes can be inside that loop at once. Two of them
+  seeing the same page free hands the SAME physical frame to both, which is
+  silent cross-process memory corruption. used_pages_++ has the same window,
+  and that counter is what the gate's leak check reads.
+  - PROVEN, not assumed. New user/memtest.c fills its own pages with a tag and
+    checks them after yielding. Four copies launched by hand never collided,
+    because typing the commands staggers them by a second each. Launching them
+    as one pipeline starts them microseconds apart, and with a deliberate
+    switch inserted between the check and the claim the log read
+    "[pmm] RACE: page 2541 was taken while we slept" and the processes died.
+    Worth recording what did NOT reproduce it: widening the window with a busy
+    spin instead. A collision needs the OTHER task's short scan to land inside
+    the window, so stretching the window after the scan barely changes the
+    odds. That is also why this is rare in practice rather than constant.
+  - FIXED with irq_save/irq_restore around both the claim and the free,
+    matching heap.c. Interrupts off rather than a mutex because the critical
+    sections are a few instructions, never yield, and no interrupt handler
+    allocates, so there is nothing to block on.
+  - vfs.c's alloc_node had the same shape of bug: two processes in vfs_open or
+    vfs_pipe could both claim one slot in the 16-entry handle table. Guarded
+    with preempt_disable, which is enough because the scan never yields.
+  - Gate 35 -> 38 checks: three processes started by one pipeline, each
+    verifying its own pages survived the others allocating.
 
 v0.8.4  (2026-10-06)  — COPY AND PASTE
   A system clipboard shared by the editor and the shell, so a span cut in jot

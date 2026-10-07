@@ -4,6 +4,26 @@
 #define PAGE_SIZE  4096
 #define MAX_PAGES  (256 * 1024)    /* covers up to 1 GB */
 
+/* The bitmap is shared mutable state, and since v0.8.0 several processes can
+ * be inside the allocator at once: every proc_spawn calls paging_new_dir, and
+ * every ELF load and sbrk calls map_user_page. The check-and-claim below is a
+ * read-modify-write, so without this a timer preemption landing between
+ * is_used() and set_used() hands the SAME physical frame to two processes,
+ * which is silent cross-process memory corruption. used_pages_++ has the same
+ * problem and is what the gate's leak check reads.
+ *
+ * Interrupts off rather than a mutex, matching heap.c: the critical sections
+ * here are a few instructions, they never yield, and nothing in an interrupt
+ * handler allocates, so there is nothing to block on. */
+static inline uint32_t irq_save(void) {
+    uint32_t f;
+    __asm__ volatile ("pushf; pop %0; cli" : "=r"(f) :: "memory");
+    return f;
+}
+static inline void irq_restore(uint32_t f) {
+    __asm__ volatile ("push %0; popf" :: "r"(f) : "memory", "cc");
+}
+
 /* Bitmap: bit=1 means page is used */
 static uint32_t bitmap[MAX_PAGES / 32];   /* 32 KB in BSS */
 static uint32_t total_pages_ = 0;
@@ -60,22 +80,27 @@ void pmm_init(uint32_t mb_info_addr) {
 }
 
 void *pmm_alloc_page(void) {
+    uint32_t flags = irq_save();
     for (uint32_t i = 1; i < MAX_PAGES; i++) {
         if (!is_used(i)) {
             set_used(i);
             used_pages_++;
+            irq_restore(flags);
             return (void *)(i * PAGE_SIZE);
         }
     }
+    irq_restore(flags);
     return (void *)0;   /* out of memory */
 }
 
 void pmm_free_page(void *page) {
     uint32_t p = (uint32_t)page / PAGE_SIZE;
+    uint32_t flags = irq_save();
     if (p > 0 && p < MAX_PAGES && is_used(p)) {
         set_free(p);
         used_pages_--;
     }
+    irq_restore(flags);
 }
 
 uint32_t pmm_total_pages(void) { return total_pages_; }

@@ -3,7 +3,7 @@
 ## What this is
 
 soupOS is a 32-bit x86 hobby OS written in C and NASM assembly (currently
-**v0.8.4**). It boots via GRUB and runs in protected mode with paging, a
+**v0.8.5**). It boots via GRUB and runs in protected mode with paging, a
 physical/heap allocator, and a cooperative scheduler. On top of that:
 
 - **Filesystem**: FAT16 read/write with subdirectories ("bowls") and a VFS shim
@@ -462,6 +462,17 @@ soupOS runs real ring-3 user programs with hardware memory protection.
   copies prove concurrency) and `hog` (loops forever making NO syscalls, so
   only the IRQ kill path can end it). Link them at `USER_BASE` with
   `user/user.ld`; the disk recipe mcopies each one.
+
+## Allocator locking (v0.8.5)
+
+Since processes became concurrent, anything that allocates is reachable from
+several tasks at once. `pmm_alloc_page`/`pmm_free_page` take `irq_save` around
+the bitmap claim (a timer preemption between `is_used()` and `set_used()` hands
+one frame to two processes), `heap.c` already did the same for its free list,
+and `vfs.c`'s `alloc_node` uses `preempt_disable` for the handle table. None of
+these critical sections yield, which is why interrupts-off is sufficient and a
+mutex would be overkill. `user/memtest.c` plus three pipeline stages is the
+regression test.
 
 ## Clipboard (`src/clip.c`, v0.8.4)
 
