@@ -259,6 +259,22 @@ uint32_t task_count(void) {
  * not collected yet, which is a surprise for a caller asking "is anything else
  * running?": every finished program left `doom` refusing to start until the
  * next yield swept it up. */
+void task_set_service(void) { if (current) current->service = 1; }
+
+/* Alive, minus the background services. A framebuffer console and a sound
+ * mixer are permanent now, so "is anything else running?" has to mean
+ * "is another PROGRAM running?" or nothing can ever claim the machine. */
+uint32_t task_count_users(void) {
+    if (!list_head) return 0;
+    uint32_t n = 0;
+    task_t *t = list_head;
+    do {
+        if (t->state != TASK_DEAD && !t->service) n++;
+        t = t->next;
+    } while (t != list_head);
+    return n;
+}
+
 uint32_t task_count_alive(void) {
     if (!list_head) return 0;
     uint32_t n = 0;

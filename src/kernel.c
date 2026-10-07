@@ -21,6 +21,7 @@
 #include "ac97.h"
 #include "fb.h"
 #include "fbcon.h"
+#include "vga13h.h"
 #include "mixer.h"
 #include "task.h"
 #include "serial.h"
@@ -207,6 +208,8 @@ void kernel_main(uint32_t mb_magic, uint32_t mb_info) {
 
     /* ---- Scheduler bring-up ---- */
     task_init();
+
+    vga13h_init_target();   /* mode 13h draws to RAM when an LFB is present */
 
     if (mixer_start() == 0)
         vga_puts("[OK] Mixer         - 4 voices into the AC97 ring\n");

@@ -3,7 +3,7 @@
 ## What this is
 
 soupOS is a 32-bit x86 hobby OS written in C and NASM assembly (currently
-**v0.13.0**). It boots via GRUB and runs in protected mode with paging, a
+**v0.14.0**). It boots via GRUB and runs in protected mode with paging, a
 physical/heap allocator, and a cooperative scheduler. On top of that:
 
 - **Filesystem**: FAT16 read/write with subdirectories ("bowls") and a VFS shim
@@ -527,6 +527,27 @@ VGA cells doubles the work. `vga.c`'s `scroll()` copies 32-bit words (two cells
 per store) and is about twice as fast as the original cell-at-a-time loop;
 `memmove` measured 47% slower than that original. `sample` guards the row
 movement. The same caution applies anywhere a wide copy looks tempting.
+
+## The framebuffer is the default (v0.14.0)
+
+`make` builds the framebuffer kernel (FB=1); `make iso-text` builds the FB=0
+text-mode one, which is the only way to get real mode 13h. Both consoles come
+from the same cell store, so the serial mirror - and therefore the gate - is
+identical either way.
+
+**Mode 13h on a framebuffer boot**: `vga13h`'s pixel store is a pointer, like
+vga.c's cell store. Use `vga13h_pixels()`, never `0xA0000`. Drawing goes to a
+RAM shadow and `vga13h_present()` scales it 3x through a software palette copy;
+call present where a frame ends. `vga13h_enter/exit` pause and resume `fbcon`,
+because the console would otherwise paint over the picture.
+
+**A program wanting the machine to itself** must ask `task_count_users()`, not
+`task_count_alive()`: the console renderer and the mixer are permanent
+services (`task_set_service()`) and would otherwise always look like rivals.
+
+**Palette widening is `(v<<2)|(v>>4)`**, not `<<2`, or bright colours sit a
+shade dark. Do not try to match QEMU bit-for-bit here; it has its own quirk,
+and `scripts/doom-fb-test.sh` tolerates 4 levels and explains why.
 
 ## The sound mixer (`src/mixer.c`, v0.13.0)
 

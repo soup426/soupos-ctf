@@ -117,3 +117,14 @@ void fb_fill(uint32_t x0, uint32_t y0, uint32_t w, uint32_t h, uint32_t rgb) {
 }
 
 void fb_clear(uint32_t rgb) { fb_fill(0, 0, fb_w, fb_h, rgb); }
+
+/* A run of already-converted pixels straight into one scanline. The scaler in
+ * vga13h.c builds a row once and lays it down several times through this, so
+ * the palette lookup happens once per SOURCE pixel rather than once per
+ * destination pixel, and the writes to video memory stay sequential. */
+void fb_blit_row(uint32_t x, uint32_t y, const uint32_t *px, uint32_t n) {
+    if (!fb_ready || y >= fb_h || x >= fb_w) return;
+    if (x + n > fb_w) n = fb_w - x;
+    uint32_t *dst = (uint32_t *)(fb + y * fb_pitch + x * 4);
+    for (uint32_t i = 0; i < n; i++) dst[i] = px[i];
+}

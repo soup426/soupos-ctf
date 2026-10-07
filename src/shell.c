@@ -2011,18 +2011,7 @@ static void cmd_mandelbrot(void) {
 #undef MB_SC
 }
 
-/* Mode 13h is programmed through VGA registers that a linear-framebuffer
- * boot must leave alone: the card is scanning out the LFB, and reprogramming
- * it from here would need the mode-setting BIOS we cannot call. */
-static int no_mode13h(void) {
-    if (!fb_present()) return 0;
-    vga_puts("  Not on a framebuffer boot: mode 13h needs the VGA text-mode\n"
-             "  path. Boot the ordinary image for this one.\n");
-    return 1;
-}
-
 static void cmd_vgademo(void) {
-    if (no_mode13h()) return;
     vga13h_enter();
     vga13h_defpal();
 
@@ -2657,7 +2646,6 @@ static void cmd_cat(void) {
 }
 
 static void cmd_bounce(void) {
-    if (no_mode13h()) return;
     /* Screensaver: four colored balls ricochet around mode 13h. */
     #define BALLS 4
     int bx[BALLS], by[BALLS], vx[BALLS], vy[BALLS];
@@ -2785,8 +2773,7 @@ static void cmd_reheat(void) {
  * would leak the lock into an unrelated task the first time a player paused on
  * a menu. See docs/doom-reenable-plan.md. */
 static void cmd_doom(void) {
-    if (no_mode13h()) return;
-    if (task_count_alive() > 1) {
+    if (task_count_users() > 1) {
         vga_set_color(VGA_YELLOW, VGA_BLACK);
         vga_puts("  Doom needs the machine to itself.\n");
         vga_set_color(VGA_LIGHT_GREY, VGA_BLACK);

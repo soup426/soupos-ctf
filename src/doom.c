@@ -13,6 +13,7 @@
 #include "doom.h"
 #include "wad.h"
 #include "doomsnd.h"
+#include "fb.h"
 #include "vga.h"
 #include "vga13h.h"
 #include "keyboard.h"
@@ -112,15 +113,21 @@ static inline uint8_t vga_inb(uint16_t port) {
 }
 
 static void present_frame(void) {
-    /* Wait for vertical blank then copy — eliminates tearing/flicker */
-    PF_T0(t_vbl);
-    while ( vga_inb(0x3DA) & 8) {}  /* wait for end of any current vblank */
-    while (!(vga_inb(0x3DA) & 8)) {}  /* wait for start of next vblank    */
-    PF_ACC(pf_vbl, t_vbl);
+    /* Wait for vertical blank then copy — eliminates tearing/flicker.
+     * On a framebuffer boot there is no CRT to chase: 0x3DA's status bits
+     * belong to a VGA mode that is not running, and polling them would spin
+     * forever. The scaler writes a whole frame at once instead. */
+    if (!fb_present()) {
+        PF_T0(t_vbl);
+        while ( vga_inb(0x3DA) & 8) {}  /* end of any current vblank */
+        while (!(vga_inb(0x3DA) & 8)) {}  /* start of the next       */
+        PF_ACC(pf_vbl, t_vbl);
+    }
 
     PF_T0(t_copy);
     uint8_t *fb = vga13h_fb();
     for (int i = 0; i < VGA13_W * VGA13_H; i++) fb[i] = g_backbuf[i];
+    vga13h_present();
     PF_ACC(pf_copy, t_copy);
 }
 

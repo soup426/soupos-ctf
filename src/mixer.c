@@ -83,6 +83,7 @@ static void mix_chunk(int16_t *out, uint32_t samples) {
 
 static void mixer_task(void *arg) {
     (void)arg;
+    task_set_service();
     for (;;) {
         if (!any_active()) {
             if (ring_live && ac97_ring_halted()) {

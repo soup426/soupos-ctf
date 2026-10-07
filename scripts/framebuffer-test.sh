@@ -1,11 +1,12 @@
 #!/usr/bin/env bash
-# Boot the framebuffer image, log in through the rendered console, type a
-# command, and verify the glyphs from a screendump - pixel-identically against
-# the same font the kernel embeds.
+# Log in through the rendered framebuffer console, type a command, and verify
+# the glyphs from a screendump - pixel-identically against the same font the
+# kernel embeds. This runs against the DEFAULT image, which has been the
+# framebuffer build since v0.14.0.
 #
-# Not part of smoke-test.sh, which boots the text image: the two differ only in
-# the multiboot header's video request (make FB=1), which OVERRIDES grub.cfg's
-# gfxpayload, so testing the framebuffer means booting a second image.
+# The smoke gate drives the same image and sees everything over the serial
+# mirror, so it does not care which console is drawing; this is the only test
+# that checks pixels actually reach the screen.
 set -uo pipefail
 cd "$(dirname "$0")/.."
 
@@ -16,8 +17,6 @@ PID=""
 cleanup() { [ -n "$PID" ] && kill "$PID" 2>/dev/null; rm -f "$MON" "$TESTDISK" "$LOG" "$SHOT"; }
 trap cleanup EXIT
 
-make iso-fb >/dev/null 2>&1 || { echo "  FAIL  could not build the framebuffer ISO"; exit 1; }
-
 # A throwaway copy of the disk, for two reasons: an interactive QEMU window
 # holding disk.img must not block the tests (the image is write-locked), and
 # a hermetic disk means no state leaks between runs - stale files in the
@@ -27,7 +26,7 @@ cp disk.img "$TESTDISK"
 
 qemu-system-i386 -accel kvm -cpu host \
     -drive "file=$TESTDISK,format=raw,if=ide,index=0" \
-    -cdrom soupOS-fb.iso -boot d \
+    -cdrom soupOS.iso -boot d \
     -m 128M -no-reboot -no-shutdown -display none \
     -serial "file:$LOG" -monitor "unix:$MON,server,nowait" >/dev/null 2>&1 &
 PID=$!

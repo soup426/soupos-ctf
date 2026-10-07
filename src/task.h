@@ -38,6 +38,9 @@ typedef struct task {
     uint32_t      user_resume_esp;
     struct proc  *proc;          /* ring-3 process this task runs, or NULL  */
     void         *soupyc;        /* soupyc_ctx_t while this task interprets  */
+    int           service;       /* a background service (fbcon, mixer): it
+                                  * is alive, but it is not another program
+                                  * competing for the machine */
 } task_t;
 
 /* Simple intrusive wait queue - FIFO singly-linked list of blocked tasks.
@@ -80,6 +83,13 @@ uint32_t task_count(void);
 /* Like task_count(), but ignores DEAD tasks awaiting the reaper. Use this to
  * ask "is any other task actually running?". */
 uint32_t task_count_alive(void);
+
+/* Alive tasks that are not background services. This is the number a program
+ * asking "do I have the machine to myself?" actually wants. */
+uint32_t task_count_users(void);
+
+/* Mark the calling task a background service. */
+void     task_set_service(void);
 
 /* Iteration. Start at task_list_head() (NULL if no tasks), follow .next
  * until it wraps back to the head. The list is circular so do not

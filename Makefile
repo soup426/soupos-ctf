@@ -30,11 +30,15 @@ SRC_ASM = $(wildcard src/*.asm)
 # builds with DOOM=0: 3000 lines parsing a 4 MB data file is a lot of extra
 # attack surface in an image whose whole value is a precisely specified solve
 # path, and the WAD is 4 MB of a 32 MB disk.
-# FB=1 asks GRUB for a linear framebuffer in the multiboot header. Off by
-# default: the request overrides grub.cfg's gfxpayload, so a kernel that asks
-# gets graphics even from the text menu entry, and the text console (which the
-# smoke gate drives) would have nowhere to draw.
-FB     ?= 0
+# FB asks GRUB for a linear framebuffer in the multiboot header. ON by
+# default since v0.14.0: the framebuffer console is the normal way to run
+# soupOS, and mode 13h programs (doom, vgademo, bounce) scale into it.
+#
+# FB=0 still builds the text-mode kernel, which is the only way to get real
+# mode 13h and the hardware text console. The request has to be a build flag
+# rather than a boot menu entry because it OVERRIDES grub.cfg's gfxpayload -
+# see the note in src/boot.asm.
+FB     ?= 1
 ifeq ($(FB),1)
   CFLAGS  += -DFB_REQUEST
   ASFLAGS += -DFB_REQUEST
@@ -131,14 +135,16 @@ iso: $(TARGET)
 # The same kernel booted into the framebuffer menu entry instead of the text
 # one. A separate image rather than a build flag, because the difference is
 # entirely GRUB's gfxpayload: the kernel is identical and decides at runtime.
-ISO_FB  = soupOS-fb.iso
-iso-fb:
+# The text-mode image: the same tree built with FB=0, so mode 13h is real and
+# the console is the hardware text buffer. `iso` builds the framebuffer image.
+ISO_TEXT = soupOS-text.iso
+iso-text:
 	$(MAKE) clean >/dev/null
-	$(MAKE) FB=1 $(TARGET)
-	rm -rf .iso-fb && cp -r iso .iso-fb
-	cp $(TARGET) .iso-fb/boot/kernel.elf
-	grub-mkrescue -o $(ISO_FB) .iso-fb 2>/dev/null
-	rm -rf .iso-fb
+	$(MAKE) FB=0 $(TARGET)
+	rm -rf .iso-text && cp -r iso .iso-text
+	cp $(TARGET) .iso-text/boot/kernel.elf
+	grub-mkrescue -o $(ISO_TEXT) .iso-text 2>/dev/null
+	rm -rf .iso-text
 	$(MAKE) clean >/dev/null
 
 # Create FAT16 disk image with test files (32 MB, primary master)

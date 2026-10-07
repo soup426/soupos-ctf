@@ -33,6 +33,7 @@
 static uint16_t shadow[COLS * ROWS];
 static uint32_t ox, oy;              /* centring offsets in pixels */
 static int      last_cr = -1, last_cc = -1;
+static volatile int paused;      /* a mode 13h program owns the screen */
 
 /* The classic VGA 16-colour palette, as RGB. Attributes index it exactly as
  * the text hardware would: low nibble foreground, next three bits background. */
@@ -60,9 +61,12 @@ static void draw_cell(int r, int c, uint16_t cell, int cursor) {
 
 static void fbcon_task(void *arg) {
     (void)arg;
+    task_set_service();
     volatile uint16_t *cells = (volatile uint16_t *)vga_cells();
 
     for (;;) {
+        if (paused) { task_sleep(50); continue; }
+
         for (int i = 0; i < COLS * ROWS; i++) {
             uint16_t v = cells[i];
             if (v != shadow[i]) {
@@ -98,4 +102,15 @@ int fbcon_start(void) {
     klog("[fbcon] 80x25 console at %u,%u on the %ux%u framebuffer\n",
          ox, oy, fb_width(), fb_height());
     return 0;
+}
+
+/* Mode 13h programs draw to the whole framebuffer, so the console has to stop
+ * painting over them. On resume every cell is marked dirty, because the
+ * screen underneath is now a Doom frame rather than the text we last drew. */
+void fbcon_pause(void) { paused = 1; }
+
+void fbcon_resume(void) {
+    for (int i = 0; i < COLS * ROWS; i++) shadow[i] = 0xFFFF;
+    last_cr = last_cc = -1;
+    paused = 0;
 }

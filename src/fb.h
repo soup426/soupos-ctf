@@ -22,3 +22,6 @@ uint8_t  fb_bits(void);
 void     fb_put (uint32_t x, uint32_t y, uint32_t rgb);
 void     fb_fill(uint32_t x0, uint32_t y0, uint32_t w, uint32_t h, uint32_t rgb);
 void     fb_clear(uint32_t rgb);
+
+/* A run of converted pixels into one scanline, for the mode 13h scaler. */
+void     fb_blit_row(uint32_t x, uint32_t y, const uint32_t *px, uint32_t n);

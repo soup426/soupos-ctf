@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.13.0
+Current version: v0.14.0
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,44 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.14.0 (2026-10-07)  — THE FRAMEBUFFER IS THE DEFAULT, AND DOOM RENDERS INTO IT
+  soupOS now boots to a 1024x768 framebuffer with a glyph-rendered console,
+  and mode 13h programs scale into it. FB=0 still builds the text-mode kernel,
+  which is the only way to get real mode 13h hardware.
+  - THE SAME TRICK AS THE TEXT CONSOLE, ONE LAYER DOWN. vga13h's pixel store
+    became a pointer: the real 0xA0000 on a text boot, a RAM shadow on a
+    framebuffer boot. Doom already rendered into its own backbuffer and copied
+    to hardware in exactly ONE place, so redirecting that one copy was the
+    whole integration. vga13h_present() scales 320x200 up by 3 - the largest
+    whole multiple that fits 1024x768 - through a software copy of the palette.
+  - The scaler builds each row once into a line buffer and lays it down three
+    times, so the palette lookup happens once per SOURCE pixel instead of once
+    per destination pixel, and the writes to video memory stay sequential.
+  - vga13h_enter/exit now hand the screen over: the console stops painting (it
+    would otherwise draw text over Doom thirty times a second) and every cell
+    is marked dirty on the way back, because what is underneath is no longer
+    the text we last drew. Any mode 13h program gets this for free.
+  - TASKS CAN DECLARE THEMSELVES SERVICES. Doom asks for the machine to itself,
+    and with a console renderer and a sound mixer always running the answer was
+    permanently no. task_count_users() ignores tasks that called
+    task_set_service(), which is the number that question actually wants.
+  - PALETTE PRECISION, FOUND BY COMPARING FRAMES. Widening 6 bits to 8 is bit
+    replication, (v<<2)|(v>>4), not a plain <<2: the latter leaves full scale
+    at 252 and every bright colour a shade dark. Found by comparing a
+    framebuffer frame against a mode 13h frame pixel by pixel - agreement went
+    from 42% to 99.97%. The remaining 18 pixels of 64000 are a three-row band
+    that differs by 13 levels, which is an animated strip between two separate
+    runs.
+  - DELIBERATELY NOT bit-identical to QEMU: its VGA renders odd 6-bit values as
+    (v<<2)|3, replicating the low bit, which is an emulator artefact. Matching
+    it would make the comparison exact and the colours wrong, so
+    scripts/doom-fb-test.sh carries a 4-level tolerance and says why. A real
+    fault - wrong scale, wrong offset, swapped channels, unshadowed palette -
+    scores 1-45%, nowhere near the threshold.
+  - `make iso` is now the framebuffer image; `make iso-text` builds the FB=0
+    one. Gate still 67 on the default image, five test scripts green, five
+    build configurations clean.
 
 v0.13.0 (2026-10-07)  — THE MIXER: SEVERAL SOUNDS AT ONCE
   Night-queue item 8's third milestone, and the last open item in the queue.
