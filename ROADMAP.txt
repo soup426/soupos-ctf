@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.19.0
+Current version: v0.19.1
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,30 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.19.1 (2026-10-07)  — THE JOB-CONTROL FLAKE: NOT REPRODUCED, NOT PAPERED OVER
+  Third queue, item 1. A gate run had failed with "stopped job kept running:
+  1 lines while parked" and the next passed. The item said to find out why
+  before touching the check, and the honest result is that I could not.
+  - Twenty-four targeted runs - ten in isolation, fourteen under the gate's own
+    conditions, with two background markers already running and an `orders`
+    between the stop and the resume - never reproduced it. So it is below
+    about four percent, which is also why it had not been seen before.
+  - What the code says, which is why the failure is interesting rather than
+    obviously benign: proc_take_stop logs "stopped" at the moment it parks,
+    not when the stop is requested, so a line printed on the way to the safe
+    point should land BEFORE that message. A line after it is not explained by
+    stop latency alone.
+  - ONE DIFFERENT ANOMALY DID APPEAR, once in fourteen: the "continued" marker
+    never arrived, so the job did not resume or did not log it. Recorded rather
+    than chased, because one occurrence is not a diagnosis.
+  - So: the check is UNCHANGED, and its failure message now prints the log
+    lines around the boundary. The next occurrence will carry its own evidence
+    instead of leaving the investigation to start from nothing again.
+    scripts/jobcontrol-soak.sh drives the sequence in bulk for anyone with the
+    machine spare.
+  - Loosening a check because it caught something, without understanding what,
+    is how a gate stops being worth running. It stays as it is.
 
 v0.19.0 (2026-10-07)  — VOLUME, AND WHAT A FAILING TEST ACTUALLY MEANT
   New queue item 8, the last in that queue. `hush [0-100]` sets how loud the

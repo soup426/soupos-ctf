@@ -31,7 +31,7 @@ to measure this machine, which is the part that keeps being the hard bit.
 
 ---
 
-## 1. The flaky job-control check
+## 1. The flaky job-control check — INVESTIGATED (v0.19.1), still open
 
 One gate run failed on `stopped job kept running: 1 lines while parked`; the
 next passed, and nothing in that commit touched job control.
@@ -44,6 +44,15 @@ next passed, and nothing in that commit touched job control.
   fails, and look at where the escaping line came from.
 - **Do not loosen the check until that is known.** A gate that is adjusted to
   accept what it caught stops being worth running.
+
+**2026-10-07: not reproduced in 24 runs, so this stays open.** Ten in isolation
+and fourteen under the gate's conditions. Below about 4%. The check is
+unchanged; its failure now prints the surrounding log lines, and
+scripts/jobcontrol-soak.sh drives the sequence in bulk. Worth knowing before
+the next attempt: proc_take_stop logs "stopped" when it parks, not when the
+stop is requested, so stop latency alone does not explain a line landing after
+it. A second anomaly appeared once in fourteen - the job never logged
+"continued" - which may or may not be the same bug seen from the other side.
 
 ## 2. Doom at the framebuffer's own resolution
 

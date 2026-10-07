@@ -289,6 +289,15 @@ if [ -n "$stop_line" ] && [ -n "$cont_line" ]; then
         echo "  ok    a stopped job really is parked (no output for $(( cont_line - stop_line )) log lines)"
     else
         echo "  FAIL  stopped job kept running: $while_parked lines while parked"
+        # Print the boundary, because this one is RARE - twenty-four targeted
+        # runs on 2026-10-07 never reproduced it - so the next occurrence has
+        # to carry its own evidence or the investigation starts from nothing
+        # again. What matters is whether the escaping line sits before or
+        # after the kernel's own "stopped" message in time, not just in the
+        # file: proc_take_stop logs it at the moment it parks.
+        echo "        --- log lines $((stop_line - 2)) to $((cont_line + 1)) ---"
+        awk -v a="$((stop_line - 2))" -v b="$((cont_line + 1))" \
+            'NR>=a && NR<=b {printf "        %5d  %s\n", NR, $0}' "$LOG"
         fail=1
     fi
     after=$(awk -v b="$cont_line" 'NR>b' "$LOG" | grep -cE '\[p:Z\]' || true)
