@@ -1578,12 +1578,19 @@ static void cmd_hatch(const char *args) {
     keyboard_flush();
 
     int served = 0;
+    /* Listen ONCE: the listener is not a connection any more, so it stays
+     * armed while a client is being served and the next SYN takes its own
+     * slot instead of being refused. */
+    if (tcp_listen((uint16_t)port) < 0) {
+        vga_puts("  could not listen\n");
+        return;
+    }
     while (!keyboard_available()) {
-        if (tcp_listen((uint16_t)port) < 0) break;
-        if (tcp_accept(100) < 0) continue;          /* one second, then look at the keyboard */
+        int h = tcp_accept(100);                    /* a second, then check the keyboard */
+        if (h < 0) continue;
 
-        int n = tcp_recv((uint8_t *)req, sizeof(req) - 1, 200);
-        if (n <= 0) { tcp_close(); continue; }
+        int n = tcp_recv_on(h, (uint8_t *)req, sizeof(req) - 1, 200);
+        if (n <= 0) { tcp_close_on(h); continue; }
         req[n] = '\0';
 
         /* "GET /NAME HTTP/1.0" - only the path matters here. */
@@ -1609,8 +1616,8 @@ static void cmd_hatch(const char *args) {
                          "Content-Length: 11\r\n"
                          "Connection: close\r\n\r\n");
             hl = (int)strlen(head);
-            tcp_send(head, (uint16_t)hl);
-            tcp_send(nf, (uint16_t)(sizeof(nf) - 1));
+            tcp_send_on(h, head, (uint16_t)hl);
+            tcp_send_on(h, nf, (uint16_t)(sizeof(nf) - 1));
             vga_printf("  404 %s\n", path);
         } else {
             /* Content-Length matters: without it a client waits for the close
@@ -1628,16 +1635,16 @@ static void cmd_hatch(const char *args) {
             strcpy(head, "HTTP/1.0 200 OK\r\nContent-Type: text/plain\r\nContent-Length: ");
             strcat(head, num);
             strcat(head, "\r\nConnection: close\r\n\r\n");
-            tcp_send(head, (uint16_t)strlen(head));
-            tcp_send(body, (uint16_t)got);
+            tcp_send_on(h, head, (uint16_t)strlen(head));
+            tcp_send_on(h, body, (uint16_t)got);
             vga_printf("  200 %s (%u bytes)\n", path, got);
             served++;
         }
-        tcp_close();
+        tcp_close_on(h);
         klog("[hatch] served %s\n", path);
     }
     keyboard_flush();
-    tcp_abort();
+    tcp_stop_listening();
     vga_printf("  hatch closed after %d file%s\n", served, served == 1 ? "" : "s");
 }
 

@@ -48,8 +48,23 @@ int         tcp_connect(uint32_t dst_ip, uint16_t dst_port);
  *
  * tcp_listen arms it and returns at once; tcp_accept blocks until a client has
  * completed the handshake, returning 0, or -1 after `ticks` (100 Hz). */
+/* Several connections at once, since v0.21.0. The listener owns no connection
+ * of its own: a SYN takes a free slot and the listener keeps listening, so a
+ * client knocking mid-request is served rather than refused.
+ *
+ * tcp_accept returns a HANDLE, and the handle forms below act on it. The
+ * plain forms act on the one connection tcp_connect made, which is all the
+ * outbound commands need. */
 int         tcp_listen(uint16_t port);
+void        tcp_stop_listening(void);
 int         tcp_accept(uint32_t ticks);
+
+int         tcp_send_on(int h, const void *data, uint16_t len);
+int         tcp_recv_on(int h, uint8_t *out, uint16_t max, uint32_t ticks);
+void        tcp_close_on(int h);
+void        tcp_abort_on(int h);
+int         tcp_peer_done_on(int h);
+tcp_state_t tcp_state_of(int h);
 
 /* Send data, blocking until the peer acknowledges it. Returns the number of
  * bytes sent, or -1 if the connection failed. Task context only. */

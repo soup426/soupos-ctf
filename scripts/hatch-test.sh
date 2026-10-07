@@ -56,6 +56,34 @@ else
     fail=1
 fi
 
+# Three clients at once. Before the connection table this was impossible: the
+# listener WAS the connection, so the second and third were refused. The sizes
+# are the files' real ones, so a muddled response shows up as a wrong count.
+# NOTE: wait for the curl PIDs specifically. A bare `wait` also waits for the
+# QEMU process started above, which never exits, so the test hangs - the
+# fetches themselves finish in milliseconds.
+par_ok=1
+par_pids=""
+for f in HELLO.TXT:47 RECIPE.TXT:75 SECRET.TXT:31; do
+    name=${f%%:*}; want=${f##*:}
+    ( got=$(curl -s -m 20 "http://127.0.0.1:$PORT/$name" 2>/dev/null | wc -c)
+      [ "$got" = "$want" ] || echo "BAD $name:$got" ) >> "$LOG.par" 2>&1 &
+    par_pids="$par_pids $!"
+done
+for pid in $par_pids; do wait "$pid"; done
+if [ -s "$LOG.par" ]; then
+    echo "  FAIL  parallel fetches came back wrong: $(cat "$LOG.par" | tr '\n' ' ')"
+    par_ok=0; fail=1
+fi
+rm -f "$LOG.par"
+slots=$(grep -oE "slot [0-9]+" "$LOG" | sort -u | wc -l)
+if [ "$par_ok" = "1" ] && [ "$slots" -ge 2 ]; then
+    echo "  ok    three clients served at once, across $slots connection slots"
+elif [ "$par_ok" = "1" ]; then
+    echo "  FAIL  three fetches worked but all reused one slot: not concurrent"
+    fail=1
+fi
+
 code=$(curl -s -m 15 -o /dev/null -w '%{http_code}' "http://127.0.0.1:$PORT/NOPE.TXT" 2>/dev/null)
 if [ "${code:-0}" = "404" ]; then
     echo "  ok    a missing file gives 404"

@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.20.0
+Current version: v0.21.0
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,31 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.21.0 (2026-10-07)  — MORE THAN ONE CONNECTION AT A TIME
+  Third queue, item 4. `hatch` served one client, then listened again, because
+  the listener WAS the connection - the same single block of state. Now there
+  is a table of four, and the listener owns none of them.
+  - A SYN for the listening port takes a free slot and the listener stays
+    listening, so a client knocking mid-request is served instead of refused.
+    tcp_input's "is this for our one connection?" became a four-tuple lookup,
+    which is the whole structural change; the state machine itself did not
+    move an inch.
+  - The public API grew handle forms - tcp_send_on, tcp_recv_on, tcp_close_on -
+    and tcp_accept returns one. The plain forms stayed, forwarding to whichever
+    slot tcp_connect took, because reserve, holler and takeout each make
+    exactly one outbound connection and should not have to care.
+  - Four slots at 4 KB of receive buffer each is 16 KB, which is the whole cost.
+  - PROVEN BY THREE CLIENTS AT ONCE: HELLO.TXT, RECIPE.TXT and SECRET.TXT
+    fetched in parallel come back with their real sizes - 47, 75 and 31 bytes -
+    across three DIFFERENT slots. The slot numbers are the evidence that they
+    overlapped rather than queued, and hatch-test.sh now checks both.
+  - THE TEST HUNG AND IT WAS MY SHELL, NOT THE KERNEL. The parallel block ended
+    in a bare `wait`, which waits for every background job - including the QEMU
+    process, which never exits. Timing the fetches settled it in one run: each
+    took between four and twenty-one milliseconds and returned 200, so nothing
+    was slow at all. It waits on the curl PIDs now, with a note saying why.
+  - Gate 72.
 
 v0.20.0 (2026-10-07)  — WRITING LONG FILENAMES
   Third queue, item 3. Reading them landed in v0.16.0 and left an asymmetry:

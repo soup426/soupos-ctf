@@ -99,7 +99,7 @@ mention and the old allocator could not meet. Noted while there: soupOS's
 permission byte is VFAT's case-flags byte, so other tools display our aliases in
 lower case - cosmetic, pre-existing, now documented.
 
-## 4. More than one connection at a time
+## 4. More than one connection at a time — DONE (v0.21.0)
 
 `hatch` serves one request, then listens again, because the listener IS the
 connection - one block of state.
@@ -111,6 +111,13 @@ connection - one block of state.
   the state machine itself does not move.
 - Verify with two `curl`s in parallel against `hatch`, both getting their own
   file intact.
+
+**2026-10-07: done, v0.21.0, gate 72.** Three in parallel, each with its real
+size, across three different slots - the slot numbers being what proves they
+overlapped rather than queued. The item's prediction held exactly: the lookup
+was the whole change and the state machine did not move. Lesson for the next
+script: a bare `wait` also waits for QEMU, which never exits, and that looked
+like a slow server until the fetches were timed at 4-21 ms each.
 
 ## 5. A live view of the machine
 

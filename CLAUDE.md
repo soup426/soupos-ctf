@@ -621,6 +621,17 @@ suspecting the directory parser.
 
 Writing long names is not implemented: a new file still gets a mangled 8.3 name.
 
+## Several connections at once (v0.21.0)
+
+`tcp.c` holds a table of four connections; **the listener owns none of them**,
+so a SYN takes a free slot and the listener keeps listening. `tcp_accept`
+returns a handle and `tcp_send_on`/`tcp_recv_on`/`tcp_close_on` act on it; the
+plain `tcp_send`/`tcp_recv`/`tcp_close` forward to the slot `tcp_connect` took,
+for the outbound commands.
+
+**In a test script, never use a bare `wait`** - it waits for the QEMU process
+too, which never exits. Collect the PIDs you care about and wait on those.
+
 ## Serving: the listening socket (v0.15.0)
 
 `hatch [port]` answers HTTP GETs for files on the FAT volume;
