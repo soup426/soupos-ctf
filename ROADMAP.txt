@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.18.1
+Current version: v0.18.2
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,32 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.18.2 (2026-10-07)  — WARNINGS ARE ERRORS NOW
+  New queue item 7. One tolerated warning teaches the eye to skip the
+  compiler's output, and the `sink` one had been doing exactly that all
+  session.
+  - `sink` is the accumulator a deliberate cpu-burner writes and nothing read,
+    so GCC was right. It is read now, in the line that reports the burn
+    finished, which both silences the warning honestly and shows the loop ran
+    rather than being optimised away.
+  - THE EXTRA FLAGS EARNED THEIR PLACE IMMEDIATELY. Beyond -Wall -Wextra, this
+    now builds with -Wshadow, -Wpointer-arith, -Wstrict-prototypes and
+    -Wold-style-definition, and -Wshadow caught something from the same day:
+    the `pixels` global I added to vga13h.c for the framebuffer work shadows
+    vga13h_blit's parameter of the same name. Not a bug - that function wants
+    its parameter and gets it - but a trap for whoever edits it next, so the
+    newcomer yielded the name and is `pixel_store`.
+  - -Werror, with WERROR=0 to turn it off for bisecting or for a newer GCC
+    that invents a warning this code has not met. Five configurations build
+    clean: default, FB=0, DOOM=0, CHALLENGE=1 DOOM=0 and PROFILE=1.
+  - A FLAKE WORTH RECORDING RATHER THAN FIXING BLIND. One gate run failed on
+    "stopped job kept running: 1 lines while parked" and the next passed. That
+    check asserts a Ctrl+Z'd process prints nothing while parked, and one line
+    slipping out looks like a race between the stop taking effect and the
+    process's next write. Nothing in this commit touches job control. It is in
+    the queue as its own item; loosening the check to accept what it caught
+    would be the wrong instinct without understanding it first.
 
 v0.18.1 (2026-10-07)  — WHAT EACH TASK COSTS
   New queue item 6. `ps` grew a CPU% column, and the question the item was

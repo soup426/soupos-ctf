@@ -12,8 +12,21 @@ CC      = gcc
 # (no CR4.OSFXSR / FXSAVE area), and QEMU's default `qemu32` CPU does not even
 # expose SSE2 — so the first such instruction is an invalid opcode, which with
 # no IDT loaded yet triple-faults the machine before the GDT is installed.
+# -Werror, because one tolerated warning teaches you to read past the rest:
+# the `sink` one sat there for a whole session and trained the eye to skip the
+# compiler's output. The extra flags beyond -Wall -Wextra earn their place -
+# -Wshadow caught a global shadowing vga13h_blit's parameter the day it was
+# added. WERROR=0 turns it off for bisecting or for a newer GCC that invents a
+# warning this code has not met yet.
+WERROR ?= 1
+ifeq ($(WERROR),1)
+  WARNFLAGS = -Werror
+endif
+
 CFLAGS  = -m32 -std=gnu99 -ffreestanding -fno-stack-protector -fno-builtin \
           -nostdlib -Wall -Wextra -Iinclude -Isrc \
+          -Wshadow -Wpointer-arith -Wstrict-prototypes -Wold-style-definition \
+          $(WARNFLAGS) \
           -mgeneral-regs-only \
           -O2 -g -fno-omit-frame-pointer
 
@@ -76,7 +89,7 @@ endif
 # from the link while a stale object still references it, so you get an
 # undefined reference to something you deliberately compiled out. Stamp the
 # config into a file and make every object depend on it.
-CONFIG_SIG := DOOM=$(DOOM) CHALLENGE=$(CHALLENGE) PROFILE=$(PROFILE) FB=$(FB)
+CONFIG_SIG := DOOM=$(DOOM) CHALLENGE=$(CHALLENGE) PROFILE=$(PROFILE) FB=$(FB) WERROR=$(WERROR)
 
 # Rewrite the stamp during parsing, before any rule runs, so .build-config is
 # just an ordinary prerequisite. Done with $(shell ...) rather than a FORCE

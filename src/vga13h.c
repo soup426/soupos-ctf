@@ -25,15 +25,19 @@
  *
  * Same shape as the text console's cell store (see vga.c): one pointer, set
  * once at boot, and every caller carries on unchanged. */
+/* Named pixel_store, not pixels: vga13h_blit takes a parameter called
+ * `pixels` for its source image, and a global of the same name shadows it -
+ * harmless there, a trap for whoever edits that function next. The newcomer
+ * yields the name. */
 static uint8_t  shadow_pixels[VGA13_W * VGA13_H];
-static uint8_t *pixels = (uint8_t *)0xA0000u;
+static uint8_t *pixel_store = (uint8_t *)0xA0000u;
 static uint32_t pal32[256];              /* the palette as the LFB wants it */
 static int      to_fb;                   /* scaling, rather than direct     */
 
-uint8_t *vga13h_pixels(void) { return pixels; }
+uint8_t *vga13h_pixels(void) { return pixel_store; }
 
 void vga13h_init_target(void) {
-    if (fb_present()) { pixels = shadow_pixels; to_fb = 1; }
+    if (fb_present()) { pixel_store = shadow_pixels; to_fb = 1; }
 }
 
 /* Integer scale, so the picture stays crisp. 3x of 320x200 is 960x600, which
@@ -48,7 +52,7 @@ void vga13h_present(void) {
     uint32_t oy = (fb_height() - VGA13_H * SCALE) / 2;
 
     for (int sy = 0; sy < VGA13_H; sy++) {
-        const uint8_t *src = pixels + sy * VGA13_W;
+        const uint8_t *src = pixel_store + sy * VGA13_W;
         for (int sx = 0; sx < VGA13_W; sx++) {
             uint32_t c = pal32[src[sx]];
             uint32_t *o = &line[sx * SCALE];
@@ -163,7 +167,7 @@ void vga13h_enter(void) {
      * drawing works and vga13h_present() puts it on screen. */
     if (to_fb) {
         fbcon_pause();                 /* the console must stop painting */
-        for (int i = 0; i < VGA13_W * VGA13_H; i++) pixels[i] = 0;
+        for (int i = 0; i < VGA13_W * VGA13_H; i++) pixel_store[i] = 0;
         fb_clear(0x00000000);
         return;
     }

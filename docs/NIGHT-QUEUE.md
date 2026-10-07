@@ -149,7 +149,7 @@ than who worked - a task halted at a prompt still counts, so the shell reads
 100% - which is stated in ps's own comment and in CLAUDE.md, because it is the
 sort of number that invites a wrong reading.
 
-## 7. A warnings sweep, then -Werror
+## 7. A warnings sweep, then -Werror — DONE (v0.18.2)
 
 `src/shell.c` has had a `variable 'sink' set but not used` warning all night,
 which is exactly how warnings accumulate: one harmless one teaches you to read
@@ -159,6 +159,21 @@ past the rest.
   add `-Werror` so the next one cannot be ignored.
 - Expect `-Werror` to be the easy part and the fixes to turn up at least one
   thing that is actually a bug.
+
+**2026-10-07: done, v0.18.2.** The prediction half held: the only -Wall warning
+was the deliberate cpu-burner's accumulator, but adding -Wshadow immediately
+caught a global added the same day shadowing vga13h_blit's parameter. Not a bug
+yet, which is the point of catching it. Five configurations build clean.
+
+### New item: a flaky job-control check
+
+One gate run failed on "stopped job kept running: 1 lines while parked" and the
+next passed, with nothing in that commit touching job control. The check asserts
+a Ctrl+Z'd process prints nothing while parked; one line escaping looks like a
+race between the stop taking effect and the process's next write. Find out
+whether the kernel is late taking the stop at a safe point, or whether the
+check is simply tighter than the stop can be - and do NOT loosen it until that
+is known.
 
 ## 8. Volume, for the mixer
 

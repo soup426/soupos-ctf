@@ -2451,7 +2451,9 @@ static void spinbg_task(void *arg) {
         }
         for (int i = 0; i < 200000; i++) sink += (uint32_t)i;  /* burn CPU, never yield */
     }
-    klog("[spin] done\n");
+    /* Read the accumulator, so the compiler can see the loop mattered and
+     * the log shows it actually ran rather than being elided. */
+    klog("[spin] done (burn checksum %u)\n", sink);
 }
 
 static void cmd_spinbg(void) {
