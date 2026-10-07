@@ -6,7 +6,9 @@
 # (password)": that line is only reached after the key exchange succeeded,
 # NEWKEYS went both ways, and SERVICE_ACCEPT came back ENCRYPTED. The
 # fingerprint the client prints must be the one the kernel logged, and after
-# a reboot of the same disk it must not change.
+# a reboot of the same disk it must not change. Then the real thing, via
+# scripts/ssh-login.py: a password login, two commands answered through the
+# channel, and a wrong password refused.
 set -uo pipefail
 cd "$(dirname "$0")/.."
 
@@ -52,6 +54,12 @@ echo "$client" | grep -q "Permission denied (password)" \
     && echo "  ok    refused with password offered" || { echo "  FAIL  did not end at Permission denied"; fail=1; }
 [ -n "$cfp" ] && [ "$cfp" = "$kfp1" ] \
     && echo "  ok    client saw the kernel's fingerprint ($cfp)" || { echo "  FAIL  fingerprint mismatch ('$cfp' vs '$kfp1')"; fail=1; }
+python3 scripts/ssh-login.py "$PORT" good \
+    && echo "  ok    password login, whoami and larder over the channel" \
+    || { echo "  FAIL  interactive login did not work"; fail=1; }
+python3 scripts/ssh-login.py "$PORT" bad \
+    && echo "  ok    a wrong password is refused" \
+    || { echo "  FAIL  wrong password was not refused"; fail=1; }
 halt; rm -f "$LOG" "$MON"
 
 boot

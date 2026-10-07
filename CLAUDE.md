@@ -627,7 +627,7 @@ Writing long names is not implemented: a new file still gets a mangled 8.3 name.
 4 KB packet cap. The chacha20-poly1305@openssh.com framing (two keys, length
 encrypted separately, seq as nonce) lives in `write_packet`/`read_packet`; the
 host key seed is `/HOSTKEY.ED`. Verify with `scripts/ssh-test.sh`, which runs
-the real `ssh -vvv` and compares fingerprints. Userauth is refused until S7. TCP has a table of four listeners (`tcp_accept(port, ticks)`), so `pass`, `vault` and `hatch` coexist; `pass` and `hatch` build without Doom.
+the real `ssh -vvv` and compares fingerprints. Password userauth against the roster, then one session channel bridged to the console through a 4 KB output ring (`ssh_sink` -> `flush_output`); `scripts/ssh-login.py` drives a real login with pexpect. TCP has a table of four listeners (`tcp_accept(port, ticks)`), so `pass`, `vault` and `hatch` coexist; `pass` and `hatch` build without Doom.
 
 ## Kill wakes a blocked task (v0.27.0)
 

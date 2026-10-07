@@ -176,7 +176,7 @@ curve25519-sha256 kex with an ssh-ed25519 host key. Verify by connecting
 with the real `ssh` client with -vvv: it must reach "SSH2_MSG_NEWKEYS sent"
 and report the expected fingerprint, even before auth exists.
 
-### S7. Userauth and the session channel
+### S7. Userauth and the session channel  — DONE v0.30.0
 Password auth against users.c; then a session channel with pty-req and shell,
 attached to the same console sink and byte translator the pass uses. The
 acceptance test is `ssh headchef@localhost -p <port>` from the host giving a

@@ -25,6 +25,7 @@
 #include "curve25519.h"
 #include "ed25519.h"
 #include "users.h"
+#include "console.h"
 #include "str.h"
 #include "klog.h"
 
@@ -41,6 +42,18 @@
 #define MSG_USERAUTH_REQUEST 50
 #define MSG_USERAUTH_FAILURE 51
 #define MSG_USERAUTH_SUCCESS 52
+#define MSG_GLOBAL_REQUEST   80
+#define MSG_REQUEST_FAILURE  82
+#define MSG_CHANNEL_OPEN     90
+#define MSG_CHANNEL_OPEN_OK  91
+#define MSG_CHANNEL_OPEN_FAIL 92
+#define MSG_CHANNEL_WINDOW   93
+#define MSG_CHANNEL_DATA     94
+#define MSG_CHANNEL_EOF      96
+#define MSG_CHANNEL_CLOSE    97
+#define MSG_CHANNEL_REQUEST  98
+#define MSG_CHANNEL_SUCCESS  99
+#define MSG_CHANNEL_FAILURE 100
 
 static const char VERSION[] = "SSH-2.0-soupOS_0.29";
 static const char HOSTKEY_PATH[] = "/HOSTKEY.ED";
@@ -55,6 +68,11 @@ typedef struct {
     int      h;
     uint32_t seq_in, seq_out;
     int      crypt;                 /* after NEWKEYS both ways */
+    uint32_t hdr_have;              /* length bytes read so far (poll-safe) */
+    int      chan_open;
+    uint32_t chan_peer;             /* the client's channel number */
+    uint32_t win_out;               /* bytes the client will still take */
+    uint32_t win_in_used;           /* bytes we have taken since the last adjust */
     uint8_t  key_c2s[64], key_s2c[64];
     uint8_t  session_id[32];
     uint8_t  client_version[256]; uint32_t client_version_len;
@@ -185,9 +203,24 @@ static int write_packet(const uint8_t *payload, uint32_t len) {
 }
 
 /* Returns the payload length into S.payload, or -1. */
-static int read_packet(void) {
+/* Returns the payload length into S.payload; -1 on error; -2 if no packet
+ * started within `wait` ticks (nothing consumed that is not kept for the
+ * next call, so the session loop can poll between output flushes). */
+static int read_packet_wait(uint32_t wait) {
     uint8_t *i = S.in;
-    if (read_exact(i, 4, 3000) < 0) return -1;
+    uint32_t start = timer_get_ticks();
+    while (S.hdr_have < 4) {
+        if (want_stop) return -1;
+        int r = tcp_recv_on(S.h, i + S.hdr_have, (uint16_t)(4 - S.hdr_have), 2);
+        if (r < 0) return -1;
+        if (r == 0) {
+            if (tcp_peer_done_on(S.h)) return -1;
+            if (timer_get_ticks() - start >= wait) return -2;
+            continue;
+        }
+        S.hdr_have += (uint32_t)r;
+    }
+    S.hdr_have = 0;
     uint8_t lenbytes[4];
     memcpy(lenbytes, i, 4);
     if (S.crypt) {
@@ -216,6 +249,12 @@ static int read_packet(void) {
     uint32_t len = plen - 1 - pad;
     memcpy(S.payload, i + 5, len);
     return (int)len;
+}
+
+static int read_packet(void) {
+    int n;
+    do { n = read_packet_wait(3000); } while (n == -2 && !want_stop && timer_get_ticks());
+    return n;
 }
 
 static int send_disconnect(uint32_t reason, const char *why) {
@@ -350,24 +389,76 @@ static int read_client_version(void) {
     return -1;
 }
 
+/* ── output ring: console sink (any task) -> SSH task ────────────────────── */
+static uint8_t  oring[4096];
+static volatile uint32_t ohead, otail;
+
+static void oring_push(char c) {
+    uint32_t next = (ohead + 1) % sizeof(oring);
+    if (next == otail) return;              /* full: drop, the terminal survives */
+    oring[ohead] = (uint8_t)c;
+    ohead = next;
+}
+
+static void ssh_sink(char c) {
+    if (!S.chan_open) return;
+    preempt_disable();
+    if (c == '\n')      { oring_push('\r'); oring_push('\n'); }
+    else if (c == '\b') { oring_push('\b'); oring_push(' '); oring_push('\b'); }
+    else                  oring_push(c);
+    preempt_enable();
+}
+
+static int flush_output(void) {
+    while (ohead != otail && S.win_out > 0) {
+        uint8_t chunk[1024];
+        uint32_t n = 0;
+        preempt_disable();
+        while (ohead != otail && n < sizeof(chunk) && n < S.win_out) {
+            chunk[n++] = oring[otail];
+            otail = (otail + 1) % sizeof(oring);
+        }
+        preempt_enable();
+        uint8_t mem[1024 + 16]; wbuf_t b; w_init(&b, mem, sizeof(mem));
+        w_u8(&b, MSG_CHANNEL_DATA); w_u32(&b, S.chan_peer); w_str(&b, chunk, n);
+        if (write_packet(b.p, b.len) < 0) return -1;
+        S.win_out -= n;
+    }
+    return 0;
+}
+
+/* ── userauth: password against the roster ──────────────────────────────── */
 static int userauth(void) {
-    /* Stage S6 ends here: every attempt is refused, naming `password` as the
-     * method we will take once S7 lands. The client's "none" probe gets the
-     * same answer, which is how it learns what to ask for. */
     for (int attempts = 0; attempts < 6; attempts++) {
         int n = read_packet();
         if (n < 1) return -1;
         if (S.payload[0] == MSG_IGNORE || S.payload[0] == MSG_DEBUG) { attempts--; continue; }
         if (S.payload[0] != MSG_USERAUTH_REQUEST) return -1;
         rbuf_t r; r_init(&r, S.payload + 1, (uint32_t)n - 1);
-        uint32_t ul, sl, ml;
+        uint32_t ul, sl, ml, pl = 0;
         const uint8_t *user = r_str(&r, &ul); r_str(&r, &sl); const uint8_t *method = r_str(&r, &ml);
         if (r.bad) return -1;
-        char u[32], m[32];
+        char u[32], m[32], pw[64];
         uint32_t un = ul < 31 ? ul : 31, mn = ml < 31 ? ml : 31;
         memcpy(u, user, un); u[un] = '\0';
         memcpy(m, method, mn); m[mn] = '\0';
-        klog("[ssh] userauth %s by %s: refused (S6)\n", u, m);
+
+        int ok = 0;
+        if ((strcmp(m, "password") == 0)) {
+            r_u8(&r);                                /* FALSE: not a change request */
+            const uint8_t *pass = r_str(&r, &pl);
+            if (!r.bad && pl < sizeof(pw)) {
+                memcpy(pw, pass, pl); pw[pl] = '\0';
+                ok = users_check(u, pw) >= 0;
+                memset(pw, 0, sizeof(pw));
+            }
+        }
+        if (ok) {
+            klog("[ssh] %s authenticated by password\n", u);
+            uint8_t ok_msg = MSG_USERAUTH_SUCCESS;
+            return write_packet(&ok_msg, 1);
+        }
+        klog("[ssh] userauth %s by %s: refused\n", u, m);
         uint8_t mem[64]; wbuf_t b; w_init(&b, mem, sizeof(mem));
         w_u8(&b, MSG_USERAUTH_FAILURE); w_cstr(&b, "password"); w_u8(&b, 0);
         if (write_packet(b.p, b.len) < 0) return -1;
@@ -375,9 +466,97 @@ static int userauth(void) {
     return -1;
 }
 
+/* ── the connection layer: one session channel on the console ───────────── */
+static int reply_status(uint8_t msg) {
+    uint8_t mem[8]; wbuf_t b; w_init(&b, mem, sizeof(mem));
+    w_u8(&b, msg); w_u32(&b, S.chan_peer);
+    return write_packet(b.p, b.len);
+}
+
+static int handle_channel_request(rbuf_t *r) {
+    uint32_t tl; const uint8_t *type = r_str(r, &tl);
+    int want_reply = r_u8(r) != 0;
+    if (r->bad) return -1;
+    char t[32]; uint32_t tn = tl < 31 ? tl : 31; memcpy(t, type, tn); t[tn] = '\0';
+
+    int ok = (strcmp(t, "pty-req") == 0) || (strcmp(t, "shell") == 0) || (strcmp(t, "env") == 0) || (strcmp(t, "window-change") == 0);
+    if ((strcmp(t, "shell") == 0)) {
+        console_set_sink(ssh_sink);
+        klog("[ssh] shell attached to the console\n");
+        static const char hello[] = "\r\nsoupOS over SSH. You share the local keyboard.\r\n";
+        for (uint32_t i = 0; i < sizeof(hello) - 1; i++) oring_push(hello[i]);
+        console_rx_byte('\r');               /* a fresh prompt for the new arrival */
+    }
+    if (want_reply) return reply_status(ok ? MSG_CHANNEL_SUCCESS : MSG_CHANNEL_FAILURE);
+    return 0;
+}
+
+static void connection_loop(void) {
+    for (;;) {
+        if (flush_output() < 0) return;
+        int n = read_packet_wait(2);
+        if (n == -2) continue;
+        if (n < 1) return;
+        rbuf_t r; r_init(&r, S.payload + 1, (uint32_t)n - 1);
+        switch (S.payload[0]) {
+        case MSG_IGNORE: case MSG_DEBUG: break;
+        case MSG_DISCONNECT: return;
+        case MSG_GLOBAL_REQUEST: {
+            uint32_t nl; r_str(&r, &nl);
+            if (r_u8(&r)) { uint8_t f = MSG_REQUEST_FAILURE; if (write_packet(&f, 1) < 0) return; }
+            break;
+        }
+        case MSG_CHANNEL_OPEN: {
+            uint32_t tl; const uint8_t *type = r_str(&r, &tl);
+            uint32_t peer = r_u32(&r), win = r_u32(&r); r_u32(&r);
+            if (r.bad) return;
+            uint8_t mem[64]; wbuf_t b; w_init(&b, mem, sizeof(mem));
+            if (S.chan_open || tl != 7 || memcmp(type, "session", 7) != 0) {
+                w_u8(&b, MSG_CHANNEL_OPEN_FAIL); w_u32(&b, peer); w_u32(&b, 1);
+                w_cstr(&b, "one session, and only a session"); w_cstr(&b, "");
+            } else {
+                S.chan_open = 1; S.chan_peer = peer; S.win_out = win; S.win_in_used = 0;
+                w_u8(&b, MSG_CHANNEL_OPEN_OK); w_u32(&b, peer); w_u32(&b, 0);
+                w_u32(&b, 65536); w_u32(&b, 2048);
+            }
+            if (write_packet(b.p, b.len) < 0) return;
+            break;
+        }
+        case MSG_CHANNEL_WINDOW: r_u32(&r); S.win_out += r_u32(&r); break;
+        case MSG_CHANNEL_DATA: {
+            r_u32(&r);
+            uint32_t dl; const uint8_t *d = r_str(&r, &dl);
+            if (r.bad) return;
+            for (uint32_t i = 0; i < dl; i++) console_rx_byte(d[i]);
+            S.win_in_used += dl;
+            if (S.win_in_used > 32768) {
+                uint8_t mem[16]; wbuf_t b; w_init(&b, mem, sizeof(mem));
+                w_u8(&b, MSG_CHANNEL_WINDOW); w_u32(&b, S.chan_peer); w_u32(&b, S.win_in_used);
+                if (write_packet(b.p, b.len) < 0) return;
+                S.win_in_used = 0;
+            }
+            break;
+        }
+        case MSG_CHANNEL_REQUEST: r_u32(&r); if (handle_channel_request(&r) < 0) return; break;
+        case MSG_CHANNEL_EOF: break;
+        case MSG_CHANNEL_CLOSE:
+            flush_output();
+            reply_status(MSG_CHANNEL_CLOSE);
+            return;
+        default: {
+            uint8_t mem[8]; wbuf_t b; w_init(&b, mem, sizeof(mem));
+            w_u8(&b, MSG_UNIMPLEMENTED); w_u32(&b, S.seq_in - 1);
+            if (write_packet(b.p, b.len) < 0) return;
+        }
+        }
+    }
+}
+
 static void session(void) {
+    console_set_sink(0);
     memset(&S, 0, sizeof(S));
     S.h = -1;
+    ohead = otail = 0;
 }
 
 static void run_session(int h) {
@@ -428,7 +607,12 @@ static void run_session(int h) {
         return;
     }
 
-    userauth();
+    if (userauth() < 0) return;
+    ohead = otail = 0;
+    connection_loop();
+    console_set_sink(0);
+    S.chan_open = 0;
+    klog("[ssh] session over\n");
 }
 
 static void ssh_task(void *arg) {

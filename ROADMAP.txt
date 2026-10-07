@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.29.0
+Current version: v0.30.0
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,26 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.30.0 (2026-10-07)  — SSH LOGIN: PASSWORD AND A SHELL
+  Stage S7, the last of the SSH plan. `ssh headchef@soupOS` works.
+  - Userauth takes `password` against the roster (users_check), six
+    attempts, then the RFC 4254 connection layer: one session channel,
+    pty-req/env/shell/window-change accepted, exec refused, windows
+    tracked both ways (ours advertised at 64 KB and re-opened after 32 KB
+    consumed; theirs honoured on every send).
+  - THE CHANNEL IS THE CONSOLE, the same way the pass and the serial line
+    are: bytes in go through console_rx_byte, bytes out come from the
+    console sink. The sink runs on whatever task is printing, so it pushes
+    into a 4 KB ring under preempt_disable and the SSH task drains the
+    ring into CHANNEL_DATA packets between polls for incoming packets.
+    The packet reader keeps a partial length header across polls so a
+    2-tick poll can time out without corrupting the stream.
+  - Verified with the real client driven by pexpect (scripts/ssh-login.py):
+    password prompt, greeting, `whoami` and `larder` answered through the
+    channel, and a wrong password refused. ssh-test.sh asserts both.
+  - The pass (clear text) stays, off by default like everything else; the
+    vault is the one to open on a network you do not own entirely. Gate 74.
 
 v0.29.0 (2026-10-07)  — THE VAULT: SSH TRANSPORT AND KEY EXCHANGE
   Stage S6. A real OpenSSH client now talks to soupOS encrypted.
