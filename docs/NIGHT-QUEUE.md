@@ -101,6 +101,105 @@ The gate is end-to-end only; nothing tests a subsystem directly.
 - Make it emit a single machine-readable summary line so the gate can assert on
   it with one check.
 
+
+## 5. PS/2 mouse
+
+The copy-and-paste milestone said selection is keyboard-only "unless a PS/2
+mouse driver is built first". This is that driver, and it is self-contained.
+
+- The mouse is the i8042's auxiliary device on IRQ 12 (slave PIC, so remember
+  `irq_unmask` opens the cascade as well). Enable the aux port (0xA8), set
+  defaults, enable reporting, and read 3-byte packets: flags, dx, dy, with the
+  sign and overflow bits in the flags byte.
+- Packets arrive misaligned if a byte is ever dropped, so resynchronise on the
+  "always 1" bit in the flags byte rather than trusting the stream.
+- Keep a cursor position clamped to 80x25 and draw it by inverting the cell
+  under it, the way `jot` already paints with attributes.
+- Then the payoff, in a second commit: drag-select in `jot` sets the mark on
+  press and the cursor on release, so the existing Ctrl+C/Ctrl+X/Ctrl+V work
+  with a mouse selection unchanged.
+- Gate: inject packets through the QEMU monitor (`mouse_move`, `mouse_button`)
+  and assert the cursor position and a resulting selection length in the log.
+
+## 6. soupyc's value model
+
+The longest-standing limitation in the tree, flagged in `docs/next-steps.md`:
+strings are a fixed `char[48]`, so the language caps every value at 47
+characters, and the interpreter keeps all its state in file-scope globals so it
+is not reentrant.
+
+- Heap-backed strings first: a value struct with a pointer and a length,
+  allocated from the kernel heap, freed when the slot is reused. This is the
+  unlock; the 47-character cap is why a soupyc script cannot write an ELF.
+- Then a per-invocation context struct, replacing the 69 file-scope statics, so
+  two interpreters can run at once.
+- Then `spawn(fn)` as a real background task, which is the thing the context
+  work exists for. With processes and job control already in place, a spawned
+  script should show up in `orders`.
+- Gate: a script that builds a string longer than 47 characters and prints it,
+  and a `spawn` whose output interleaves with the shell's.
+
+## 7. The known-bugs sweep
+
+`ROADMAP.txt` carries a KNOWN BUGS / DEBT list, several items of which are
+small and independently testable. Take them as one commit each:
+
+- `kfree` only forward-coalesces, so long sessions fragment the heap. Make it
+  coalesce backwards too; gate by allocating and freeing an alternating pattern
+  and asserting the largest free block recovers.
+- FAT write mishandles fragmented free clusters when the disk is nearly full.
+  Reproduce it first by filling a disk image, then fix.
+- `shell_tab_complete` rescans the FAT on every Tab press. Cache the listing
+  per directory and invalidate on write.
+- VGA scrolling copies the whole buffer on every newline; it only needs to move
+  24 rows, and `memmove` of 4000 bytes is not where the time should go.
+- No bounds check on `prompt_row` when the screen is full and tab completion
+  redraws the prompt.
+
+## 8. Sound
+
+The PCI groundwork from the network card (BARs, bus mastering, interrupt
+lines) is exactly what a sound card needs, so this is cheaper now than it has
+ever been.
+
+- An AC97 controller (QEMU: `-device AC97`) is the easier target: two BARs,
+  a buffer descriptor list of up to 32 entries, and an interrupt per completed
+  buffer. Set the sample rate, build a BDL pointing at a ring of PCM buffers,
+  and feed it.
+- First milestone is a sine wave at a known frequency, verified by dumping the
+  samples QEMU writes (`-audiodev wav`) and checking the wave's period on the
+  host rather than by ear.
+- Second milestone is the obvious one: Doom's sound effects. The WAD's `DS*`
+  lumps are 11025 Hz unsigned 8-bit with a short header, which needs resampling
+  to whatever rate the card is set to. Mixing more than one effect at a time is
+  a third milestone, not part of the second.
+
+## 9. A real framebuffer
+
+soupOS is 80x25 text plus 320x200 mode 13h, both of which are as old as the
+hardware they imitate. GRUB can hand us a linear framebuffer at boot through
+the multiboot header, with no real-mode BIOS calls needed from protected mode.
+
+- Request a framebuffer in `boot.asm`'s multiboot header, read the address,
+  pitch, width, height and bit depth out of the multiboot info the bootloader
+  already passes to `kernel_main`, and map it.
+- Then a console on top of it: an 8x16 bitmap font (there is already one being
+  saved and restored around mode 13h in `vga13h.c`), a glyph blitter, and the
+  same `vga_*` interface so nothing above has to change.
+- Keep the text-mode path working and selectable, because the gate drives the
+  shell through it and mode 13h is what Doom uses.
+- This is the item most likely to sprawl. If it starts touching Doom or the
+  gate's screen handling, stop and write a note.
+
+---
+
+## Choosing what to do
+
+The items are independent except where stated (2a before 2b before 2c). If one
+turns out to be blocked, badly scoped, or to need a decision that is not
+written down, leave a note in the section below and move to the next item
+rather than improvising a different plan.
+
 ---
 
 ## Notes left by unattended runs
