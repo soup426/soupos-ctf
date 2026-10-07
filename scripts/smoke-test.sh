@@ -38,7 +38,15 @@ s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
 s.bind(('127.0.0.1', 19000)); s.listen(8); s.settimeout(300)
 try:
     while True:
-        c, _ = s.accept(); c.close()
+        c, _ = s.accept()
+        c.settimeout(5)
+        try:                       # echo, so the data path can be checked too
+            d = c.recv(512)
+            if d:
+                c.sendall(d.upper())
+        except Exception:
+            pass
+        c.close()
 except Exception:
     pass
 " >/dev/null 2>&1 &
@@ -92,7 +100,8 @@ python3 scripts/qemu_keys.py "$MON" \
     "cook memtest.elf A | memtest.elf B | memtest.elf C" "WAIT:14" \
     "sip 10.0.2.2 3" "WAIT:8" \
     "sniff example.com" "WAIT:6" \
-    "reserve 10.0.2.2 19000" "WAIT:6" >/dev/null || {
+    "reserve 10.0.2.2 19000" "WAIT:6" \
+    "holler 10.0.2.2 19000 souptcp" "WAIT:8" >/dev/null || {
         echo "FAIL: could not drive the QEMU monitor"; exit 1; }
 
 fail=0
@@ -322,6 +331,12 @@ check "a DNS query was built and sent" '\[net\] dns query id='
 # QEMU's gateway, so this is hermetic too. "established" is only logged after
 # SYN, SYN/ACK and our ACK have all been through the state machine.
 check "a TCP connection was established" '\[tcp\] established with 10\.0\.2\.2:19000'
+
+# And the data path: the listener echoes what it is sent, upper-cased, so a
+# reply proves our segment arrived, was acknowledged, and theirs was accepted
+# in sequence and handed to the reader.
+check "TCP carried data and got a reply" '\[tcp\] sent 7 bytes'
+check "TCP received the echo"            '\[tcp\] rx 7 bytes'
 
 # vgastress prints whole lines of a single repeated character from two tasks.
 # Any line containing both means vga_puts was interrupted mid-string.

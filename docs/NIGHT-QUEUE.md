@@ -58,7 +58,7 @@ build, gate and commit on its own.
 - Nothing above it yet: a `knock` style test that connects and closes is enough
   to gate, asserted against the pcap and a log line.
 
-### 2b. Data transfer
+### 2b. Data transfer — DONE (v0.9.4)
 
 - Send and receive with sequence and acknowledgement numbers, a receive buffer,
   and a retransmit timer driven by the 100 Hz tick.
@@ -221,3 +221,9 @@ QEMU ignores the first SYN after an ARP exchange and answers the retransmit
 on the wire with the same destination MAC and checksum, so what soupOS emits is
 correct; the behaviour is QEMU's. Not worth more time, but if stage 2b sees
 odd first-packet behaviour, this is the context.
+
+**2026-10-07, item 2b (TCP data): done, v0.9.4, 45 checks green.** Stop-and-wait
+as scoped. The gate's host listener now echoes upper-cased, so the data path is
+checked both directions. No decisions needed. Stage 2c inherits a FIN that is
+already acknowledged and flagged (`tcb.peer_fin`), so the close work is the
+state machine, not the detection.

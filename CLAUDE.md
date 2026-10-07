@@ -3,7 +3,7 @@
 ## What this is
 
 soupOS is a 32-bit x86 hobby OS written in C and NASM assembly (currently
-**v0.9.3**). It boots via GRUB and runs in protected mode with paging, a
+**v0.9.4**). It boots via GRUB and runs in protected mode with paging, a
 physical/heap allocator, and a cooperative scheduler. On top of that:
 
 - **Filesystem**: FAT16 read/write with subdirectories ("bowls") and a VFS shim
@@ -504,6 +504,10 @@ compiled in (10.0.2.15, gateway 10.0.2.2) rather than discovered by DHCP.
   later depends on that being right. A duplicate SYN/ACK is re-acked, because
   the peer retransmits when our ACK is late. `tcp_close()` sends RST; the
   graceful FIN close is stage 2c.
+- **Data (v0.9.4)** is stop-and-wait: one segment in flight, acked before the
+  next. Sequence comparisons use `(int32_t)(a - b) > 0`, never a plain `>`,
+  because the sequence space wraps. The receive buffer is written by the
+  interrupt handler and drained with interrupts off.
 - Shell: `faucet`, `plumbing [ip|dhcp]`, `table`, `sip <host> [count]`,
   `sniff <host>`, `reserve <host> <port>`.
 

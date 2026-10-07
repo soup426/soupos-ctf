@@ -1328,6 +1328,63 @@ static void cmd_reserve(const char *args) {
     }
 }
 
+/* holler <host> <port> <text> - call across to another kitchen and listen for
+ * the answer. Opens a connection, sends the text, prints whatever comes back.
+ * This is what stage two of TCP is for; stage three turns it into `takeout`. */
+static void cmd_holler(const char *args) {
+    while (*args == ' ') args++;
+    if (!*args) { vga_puts("  Usage: holler <host> <port> <text>\n"); return; }
+
+    char host[64];
+    int i = 0;
+    while (args[i] && args[i] != ' ' && i < (int)sizeof(host) - 1) { host[i] = args[i]; i++; }
+    host[i] = '\0';
+
+    const char *rest = args + i;
+    while (*rest == ' ') rest++;
+    int port = parse_num(rest);
+    while (*rest && *rest != ' ') rest++;
+    while (*rest == ' ') rest++;
+    if (port <= 0 || port > 65535 || !*rest) {
+        vga_puts("  Usage: holler <host> <port> <text>\n");
+        return;
+    }
+
+    uint32_t ip;
+    if (net_dns_resolve(host, &ip) < 0) {
+        vga_set_color(VGA_LIGHT_RED, VGA_BLACK);
+        vga_printf("  could not resolve %s\n", host);
+        vga_set_color(VGA_LIGHT_GREY, VGA_BLACK);
+        return;
+    }
+
+    if (tcp_connect(ip, (uint16_t)port) < 0) {
+        vga_set_color(VGA_LIGHT_RED, VGA_BLACK);
+        vga_puts("  no answer\n");
+        vga_set_color(VGA_LIGHT_GREY, VGA_BLACK);
+        return;
+    }
+
+    int n = tcp_send(rest, (uint16_t)strlen(rest));
+    if (n < 0) { vga_puts("  nothing got through\n"); tcp_close(); return; }
+    vga_printf("  hollered %d bytes\n", n);
+
+    uint8_t buf[256];
+    int got = tcp_recv(buf, (uint16_t)(sizeof(buf) - 1), 200);   /* 2 s */
+    if (got > 0) {
+        buf[got] = '\0';
+        vga_set_color(VGA_LIGHT_GREEN, VGA_BLACK);
+        vga_printf("  heard back %d bytes: ", got);
+        vga_set_color(VGA_LIGHT_GREY, VGA_BLACK);
+        for (int k = 0; k < got; k++)
+            vga_putchar((buf[k] >= ' ' && buf[k] < 127) ? (char)buf[k] : '.');
+        vga_putchar('\n');
+    } else {
+        vga_puts("  nothing came back\n");
+    }
+    tcp_close();
+}
+
 static void cmd_sniff(const char *args) {
     while (*args == ' ') args++;
     if (!*args) { vga_puts("  Usage: sniff <hostname>\n"); return; }
@@ -2763,7 +2820,7 @@ static const char *const cmd_names[] = {
     "beep", "mandelbrot", "vgademo", "uname", "cal",
     "clock", "wipe", "fortune", "bounce", "recipe", "leftovers", "spill",
     "freeze", "reheat", "ps", "orders", "plate", "steep", "kill", "scraps",
-    "faucet", "plumbing", "table", "sip", "sniff", "reserve", "bgclock", "yieldbg", "spinbg", "sleeptest", "vfstest",
+    "faucet", "plumbing", "table", "sip", "sniff", "reserve", "holler", "bgclock", "yieldbg", "spinbg", "sleeptest", "vfstest",
     "dmesg", "pwd", "cd", "mkbowl", "rmbowl", "bowltest",
     "whoami", "roster", "clockout", "hire", "fire", "perms",
 };
@@ -2999,6 +3056,7 @@ static void dispatch(const char *buf) {
     else if (str_eq(p, "table"))       cmd_table();
     else if (str_startswith(p, "sniff"))    { const char *a = p + 5; cmd_sniff(a); }
     else if (str_startswith(p, "reserve")) { const char *a = p + 7; cmd_reserve(a); }
+    else if (str_startswith(p, "holler"))  { const char *a = p + 6; cmd_holler(a); }
     else if (str_startswith(p, "plumbing")) { const char *a = p + 8; cmd_plumbing(a); }
     else if (str_startswith(p, "sip"))      { const char *a = p + 3; cmd_sip(a); }
     else if (str_startswith(p, "plate")) { const char *a = p + 5; cmd_plate(a); }

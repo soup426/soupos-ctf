@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.9.3
+Current version: v0.9.4
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,29 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.9.4  (2026-10-07)  — TCP, STAGE TWO: DATA
+  Night-queue item 2b. `holler 10.0.2.2 19100 souptcp` sends over TCP and
+  prints what comes back.
+  - Stop-and-wait, and the header says so: one segment in flight, acknowledged
+    before the next goes out, retransmitted four times before giving up. No
+    congestion control, no window scaling, no selective acknowledgement. An
+    out-of-order segment is dropped and re-acked at the old position, which is
+    this stack's way of asking for a resend. On a virtual network that costs
+    nothing; the comment says it would not be free on a real one.
+  - Acknowledgement comparisons use signed arithmetic on the difference
+    ((int32_t)(a - snd_una) > 0) rather than a plain >, because the sequence
+    space wraps and a naive comparison breaks once the numbers pass 2^31.
+  - The receive buffer is filled by the interrupt handler and drained by
+    tcp_recv, which takes its snapshot with interrupts off rather than trying
+    to be clever with a lock-free ring for one reader.
+  - A FIN is acknowledged and noted but not acted on: the close sequence is
+    stage 2c. Acking it at least stops the peer retransmitting it at us.
+  - Shell: `holler <host> <port> <text>`.
+  - Gate 43 -> 45 checks. The gate's listener now echoes what it is sent,
+    upper-cased, so a reply proves our segment arrived, was acknowledged, and
+    theirs was taken in sequence and handed to the reader. Verified by eye too:
+    `souptcp` out, `SOUPTCP` back.
 
 v0.9.3  (2026-10-07)  — TCP, STAGE ONE: CONNECTION SETUP
   Night-queue item 2a. soupOS completes a three-way handshake.

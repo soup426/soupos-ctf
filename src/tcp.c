@@ -28,16 +28,27 @@ typedef struct {
     uint16_t window, csum, urg;
 } __attribute__((packed)) tcp_hdr_t;
 
+#define TCP_RX_MAX  4096        /* what we are willing to hold for the reader */
+#define TCP_MSS     1024        /* conservative: never fragments an Ethernet frame */
+
 /* The one connection. volatile where the interrupt handler writes it. */
 static struct {
     volatile tcp_state_t state;
     uint32_t  peer_ip;
     uint16_t  local_port, peer_port;
     uint32_t  snd_nxt;              /* next sequence number we send   */
+    volatile uint32_t snd_una;      /* oldest unacknowledged          */
     volatile uint32_t rcv_nxt;      /* next sequence number we expect */
     volatile uint16_t peer_window;
     volatile int      refused;      /* peer sent RST                  */
+    volatile int      peer_fin;     /* peer has finished sending      */
 } tcb;
+
+/* Received data waiting for a reader. Written by the interrupt handler, drained
+ * by tcp_recv, so the count is volatile and the drain disables interrupts for
+ * the memmove rather than trying to be clever with a lock-free ring. */
+static uint8_t           rx_buf[TCP_RX_MAX];
+static volatile uint16_t rx_len;
 
 static uint16_t next_port = 49152;  /* ephemeral range */
 
@@ -51,9 +62,11 @@ static inline uint32_t hton32(uint32_t v) {
 }
 static inline uint32_t ntoh32(uint32_t v) { return hton32(v); }
 
-/* Build and send one segment. No payload at this stage. */
-static void tcp_send_flags(uint8_t flags, uint32_t seq, uint32_t ack) {
-    uint8_t pkt[sizeof(tcp_hdr_t)];
+/* Build and send one segment, with an optional payload. */
+static void tcp_send_seg(uint8_t flags, uint32_t seq, uint32_t ack,
+                         const uint8_t *data, uint16_t dlen) {
+    uint8_t pkt[sizeof(tcp_hdr_t) + TCP_MSS];
+    if (dlen > TCP_MSS) dlen = TCP_MSS;
     tcp_hdr_t *t = (tcp_hdr_t *)pkt;
 
     t->sport   = hton16(tcb.local_port);
@@ -65,10 +78,15 @@ static void tcp_send_flags(uint8_t flags, uint32_t seq, uint32_t ack) {
     t->window  = hton16(4096);      /* what we are willing to receive */
     t->csum    = 0;
     t->urg     = 0;
-    t->csum = hton16(net_pseudo_checksum(net_ip(), tcb.peer_ip, 6,
-                                         pkt, sizeof(pkt)));
+    if (dlen && data) memcpy(pkt + sizeof(tcp_hdr_t), data, dlen);
 
-    net_ip_send(tcb.peer_ip, 6, pkt, sizeof(pkt));
+    uint16_t total = (uint16_t)(sizeof(tcp_hdr_t) + dlen);
+    t->csum = hton16(net_pseudo_checksum(net_ip(), tcb.peer_ip, 6, pkt, total));
+    net_ip_send(tcb.peer_ip, 6, pkt, total);
+}
+
+static void tcp_send_flags(uint8_t flags, uint32_t seq, uint32_t ack) {
+    tcp_send_seg(flags, seq, ack, 0, 0);
 }
 
 /* Interrupt context: just enough to finish the handshake. */
@@ -99,10 +117,109 @@ void tcp_input(uint32_t src_ip, const uint8_t *seg, uint16_t len) {
         /* Their SYN occupies one sequence number, so what we expect next is
          * their sequence plus one. */
         tcb.rcv_nxt     = ntoh32(t->seq) + 1;
+        tcb.snd_una     = ntoh32(t->ack);
         tcb.peer_window = ntoh16(t->window);
         tcb.state       = TCP_ESTABLISHED;
         tcp_send_flags(TCP_ACK, tcb.snd_nxt, tcb.rcv_nxt);
+        return;
     }
+
+    if (tcb.state != TCP_ESTABLISHED) return;
+
+    if (t->flags & TCP_ACK) {
+        uint32_t a = ntoh32(t->ack);
+        /* Signed comparison handles the sequence space wrapping; a plain > is
+         * wrong once the numbers pass 2^31. */
+        if ((int32_t)(a - tcb.snd_una) > 0) tcb.snd_una = a;
+        tcb.peer_window = ntoh16(t->window);
+    }
+
+    uint16_t hlen  = (uint16_t)((t->off_rsv >> 4) * 4);
+    if (hlen < sizeof(tcp_hdr_t) || hlen > len) return;
+    uint16_t dlen  = (uint16_t)(len - hlen);
+    uint32_t seq   = ntoh32(t->seq);
+
+    if (dlen) {
+        if (seq == tcb.rcv_nxt) {
+            uint16_t room = (uint16_t)(TCP_RX_MAX - rx_len);
+            uint16_t take = (dlen < room) ? dlen : room;
+            memcpy(rx_buf + rx_len, seg + hlen, take);
+            rx_len      = (uint16_t)(rx_len + take);
+            tcb.rcv_nxt = seq + take;      /* only what we actually kept */
+        }
+        /* Either way, tell them where we are. An out-of-order segment gets the
+         * same answer, which is this stack's way of asking for a resend. */
+        tcp_send_flags(TCP_ACK, tcb.snd_nxt, tcb.rcv_nxt);
+    }
+
+    if ((t->flags & TCP_FIN) && seq == tcb.rcv_nxt) {
+        /* Noted, not handled: the close sequence is stage 2c. Acknowledging
+         * the FIN here stops the peer retransmitting it at us. */
+        tcb.peer_fin = 1;
+        tcb.rcv_nxt  = seq + 1;
+        tcp_send_flags(TCP_ACK, tcb.snd_nxt, tcb.rcv_nxt);
+    }
+}
+
+int tcp_send(const void *data, uint16_t len) {
+    if (tcb.state != TCP_ESTABLISHED || !data || !len) return -1;
+
+    const uint8_t *p = (const uint8_t *)data;
+    uint16_t sent = 0;
+
+    while (sent < len) {
+        uint16_t chunk = (uint16_t)(len - sent);
+        if (chunk > TCP_MSS) chunk = TCP_MSS;
+
+        uint32_t seq = tcb.snd_nxt;
+        tcb.snd_nxt  = seq + chunk;
+
+        /* One segment in flight: send it, wait for the acknowledgement to
+         * cover it, resend if it does not come. Stop-and-wait, deliberately. */
+        int acked = 0;
+        for (int attempt = 0; attempt < 4 && !acked; attempt++) {
+            tcp_send_seg(TCP_PSH | TCP_ACK, seq, tcb.rcv_nxt, p + sent, chunk);
+
+            uint32_t until = timer_get_ticks() + 50;      /* 500 ms */
+            while (timer_get_ticks() < until) {
+                if ((int32_t)(tcb.snd_una - (seq + chunk)) >= 0) { acked = 1; break; }
+                if (tcb.refused || tcb.state != TCP_ESTABLISHED) return -1;
+                task_yield();
+            }
+        }
+        if (!acked) {
+            klog("[tcp] no ack for %u bytes at seq %u\n", chunk, seq);
+            return (int)sent ? (int)sent : -1;
+        }
+        sent = (uint16_t)(sent + chunk);
+    }
+
+    klog("[tcp] sent %u bytes\n", sent);
+    return (int)sent;
+}
+
+int tcp_recv(uint8_t *out, uint16_t max, uint32_t ticks) {
+    if (!out || !max) return 0;
+
+    uint32_t until = timer_get_ticks() + ticks;
+    while (rx_len == 0 && timer_get_ticks() < until) {
+        if (tcb.refused || tcb.peer_fin) break;
+        task_yield();
+    }
+    if (rx_len == 0) return 0;
+
+    /* The handler appends to the same buffer, so take a consistent snapshot
+     * rather than racing it mid-memmove. */
+    uint32_t flags;
+    __asm__ volatile ("pushf; pop %0; cli" : "=r"(flags) :: "memory");
+    uint16_t n = (rx_len < max) ? rx_len : max;
+    memcpy(out, rx_buf, n);
+    if (n < rx_len) memmove(rx_buf, rx_buf + n, (uint32_t)(rx_len - n));
+    rx_len = (uint16_t)(rx_len - n);
+    __asm__ volatile ("push %0; popf" :: "r"(flags) : "memory", "cc");
+
+    klog("[tcp] rx %u bytes\n", n);
+    return (int)n;
 }
 
 int tcp_connect(uint32_t dst_ip, uint16_t dst_port) {
@@ -126,9 +243,12 @@ int tcp_connect(uint32_t dst_ip, uint16_t dst_port) {
     tcb.snd_nxt     = (timer_get_ticks() << 8) ^ 0x5000C0DEu;
     tcb.rcv_nxt     = 0;
     tcb.refused     = 0;
+    tcb.peer_fin    = 0;
+    rx_len          = 0;
     tcb.state       = TCP_SYN_SENT;
 
     uint32_t iss = tcb.snd_nxt;
+    tcb.snd_una = iss;
     /* Our SYN occupies one sequence number too, so everything after it is
      * numbered from iss + 1. */
     tcb.snd_nxt = iss + 1;
