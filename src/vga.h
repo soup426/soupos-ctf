@@ -35,3 +35,7 @@ int  vga_get_col(void);
 /* Fill one row with a character using the current color. Does not move
    the hardware cursor or trigger scroll. Out-of-range rows are ignored. */
 void vga_fill_row(int row, char c);
+
+/* Checks that scroll() moves exactly 24 rows and blanks the last one. Saves
+ * and restores the real screen; returns 1 on pass. Used by `sample`. */
+int vga_scroll_selftest(void);

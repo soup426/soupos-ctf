@@ -1519,6 +1519,21 @@ static void cmd_sip(const char *args) {
     net_ping(ip, count);
 }
 
+/* larder - how much room is left on the disk. */
+static void cmd_larder(void) {
+    uint32_t freec = 0, total = 0, cbytes = 0;
+    fat_space(&freec, &total, &cbytes);
+    if (!total) { vga_puts("  No filesystem mounted.\n"); return;  }
+    uint32_t used = total - freec;
+    uint32_t kb_per = cbytes / 1024;
+    vga_set_color(VGA_YELLOW, VGA_BLACK);
+    vga_puts("  Larder:\n");
+    vga_set_color(VGA_LIGHT_GREY, VGA_BLACK);
+    vga_printf("  %u of %u clusters used (%u KB each)\n", used, total, kb_per);
+    vga_printf("  %u KB free, %u KB total\n", freec * kb_per, total * kb_per);
+    klog("[larder] free=%u total=%u clusterkb=%u\n", freec, total, kb_per);
+}
+
 /* skewer - what the pointer is pointing at. */
 static void cmd_skewer(void) {
     if (!mouse_present()) {
@@ -2931,7 +2946,7 @@ static const char *const cmd_names[] = {
     "jot", "ai", "cook", "soup", "hash",
     "beep", "mandelbrot", "vgademo", "uname", "cal",
     "clock", "wipe", "fortune", "bounce", "recipe", "leftovers", "spill",
-    "freeze", "reheat", "ps", "orders", "plate", "steep", "kill", "scraps", "sample", "skewer",
+    "freeze", "reheat", "ps", "orders", "plate", "steep", "kill", "scraps", "sample", "skewer", "larder",
     "faucet", "plumbing", "table", "sip", "sniff", "reserve", "holler",
     "takeout", "bgclock", "yieldbg", "spinbg", "sleeptest", "vfstest",
     "dmesg", "pwd", "cd", "mkbowl", "rmbowl", "bowltest",
@@ -3167,6 +3182,7 @@ static void dispatch(const char *buf) {
     else if (str_eq(p, "scraps"))      cmd_scraps();
     else if (str_eq(p, "sample"))      cmd_sample();
     else if (str_eq(p, "skewer"))      cmd_skewer();
+    else if (str_eq(p, "larder"))      cmd_larder();
     else if (str_eq(p, "faucet"))      cmd_faucet();
     else if (str_eq(p, "table"))       cmd_table();
     else if (str_startswith(p, "sniff"))    { const char *a = p + 5; cmd_sniff(a); }

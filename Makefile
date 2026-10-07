@@ -154,6 +154,8 @@ $(DISK):
 	    | mcopy -i $(DISK) - ::RUNAWAY.SC
 	printf '# spawn - run a soupyc function as a background task\nfn ticker() {\n    let i = 0\n    while i < 5 {\n        pour "[child] tick " + i\n        sleep(400)\n        i = i + 1\n    }\n    let mine = [7, 8, 9]\n    pour "[child] array " + len(mine) + " " + mine[1]\n    pour "[child] done"\n}\nlet kept = [1, 2]\nlet id = spawn("ticker")\npour "[parent] spawned " + id\nsleep(600)\npour "[parent] array still " + len(kept) + " " + kept[1]\npour "[parent] leaving"\n' \
 	    | mcopy -i $(DISK) - ::SPAWN.SC
+	printf '# scroll timing: 600 lines, in ticks (10 ms each)\nlet t0 = time()\nlet i = 0\nwhile i < 600 {\n    pour "scroll line " + i\n    i = i + 1\n}\nlet t1 = time()\npour "SCROLLTICKS " + (t1 - t0)\n' \
+	    | mcopy -i $(DISK) - ::SCROLL.SC
 	printf '# a tiny library - included by INCLUDE.SC\nfn cube(n) { return n * n * n }\n' \
 	    | mcopy -i $(DISK) - ::MATHLIB.SC
 	printf '# include + new builtins demo - run with: soup INCLUDE.SC\ninclude "MATHLIB.SC"\npour "cube(3)  = " + cube(3)\nlet nums = [5, 2, 9, 1, 7]\nsort(nums)\npour "sorted   ="\npour nums\npour "sum      = " + sum(nums)\nreverse(nums)\npour "reversed ="\npour nums\npour "find OS  = " + find("soupOS", "OS")\n' \

@@ -139,7 +139,7 @@ is not reentrant.
 - Gate: a script that builds a string longer than 47 characters and prints it,
   and a `spawn` whose output interleaves with the shell's.
 
-## 7. The known-bugs sweep
+## 7. The known-bugs sweep — 3 of 4 done (v0.10.3)
 
 `ROADMAP.txt` carries a KNOWN BUGS / DEBT list, several items of which are
 small and independently testable. Take them as one commit each:
@@ -154,8 +154,23 @@ small and independently testable. Take them as one commit each:
   per directory and invalidate on write.
 - VGA scrolling copies the whole buffer on every newline; it only needs to move
   24 rows, and `memmove` of 4000 bytes is not where the time should go.
-- No bounds check on `prompt_row` when the screen is full and tab completion
-  redraws the prompt.
+- ~~No bounds check on `prompt_row`~~ **Stale, checked 2026-10-07.**
+  `vga_set_cursor_impl` clamps row and col, and the multi-match completion path
+  calls `prompt()`, which re-records `prompt_row` after the candidate list
+  scrolls. NEW and separate: `spawn()` means arbitrary output can now land
+  while the line editor is active, which can desync `prompt_row` the way
+  background job reports were handled to avoid. Needs a scroll counter in
+  vga.c that the line editor subtracts from `prompt_row`, and a screendump to
+  verify. Not guessed at yet.
+
+**2026-10-07, item 7: three of four done, v0.10.3, 60 checks green.** The VGA
+entry named a remedy that measured 47% worse (memmove is a byte loop); words
+are the answer, 504 -> 271 ticks. The FAT entry was mis-described: fragmentation
+is fine, the real bug was a cluster leak on every write failure path, now fixed,
+with `larder` added because free space was previously unobservable. Left: the
+tab-complete cache (measure first), and the empirical nearly-full repro of the
+leak, which `larder` now makes cheap - fill the disk from a script, delete the
+files, and free space must return to its starting value.
 
 ## 8. Sound
 

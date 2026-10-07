@@ -148,6 +148,23 @@ static void test_fat_roundtrip(void) {
     check("fat read matches", ok);
 
     check("fat delete", fat_delete(path) >= 0);
+
+    /* Free space must come back exactly. A write that takes clusters and
+     * gives back fewer is the shape of the leak fixed in the write path. */
+    uint32_t before = 0, after = 0;
+    fat_space(&before, 0, 0);
+    if (fat_write(path, (const uint8_t *)body, len) >= 0 && fat_delete(path) >= 0) {
+        fat_space(&after, 0, 0);
+        check("fat gives back what it took", before == after);
+    } else {
+        check("fat gives back what it took", 0);
+    }
+}
+
+/* ── VGA ──────────────────────────────────────────────────────────────────
+ * The scroll is a hand-written word copy over the frame buffer. */
+static void test_vga(void) {
+    check("vga scroll moves 24 rows", vga_scroll_selftest());
 }
 
 /* ── The hand-written libc ────────────────────────────────────────────────
@@ -184,6 +201,7 @@ int selftest_run(void) {
     test_pipe_wrap();
     test_checksum();
     test_fat_roundtrip();
+    test_vga();
     test_str();
 
     vga_set_color(t_fail ? VGA_LIGHT_RED : VGA_LIGHT_GREEN, VGA_BLACK);

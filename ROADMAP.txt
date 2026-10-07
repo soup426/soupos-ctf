@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.10.2
+Current version: v0.10.3
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,46 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.10.3 (2026-10-07)  — THE KNOWN-BUGS SWEEP, VERIFIED FIRST
+  Night-queue item 7, taking the list seriously enough to check it. Two of the
+  four open entries were wrong, and one named a fix that would have made things
+  worse.
+  - VGA SCROLL: the complaint was right, the suggested remedy was not. The
+    entry said to use memmove. str.c's memmove is a BYTE loop, so handing it
+    3840 bytes does twice the work of the 1920 cell copies it replaced:
+    measured, it was 47% SLOWER (600 scrolled lines, 504 ticks -> 743). Copying
+    32-bit words instead - two cells per store, and 0xB8000 plus an even
+    VGA_WIDTH make the alignment exact - runs in 271 ticks, so the same
+    workload is about twice as fast as where it started. Guarded now by a
+    `sample` test that checks the scroll moves exactly 24 rows and blanks the
+    last, because a bad word count would shift the screen by half a cell and
+    look like a font bug.
+  - FAT: the entry said fragmented free clusters are mishandled. They are not;
+    fat_alloc_cluster scans from a hint and wraps, so it finds free clusters
+    wherever they are, and the write loop chains them correctly. The REAL bug
+    is next door, and it is worse: all five failure paths in the write loop
+    returned -1 with clusters already allocated and no directory entry written,
+    so nothing on the disk referenced them and nothing ever would. Space lost
+    until a reformat, and the way to hit it is exactly the case the entry
+    mentioned - a write that runs out of room halfway. Every failure now gives
+    the chain back, with the one exception that must not: once the directory
+    entry references the chain, freeing it would leave a dangling entry, which
+    is worse than lost space.
+  - There was NO WAY TO SEE FREE SPACE from inside soupOS, which is part of why
+    that leak could sit there unnoticed. `larder` now reports clusters used and
+    KB free, and `sample` asserts the invariant the leak broke: a write
+    followed by a delete gives back exactly what it took.
+  - prompt_row: the entry asks for a bounds check that already exists.
+    vga_set_cursor_impl clamps row and col, and the multi-match completion path
+    calls prompt(), which re-records prompt_row after the candidate list has
+    scrolled the screen. Marked stale. Worth knowing: spawn() (v0.10.2) means
+    arbitrary output can now land while the line editor is active, which can
+    desync prompt_row in a way background job reports were specifically handled
+    to avoid. Queued as its own item rather than guessed at here.
+  - Gate 59 -> 60 checks, `sample` 19 -> 21 assertions.
+  That is three of the four list entries resolved by checking rather than by
+  assuming, after item 4 already retired a fourth the same way.
 
 v0.10.2 (2026-10-07)  — spawn(): A SCRIPT FUNCTION AS A TASK
   Night-queue item 6, finished. This is what the context work was for.
@@ -1327,11 +1367,22 @@ KNOWN BUGS / DEBT
       (already fixed in `recipe` cmd; also bumped README.TXT to v0.4.0)
   [x] Tab completion only matches filenames, not command names
   [ ] shell_tab_complete rescans FAT on every Tab press — cache it
+      (still open; measure a Tab press before adding a cache and its
+      invalidation bugs. v0.10.3 did not get to this one.)
   [x] soupyc recursion depth raised from 8 to 16 (MAX_CALL_DEPTH); the
       call_args table is sized off it, so it grew automatically
   [x] beep busy-waited with pause; now calls task_sleep(ms)
-  [ ] FAT write does not handle fragmented free clusters correctly
+  [x] FAT write does not handle fragmented free clusters correctly
+      MIS-DESCRIBED, corrected v0.10.3: fragmentation is handled fine. The
+      real bug was a cluster leak on every failure path of the write loop,
+      now fixed, with `larder` and a sample test to see it.
       when the disk is nearly full
-  [ ] VGA scrolling is slow (copies entire buffer on newline)
-  [ ] No bounds check on prompt_row when screen is full and
+  [x] VGA scrolling is slow (copies entire buffer on newline)
+      FIXED v0.10.3 by copying 32-bit words, 504 -> 271 ticks for 600 lines.
+      Note: the obvious memmove is 47% SLOWER, because str.c's memmove is a
+      byte loop.
+  [x] STALE, checked v0.10.3: vga_set_cursor_impl clamps, and the completion
+      path re-records prompt_row via prompt(). See the note about spawn()
+      output and the line editor, which is a NEW and separate concern.
+  [ ] (original) No bounds check on prompt_row when screen is full and
       tab-completion redraws the prompt

@@ -126,7 +126,8 @@ python3 scripts/qemu_keys.py "$MON" \
     "takeout 10.0.2.2:19002 /soup" "WAIT:9" \
     "soup LONGSTR.SC" "WAIT:6" \
     "soup RUNAWAY.SC" "WAIT:22" "pwd" "WAIT:2" \
-    "soup SPAWN.SC" "WAIT:1" "ps" "WAIT:5" >/dev/null || {
+    "soup SPAWN.SC" "WAIT:1" "ps" "WAIT:5" \
+    "larder" "WAIT:2" >/dev/null || {
         echo "FAIL: could not drive the QEMU monitor"; exit 1; }
 
 fail=0
@@ -409,6 +410,12 @@ check "the spawned script is a live task"  'soup:ticker'
 check "parent keeps its arrays"            '\[parent\] array still 2 2'
 check "child gets arrays of its own"       '\[child\] array 3 8'
 check "the spawned script finishes"        '\[child\] done'
+
+# Free space had no way to be seen from inside soupOS before, which is part of
+# why a cluster leak could sit in the write path unnoticed. The `sample` suite
+# above now also asserts that a write-then-delete gives back exactly what it
+# took, which is the shape that leak had.
+check "larder reports disk space" 'clusters used \([0-9]+ KB each\)'
 
 # vgastress prints whole lines of a single repeated character from two tasks.
 # Any line containing both means vga_puts was interrupted mid-string.

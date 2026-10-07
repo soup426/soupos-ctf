@@ -3,7 +3,7 @@
 ## What this is
 
 soupOS is a 32-bit x86 hobby OS written in C and NASM assembly (currently
-**v0.10.2**). It boots via GRUB and runs in protected mode with paging, a
+**v0.10.3**). It boots via GRUB and runs in protected mode with paging, a
 physical/heap allocator, and a cooperative scheduler. On top of that:
 
 - **Filesystem**: FAT16 read/write with subdirectories ("bowls") and a VFS shim
@@ -519,6 +519,23 @@ compiled in (10.0.2.15, gateway 10.0.2.2) rather than discovered by DHCP.
   outliving our close. The gate uses a separate listener port per check.
 - Shell: `faucet`, `plumbing [ip|dhcp]`, `table`, `sip <host> [count]`,
   `sniff <host>`, `reserve <host> <port>`.
+
+## Do not use memmove on the frame buffer (v0.10.3)
+
+`str.c`'s `memmove` is a **byte** loop, so using it for a block move of 16-bit
+VGA cells doubles the work. `vga.c`'s `scroll()` copies 32-bit words (two cells
+per store) and is about twice as fast as the original cell-at-a-time loop;
+`memmove` measured 47% slower than that original. `sample` guards the row
+movement. The same caution applies anywhere a wide copy looks tempting.
+
+## FAT free space (v0.10.3)
+
+`fat_space()` reports free/total clusters; `larder` is the command. Before this
+there was no way to see free space from inside soupOS, which is how a cluster
+leak sat unnoticed in `fat_write`: its failure paths returned with clusters
+allocated and no directory entry referencing them. **If you add a failure path
+to `fat_write`, send it to `fail:`**, which gives the chain back, except after
+the directory entry is written, where freeing would leave a dangling entry.
 
 ## soupyc spawn (v0.10.2)
 

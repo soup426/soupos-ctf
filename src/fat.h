@@ -48,6 +48,10 @@ int fat_write(const char *path, const uint8_t *buf, uint32_t size);
 /* Delete a file (not a directory - use fat_rmdir). FAT16 only. */
 int fat_delete(const char *path);
 
+/* Free and total data clusters, and the size of one in bytes. Any pointer may
+ * be NULL. Walks the FAT, so it is a command-speed call, not a hot path. */
+void fat_space(uint32_t *out_free, uint32_t *out_total, uint32_t *out_cluster_bytes);
+
 /* Create a directory ("bowl"). FAT16 only. Fails if it already exists,
    the parent is missing, or the disk is full. Returns 0=ok, -1=error. */
 int fat_mkdir(const char *path);

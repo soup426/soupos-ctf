@@ -620,12 +620,23 @@ static int fat_write_impl(const char *path, const uint8_t *buf, uint32_t size) {
     uint32_t cluster_bytes = (uint32_t)spc * bps;
     uint32_t clusters_need = size ? (size + cluster_bytes - 1) / cluster_bytes : 0;
 
+    /* Every failure below goes to `fail`, which gives the clusters back.
+     * Returning early instead would strand them: they are marked in use in
+     * the FAT, and the directory entry that would reference them is not
+     * written until after this loop, so nothing on the disk points at them
+     * and nothing ever will. That is space lost until a reformat, and the
+     * easiest way to hit it is a write that runs out of room halfway. */
     for (uint32_t c = 0; c < clusters_need; c++) {
         uint32_t cl = fat_alloc_cluster();
-        if (cl == 0) return -1;
+        if (cl == 0) goto fail;                 /* out of space */
 
         if (!first_cluster) first_cluster = cl;
-        if (prev_cluster && fat_set_entry(prev_cluster, cl) < 0) return -1;
+        if (prev_cluster && fat_set_entry(prev_cluster, cl) < 0) {
+            /* Allocated but not yet linked, so the chain walk below cannot
+             * reach it: hand this one back on its own. */
+            fat_set_entry(cl, 0);
+            goto fail;
+        }
 
         uint32_t lba = cluster_to_lba(cl);
         for (uint32_t s = 0; s < spc; s++) {
@@ -633,16 +644,16 @@ static int fat_write_impl(const char *path, const uint8_t *buf, uint32_t size) {
             uint32_t to_copy = (written < size) ? (size - written) : 0;
             if (to_copy > bps) to_copy = bps;
             if (to_copy) memcpy(sec_buf, buf + written, to_copy);
-            if (ata_write_sector(lba + s, sec_buf) < 0) return -1;
+            if (ata_write_sector(lba + s, sec_buf) < 0) goto fail;
             written += to_copy;
         }
         prev_cluster = cl;
     }
 
-    if (fat_flush_cache() < 0) return -1;
+    if (fat_flush_cache() < 0) goto fail;
 
     /* Write the directory entry. */
-    if (ata_read_sector(dir_lba, sec_buf) < 0) return -1;
+    if (ata_read_sector(dir_lba, sec_buf) < 0) goto fail;
     dirent_t *ent = (dirent_t *)sec_buf + dir_idx;
     memset(ent, 0, sizeof(*ent));
     memcpy(ent->name, fname, 8);
@@ -652,7 +663,40 @@ static int fat_write_impl(const char *path, const uint8_t *buf, uint32_t size) {
     ent->crt_time_tenth = ent_owner;           /* soupOS owner uid       */
     ent->cluster_lo     = (uint16_t)(first_cluster & 0xFFFF);
     ent->file_size      = size;
+    /* Past this point the entry references the chain, so a failure here must
+     * NOT free it: that would be a dangling directory entry, which is worse
+     * than lost space. */
     return ata_write_sector(dir_lba, sec_buf);
+
+fail:
+    if (first_cluster) {
+        fat_free_chain(first_cluster);
+        fat_flush_cache();
+    }
+    return -1;
+}
+
+/* ---- Public: fat_space ----
+ *
+ * Counting free clusters means walking the FAT, which the sector cache makes
+ * cheap enough for a shell command. There was no way to see free space from
+ * inside soupOS before, which is part of why a cluster leak could sit in the
+ * write path unnoticed. */
+static uint32_t fat_free_clusters_impl(void) {
+    if (!initialized) return 0;
+    uint32_t last = cluster_count + 1, n = 0;
+    for (uint32_t c = 2; c <= last; c++)
+        if (fat_get_entry(c) == 0) n++;
+    return n;
+}
+
+void fat_space(uint32_t *out_free, uint32_t *out_total, uint32_t *out_cluster_bytes) {
+    mutex_lock(&fat_mtx);
+    if (out_free)  *out_free  = fat_free_clusters_impl();
+    if (out_total) *out_total = initialized ? cluster_count : 0;
+    if (out_cluster_bytes)
+        *out_cluster_bytes = initialized ? (uint32_t)spc * bps : 0;
+    mutex_unlock(&fat_mtx);
 }
 
 /* ---- Public: fat_mkdir ---- */
