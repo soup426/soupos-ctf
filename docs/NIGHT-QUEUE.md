@@ -179,7 +179,7 @@ leak back. Tab completion is closed as won't-do with numbers: 1.9 ms per scan
 normally, 5.5 ms on a 128-entry directory, both below perception, and a cache's
 invalidation surface got worse when spawn() landed.
 
-### New item, found while writing the fill script
+### New item, found while writing the fill script — DONE (v0.10.5)
 
 `let` inside a loop body creates a fresh binding per iteration and MAX_VARS is
 64, so any loop declaring a variable dies after 64 passes. Scopes are popped on

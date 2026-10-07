@@ -125,6 +125,7 @@ python3 scripts/qemu_keys.py "$MON" \
     "holler 10.0.2.2 19001 souptcp" "WAIT:8" \
     "takeout 10.0.2.2:19002 /soup" "WAIT:9" \
     "soup LONGSTR.SC" "WAIT:6" \
+    "soup SCOPE.SC" "WAIT:4" \
     "soup RUNAWAY.SC" "WAIT:22" "pwd" "WAIT:2" \
     "soup SPAWN.SC" "WAIT:1" "ps" "WAIT:5" \
     "larder" "WAIT:2" >/dev/null || {
@@ -420,6 +421,11 @@ check "larder reports disk space" 'clusters used \([0-9]+ KB each\)'
 # remove() closed a real gap: soupyc could create files but not delete them,
 # so a script that filled the disk could not clean up after itself.
 check "soupyc can delete a file" 'removed 1'
+
+# A `let` inside a while body used to accumulate a binding per pass and die at
+# MAX_VARS, which is 64. 200 iterations, and the exact sum, so a scoping change
+# that drops the wrong bindings shows up as a wrong total rather than a crash.
+check "a let inside a loop survives 200 passes" 'SCOPE total 39800'
 
 # vgastress prints whole lines of a single repeated character from two tasks.
 # Any line containing both means vga_puts was interrupted mid-string.

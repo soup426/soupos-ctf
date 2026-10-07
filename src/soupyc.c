@@ -1088,12 +1088,19 @@ static val_t eval_node(node_t *n) {
         }
 
         case N_WHILE: {
+            /* Bindings the body makes are per-iteration, exactly as in N_FOR
+             * below. Without this a `let` inside the body accumulated a new
+             * binding every pass and the loop died at MAX_VARS with "too many
+             * variables" - at 64 iterations, which is not many. */
+            int saved_nvar = nvar;
             while (!err_flag && !return_flag) {
                 val_t c = eval_node(n->left);
                 if (!as_int(c)) break;
                 eval_block(n->body);
                 if (break_flag) { break_flag = 0; break; }
+                nvar = saved_nvar;
             }
+            nvar = saved_nvar;
             return mkival(0);
         }
 

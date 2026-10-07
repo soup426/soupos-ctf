@@ -3,7 +3,7 @@
 ## What this is
 
 soupOS is a 32-bit x86 hobby OS written in C and NASM assembly (currently
-**v0.10.4**). It boots via GRUB and runs in protected mode with paging, a
+**v0.10.5**). It boots via GRUB and runs in protected mode with paging, a
 physical/heap allocator, and a cooperative scheduler. On top of that:
 
 - **Filesystem**: FAT16 read/write with subdirectories ("bowls") and a VFS shim
@@ -528,13 +528,13 @@ per store) and is about twice as fast as the original cell-at-a-time loop;
 `memmove` measured 47% slower than that original. `sample` guards the row
 movement. The same caution applies anywhere a wide copy looks tempting.
 
-## soupyc: `let` in a loop runs out of variables (v0.10.4)
+## soupyc loop scoping (fixed v0.10.5)
 
-A `let` inside a loop body creates a **fresh binding every iteration**, and
-`MAX_VARS` is 64, so a loop that declares a variable fails after 64 passes with
-"too many variables". Scopes are popped on function return, not at the end of a
-block. Declare outside the loop and assign inside. Worth fixing properly one
-day by popping the scope at block exit.
+Both `N_FOR` and `N_WHILE` drop the bindings their body made, once per
+iteration, so a `let` inside a loop no longer accumulates toward `MAX_VARS`
+(64). `N_WHILE` was missing this and died at 64 passes with "too many
+variables". If you add another looping construct, do the same: record `nvar`
+before the loop and restore it after each pass.
 
 ## Verifying the FAT cluster leak (v0.10.3, proven v0.10.4)
 

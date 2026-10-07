@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.10.4
+Current version: v0.10.5
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,22 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.10.5 (2026-10-07)  — A `let` IN A while LOOP STOPS RUNNING OUT
+  Found while writing the disk-fill script in v0.10.4, which died at iteration
+  64 with "too many variables".
+  - N_FOR already dropped the bindings its body made, once per iteration.
+    N_WHILE never did, so a `let` inside a while body accumulated a binding
+    every pass and hit MAX_VARS, which is 64. Not many iterations for a loop.
+    N_WHILE now does exactly what N_FOR does, which makes the two consistent
+    as well as correct.
+  - Checked that nothing relied on the leak: no script on the disk uses a
+    variable after the loop that declared it, and recursion through a while
+    body (FN.SC's factorial and fib tables) is unaffected, since function
+    calls save and restore nvar around the call.
+  - Gate 61 -> 62: 200 iterations each declaring a variable, asserting the
+    exact sum, so a scoping change that drops the wrong bindings shows up as a
+    wrong total rather than as a crash.
 
 v0.10.4 (2026-10-07)  — ITEM 7 FINISHED: THE LEAK, PROVEN
   The cluster leak fixed in v0.10.3 was established by reading all five
