@@ -144,7 +144,7 @@ timing jitter, and the RTC, through SHA-256 into a pool. The check is not a
 test vector - there is none - but that two boots produce different output and
 that a megabyte of it passes a simple monobit and runs test.
 
-### S3. ChaCha20 and Poly1305
+### S3. ChaCha20 and Poly1305  — DONE v0.25.0
 RFC 8439 vectors, including the AEAD construction (section 2.8.2), because
 SSH's chacha20-poly1305@openssh.com uses it in a particular way.
 

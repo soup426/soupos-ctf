@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.24.0
+Current version: v0.25.0
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,20 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.25.0 (2026-10-07)  — CHACHA20-POLY1305
+  Stage S3. The cipher SSH will actually run traffic through.
+  - src/chacha.c: ChaCha20 with the 32-bit counter, Poly1305 in five 26-bit
+    limbs with 64-bit products (what a 32-bit machine can do without a
+    bignum), and the RFC 8439 AEAD on top. The pieces are exposed separately
+    too, because chacha20-poly1305@openssh.com uses them its own way.
+  - SIX CHECKS IN `sample`: the RFC's 2.4.2 cipher vector, the 2.5.2 MAC
+    vector (fed in two pieces so the block buffer across an update boundary
+    is exercised), the 2.8.2 AEAD ciphertext and tag, a round trip, and a
+    flipped bit that must be refused. Expected values regenerated with the
+    `cryptography` library, not copied from this code.
+  - All six passed on the first run. The tag compare is constant-time; the
+    rest is not. Gate 72; sample is 38 tests.
 
 v0.24.0 (2026-10-07)  — AN ENTROPY POOL
   Stage S2. Key generation needs bytes nobody can predict, and a kernel

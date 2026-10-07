@@ -24,6 +24,7 @@
 #include "klog.h"
 #include "sha256.h"
 #include "random.h"
+#include "chacha.h"
 
 static int t_run, t_fail;
 
@@ -298,6 +299,66 @@ static void test_random(void) {
     check("random runs",    runs > 262144 - 1086 && runs < 262144 + 1086);
 }
 
+/* ── ChaCha20-Poly1305 ────────────────────────────────────────────────────
+ * The RFC 8439 vectors: section 2.4.2 (the cipher alone), 2.5.2 (the MAC
+ * alone) and 2.8.2 (the AEAD, whose tag covers the padding and length
+ * trailer that are easiest to get wrong). Then a tampered byte must be
+ * refused, because an AEAD that decrypts anything is just a stream cipher. */
+static int bytes_eq(const uint8_t *d, const char *hex, int n) {
+    for (int i = 0; i < n; i++) {
+        unsigned hi = hex[2*i], lo = hex[2*i+1];
+        hi = hi >= 'a' ? hi - 'a' + 10 : hi - '0';
+        lo = lo >= 'a' ? lo - 'a' + 10 : lo - '0';
+        if (d[i] != (uint8_t)((hi << 4) | lo)) return 0;
+    }
+    return 1;
+}
+static void test_chacha(void) {
+    static const char sunscreen[] =
+        "Ladies and Gentlemen of the class of '99: If I could offer you "
+        "only one tip for the future, sunscreen would be it.";
+    uint8_t buf[114], key[32], nonce[12], tag[16];
+
+    for (int i = 0; i < 32; i++) key[i] = (uint8_t)i;
+    memset(nonce, 0, 12); nonce[7] = 0x4a;
+    memcpy(buf, sunscreen, 114);
+    chacha20_xor(key, nonce, 1, buf, 114);
+    check("chacha20 rfc8439 2.4.2", bytes_eq(buf,
+        "6e2e359a2568f98041ba0728dd0d6981e97e7aec1d4360c20a27afccfd9fae0b"
+        "f91b65c5524733ab8f593dabcd62b3571639d624e65152ab8f530c359f0861d8"
+        "07ca0dbf500d6a6156a38e088a22b65e52bc514d16ccf806818ce91ab7793736"
+        "5af90bbf74a35be6b40b8eedf2785e42874d", 114));
+
+    static const uint8_t pk[32] = {
+        0x85,0xd6,0xbe,0x78,0x57,0x55,0x6d,0x33,0x7f,0x44,0x52,0xfe,0x42,0xd5,0x06,0xa8,
+        0x01,0x03,0x80,0x8a,0xfb,0x0d,0xb2,0xfd,0x4a,0xbf,0xf6,0xaf,0x41,0x49,0xf5,0x1b };
+    poly1305_t p;
+    poly1305_init(&p, pk);
+    poly1305_update(&p, (const uint8_t *)"Cryptographic Forum ", 20);   /* split across blocks */
+    poly1305_update(&p, (const uint8_t *)"Research Group", 14);
+    poly1305_final(&p, tag);
+    check("poly1305 rfc8439 2.5.2", bytes_eq(tag, "a8061dc1305136c6c22b8baf0c0127a9", 16));
+
+    for (int i = 0; i < 32; i++) key[i] = (uint8_t)(0x80 + i);
+    static const uint8_t n2[12] = { 0x07,0,0,0, 0x40,0x41,0x42,0x43,0x44,0x45,0x46,0x47 };
+    static const uint8_t aad[12] = { 0x50,0x51,0x52,0x53,0xc0,0xc1,0xc2,0xc3,0xc4,0xc5,0xc6,0xc7 };
+    memcpy(buf, sunscreen, 114);
+    chacha20poly1305_encrypt(key, n2, aad, 12, buf, 114, tag);
+    check("aead rfc8439 2.8.2 ciphertext", bytes_eq(buf,
+        "d31a8d34648e60db7b86afbc53ef7ec2a4aded51296e08fea9e2b5a736ee62d6"
+        "3dbea45e8ca9671282fafb69da92728b1a71de0a9e060b2905d6a5b67ecd3b36"
+        "92ddbd7f2d778b8c9803aee328091b58fab324e4fad675945585808b4831d7bc"
+        "3ff4def08e4b7a9de576d26586cec64b6116", 114));
+    check("aead rfc8439 2.8.2 tag", bytes_eq(tag, "1ae10b594f09e26a7e902ecbd0600691", 16));
+
+    int ok = chacha20poly1305_decrypt(key, n2, aad, 12, buf, 114, tag);
+    check("aead round trip", ok == 0 && memcmp(buf, sunscreen, 114) == 0);
+
+    chacha20poly1305_encrypt(key, n2, aad, 12, buf, 114, tag);
+    buf[50] ^= 1;
+    check("aead refuses a flipped bit", chacha20poly1305_decrypt(key, n2, aad, 12, buf, 114, tag) == -1);
+}
+
 int selftest_run(void) {
     t_run = t_fail = 0;
 
@@ -315,6 +376,7 @@ int selftest_run(void) {
     test_str();
     test_sha256();
     test_random();
+    test_chacha();
 
     vga_set_color(t_fail ? VGA_LIGHT_RED : VGA_LIGHT_GREEN, VGA_BLACK);
     vga_printf("  %d tests, %d failed\n", t_run, t_fail);
