@@ -100,6 +100,7 @@ python3 scripts/qemu_keys.py "$MON" \
     "cook wc.elf < P.TXT" "WAIT:3" \
     "cook hog.elf | wc.elf &" "WAIT:2" "kill %" "WAIT:2" "kill %" "WAIT:2" \
     "sample" "WAIT:6" \
+    "MON:mouse_move 40 -20" "MON:mouse_move 40 -20" "skewer" "WAIT:2" \
     "strain CLIP.TXT" "WAIT:1" \
     "TYPE:soup is good" "KEY:ctrl-u" "scraps" "WAIT:2" \
     "jot CLIP.TXT" "WAIT:2" "TYPE:abc def" \
@@ -359,6 +360,11 @@ check "the connection closed gracefully"  '\[tcp\] closed cleanly'
 # and the hand-written string routines. One line, so the count can grow without
 # touching the gate.
 check "in-kernel self-test passes" '\[sample\] [0-9]+ tests, 0 failed'
+
+# The mouse, driven through the QEMU monitor rather than by hand: it starts
+# centred at 40,12, and two injections of (40,-20) move it ten cells right and
+# five up each. Exact, so a sign error or a scaling change shows up here.
+check "mouse tracks injected movement" '\[mouse\] at 60,2 '
 
 # vgastress prints whole lines of a single repeated character from two tasks.
 # Any line containing both means vga_puts was interrupted mid-string.

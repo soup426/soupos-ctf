@@ -22,6 +22,7 @@
 #include "rtl8139.h"
 #include "tcp.h"
 #include "selftest.h"
+#include "mouse.h"
 #include "vfs.h"
 #include "klog.h"
 #include "users.h"
@@ -1517,6 +1518,25 @@ static void cmd_sip(const char *args) {
     net_ping(ip, count);
 }
 
+/* skewer - what the pointer is pointing at. */
+static void cmd_skewer(void) {
+    if (!mouse_present()) {
+        vga_puts("  No mouse. QEMU has one by default; check IRQ 12.\n");
+        return;
+    }
+    int x, y, b;
+    uint32_t moves, resyncs;
+    mouse_get(&x, &y, &b);
+    mouse_stats(&moves, &resyncs);
+    vga_printf("  pointing at %d,%d  buttons:%s%s%s\n", x, y,
+               (b & 1) ? " left"   : "",
+               (b & 2) ? " right"  : "",
+               (b & 4) ? " middle" : "");
+    vga_printf("  %u packets, %u resyncs\n", moves, resyncs);
+    klog("[mouse] at %d,%d buttons=%d packets=%u resyncs=%u\n",
+         x, y, b, moves, resyncs);
+}
+
 /* sample - taste the soup: run the in-kernel subsystem checks. */
 static void cmd_sample(void) {
     int failed = selftest_run();
@@ -2910,7 +2930,7 @@ static const char *const cmd_names[] = {
     "jot", "ai", "cook", "soup", "hash",
     "beep", "mandelbrot", "vgademo", "uname", "cal",
     "clock", "wipe", "fortune", "bounce", "recipe", "leftovers", "spill",
-    "freeze", "reheat", "ps", "orders", "plate", "steep", "kill", "scraps", "sample",
+    "freeze", "reheat", "ps", "orders", "plate", "steep", "kill", "scraps", "sample", "skewer",
     "faucet", "plumbing", "table", "sip", "sniff", "reserve", "holler",
     "takeout", "bgclock", "yieldbg", "spinbg", "sleeptest", "vfstest",
     "dmesg", "pwd", "cd", "mkbowl", "rmbowl", "bowltest",
@@ -3145,6 +3165,7 @@ static void dispatch(const char *buf) {
     else if (str_eq(p, "orders"))      cmd_orders();
     else if (str_eq(p, "scraps"))      cmd_scraps();
     else if (str_eq(p, "sample"))      cmd_sample();
+    else if (str_eq(p, "skewer"))      cmd_skewer();
     else if (str_eq(p, "faucet"))      cmd_faucet();
     else if (str_eq(p, "table"))       cmd_table();
     else if (str_startswith(p, "sniff"))    { const char *a = p + 5; cmd_sniff(a); }

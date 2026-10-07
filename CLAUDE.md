@@ -3,7 +3,7 @@
 ## What this is
 
 soupOS is a 32-bit x86 hobby OS written in C and NASM assembly (currently
-**v0.9.7**). It boots via GRUB and runs in protected mode with paging, a
+**v0.9.8**). It boots via GRUB and runs in protected mode with paging, a
 physical/heap allocator, and a cooperative scheduler. On top of that:
 
 - **Filesystem**: FAT16 read/write with subdirectories ("bowls") and a VFS shim
@@ -519,6 +519,16 @@ compiled in (10.0.2.15, gateway 10.0.2.2) rather than discovered by DHCP.
   outliving our close. The gate uses a separate listener port per check.
 - Shell: `faucet`, `plumbing [ip|dhcp]`, `table`, `sip <host> [count]`,
   `sniff <host>`, `reserve <host> <port>`.
+
+## PS/2 mouse (`src/mouse.c`, v0.9.8)
+
+The i8042's auxiliary device on IRQ 12. Positions are text cells so they line
+up with the screen; four raw counts per cell. Three gotchas, all commented in
+the file: IRQ 12 needs `irq_unmask` (slave line, so the cascade too), commands
+go through a `0xD4` prefix and must wait for the `0xFA` acknowledgement, and
+the three-byte packets have no framing - bit 3 of the first byte is always set,
+and resynchronising on it is the only thing keeping a dropped byte from
+misaligning the stream permanently. `skewer` shows the state.
 
 ## `sample`: in-kernel self-tests (v0.9.7)
 

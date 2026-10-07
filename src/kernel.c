@@ -17,6 +17,7 @@
 #include "vfs.h"
 #include "rtl8139.h"
 #include "net.h"
+#include "mouse.h"
 #include "task.h"
 #include "serial.h"
 #include "klog.h"
@@ -163,6 +164,11 @@ void kernel_main(uint32_t mb_magic, uint32_t mb_info) {
     }
     vga_puts("[OK] VFS ready     - files + /dev/{null,zero,serial,kbd}\n");
     vga_puts("[OK] Kernel log    - ring buffer + serial mirror (see: dmesg)\n");
+
+    if (mouse_init() == 0)
+        vga_puts("[OK] Mouse         - PS/2 auxiliary device on IRQ 12\n");
+    else
+        vga_puts("[--] No PS/2 mouse\n");
 
     if (rtl8139_init() == 0) {
         const uint8_t *m = rtl8139_mac();
