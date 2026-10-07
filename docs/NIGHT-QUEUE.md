@@ -49,7 +49,7 @@ scroll "optimisation" ended up 47% slower.
   status bar is static so dirty-row tracking would skip a third of the
   screen, and the row blit could move 64 bits at a time. Pick with numbers.
 
-## 2. A listening TCP socket, and then a tiny HTTP server
+## 2. A listening TCP socket, and an HTTP server — DONE (v0.15.0)
 
 The stack only dials out. `tcp.c` has one connection slot and a state machine
 that starts at SYN_SENT; a passive open needs LISTEN, SYN received, SYN-ACK,
@@ -62,6 +62,14 @@ and a second slot so the listener survives the connection.
 - The trap this will hit is the one DHCP and TCP both hit: SLIRP answers fast
   enough that a reply can arrive before the send call returns, so arm the
   receive side before sending anything that expects an answer.
+
+**2026-10-07: done, v0.15.0.** `hatch [port]` serves files; scripts/hatch-test.sh
+fetches them with curl from the host. The trap was not the one predicted: it was
+ARP, not SLIRP timing. Replies are built in interrupt context where ip_send
+cannot resolve, and SLIRP never ARPs us because it learns our MAC from DHCP, so
+net_rx now learns the sender's MAC from every IP frame. One connection at a
+time, by design - the listener is the connection - so a backlog is still open if
+anyone wants it.
 
 ## 3. VFAT long filenames, read side at least
 

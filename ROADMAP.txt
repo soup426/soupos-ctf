@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.14.1
+Current version: v0.15.0
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,41 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.15.0 (2026-10-07)  — soupOS ANSWERS: A LISTENING SOCKET AND AN HTTP SERVER
+  New queue item 2. The stack could only ever dial out; now it can be dialled.
+  `hatch [port]` is a serving hatch, answering HTTP GETs for files on the FAT
+  volume, and `curl` from the host fetches them through QEMU's hostfwd.
+  - TCP grew a passive open: TCP_LISTEN and TCP_SYN_RCVD. A listener has no
+    peer yet, so the input path matches it on the local port alone and fills
+    in the four-tuple from the SYN that arrives; everything else still matches
+    the full tuple. A repeated SYN in SYN_RCVD re-sends the SYN-ACK, because
+    the first one being lost is the normal way this fails.
+  - The ACK that completes the handshake FALLS THROUGH to the data path rather
+    than returning, because SLIRP puts the request's first bytes in that same
+    segment often enough to matter.
+  - ONE CONNECTION AT A TIME, deliberately, because the listener IS the
+    connection: the same single block of state. So the server listens again
+    after each client, and a SYN arriving mid-request is refused rather than
+    queued. A backlog needs a table of connections, which is a different
+    change; this is written in tcp.h rather than left to be discovered.
+  - THE BUG THAT MATTERED, AND IT WAS NOT IN TCP. The first fetch hung with
+    `[net] drop: no arp entry for 10.0.2.2`. Replies are built in interrupt
+    context, where ip_send refuses to resolve - and a peer does not have to
+    ARP us first: SLIRP learned our MAC from the DHCP exchange, so an inbound
+    SYN arrived with nothing in the cache to address the SYN-ACK to. net_rx
+    now learns the sender's hardware address from every IP frame, not only
+    from ARP traffic, which is the same policy handle_arp already applied to
+    the other half and is what lets soupOS answer ANY peer rather than only
+    ones it has spoken to first.
+  - scripts/hatch-test.sh starts the server and fetches with curl from the
+    host: the right body, the right Content-Length, a 404 for a missing file,
+    and a SECOND request to prove the listener re-arms. Three accepted
+    connections in the log is the evidence for that last one.
+  - Not in the main gate: hatch blocks until a key is pressed, so the fetch has
+    to happen while the guest sits in the command, and the gate drives a
+    straight keystroke sequence with no way to act in the middle of one.
+  - Gate still 67 (the outbound checks unchanged), six test scripts green.
 
 v0.14.1 (2026-10-07)  — DOOM'S FRAME COST, MEASURED (AND LEFT ALONE)
   New queue item 1. The scaler writes 2.3 MB a frame where mode 13h wrote

@@ -1527,6 +1527,99 @@ static void cmd_sip(const char *args) {
 }
 
 #ifndef NO_DOOM
+/* hatch <port> - a serving hatch: answer HTTP GETs for files on the disk.
+ *
+ * One request at a time, because the TCP stack holds one connection and the
+ * listener becomes that connection (see tcp.h). The loop is therefore:
+ * listen, accept, read the request, answer it, close, listen again. A client
+ * that knocks mid-request is refused rather than queued, which for serving
+ * files off a FAT volume is a limitation nobody will notice.
+ *
+ * Any key stops it, checked between connections.
+ */
+static void cmd_hatch(const char *args) {
+    while (*args == ' ') args++;
+    uint32_t port = 0;
+    while (*args >= '0' && *args <= '9') port = port * 10 + (uint32_t)(*args++ - '0');
+    if (!port) port = 80;
+
+    if (!net_ip()) {
+        vga_puts("  No address yet. Try: plumbing dhcp\n");
+        return;
+    }
+
+    static uint8_t  body[32768];
+    static char     req[512];
+    static char     path[FAT_PATH_MAX];
+    static char     head[256];
+
+    vga_printf("  hatch open on port %u - press a key to close it\n", port);
+    keyboard_flush();
+
+    int served = 0;
+    while (!keyboard_available()) {
+        if (tcp_listen((uint16_t)port) < 0) break;
+        if (tcp_accept(100) < 0) continue;          /* one second, then look at the keyboard */
+
+        int n = tcp_recv((uint8_t *)req, sizeof(req) - 1, 200);
+        if (n <= 0) { tcp_close(); continue; }
+        req[n] = '\0';
+
+        /* "GET /NAME HTTP/1.0" - only the path matters here. */
+        const char *pp = req;
+        while (*pp && *pp != ' ') pp++;             /* past the method */
+        while (*pp == ' ') pp++;
+        int k = 0;
+        path[k++] = '/';
+        if (*pp == '/') pp++;
+        while (*pp && *pp != ' ' && *pp != '\r' && *pp != '\n' && k < FAT_PATH_MAX - 1)
+            path[k++] = *pp++;
+        path[k] = '\0';
+        if (k == 1) strcpy(path, "/README.TXT");    /* "/" gets something to read */
+
+        uint32_t got = 0;
+        int rc = fat_read(path, body, sizeof(body), &got);
+
+        if (rc < 0) {
+            static const char nf[] = "Not found.\n";
+            int hl = 0;
+            strcpy(head, "HTTP/1.0 404 Not Found\r\n"
+                         "Content-Type: text/plain\r\n"
+                         "Content-Length: 11\r\n"
+                         "Connection: close\r\n\r\n");
+            hl = (int)strlen(head);
+            tcp_send(head, (uint16_t)hl);
+            tcp_send(nf, (uint16_t)(sizeof(nf) - 1));
+            vga_printf("  404 %s\n", path);
+        } else {
+            /* Content-Length matters: without it a client waits for the close
+             * and curl reports a truncated body if anything goes wrong. */
+            /* No integer formatter in str.h, and vga_printf writes to the
+             * screen rather than a buffer, so the length is built by hand. */
+            char num[12];
+            int ni = 0;
+            uint32_t v = got;
+            if (!v) num[ni++] = '0';
+            char tmp[12]; int ti = 0;
+            while (v) { tmp[ti++] = (char)('0' + v % 10); v /= 10; }
+            while (ti) num[ni++] = tmp[--ti];
+            num[ni] = '\0';
+            strcpy(head, "HTTP/1.0 200 OK\r\nContent-Type: text/plain\r\nContent-Length: ");
+            strcat(head, num);
+            strcat(head, "\r\nConnection: close\r\n\r\n");
+            tcp_send(head, (uint16_t)strlen(head));
+            tcp_send(body, (uint16_t)got);
+            vga_printf("  200 %s (%u bytes)\n", path, got);
+            served++;
+        }
+        tcp_close();
+        klog("[hatch] served %s\n", path);
+    }
+    keyboard_flush();
+    tcp_abort();
+    vga_printf("  hatch closed after %d file%s\n", served, served == 1 ? "" : "s");
+}
+
 /* sizzle - play one of Doom's sound effects (a DS* lump from the WAD). */
 static void cmd_sizzle(const char *args) {
     if (!ac97_present()) { vga_puts("  No sound card. QEMU needs -device AC97.\n"); return; }
@@ -3008,7 +3101,7 @@ static const char *const cmd_names[] = {
     "jot", "ai", "cook", "soup", "hash",
     "beep", "mandelbrot", "vgademo", "uname", "cal",
     "clock", "wipe", "fortune", "bounce", "recipe", "leftovers", "spill",
-    "freeze", "reheat", "ps", "orders", "plate", "steep", "kill", "scraps", "sample", "skewer", "larder", "whistle",
+    "freeze", "reheat", "ps", "orders", "plate", "steep", "kill", "scraps", "sample", "skewer", "larder", "whistle", "hatch",
 #ifndef NO_DOOM
     "sizzle",
 #endif
@@ -3251,6 +3344,7 @@ static void dispatch(const char *buf) {
     else if (str_startswith(p, "whistle")) cmd_whistle(p + 7);
 #ifndef NO_DOOM
     else if (str_startswith(p, "sizzle"))  cmd_sizzle(p + 6);
+    else if (str_startswith(p, "hatch"))   cmd_hatch(p + 5);
 #endif
     else if (str_eq(p, "faucet"))      cmd_faucet();
     else if (str_eq(p, "table"))       cmd_table();

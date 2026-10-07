@@ -22,6 +22,8 @@
 
 typedef enum {
     TCP_CLOSED = 0,
+    TCP_LISTEN,         /* waiting for somebody to connect to us          */
+    TCP_SYN_RCVD,       /* their SYN answered, waiting for their ACK      */
     TCP_SYN_SENT,
     TCP_ESTABLISHED,
     TCP_FIN_WAIT_1,     /* we sent FIN, waiting for it to be acknowledged */
@@ -34,6 +36,20 @@ typedef enum {
 /* Open a connection. Returns 0 once established, -1 on timeout or refusal.
  * Blocks: task context only. */
 int         tcp_connect(uint32_t dst_ip, uint16_t dst_port);
+
+/* Passive open: wait for somebody to connect to `port`.
+ *
+ * ONE CONNECTION AT A TIME, like the rest of this stack. The listener does not
+ * survive the connection - the same single block of state becomes the
+ * connection - so a server loop listens again after each client is done, and
+ * a SYN arriving mid-request is refused rather than queued. For serving files
+ * one request at a time that is the honest shape; a backlog needs a table of
+ * connections, which is a bigger change than it sounds.
+ *
+ * tcp_listen arms it and returns at once; tcp_accept blocks until a client has
+ * completed the handshake, returning 0, or -1 after `ticks` (100 Hz). */
+int         tcp_listen(uint16_t port);
+int         tcp_accept(uint32_t ticks);
 
 /* Send data, blocking until the peer acknowledges it. Returns the number of
  * bytes sent, or -1 if the connection failed. Task context only. */

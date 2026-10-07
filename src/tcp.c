@@ -96,6 +96,26 @@ void tcp_input(uint32_t src_ip, const uint8_t *seg, uint16_t len) {
     const tcp_hdr_t *t = (const tcp_hdr_t *)seg;
 
     if (tcb.state == TCP_CLOSED) return;
+
+    /* A listener has no peer yet, so it can only match on the port it was
+     * given; everything else matches the full four-tuple. */
+    if (tcb.state == TCP_LISTEN) {
+        if (ntoh16(t->dport) != tcb.local_port) return;
+        if (!(t->flags & TCP_SYN)) return;
+
+        tcb.peer_ip     = src_ip;
+        tcb.peer_port   = ntoh16(t->sport);
+        tcb.rcv_nxt     = ntoh32(t->seq) + 1;   /* their SYN takes one */
+        tcb.peer_window = ntoh16(t->window);
+
+        uint32_t iss = (timer_get_ticks() << 8) ^ 0x5000D00Du;
+        tcb.snd_una  = iss;
+        tcb.snd_nxt  = iss + 1;                 /* ours takes one too  */
+        tcb.state    = TCP_SYN_RCVD;
+        tcp_send_flags(TCP_SYN | TCP_ACK, iss, tcb.rcv_nxt);
+        return;
+    }
+
     if (src_ip != tcb.peer_ip) return;
     if (ntoh16(t->dport) != tcb.local_port) return;
     if (ntoh16(t->sport) != tcb.peer_port) return;
@@ -112,6 +132,22 @@ void tcp_input(uint32_t src_ip, const uint8_t *seg, uint16_t len) {
     if (tcb.state == TCP_ESTABLISHED && (t->flags & TCP_SYN) && (t->flags & TCP_ACK)) {
         tcp_send_flags(TCP_ACK, tcb.snd_nxt, tcb.rcv_nxt);
         return;
+    }
+
+    if (tcb.state == TCP_SYN_RCVD) {
+        if (t->flags & TCP_SYN) {        /* our SYN-ACK was lost: say it again */
+            tcp_send_flags(TCP_SYN | TCP_ACK, tcb.snd_una, tcb.rcv_nxt);
+            return;
+        }
+        if (t->flags & TCP_ACK) {
+            tcb.snd_una     = ntoh32(t->ack);
+            tcb.peer_window = ntoh16(t->window);
+            tcb.state       = TCP_ESTABLISHED;
+            /* Fall through: this ACK may carry the request's first bytes,
+             * and SLIRP does exactly that often enough to matter. */
+        } else {
+            return;
+        }
     }
 
     if (tcb.state == TCP_SYN_SENT && (t->flags & TCP_SYN) && (t->flags & TCP_ACK)) {
@@ -364,4 +400,38 @@ void tcp_close(void) {
     }
 
     klog("[tcp] closed cleanly\n");
+}
+
+int tcp_listen(uint16_t port) {
+    tcb.peer_ip     = 0;
+    tcb.peer_port   = 0;
+    tcb.local_port  = port;
+    tcb.snd_nxt     = 0;
+    tcb.snd_una     = 0;
+    tcb.rcv_nxt     = 0;
+    tcb.peer_window = 0;
+    tcb.refused     = 0;
+    tcb.peer_fin    = 0;
+    tcb.fin_sent    = 0;
+    rx_len          = 0;
+    tcb.state       = TCP_LISTEN;
+    klog("[tcp] listening on port %u\n", port);
+    return 0;
+}
+
+int tcp_accept(uint32_t ticks) {
+    uint32_t start = timer_get_ticks();
+    while (timer_get_ticks() - start < ticks) {
+        if (tcb.state == TCP_ESTABLISHED) {
+            klog("[tcp] accepted %u.%u.%u.%u:%u on port %u\n",
+                 (tcb.peer_ip >> 24) & 0xFF, (tcb.peer_ip >> 16) & 0xFF,
+                 (tcb.peer_ip >> 8) & 0xFF, tcb.peer_ip & 0xFF,
+                 tcb.peer_port, tcb.local_port);
+            return 0;
+        }
+        if (tcb.state == TCP_CLOSED) return -1;   /* reset while handshaking */
+        task_yield();
+        __asm__ volatile ("hlt");
+    }
+    return -1;
 }

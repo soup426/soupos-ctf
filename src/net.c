@@ -441,7 +441,28 @@ static void net_rx(const uint8_t *frame, uint16_t len) {
 
     switch (ntoh16(e->type)) {
         case ETH_TYPE_ARP: handle_arp(payload, plen); break;
-        case ETH_TYPE_IP:  handle_ip(payload, plen);  break;
+        case ETH_TYPE_IP:
+            /* Learn the sender's hardware address from the frame itself, not
+             * only from ARP traffic.
+             *
+             * Without this, soupOS cannot ANSWER a connection it did not
+             * start. Replies are built in interrupt context, where ip_send
+             * refuses to resolve - and a peer does not have to ARP us first:
+             * QEMU's SLIRP learned our MAC from the DHCP exchange, so an
+             * inbound SYN arrived with nothing in the cache to address the
+             * SYN-ACK to, and the handshake died with "no arp entry". Every
+             * IP frame already carries both halves of the mapping, so this
+             * is a line of bookkeeping rather than a round trip.
+             *
+             * handle_arp already learns from anything it sees, so this is the
+             * same policy applied to the other half of the traffic. */
+            if (plen >= sizeof(ip_hdr_t)) {
+                const ip_hdr_t *ih = (const ip_hdr_t *)payload;
+                uint32_t src = get_ip(ih->src);
+                if (src && src != my_ip) arp_insert(src, e->src);
+            }
+            handle_ip(payload, plen);
+            break;
         default:           n_other++;                 break;
     }
 }

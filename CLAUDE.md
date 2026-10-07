@@ -3,7 +3,7 @@
 ## What this is
 
 soupOS is a 32-bit x86 hobby OS written in C and NASM assembly (currently
-**v0.14.1**). It boots via GRUB and runs in protected mode with paging, a
+**v0.15.0**). It boots via GRUB and runs in protected mode with paging, a
 physical/heap allocator, and a cooperative scheduler. On top of that:
 
 - **Filesystem**: FAT16 read/write with subdirectories ("bowls") and a VFS shim
@@ -527,6 +527,22 @@ VGA cells doubles the work. `vga.c`'s `scroll()` copies 32-bit words (two cells
 per store) and is about twice as fast as the original cell-at-a-time loop;
 `memmove` measured 47% slower than that original. `sample` guards the row
 movement. The same caution applies anywhere a wide copy looks tempting.
+
+## Serving: the listening socket (v0.15.0)
+
+`hatch [port]` answers HTTP GETs for files on the FAT volume;
+`scripts/hatch-test.sh` fetches from the host through QEMU's hostfwd. TCP has
+`tcp_listen`/`tcp_accept` with `TCP_LISTEN` and `TCP_SYN_RCVD`.
+
+**The listener IS the connection** - one block of state - so a server must
+listen again after each client, and a SYN mid-request is refused. A backlog
+needs a connection table.
+
+**To answer an unsolicited peer you must know its MAC without resolving**,
+because replies are built in interrupt context where `ip_send` will not ARP.
+`net_rx` therefore learns the sender's hardware address from every IP frame.
+Do not remove that: a peer need not ARP us first (SLIRP learns our MAC from
+DHCP), and without it every inbound handshake dies on "no arp entry".
 
 ## Profiling Doom (v0.14.1)
 
