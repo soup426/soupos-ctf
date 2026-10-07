@@ -17,6 +17,7 @@
 #include "vga13h.h"
 #include "task.h"
 #include "proc.h"
+#include "clip.h"
 #include "vfs.h"
 #include "klog.h"
 #include "users.h"
@@ -275,6 +276,7 @@ static void shell_delkey(char *input, int *pos, int *len) {
 static void shell_kill_to_start(char *input, int *pos, int *len) {
     if (*pos == 0) return;
     int n = *pos;
+    clip_set(input, (uint32_t)n);     /* killed text is the clipboard, so ^V restores it */
     for (int i = 0; i + n < *len; i++) input[i] = input[i + n];
     *len -= n;
     *pos = 0;
@@ -294,6 +296,7 @@ static void shell_kill_word(char *input, int *pos, int *len) {
     while (start > 0 && input[start - 1] != ' ') start--;
     int n = end - start;
     if (n == 0) return;
+    clip_set(input + start, (uint32_t)n);
     for (int i = start; i + n < *len; i++) input[i] = input[i + n];
     *len -= n;
     *pos = start;
@@ -400,6 +403,7 @@ static void cmd_menu(void) {
         {0, "    cook <prog.elf> &  - ... in the background (Ctrl+C kills the"},
         {0, "                         foreground one; kill <pid> any of them)"},
         {0, "    jobs               - list processes and their exit codes"},
+        {0, "    clip               - show the clipboard (^U/^W fill it, ^V pastes)"},
         {0, "    fg [pid] / bg [pid]- resume a job in the fore/background"},
         {0, "                         (Ctrl+Z stops the foreground program)"},
         {0, "    soup <file.sc>     - run a soupyc script"},
@@ -1187,6 +1191,38 @@ static void cmd_bg(const char *args) {
     vga_set_color(VGA_DARK_GREY, VGA_BLACK);
     vga_printf("  [%u] %s &\n", p->pid, p->name);
     vga_set_color(VGA_LIGHT_GREY, VGA_BLACK);
+}
+
+/* clip - show what is on the clipboard. Mirrored to the kernel log so a
+ * headless test can read the result of a copy or a cut. */
+static void cmd_clip(void) {
+    uint32_t n = clip_len();
+    if (n == 0) {
+        vga_puts("  (clipboard empty)\n");
+        klog("[clip] empty\n");
+        return;
+    }
+    const char *cb = clip_peek();
+    vga_set_color(VGA_DARK_GREY, VGA_BLACK);
+    vga_printf("  %u bytes:\n", n);
+    vga_set_color(VGA_LIGHT_GREY, VGA_BLACK);
+    vga_puts("  ");
+    for (uint32_t i = 0; i < n; i++) {
+        char c = cb[i];
+        if (c == '\n')                 { vga_puts("\n  "); }
+        else if (c >= ' ' && c < 127)   { vga_putchar(c); }
+        else                            { vga_putchar('.'); }
+    }
+    vga_putchar('\n');
+
+    /* klog wants a NUL-terminated string, and control bytes would wreck the
+     * log, so flatten into a bounded printable copy. */
+    char line[120];
+    uint32_t m = (n < sizeof(line) - 1) ? n : (uint32_t)(sizeof(line) - 1);
+    for (uint32_t i = 0; i < m; i++)
+        line[i] = (cb[i] >= ' ' && cb[i] < 127) ? cb[i] : '.';
+    line[m] = '\0';
+    klog("[clip] %u bytes: %s\n", n, line);
 }
 
 /* jobs - the process table. `ps` lists tasks, including the task each process
@@ -2540,7 +2576,7 @@ static const char *const cmd_names[] = {
     "jot", "ai", "cook", "soup", "hash",
     "beep", "mandelbrot", "vgademo", "uname", "cal",
     "clock", "wipe", "fortune", "bounce", "recipe", "leftovers", "spill",
-    "freeze", "reheat", "ps", "jobs", "fg", "bg", "kill", "bgclock", "yieldbg", "spinbg", "sleeptest", "vfstest",
+    "freeze", "reheat", "ps", "jobs", "fg", "bg", "kill", "clip", "bgclock", "yieldbg", "spinbg", "sleeptest", "vfstest",
     "dmesg", "pwd", "cd", "mkbowl", "rmbowl", "bowltest",
     "whoami", "roster", "clockout", "hire", "fire", "perms",
 };
@@ -2771,6 +2807,7 @@ static void dispatch(const char *buf) {
     else if (str_eq(p, "cat"))       cmd_cat();  /* hidden */
     else if (str_eq(p, "ps"))          cmd_ps();
     else if (str_eq(p, "jobs"))        cmd_jobs();
+    else if (str_eq(p, "clip"))        cmd_clip();
     else if (str_startswith(p, "fg")) { const char *a = p + 2; cmd_fg(a); }
     else if (str_startswith(p, "bg")) { const char *a = p + 2; cmd_bg(a); }
     else if (str_eq(p, "bgclock"))     cmd_bgclock();
@@ -2841,6 +2878,18 @@ void shell_run(void) {
             pos = len = hist_browse = 0;
             input[0] = saved[0] = '\0';
             prompt();
+
+        } else if (c == 0x16) {   /* Ctrl+V - paste the clipboard */
+            uint32_t n = clip_len();
+            const char *cb = clip_peek();
+            for (uint32_t k = 0; k < n; k++) {
+                /* The prompt is one line: a pasted newline becomes a space
+                 * rather than submitting half a command by surprise. */
+                char ch = cb[k];
+                if (ch == '\n' || ch == '\t' || ch == '\r') ch = ' ';
+                if (ch < ' ' || ch >= 127) continue;
+                shell_insert(input, &pos, &len, ch);
+            }
 
         } else if (c == 0x15) {   /* Ctrl+U - clear from cursor to start */
             shell_kill_to_start(input, &pos, &len);

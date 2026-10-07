@@ -45,6 +45,15 @@ for item in SCRIPT:
         cmd('sendkey ' + item[4:])
         continue
     # MON:<command> sends a raw monitor command (screendump, info, ...).
+    # TYPE:<text> types the text WITHOUT a trailing Enter, for the editor and
+    # for leaving a half-finished line at the prompt.
+    if item.startswith('TYPE:'):
+        for ch in item[5:]:
+            for k in keys_for(ch):
+                cmd('sendkey ' + k)
+                time.sleep(0.03)
+        time.sleep(0.2)
+        continue
     if item.startswith('MON:'):
         cmd(item[4:])
         time.sleep(0.5)

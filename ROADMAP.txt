@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.8.3
+Current version: v0.8.4
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,37 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.8.4  (2026-10-06)  — COPY AND PASTE
+  A system clipboard shared by the editor and the shell, so a span cut in jot
+  pastes at the prompt and the text Ctrl+U kills comes back with Ctrl+V. The
+  last of the four process/UX milestones.
+  - NEW src/clip.c + clip.h: one 4 KB fixed buffer, set/get/len/peek/clear.
+    Fixed rather than heap-allocated because the shell touches it on every
+    Ctrl+U and nothing here is allowed to fail, which keeps every caller free
+    of error handling.
+  - jot gains a mark. Ctrl+B anchors it at the cursor; the span between mark
+    and cursor renders highlighted (inverse video) and is what Ctrl+C copies
+    and Ctrl+X cuts. Ctrl+V pastes at the cursor. The status bar shows [MARK]
+    while one is set, and the hint line lists the keys.
+    The mark is an anchor, not a direction: it can sit either side of the
+    cursor, and sel_span() orders them.
+  - The shell's line editor fills the clipboard from the text it already
+    throws away: Ctrl+U (kill to start) and Ctrl+W (kill word) now copy what
+    they removed, so Ctrl+V undoes them. A pasted newline or tab becomes a
+    space, because the prompt is one line and half a command submitting itself
+    would be a nasty surprise.
+  - New `clip` command shows the contents, and mirrors them to the kernel log,
+    which is what lets the headless gate check a copy by its actual text
+    rather than by its length.
+  - There is no mouse driver, so selection is keyboard-driven throughout. A
+    PS/2 mouse would make drag-select possible and is not needed for this.
+  - Gate 32 -> 35 checks: Ctrl+U's text arriving on the clipboard, jot copying
+    a marked span and pasting it (checked through the saved file's byte and
+    word counts), and Ctrl+V pasting at the prompt (checked by pasting the
+    word `clip` back and letting it run, so the command only executes if the
+    paste worked). The gate deletes the test file with `strain` first, so a
+    second run starts from the same state as the first.
 
 v0.8.3  (2026-10-06)  — PIPES, REDIRECTION, AND A SEGMENT BUG FROM v0.7.0
   `cook echo.elf hi | upper.elf | wc.elf` and `cook cat.elf < A.TXT > B.TXT`

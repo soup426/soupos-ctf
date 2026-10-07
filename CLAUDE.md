@@ -3,7 +3,7 @@
 ## What this is
 
 soupOS is a 32-bit x86 hobby OS written in C and NASM assembly (currently
-**v0.8.3**). It boots via GRUB and runs in protected mode with paging, a
+**v0.8.4**). It boots via GRUB and runs in protected mode with paging, a
 physical/heap allocator, and a cooperative scheduler. On top of that:
 
 - **Filesystem**: FAT16 read/write with subdirectories ("bowls") and a VFS shim
@@ -462,6 +462,22 @@ soupOS runs real ring-3 user programs with hardware memory protection.
   copies prove concurrency) and `hog` (loops forever making NO syscalls, so
   only the IRQ kill path can end it). Link them at `USER_BASE` with
   `user/user.ld`; the disk recipe mcopies each one.
+
+## Clipboard (`src/clip.c`, v0.8.4)
+
+One 4 KB fixed buffer shared by everything that edits text. There is no mouse
+driver, so selection is keyboard-driven.
+
+- **jot**: Ctrl+B anchors a mark (either side of the cursor; `sel_span()`
+  orders them), the span renders in inverse video, Ctrl+C copies, Ctrl+X cuts,
+  Ctrl+V pastes. `[MARK]` shows in the status bar while a mark is set.
+- **Shell line editor**: Ctrl+U and Ctrl+W copy what they kill, so Ctrl+V puts
+  it back. A pasted newline or tab becomes a space, since the prompt is one
+  line.
+- Both talk to `clip.c` rather than to each other, which is why a cut in the
+  editor pastes at the prompt.
+- `clip` prints the contents and mirrors them to the kernel log, which is how
+  the headless gate checks a copy by its text.
 
 ## Processes (`src/proc.c`, v0.8.0)
 

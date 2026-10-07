@@ -62,7 +62,14 @@ python3 scripts/qemu_keys.py "$MON" \
     "cook echo.elf pipes are plumbing | upper.elf | wc.elf" "WAIT:4" \
     "cook echo.elf through a file > P.TXT" "WAIT:2" \
     "cook wc.elf < P.TXT" "WAIT:3" \
-    "cook hog.elf | wc.elf &" "WAIT:2" "kill %" "WAIT:2" "kill %" "WAIT:2" >/dev/null || {
+    "cook hog.elf | wc.elf &" "WAIT:2" "kill %" "WAIT:2" "kill %" "WAIT:2" \
+    "strain CLIP.TXT" "WAIT:1" \
+    "TYPE:soup is good" "KEY:ctrl-u" "clip" "WAIT:2" \
+    "jot CLIP.TXT" "WAIT:2" "TYPE:abc def" \
+    "KEY:home" "KEY:ctrl-b" "KEY:end" "KEY:ctrl-c" "KEY:ctrl-v" \
+    "KEY:ctrl-s" "WAIT:1" "KEY:esc" "WAIT:1" \
+    "cook wc.elf < CLIP.TXT" "WAIT:3" \
+    "TYPE:clip" "KEY:ctrl-u" "KEY:ctrl-v" "KEY:ret" "WAIT:2" >/dev/null || {
         echo "FAIL: could not drive the QEMU monitor"; exit 1; }
 
 fail=0
@@ -243,6 +250,22 @@ else
     echo "  FAIL  a process blocked on a pipe survived kill"
     fail=1
 fi
+
+# ── Clipboard ─────────────────────────────────────────────────────────────
+# Ctrl+U kills the line into the clipboard, and `clip` mirrors the contents to
+# the log, so the copy is checked by its actual text rather than its length.
+check "Ctrl+U copies the killed text" '\[clip\] 12 bytes: soup is good'
+
+# jot: mark the whole line with Ctrl+B, copy it, paste it at the end, save.
+# "abc def" copied and pasted gives "abc defabc def": 14 bytes, 3 words, and no
+# newline. The file is deleted first (strain) so a second run sees the same
+# starting state as the first.
+check "jot copies and pastes a marked span" 'WCOUT lines=0 words=3 bytes=14'
+
+# And the paste side at the prompt: the word "clip" is killed into the
+# clipboard and pasted straight back, so the command only runs at all if
+# Ctrl+V put it there.
+check "Ctrl+V pastes at the prompt" '\[clip\] 4 bytes: clip'
 
 # vgastress prints whole lines of a single repeated character from two tasks.
 # Any line containing both means vga_puts was interrupted mid-string.
