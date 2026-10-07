@@ -634,7 +634,7 @@ produced a kernel that hung on the first ring-3 trap.
 
 Each primitive lands with published test vectors in `selftest.c` (expected
 values from an independent implementation, never from the kernel's own). SHA-256
-and HMAC are in `sha256.c`; `random.c` is the entropy pool (RDRAND + IRQ timing + RTC, folded through SHA-256), checked across boots by `scripts/random-test.sh`; `chacha.c` is ChaCha20, Poly1305 and the RFC 8439 AEAD; `curve25519.c` is X25519 in 16-bit limbs (the 1000-round RFC chain is `sample slow` / `scripts/x25519-test.sh`, not the gate). None of it is constant-time; say so wherever it is
+and HMAC are in `sha256.c`; `random.c` is the entropy pool (RDRAND + IRQ timing + RTC, folded through SHA-256), checked across boots by `scripts/random-test.sh`; `chacha.c` is ChaCha20, Poly1305 and the RFC 8439 AEAD; `sha512.c` exists for Ed25519; `fe25519.h` shares the field between `curve25519.c` (X25519) and `ed25519.c` (RFC 8032 signatures); X25519 is in 16-bit limbs (the 1000-round RFC chain is `sample slow` / `scripts/x25519-test.sh`, not the gate). None of it is constant-time; say so wherever it is
 advertised.
 
 ## The pass: a shell over TCP (v0.22.0)

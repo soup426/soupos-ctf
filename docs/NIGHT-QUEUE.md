@@ -165,7 +165,7 @@ reader (and writer) so the unwind runs; `kill %` on a pipeline should take
 the whole pipeline. Gate check: after the two kills, `ps` must show no
 hog.elf, and the smoke run's back half should get faster.
 
-### S5. Ed25519
+### S5. Ed25519  — DONE v0.28.0 (signing/verify; host key persistence folded into S6)
 RFC 8032 vectors, for the host key. Shares the field arithmetic with S4.
 Generate the host key once at first boot with S2 and keep it on the FAT
 volume, so the host fingerprint is stable across reboots.

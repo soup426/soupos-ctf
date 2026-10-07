@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.27.0
+Current version: v0.28.0
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,26 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.28.0 (2026-10-07)  — ED25519, AND SHA-512 UNDER IT
+  Stage S5. The host key SSH will prove itself with.
+  - RFC 8032 hashes with SHA-512, so src/sha512.c came first: the same
+    shape as sha256.c with 64-bit words, 80 rounds and a 128-byte block.
+    The 80 round constants and the IV were DERIVED in Python from the cube
+    and square roots of the first primes, not typed in; so were Ed25519's
+    d, 2d, the base point, sqrt(-1) and the group order. A table copied by
+    hand is where a silent wrong digit lives.
+  - The field is implemented once: curve25519.c's arithmetic is exposed
+    through fe25519.h and ed25519.c builds on it. Points are extended
+    coordinates with the unified addition formula, so doubling is the same
+    code and the ladder has no special cases. Scalars mod L use the
+    schoolbook reduction, the one piece that is not field arithmetic.
+  - IN `sample`: both SHA-512 vectors; RFC 8032's first three cases, each
+    checking the public key from the seed, the signature over the message,
+    and that it verifies; then a byte of a signature changed, which must
+    not. All passed first run; three keygen+sign+verify rounds take 3
+    ticks. The X25519 vectors still pass on the shared field.
+  - Gate 74; sample is 46 tests (47 under slow).
 
 v0.27.0 (2026-10-07)  — KILL REACHES A PROCESS BLOCKED IN THE KERNEL
   The hog the gate never killed (found in v0.26.0), fixed at the root.

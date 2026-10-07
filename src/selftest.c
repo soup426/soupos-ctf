@@ -26,6 +26,8 @@
 #include "random.h"
 #include "chacha.h"
 #include "curve25519.h"
+#include "sha512.h"
+#include "ed25519.h"
 #include "timer.h"
 
 static int t_run, t_fail, t_slow;
@@ -411,6 +413,56 @@ static void test_x25519(void) {
     check("x25519 iterated 1000x", bytes_eq(k, "684cf59ba83309552800ef566f2f4d3c1c3887c49360e3875f2eb94d99532c51", 32));
 }
 
+/* ── SHA-512 and Ed25519 ──────────────────────────────────────────────────
+ * FIPS 180-4's "abc" and 896-bit SHA-512 vectors, then RFC 8032's first
+ * three Ed25519 cases: each checks the public key derived from the seed and
+ * the signature over the message, and the signature must verify. Then one
+ * byte of a signature is changed and it must not. Expected values from the
+ * cryptography library, not from this code. */
+static void test_ed25519(void) {
+    uint8_t d[64];
+    sha512("abc", 3, d);
+    check("sha512 abc", bytes_eq(d, "ddaf35a193617abacc417349ae20413112e6fa4e89a97ea20a9eeee64b55d39a"
+                                   "2192992a274fc1a836ba3c23a3feebbd454d4423643ce80e2a9ac94fa54ca49f", 64));
+    sha512("abcdefghbcdefghicdefghijdefghijkefghijklfghijklmghijklmnhijklmno"
+           "ijklmnopjklmnopqklmnopqrlmnopqrsmnopqrstnopqrstu", 112, d);
+    check("sha512 896-bit", bytes_eq(d, "8e959b75dae313da8cf4f72814fc143f8f7779c6eb9f7fa17299aeadb6889018"
+                                       "501d289e4900f7e4331b99dec4b5433ac7d329eeb6dd26545e96e55b874be909", 64));
+
+    static const struct { const char *seed, *pk, *sig; const char *msg; int len; } v[3] = {
+        { "9d61b19deffd5a60ba844af492ec2cc44449c5697b326919703bac031cae7f60",
+          "d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a",
+          "e5564300c360ac729086e2cc806e828a84877f1eb8e5d974d873e065224901555fb8821590a33bacc61e39701cf9b46bd25bf5f0595bbe24655141438e7a100b",
+          "", 0 },
+        { "4ccd089b28ff96da9db6c346ec114e0f5b8a319f35aba624da8cf6ed4fb8a6fb",
+          "3d4017c3e843895a92b70aa74d1b7ebc9c982ccf2ec4968cc0cd55f12af4660c",
+          "92a009a9f0d4cab8720e820b5f642540a2b27b5416503f8fb3762223ebdb69da085ac1e43e15996e458f3613d0f11d8c387b2eaeb4302aeeb00d291612bb0c00",
+          "\x72", 1 },
+        { "c5aa8df43f9f837bedb7442f31dcb7b166d38535076f094b85ce3a2e0b4458f7",
+          "fc51cd8e6218a1a38da47ed00230f0580816ed13ba3303ac5deb911548908025",
+          "6291d657deec24024827e69c3abe01a30ce548a284743a445e3680d7db5ac3ac18ff9b538d16f290ae67f760984dc6594a7c15e9716ed28dc027beceea1ec40a",
+          "\xaf\x82", 2 },
+    };
+    uint8_t seed[32], pk[32], sig[64];
+    int pk_ok = 1, sig_ok = 1, ver_ok = 1;
+    uint32_t t0 = timer_get_ticks();
+    for (int i = 0; i < 3; i++) {
+        hex32(seed, v[i].seed);
+        ed25519_public_key(pk, seed);
+        if (!bytes_eq(pk, v[i].pk, 32)) pk_ok = 0;
+        ed25519_sign(sig, (const uint8_t *)v[i].msg, (size_t)v[i].len, seed, pk);
+        if (!bytes_eq(sig, v[i].sig, 64)) sig_ok = 0;
+        if (ed25519_verify(sig, (const uint8_t *)v[i].msg, (size_t)v[i].len, pk) != 0) ver_ok = 0;
+    }
+    klog("[sample] ed25519: three keygen+sign+verify took %u ticks\n", timer_get_ticks() - t0);
+    check("ed25519 rfc8032 public keys", pk_ok);
+    check("ed25519 rfc8032 signatures", sig_ok);
+    check("ed25519 signatures verify", ver_ok);
+    sig[40] ^= 1;
+    check("ed25519 refuses a changed byte",
+          ed25519_verify(sig, (const uint8_t *)v[2].msg, 2, pk) == -1);
+}
+
 int selftest_run(int slow) {
     t_run = t_fail = 0;
     t_slow = slow;
@@ -431,6 +483,7 @@ int selftest_run(int slow) {
     test_random();
     test_chacha();
     test_x25519();
+    test_ed25519();
 
     vga_set_color(t_fail ? VGA_LIGHT_RED : VGA_LIGHT_GREEN, VGA_BLACK);
     vga_printf("  %d tests, %d failed\n", t_run, t_fail);
