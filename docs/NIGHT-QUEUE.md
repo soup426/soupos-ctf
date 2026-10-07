@@ -182,6 +182,18 @@ attached to the same console sink and byte translator the pass uses. The
 acceptance test is `ssh headchef@localhost -p <port>` from the host giving a
 working shell, with `pass` then retired or left disabled by default.
 
+### S8. SSH loose ends (noted 2026-10-07 after the first real logins)
+- A second client while a session is open hangs until its banner timeout,
+  because the vault accepts one session and the TCP table holds the other
+  un-accepted. Accept it, send a one-line "busy" banner and disconnect.
+- `exec` requests (`ssh soupOS whoami`) are refused; only interactive
+  shells work. Worth taking: run the line through the console and close.
+- Public-key auth: `ssh-ed25519` client keys against /AUTHKEYS on the FAT
+  volume, so nobody types `rosemary` over the air.
+- No rekeying; a very long session would eventually need it.
+- `[tcp] sent 1 bytes` is logged per character over the pass and the vault;
+  demote it or batch the sink.
+
 ## 5. A live view of the machine
 
 `ps` has CPU% now but it is a snapshot you have to keep re-typing.

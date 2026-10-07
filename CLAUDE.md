@@ -60,7 +60,10 @@ make wad
 
 **Headless smoke test** (the oracle — use this as the gate after any change):
 ```bash
-./scripts/smoke-test.sh          # boots, drives the shell, greps serial markers
+./scripts/check.sh               # THE pre-commit check: five configs + gate + every
+                                 # test script, all in parallel (~the slowest piece)
+./scripts/check.sh quick         # configs + gate only
+./scripts/smoke-test.sh          # the gate alone: boots, drives the shell, greps serial markers
 KEEP=1 ./scripts/smoke-test.sh   # keep the serial log for inspection
 ```
 It boots with `-display none`, types into the guest through the QEMU monitor
@@ -129,6 +132,8 @@ src/
   task.c / task.h   Scheduler (task_init, spawn, yield, exit, preemption)
   task_switch.asm   Context switch primitive (callee-saved reg + esp swap)
 scripts/
+  check.sh          Everything before a commit, in parallel: configs in tree
+                    copies, the gate and the side scripts each on their own QEMU
   smoke-test.sh     Headless boot + shell-driver test (the gate)
   qemu_keys.py      Types into a running guest via the QEMU monitor
 ```
@@ -759,8 +764,9 @@ starts at `y * pitch`. The framebuffer lives at ~0xFD000000 and must be
 `DOOM=0` filters `doom.c`, `wad.c` and `doomsnd.c` out of `SRC_C`, so anything
 calling the WAD reader must be in that filter AND its shell command must sit
 behind `#ifndef NO_DOOM` - the command body, the dispatch line, the name in the
-completion list, and the help text. Four configurations have to build: default,
-`DOOM=0`, `CHALLENGE=1`, `CHALLENGE=1 DOOM=0`. **Make that check gate the
+completion list, and the help text. Five configurations have to build: default,
+`FB=0`, `DOOM=0`, `CHALLENGE=1 DOOM=0`, `PROFILE=1`; `scripts/check.sh` builds
+them all in parallel. **Make that check gate the
 commit** rather than just precede it; a `;` instead of `&&` once let a broken
 `DOOM=0` through.
 

@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.30.0
+Current version: v0.30.1
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,27 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.30.1 (2026-10-07)  — scripts/check.sh: THE PRE-COMMIT CHECK, IN PARALLEL
+  Tooling, asked for: "is there a way to make the gates go faster".
+  - The pieces were always independent - five configurations need a
+    compiler each, and every test script boots its own QEMU from a copy
+    of the disk - but they ran one after another because `make clean` for
+    the next configuration deleted the soupOS.iso the gate was booting
+    from. check.sh builds the other four configurations in rsync'd copies
+    of the tree and runs the gate and all thirteen side scripts at once
+    against the default build here.
+  - First run, 16 cores: configs 8-9 s each, side scripts 16-60 s, the
+    gate 410 s; 418 s in all, against the ten-plus minutes of the chain
+    it replaces, and that chain did not even run most of the side
+    scripts. The gate was 372 s on its own, so sharing the machine with
+    seventeen other jobs cost it ten percent.
+  - Which makes the next step obvious: the wall time IS the gate now.
+    Its drive sequence is one boot and five minutes of fixed waits;
+    splitting it into segments that boot in parallel is the remaining
+    lever, and the one that needs care (counts and pids in the log
+    assertions assume the single run).
+  - `check.sh quick` is configs + gate only; KEEP=1 keeps the logs.
 
 v0.30.0 (2026-10-07)  — SSH LOGIN: PASSWORD AND A SHELL
   Stage S7, the last of the SSH plan. `ssh headchef@soupOS` works.
