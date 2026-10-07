@@ -3,7 +3,7 @@
 ## What this is
 
 soupOS is a 32-bit x86 hobby OS written in C and NASM assembly (currently
-**v0.9.0**). It boots via GRUB and runs in protected mode with paging, a
+**v0.9.1**). It boots via GRUB and runs in protected mode with paging, a
 physical/heap allocator, and a cooperative scheduler. On top of that:
 
 - **Filesystem**: FAT16 read/write with subdirectories ("bowls") and a VFS shim
@@ -17,10 +17,12 @@ physical/heap allocator, and a cooperative scheduler. On top of that:
 - **Ring-3 processes (v0.7.0, concurrent since v0.8.0)**: `cook <prog.elf>`
   loads and runs ELF32 programs in ring 3 over an `int 0x80` syscall interface,
   with real (U/S-bit) memory protection and a private address space each.
-  Several run at once: `cook prog &` backgrounds, `jobs` lists them, `kill` and
+  Several run at once: `cook prog &` backgrounds, `orders` lists them, `kill` and
   Ctrl-C end them. See "User mode" and "Processes" below.
 
 Theming note: commands are kitchen-flavoured (`pour`/`stir`/`serve`/`cook`/…).
+**Keep it up when adding commands.** Networking is `faucet`/`plumbing`/`table`/
+`sip`/`sniff`, jobs are `orders`/`plate`/`steep`, the clipboard is `scraps`.
 
 > **Doom port: re-enabled 2026-08-26 (v0.7.5).** `doom.c/doom.h/wad.c/wad.h`
 > live in `src/` again and the `doom` shell command is back. It **refuses to
@@ -465,7 +467,7 @@ soupOS runs real ring-3 user programs with hardware memory protection.
 
 ## Networking (`src/rtl8139.c`, `src/net.c`, v0.9.0)
 
-`ping 10.0.2.2` works. QEMU's user-mode network is the target, so addressing is
+`sip 10.0.2.2` works. QEMU's user-mode network is the target, so addressing is
 compiled in (10.0.2.15, gateway 10.0.2.2) rather than discovered by DHCP.
 
 - **Driver**: RTL8139, all I/O ports plus two DMA areas. The buffers are static
@@ -483,7 +485,14 @@ compiled in (10.0.2.15, gateway 10.0.2.2) rather than discovered by DHCP.
 - **Verify with the packet capture, not with printf**: `make run NET_DUMP=1`
   writes every frame to `net.pcap`. Both bugs above were found that way, one of
   them (nothing transmitted) being invisible from inside the OS.
-- Shell: `netinfo`, `ifconfig [ip]`, `arp`, `ping <ip> [count]`.
+- **UDP and DNS (v0.9.1)**: UDP carries the pseudo-header checksum, and the
+  stack keeps one outstanding request rather than a socket table. The resolver
+  does A records only and passes a dotted quad straight through, so `sip` takes
+  a name or an address by the same path. `ip_send` requires its next hop to be
+  in the ARP cache and now logs when it drops a packet for want of one, which
+  is how a silently-vanishing DNS query cost an hour.
+- Shell: `faucet`, `plumbing [ip]`, `table`, `sip <host> [count]`,
+  `sniff <host>`.
 
 ## Allocator locking (v0.8.5)
 
@@ -509,7 +518,7 @@ driver, so selection is keyboard-driven.
   line.
 - Both talk to `clip.c` rather than to each other, which is why a cut in the
   editor pastes at the prompt.
-- `clip` prints the contents and mirrors them to the kernel log, which is how
+- `scraps` prints the contents and mirrors them to the kernel log, which is how
   the headless gate checks a copy by its text.
 
 ## Processes (`src/proc.c`, v0.8.0)
@@ -565,7 +574,7 @@ reaper are reused unchanged.
   The process owns what it was given and closes it on exit, which is what
   sends EOF down a pipe.
 - Shell surface: `cook a.elf | b.elf | c.elf` (4 stages max), `< in`, `> out`,
-  `cook prog &`, `jobs`, `fg [pid]`, `bg [pid]`, `kill <pid>`, `kill %` (newest
+  `cook prog &`, `orders`, `plate [pid]`, `steep [pid]`, `kill <pid>`, `kill %` (newest
   job), `ps` marks which tasks are processes, and a finished background job is
   announced before the next prompt.
 

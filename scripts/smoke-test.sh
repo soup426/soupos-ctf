@@ -57,7 +57,7 @@ python3 scripts/qemu_keys.py "$MON" \
     "cook systest.elf post" "WAIT:3" \
     "cook hello.elf" "WAIT:2" "cook hello.elf" "WAIT:2" \
     "cook marker.elf Z" "WAIT:1" "KEY:ctrl-z" "WAIT:3" \
-    "jobs" "WAIT:1" "bg" "WAIT:3" \
+    "orders" "WAIT:1" "steep" "WAIT:3" \
     "cook marker.elf K" "WAIT:1" "KEY:ctrl-z" "WAIT:1" "kill %" "WAIT:2" \
     "cook echo.elf hello pipes | wc.elf" "WAIT:3" \
     "cook echo.elf pipes are plumbing | upper.elf | wc.elf" "WAIT:4" \
@@ -65,14 +65,15 @@ python3 scripts/qemu_keys.py "$MON" \
     "cook wc.elf < P.TXT" "WAIT:3" \
     "cook hog.elf | wc.elf &" "WAIT:2" "kill %" "WAIT:2" "kill %" "WAIT:2" \
     "strain CLIP.TXT" "WAIT:1" \
-    "TYPE:soup is good" "KEY:ctrl-u" "clip" "WAIT:2" \
+    "TYPE:soup is good" "KEY:ctrl-u" "scraps" "WAIT:2" \
     "jot CLIP.TXT" "WAIT:2" "TYPE:abc def" \
     "KEY:home" "KEY:ctrl-b" "KEY:end" "KEY:ctrl-c" "KEY:ctrl-v" \
     "KEY:ctrl-s" "WAIT:1" "KEY:esc" "WAIT:1" \
     "cook wc.elf < CLIP.TXT" "WAIT:3" \
-    "TYPE:clip" "KEY:ctrl-u" "KEY:ctrl-v" "KEY:ret" "WAIT:2" \
+    "TYPE:scraps" "KEY:ctrl-u" "KEY:ctrl-v" "KEY:ret" "WAIT:2" \
     "cook memtest.elf A | memtest.elf B | memtest.elf C" "WAIT:14" \
-    "ping 10.0.2.2 3" "WAIT:8" >/dev/null || {
+    "sip 10.0.2.2 3" "WAIT:8" \
+    "sniff example.com" "WAIT:6" >/dev/null || {
         echo "FAIL: could not drive the QEMU monitor"; exit 1; }
 
 fail=0
@@ -268,7 +269,7 @@ check "jot copies and pastes a marked span" 'WCOUT lines=0 words=3 bytes=14'
 # And the paste side at the prompt: the word "clip" is killed into the
 # clipboard and pasted straight back, so the command only runs at all if
 # Ctrl+V put it there.
-check "Ctrl+V pastes at the prompt" '\[clip\] 4 bytes: clip'
+check "Ctrl+V pastes at the prompt" '\[clip\] 6 bytes: scraps'
 
 # ── Concurrent allocation ─────────────────────────────────────────────────
 # Three processes started back-to-back by one pipeline, so their ELF loads and
@@ -286,6 +287,12 @@ done
 # PIC, ARP for the gateway, then ICMP. A reply means every layer worked.
 check "the NIC was found and configured" '\[net\] rtl8139 at io'
 check "ARP resolved and all pings replied" '\[net\] ping done 3/3'
+
+# The UDP path end to end, as far as the wire: the resolver's MAC is resolved,
+# a datagram is built and handed to the card. The ANSWER is deliberately not
+# asserted, because it needs the host to have working DNS, and a gate that
+# fails when you are offline is a bad gate.
+check "a DNS query was built and sent" '\[net\] dns query id='
 
 # vgastress prints whole lines of a single repeated character from two tasks.
 # Any line containing both means vga_puts was interrupted mid-string.

@@ -410,7 +410,8 @@ static void cmd_menu(void) {
         {0, "    netinfo            - card, addresses and frame counters"},
         {0, "    ifconfig [ip]      - show or set this machine's address"},
         {0, "    arp                - the ARP cache"},
-        {0, "    ping <ip> [count]  - ICMP echo"},
+        {0, "    ping <host> [count]- ICMP echo (name or address)"},
+        {0, "    nslookup <host>    - resolve a name over DNS"},
         {0, "    fg [pid] / bg [pid]- resume a job in the fore/background"},
         {0, "                         (Ctrl+Z stops the foreground program)"},
         {0, "    soup <file.sc>     - run a soupyc script"},
@@ -1070,7 +1071,7 @@ static void cmd_cook(const char *args) {
         }
         int rc = proc_spawn(st[i].path, st[i].args, background, stage_in, out, &pids[i]);
         if (rc < 0) {
-            cook_err(rc == -1 ? "Too many processes (try: jobs)"
+            cook_err(rc == -1 ? "Too many orders (try: orders)"
                               : "Out of memory starting the process.");
             if (stage_in) vfs_close(stage_in);
             if (rd) vfs_close(rd);
@@ -1118,7 +1119,7 @@ static void cmd_cook(const char *args) {
             if (q) q->background = 1;
         }
         vga_set_color(VGA_YELLOW, VGA_BLACK);
-        vga_printf("  [%u] stopped  %s   (fg / bg / kill %%)\n", last, st[nst - 1].path);
+        vga_printf("  [%u] set aside  %s   (plate / steep / kill %%)\n", last, st[nst - 1].path);
         vga_set_color(VGA_LIGHT_GREY, VGA_BLACK);
         return;
     }
@@ -1152,10 +1153,10 @@ static proc_t *job_arg(const char *args) {
 
 /* fg [pid] - put a job back in the foreground: give it the terminal, resume it
  * if it was stopped, and wait for it again. */
-static void cmd_fg(const char *args) {
+static void cmd_plate(const char *args) {
     proc_t *p = job_arg(args);
     if (!p || (p->state != PROC_RUNNING && p->state != PROC_STOPPED)) {
-        vga_puts("fg: no such job (try: jobs)\n");
+        vga_puts("plate: no such order (try: orders)\n");
         return;
     }
     uint32_t pid = p->pid;
@@ -1186,11 +1187,11 @@ static void cmd_fg(const char *args) {
 
 /* bg [pid] - resume a stopped job in the background. The shell keeps the
  * terminal, so the job's stdin reads see EOF from here on. */
-static void cmd_bg(const char *args) {
+static void cmd_steep(const char *args) {
     proc_t *p = job_arg(args);
-    if (!p) { vga_puts("bg: no such job (try: jobs)\n"); return; }
+    if (!p) { vga_puts("steep: no such order (try: orders)\n"); return; }
     if (p->state != PROC_STOPPED) {
-        vga_printf("bg: job %u is not stopped\n", p->pid);
+        vga_printf("steep: order %u is not set aside\n", p->pid);
         return;
     }
     p->background = 1;
@@ -1225,15 +1226,15 @@ static int parse_ip(const char *s, uint32_t *out) {
     return 0;
 }
 
-static void cmd_netinfo(void) {
+static void cmd_faucet(void) {
     if (!rtl8139_present()) {
         vga_puts("  No network card. QEMU needs: -device rtl8139\n");
         return;
     }
     const uint8_t *m = rtl8139_mac();
-    uint32_t tx, rx, drop, a, ip, icmp, other;
+    uint32_t tx, rx, drop, a, ip, icmp, udp, other;
     rtl8139_stats(&tx, &rx, &drop);
-    net_stats(&a, &ip, &icmp, &other);
+    net_stats(&a, &ip, &icmp, &udp, &other);
 
     vga_set_color(VGA_YELLOW, VGA_BLACK);
     vga_puts("  RTL8139\n");
@@ -1242,11 +1243,13 @@ static void cmd_netinfo(void) {
     vga_puts("    IP       "); print_ip(net_ip());
     vga_puts("    mask ");     print_ip(net_mask()); vga_putchar('\n');
     vga_puts("    gateway  "); print_ip(net_gw());   vga_putchar('\n');
+    vga_puts("    resolver "); print_ip(net_dns());  vga_putchar('\n');
     vga_printf("    frames   tx %u  rx %u  dropped %u\n", tx, rx, drop);
-    vga_printf("    handled  arp %u  ip %u  icmp %u  other %u\n", a, ip, icmp, other);
+    vga_printf("    handled  arp %u  ip %u  icmp %u  udp %u  other %u\n",
+               a, ip, icmp, udp, other);
 }
 
-static void cmd_ifconfig(const char *args) {
+static void cmd_plumbing(const char *args) {
     while (*args == ' ') args++;
     if (!*args) {
         vga_puts("  ip "); print_ip(net_ip());
@@ -1256,26 +1259,58 @@ static void cmd_ifconfig(const char *args) {
         return;
     }
     uint32_t ip;
-    if (parse_ip(args, &ip) < 0) { vga_puts("  Usage: ifconfig [a.b.c.d]\n"); return; }
+    if (parse_ip(args, &ip) < 0) { vga_puts("  Usage: plumbing [a.b.c.d]\n"); return; }
     net_set_ip(ip);
     vga_puts("  ip is now "); print_ip(ip); vga_putchar('\n');
 }
 
-static void cmd_arp(void) {
+static void cmd_table(void) {
     vga_set_color(VGA_YELLOW, VGA_BLACK);
     vga_puts("  ADDRESS          MAC\n");
     vga_set_color(VGA_LIGHT_GREY, VGA_BLACK);
     net_arp_dump();
 }
 
-static void cmd_ping(const char *args) {
+static void cmd_sniff(const char *args) {
     while (*args == ' ') args++;
-    if (!*args) { vga_puts("  Usage: ping <a.b.c.d> [count]\n"); return; }
+    if (!*args) { vga_puts("  Usage: sniff <hostname>\n"); return; }
+
+    char name[64];
+    int i = 0;
+    while (args[i] && args[i] != ' ' && i < (int)sizeof(name) - 1) { name[i] = args[i]; i++; }
+    name[i] = '\0';
 
     uint32_t ip;
-    if (parse_ip(args, &ip) < 0) { vga_puts("  Usage: ping <a.b.c.d> [count]\n"); return; }
+    vga_printf("  resolving %s via ", name); print_ip(net_dns()); vga_puts("...\n");
+    if (net_dns_resolve(name, &ip) == 0) {
+        vga_printf("  %s is ", name); print_ip(ip); vga_putchar('\n');
+    } else {
+        vga_set_color(VGA_LIGHT_RED, VGA_BLACK);
+        vga_printf("  could not resolve %s\n", name);
+        vga_set_color(VGA_LIGHT_GREY, VGA_BLACK);
+    }
+}
 
-    /* Optional count after the address. */
+static void cmd_sip(const char *args) {
+    while (*args == ' ') args++;
+    if (!*args) { vga_puts("  Usage: sip <host|a.b.c.d> [count]\n"); return; }
+
+    /* A name is as good as an address here: net_dns_resolve passes a dotted
+     * quad straight through, so one path covers both. */
+    char host[64];
+    int hi = 0;
+    while (args[hi] && args[hi] != ' ' && hi < (int)sizeof(host) - 1) { host[hi] = args[hi]; hi++; }
+    host[hi] = '\0';
+
+    uint32_t ip;
+    if (net_dns_resolve(host, &ip) < 0) {
+        vga_set_color(VGA_LIGHT_RED, VGA_BLACK);
+        vga_printf("  could not resolve %s\n", host);
+        vga_set_color(VGA_LIGHT_GREY, VGA_BLACK);
+        return;
+    }
+
+    /* Optional count after the host. */
     const char *rest = args;
     while (*rest && *rest != ' ') rest++;
     while (*rest == ' ') rest++;
@@ -1289,7 +1324,7 @@ static void cmd_ping(const char *args) {
 
 /* clip - show what is on the clipboard. Mirrored to the kernel log so a
  * headless test can read the result of a copy or a cut. */
-static void cmd_clip(void) {
+static void cmd_scraps(void) {
     uint32_t n = clip_len();
     if (n == 0) {
         vga_puts("  (clipboard empty)\n");
@@ -1323,7 +1358,7 @@ static void cmd_clip(void) {
  * runs on; this lists processes, which is where background state and exit
  * codes live. A finished background job stays here until the next prompt
  * announces it. */
-static void cmd_jobs(void) {
+static void cmd_orders(void) {
     int idx = 0, n = 0;
     proc_t *p;
     vga_set_color(VGA_YELLOW, VGA_BLACK);
@@ -2670,8 +2705,8 @@ static const char *const cmd_names[] = {
     "jot", "ai", "cook", "soup", "hash",
     "beep", "mandelbrot", "vgademo", "uname", "cal",
     "clock", "wipe", "fortune", "bounce", "recipe", "leftovers", "spill",
-    "freeze", "reheat", "ps", "jobs", "fg", "bg", "kill", "clip",
-    "netinfo", "ifconfig", "arp", "ping", "bgclock", "yieldbg", "spinbg", "sleeptest", "vfstest",
+    "freeze", "reheat", "ps", "orders", "plate", "steep", "kill", "scraps",
+    "faucet", "plumbing", "table", "sip", "sniff", "bgclock", "yieldbg", "spinbg", "sleeptest", "vfstest",
     "dmesg", "pwd", "cd", "mkbowl", "rmbowl", "bowltest",
     "whoami", "roster", "clockout", "hire", "fire", "perms",
 };
@@ -2901,14 +2936,15 @@ static void dispatch(const char *buf) {
 #endif
     else if (str_eq(p, "cat"))       cmd_cat();  /* hidden */
     else if (str_eq(p, "ps"))          cmd_ps();
-    else if (str_eq(p, "jobs"))        cmd_jobs();
-    else if (str_eq(p, "clip"))        cmd_clip();
-    else if (str_eq(p, "netinfo"))     cmd_netinfo();
-    else if (str_eq(p, "arp"))         cmd_arp();
-    else if (str_startswith(p, "ifconfig")) { const char *a = p + 8; cmd_ifconfig(a); }
-    else if (str_startswith(p, "ping")) { const char *a = p + 4; cmd_ping(a); }
-    else if (str_startswith(p, "fg")) { const char *a = p + 2; cmd_fg(a); }
-    else if (str_startswith(p, "bg")) { const char *a = p + 2; cmd_bg(a); }
+    else if (str_eq(p, "orders"))      cmd_orders();
+    else if (str_eq(p, "scraps"))      cmd_scraps();
+    else if (str_eq(p, "faucet"))      cmd_faucet();
+    else if (str_eq(p, "table"))       cmd_table();
+    else if (str_startswith(p, "sniff"))    { const char *a = p + 5; cmd_sniff(a); }
+    else if (str_startswith(p, "plumbing")) { const char *a = p + 8; cmd_plumbing(a); }
+    else if (str_startswith(p, "sip"))      { const char *a = p + 3; cmd_sip(a); }
+    else if (str_startswith(p, "plate")) { const char *a = p + 5; cmd_plate(a); }
+    else if (str_startswith(p, "steep")) { const char *a = p + 5; cmd_steep(a); }
     else if (str_eq(p, "bgclock"))     cmd_bgclock();
     else if (str_eq(p, "yieldbg"))     cmd_yieldbg();
     else if (str_eq(p, "spinbg"))      cmd_spinbg();

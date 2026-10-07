@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.9.0
+Current version: v0.9.1
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -10,8 +10,36 @@ everything is just "it would be funny/cool to build."
 CHANGELOG
 ────────────────────────────────────────────────────────────────
 
+v0.9.1  (2026-10-06)  — UDP, DNS, AND KITCHEN NAMES FOR ALL OF IT
+  `sniff example.com` resolves, and `sip example.com` pings the result: soupOS
+  talks to the real internet by name.
+  - UDP with the pseudo-header checksum, and one outstanding request at a time
+    rather than a socket table, which is all a resolver needs.
+  - DNS: one question, A records, no cache. The fiddly part of a reply is name
+    compression (a length byte >= 0xC0 is a pointer), so records are walked by
+    skipping names rather than following them. A dotted quad passes straight
+    through the resolver, so `sip` takes a name or an address through one path.
+  - A BUG WORTH RECORDING: the first query was logged as sent and never
+    reached the wire. ip_send requires the next hop to be in the ARP cache and
+    returned silently when it was not; net_ping resolved first, and the new
+    UDP path did not. Two fixes: net_udp_send resolves its own next hop (it
+    runs in task context, so it may block), and ip_send now says when it drops
+    a packet, because that failure being invisible is what cost the time.
+  - KITCHEN NAMES. The commands added over this session were tonally wrong for
+    a kitchen OS, so: jobs/fg/bg -> orders/plate/steep, clip -> scraps,
+    netinfo/ifconfig/arp/ping/nslookup -> faucet/plumbing/table/sip/sniff.
+    Two things fell out of the rename worth noting: a blanket
+    function-name replace turned the unrelated cmd_bgclock into
+    cmd_steepclock, and the old `str_startswith(p, "bg")` dispatch had been
+    shadowing the pre-existing `bgclock` command since job control landed.
+    Both fixed.
+  - Gate 40 -> 41 checks. The DNS ANSWER is deliberately not asserted: it
+    needs the host to have working DNS, and a gate that fails when you are
+    offline is a bad gate. What is asserted is that the query is built and
+    handed to the card.
+
 v0.9.0  (2026-10-06)  — NETWORKING: soupOS CAN PING
-  From no concept of a network at all to `ping 10.0.2.2` replying, verified
+  From no concept of a network at all to `sip 10.0.2.2` replying, verified
   against QEMU's own packet capture rather than against what soupOS claims.
   - RTL8139 DRIVER (src/rtl8139.c). Chosen because QEMU emulates it and it is
     all I/O ports plus two DMA areas: no MMIO window, no firmware. The buffers
@@ -29,9 +57,9 @@ v0.9.0  (2026-10-06)  — NETWORKING: soupOS CAN PING
     kernel does, but this one's handlers already do real work and inventing
     deferred work for one driver is the wrong order.
   - Addresses are compiled-in defaults matching QEMU's user-mode network
-    (10.0.2.15, gateway 10.0.2.2); DHCP is a later problem. `ifconfig` can
+    (10.0.2.15, gateway 10.0.2.2); DHCP is a later problem. `plumbing` can
     change the address at runtime.
-  - Shell: netinfo, ifconfig, arp, ping.
+  - Shell: faucet, plumbing, table, sip, sniff.
   - TWO BUGS WORTH RECORDING, both found by the packet capture rather than by
     reading code:
       1. Nothing transmitted at all. The transmit path decided a descriptor
@@ -98,7 +126,7 @@ v0.8.4  (2026-10-06)  — COPY AND PASTE
     they removed, so Ctrl+V undoes them. A pasted newline or tab becomes a
     space, because the prompt is one line and half a command submitting itself
     would be a nasty surprise.
-  - New `clip` command shows the contents, and mirrors them to the kernel log,
+  - New `scraps` command shows the contents, and mirrors them to the kernel log,
     which is what lets the headless gate check a copy by its actual text
     rather than by its length.
   - There is no mouse driver, so selection is keyboard-driven throughout. A
@@ -106,7 +134,7 @@ v0.8.4  (2026-10-06)  — COPY AND PASTE
   - Gate 32 -> 35 checks: Ctrl+U's text arriving on the clipboard, jot copying
     a marked span and pasting it (checked through the saved file's byte and
     word counts), and Ctrl+V pasting at the prompt (checked by pasting the
-    word `clip` back and letting it run, so the command only executes if the
+    word `scraps` back and letting it run, so the command only executes if the
     paste worked). The gate deletes the test file with `strain` first, so a
     second run starts from the same state as the first.
 
@@ -153,8 +181,8 @@ v0.8.3  (2026-10-06)  — PIPES, REDIRECTION, AND A SEGMENT BUG FROM v0.7.0
   Design notes: docs/superpowers/specs/2026-10-06-pipes-and-redirection-design.md
 
 v0.8.2  (2026-10-06)  — JOB CONTROL
-  Ctrl-Z stops the foreground program and hands the shell back; `bg` resumes it
-  in the background, `fg` resumes it in the foreground and waits again. M2 of
+  Ctrl-Z stops the foreground program and hands the shell back; `steep` resumes it
+  in the background, `plate` resumes it in the foreground and waits again. M2 of
   the process milestones.
   - proc_state_t gains PROC_STOPPED. A stopped process is alive, keeps its
     address space, and its task is BLOCKED, so it costs nothing but RAM.
@@ -174,8 +202,8 @@ v0.8.2  (2026-10-06)  — JOB CONTROL
     its parent exactly like an exited one, which is what returns the prompt.
   - proc_kill continues a stopped process as well as flagging it, or the kill
     would be noticed only when something else woke it, which may be never.
-  - `fg [pid]`, `bg [pid]`, both defaulting to the newest job; `jobs` shows T
-    for stopped; proc_most_recent counts stopped jobs as live, so a bare `fg`
+  - `plate [pid]`, `steep [pid]`, both defaulting to the newest job; `orders` shows T
+    for stopped; proc_most_recent counts stopped jobs as live, so a bare `plate`
     and `kill %` can reach them.
   - Deliberately not included: process groups (a job is one process until pipes
     exist, so a group of one is bookkeeping with no behaviour) and user-space
@@ -264,7 +292,7 @@ v0.8.0  (2026-10-06)  — CONCURRENT RING-3 PROCESSES
     is just the per-process budget.
   - task_count_alive() ignores DEAD tasks, so `doom` no longer refuses to start
     merely because a program finished before the reaper swept it.
-  - Shell: `cook prog &`, `jobs`, `kill %` (newest process), `ps` marks which
+  - Shell: `cook prog &`, `orders`, `kill %` (newest process), `ps` marks which
     tasks are processes, finished background jobs announced before the prompt.
   - New user programs: marker.elf (tags every step with its argument, so two
     copies prove concurrency) and hog.elf (loops forever, no syscalls).
