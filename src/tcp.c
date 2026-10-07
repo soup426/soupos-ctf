@@ -69,8 +69,12 @@ static tcp_conn_t conns[TCP_MAX_CONNS];
 static int client_h = -1;
 
 /* The listener, which owns no connection of its own. */
-static int      listening;
-static uint16_t listen_port;
+static uint16_t listen_ports[TCP_MAX_LISTEN];   /* 0 = free slot */
+
+static int port_listening(uint16_t port) {
+    for (int i = 0; i < TCP_MAX_LISTEN; i++) if (listen_ports[i] == port) return 1;
+    return 0;
+}
 
 static tcp_conn_t *conn_at(int h) {
     if (h < 0 || h >= TCP_MAX_CONNS) return 0;
@@ -148,7 +152,7 @@ void tcp_input(uint32_t src_ip, const uint8_t *seg, uint16_t len) {
         /* Nothing matches the four-tuple. A SYN for the listening port starts
          * a new connection in a free slot; the listener itself is untouched,
          * so the next client is not turned away. */
-        if (!listening || dport != listen_port || !(t->flags & TCP_SYN)) return;
+        if (!port_listening(dport) || !(t->flags & TCP_SYN)) return;
 
         h = conn_alloc();
         if (h < 0) return;          /* table full: let them retransmit */
@@ -471,21 +475,30 @@ void tcp_close_on(int h) {
 }
 
 int tcp_listen(uint16_t port) {
-    listening   = 1;
-    listen_port = port;
-    klog("[tcp] listening on port %u\n", port);
-    return 0;
+    if (!port || port_listening(port)) return port ? 0 : -1;
+    for (int i = 0; i < TCP_MAX_LISTEN; i++) {
+        if (listen_ports[i] == 0) {
+            listen_ports[i] = port;
+            klog("[tcp] listening on port %u\n", port);
+            return 0;
+        }
+    }
+    klog("[tcp] no listener slot for port %u\n", port);
+    return -1;
 }
 
-void tcp_stop_listening(void) { listening = 0; }
+void tcp_stop_listening(uint16_t port) {
+    for (int i = 0; i < TCP_MAX_LISTEN; i++)
+        if (listen_ports[i] == port) listen_ports[i] = 0;
+}
 
-int tcp_accept(uint32_t ticks) {
+int tcp_accept(uint16_t port, uint32_t ticks) {
     uint32_t start = timer_get_ticks();
     while (timer_get_ticks() - start < ticks) {
         for (int i = 0; i < TCP_MAX_CONNS; i++) {
             tcp_conn_t *c = &conns[i];
             if (c->state == TCP_ESTABLISHED && !c->accepted &&
-                c->local_port == listen_port) {
+                c->local_port == port) {
                 c->accepted = 1;
                 klog("[tcp] accepted %u.%u.%u.%u:%u on port %u (slot %d)\n",
                      (c->peer_ip >> 24) & 0xFF, (c->peer_ip >> 16) & 0xFF,

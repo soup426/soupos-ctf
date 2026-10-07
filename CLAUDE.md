@@ -621,6 +621,14 @@ suspecting the directory parser.
 
 Writing long names is not implemented: a new file still gets a mangled 8.3 name.
 
+## The vault: SSH transport (v0.29.0)
+
+`ssh.c` is the server; `vault <port>` opens it. One session, static buffers,
+4 KB packet cap. The chacha20-poly1305@openssh.com framing (two keys, length
+encrypted separately, seq as nonce) lives in `write_packet`/`read_packet`; the
+host key seed is `/HOSTKEY.ED`. Verify with `scripts/ssh-test.sh`, which runs
+the real `ssh -vvv` and compares fingerprints. Userauth is refused until S7. TCP has a table of four listeners (`tcp_accept(port, ticks)`), so `pass`, `vault` and `hatch` coexist; `pass` and `hatch` build without Doom.
+
 ## Kill wakes a blocked task (v0.27.0)
 
 `proc_kill` calls `task_unblock` on a target parked on a wait queue

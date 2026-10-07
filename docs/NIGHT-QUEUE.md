@@ -170,7 +170,7 @@ RFC 8032 vectors, for the host key. Shares the field arithmetic with S4.
 Generate the host key once at first boot with S2 and keep it on the FAT
 volume, so the host fingerprint is stable across reboots.
 
-### S6. SSH transport and key exchange
+### S6. SSH transport and key exchange  — DONE v0.29.0 (`vault`, scripts/ssh-test.sh)
 Version string exchange, the binary packet protocol, and
 curve25519-sha256 kex with an ssh-ed25519 host key. Verify by connecting
 with the real `ssh` client with -vvv: it must reach "SSH2_MSG_NEWKEYS sent"

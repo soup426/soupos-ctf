@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.28.0
+Current version: v0.29.0
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,45 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.29.0 (2026-10-07)  — THE VAULT: SSH TRANSPORT AND KEY EXCHANGE
+  Stage S6. A real OpenSSH client now talks to soupOS encrypted.
+  - src/ssh.c: RFC 4253 version exchange and binary packets; KEXINIT
+    offering one of everything (curve25519-sha256, ssh-ed25519,
+    chacha20-poly1305@openssh.com); the ECDH reply signed with the host
+    key; NEWKEYS; then SERVICE_ACCEPT and a userauth refusal that names
+    `password`, so the client ends at "Permission denied (password)" over
+    an encrypted channel. `vault <port>` opens it.
+  - THE OPENSSH AEAD IS NOT THE RFC 8439 ONE. Two keys: the second half
+    encrypts the four length bytes on their own so a receiver can read the
+    length before authenticating; the first half does the payload from
+    block one; the Poly1305 key is block zero; the nonce is the packet
+    sequence number; the tag covers both encrypted parts. This is why
+    chacha.h exposed the pieces separately in v0.25.0.
+  - The host key is a 32-byte Ed25519 seed at /HOSTKEY.ED, made from the
+    entropy pool on first start and read back after, so the fingerprint a
+    client stores in known_hosts stays valid across reboots.
+  - IT WORKED ON THE FIRST CONNECTION. ssh -vvv: curve25519-sha256,
+    ssh-ed25519, chacha20-poly1305 negotiated; "SSH2_MSG_NEWKEYS received";
+    "SSH2_MSG_SERVICE_ACCEPT received" (the first packet the client had to
+    decrypt); "Permission denied (password)". The fingerprint it printed
+    matched the kernel's. Four primitives with vectors each, and the
+    composition held without a single wire-level fault; that is what the
+    vectors were for. scripts/ssh-test.sh asserts all of it plus the
+    fingerprint surviving a reboot of the same disk.
+  - One session at a time in static buffers, packets capped at 4 KB. Not
+    hardened against an adversary; for a private network, as the header
+    says.
+  - FOUND WHILE OPENING `pass` AND `vault` TOGETHER: TCP had one listener
+    slot, and each service re-armed it to its own port every second, so
+    the log alternated "listening on port 23 / 22" and a client reached
+    whichever had armed it last. The listener is now a table of four
+    (TCP_MAX_LISTEN); tcp_listen adds a port, tcp_stop_listening removes
+    it, and tcp_accept takes the port it collects for. Verified with pass,
+    vault and hatch open at once, each answering its own client.
+  - Also found: `pass` and `hatch` had been defined inside the Doom guard,
+    so a DOOM=0 build had no web server and no remote shell. The guard now
+    starts where the WAD-dependent commands do. Gate 74.
 
 v0.28.0 (2026-10-07)  — ED25519, AND SHA-512 UNDER IT
   Stage S5. The host key SSH will prove itself with.

@@ -51,7 +51,7 @@ static void remote_task(void *arg) {
     while (!want_stop) {
         if (tcp_listen(port_in_use) < 0) break;
 
-        int h = tcp_accept(100);               /* a second, then re-check stop */
+        int h = tcp_accept(port_in_use, 100);               /* a second, then re-check stop */
         if (h < 0) continue;
 
         conn = h;
@@ -81,7 +81,7 @@ static void remote_task(void *arg) {
     console_set_sink(0);
     conn    = -1;
     running = 0;
-    tcp_stop_listening();
+    tcp_stop_listening(port_in_use);
     klog("[pass] stopped\n");
     task_exit();
 }

@@ -55,9 +55,16 @@ int         tcp_connect(uint32_t dst_ip, uint16_t dst_port);
  * tcp_accept returns a HANDLE, and the handle forms below act on it. The
  * plain forms act on the one connection tcp_connect made, which is all the
  * outbound commands need. */
+/* Several LISTENERS too, since v0.30.0: pass, vault and hatch each own a
+ * port and run as their own task, and with one listener slot they re-armed it
+ * to their own port in turn, so a client reached whichever had armed it last.
+ * tcp_listen adds a port (idempotent; -1 if the table is full),
+ * tcp_stop_listening removes it, and tcp_accept takes the port it is
+ * accepting for, so each service only ever collects its own clients. */
+#define TCP_MAX_LISTEN 4
 int         tcp_listen(uint16_t port);
-void        tcp_stop_listening(void);
-int         tcp_accept(uint32_t ticks);
+void        tcp_stop_listening(uint16_t port);
+int         tcp_accept(uint16_t port, uint32_t ticks);
 
 int         tcp_send_on(int h, const void *data, uint16_t len);
 int         tcp_recv_on(int h, uint8_t *out, uint16_t max, uint32_t ticks);

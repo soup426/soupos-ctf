@@ -26,6 +26,7 @@
 #include "ac97.h"
 #include "mixer.h"
 #include "remote.h"
+#include "ssh.h"
 #ifndef NO_DOOM
 #include "music.h"
 #endif
@@ -1548,7 +1549,6 @@ static void cmd_sip(const char *args) {
     net_ping(ip, count);
 }
 
-#ifndef NO_DOOM
 /* pass [port] - let somebody drive the kitchen from the network.
  * Bare `pass` reports; `pass off` closes it. */
 static void cmd_pass(const char *args) {
@@ -1622,7 +1622,7 @@ static void cmd_hatch(const char *args) {
         return;
     }
     while (!keyboard_available()) {
-        int h = tcp_accept(100);                    /* a second, then check the keyboard */
+        int h = tcp_accept((uint16_t)port, 100);                    /* a second, then check the keyboard */
         if (h < 0) continue;
 
         int n = tcp_recv_on(h, (uint8_t *)req, sizeof(req) - 1, 200);
@@ -1680,10 +1680,11 @@ static void cmd_hatch(const char *args) {
         klog("[hatch] served %s\n", path);
     }
     keyboard_flush();
-    tcp_stop_listening();
+    tcp_stop_listening((uint16_t)port);
     vga_printf("  hatch closed after %d file%s\n", served, served == 1 ? "" : "s");
 }
 
+#ifndef NO_DOOM
 /* The WAD stays open once loaded, so repeated sizzles and hums are cheap.
  * Shared by both, because either can be the first to need it. */
 static int wad_ready_for_shell(void) {
@@ -1802,6 +1803,36 @@ static void cmd_skewer(void) {
     vga_printf("  %u packets, %u resyncs\n", moves, resyncs);
     klog("[mouse] at %d,%d buttons=%d packets=%u resyncs=%u\n",
          x, y, b, moves, resyncs);
+}
+
+/* vault - the SSH server: `vault <port>`, `vault off`, or bare for status.
+ * The encrypted, host-authenticated door; `pass` is the clear-text one. */
+static void cmd_vault(const char *args) {
+    while (*args == ' ') args++;
+    if (!*args) {
+        if (ssh_running()) vga_printf("  vault open on port %u, host key %s\n", ssh_port(), ssh_fingerprint());
+        else               vga_puts("  vault closed. Usage: vault <port> | vault off\n");
+        return;
+    }
+    if (str_eq(args, "off")) {
+        if (!ssh_running()) { vga_puts("  vault is not open.\n"); return; }
+        ssh_stop();
+        vga_puts("  closing the vault.\n");
+        return;
+    }
+    int port = parse_num(args);
+    if (port <= 0 || port > 65535) { vga_puts("  vault: port must be 1-65535\n"); return; }
+    int r = ssh_start((uint16_t)port);
+    if      (r == -1) vga_puts("  vault is already open.\n");
+    else if (r == -2) vga_puts("  no IP address yet; try `plumbing dhcp` first.\n");
+    else if (r == -3) vga_puts("  could not start the vault task.\n");
+    else if (r == -4) vga_puts("  could not read or write the host key on disk.\n");
+    else {
+        vga_printf("  vault open on port %d.\n", port);
+        vga_set_color(VGA_LIGHT_CYAN, VGA_BLACK);
+        vga_printf("  host key %s\n", ssh_fingerprint());
+        vga_set_color(VGA_LIGHT_GREY, VGA_BLACK);
+    }
 }
 
 /* sample - taste the soup: run the in-kernel subsystem checks. `sample slow`
@@ -3205,7 +3236,7 @@ static const char *const cmd_names[] = {
     "jot", "ai", "cook", "soup", "hash",
     "beep", "mandelbrot", "vgademo", "uname", "cal",
     "clock", "wipe", "fortune", "bounce", "recipe", "leftovers", "spill",
-    "freeze", "reheat", "ps", "orders", "plate", "steep", "kill", "scraps", "sample", "skewer", "larder", "whistle", "hatch", "hush", "pass",
+    "freeze", "reheat", "ps", "orders", "plate", "steep", "kill", "scraps", "sample", "skewer", "larder", "whistle", "hatch", "hush", "pass", "vault",
 #ifndef NO_DOOM
     "sizzle", "hum",
 #endif
@@ -3452,9 +3483,10 @@ static void dispatch(const char *buf) {
 #ifndef NO_DOOM
     else if (str_startswith(p, "sizzle"))  cmd_sizzle(p + 6);
     else if (str_startswith(p, "hum"))     cmd_hum(p + 3);
+#endif
     else if (str_startswith(p, "hatch"))   cmd_hatch(p + 5);
     else if (str_startswith(p, "pass"))    cmd_pass(p + 4);
-#endif
+    else if (str_startswith(p, "vault"))   cmd_vault(p + 5);
     else if (str_eq(p, "faucet"))      cmd_faucet();
     else if (str_eq(p, "table"))       cmd_table();
     else if (str_startswith(p, "sniff"))    { const char *a = p + 5; cmd_sniff(a); }
