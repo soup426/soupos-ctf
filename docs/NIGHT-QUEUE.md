@@ -134,7 +134,7 @@ kernel: it is for learning and for a private network, and it should say so
 wherever it is advertised. And soupOS has no entropy source worth the name,
 which matters more than any of the ciphers, so that comes early.
 
-### S1. SHA-256 and HMAC-SHA256
+### S1. SHA-256 and HMAC-SHA256  — DONE v0.23.0
 FIPS 180-4 vectors for the hash ("abc", the 448-bit and million-'a' cases),
 RFC 4231 vectors for HMAC. `sample` runs them.
 

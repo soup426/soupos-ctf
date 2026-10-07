@@ -621,6 +621,13 @@ suspecting the directory parser.
 
 Writing long names is not implemented: a new file still gets a mangled 8.3 name.
 
+## Crypto primitives (v0.23.0 onward)
+
+Each primitive lands with published test vectors in `selftest.c` (expected
+values from an independent implementation, never from the kernel's own). SHA-256
+and HMAC are in `sha256.c`. None of it is constant-time; say so wherever it is
+advertised.
+
 ## The pass: a shell over TCP (v0.22.0)
 
 `pass <port>` runs `remote.c` as a task that feeds socket bytes into

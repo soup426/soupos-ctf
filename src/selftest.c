@@ -22,6 +22,7 @@
 #include "fb.h"
 #include "task.h"
 #include "klog.h"
+#include "sha256.h"
 
 static int t_run, t_fail;
 
@@ -217,6 +218,51 @@ static void test_str(void) {
     check("memmove handles overlap", ov[2] == 'a' && ov[3] == 'b' && ov[7] == 'f');
 }
 
+/* ── SHA-256 ──────────────────────────────────────────────────────────────
+ * The FIPS 180-4 vectors and the RFC 4231 HMAC cases. Each one probes a
+ * different path: the 56-byte message is the exact length whose padding
+ * spills into a second block, the million 'a's exercise streaming across
+ * thousands of blocks, and the 131-byte HMAC key is longer than a block, so
+ * it has to be hashed first. Expected values were produced by a separate
+ * implementation, never by this one. */
+static int hex_eq(const uint8_t *d, const char *hex) {
+    for (int i = 0; i < SHA256_DIGEST; i++) {
+        unsigned hi = hex[2*i], lo = hex[2*i+1];
+        hi = hi >= 'a' ? hi - 'a' + 10 : hi - '0';
+        lo = lo >= 'a' ? lo - 'a' + 10 : lo - '0';
+        if (d[i] != (uint8_t)((hi << 4) | lo)) return 0;
+    }
+    return 1;
+}
+static void test_sha256(void) {
+    uint8_t d[SHA256_DIGEST];
+    sha256("", 0, d);
+    check("sha256 empty", hex_eq(d, "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"));
+    sha256("abc", 3, d);
+    check("sha256 abc", hex_eq(d, "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"));
+    static const char m448[] = "abcdbcdecdefdefgefghfghighijhijkijkljklmklmnlmnomnopnopq";
+    sha256(m448, 56, d);
+    check("sha256 448-bit (pad spills)", hex_eq(d, "248d6a61d20638b8e5c026930c3e6039a33ce45964ff2167f6ecedd419db06c1"));
+
+    static uint8_t chunk[1000];
+    memset(chunk, 'a', sizeof(chunk));
+    sha256_t s;
+    sha256_init(&s);
+    for (int i = 0; i < 1000; i++) sha256_update(&s, chunk, sizeof(chunk));
+    sha256_final(&s, d);
+    check("sha256 million a's", hex_eq(d, "cdc76e5c9914fb9281a1c7e284d73e67f1809a48a497200e046d39ccc7112cd0"));
+
+    uint8_t key[131];
+    memset(key, 0x0b, 20);
+    hmac_sha256(key, 20, "Hi There", 8, d);
+    check("hmac rfc4231 #1", hex_eq(d, "b0344c61d8db38535ca8afceaf0bf12b881dc200c9833da726e9376c2e32cff7"));
+    hmac_sha256("Jefe", 4, "what do ya want for nothing?", 28, d);
+    check("hmac rfc4231 #2", hex_eq(d, "5bdcc146bf60754e6a042426089575c75a003f089d2739839dec58b964ec3843"));
+    memset(key, 0xaa, sizeof(key));
+    hmac_sha256(key, sizeof(key), "Test Using Larger Than Block-Size Key - Hash Key First", 54, d);
+    check("hmac key longer than block", hex_eq(d, "60e431591ee0b67f0d8a26aacbf5b77f8e0bc6213728c5140546040f0ee37f54"));
+}
+
 int selftest_run(void) {
     t_run = t_fail = 0;
 
@@ -232,6 +278,7 @@ int selftest_run(void) {
     test_vga();
     test_services();
     test_str();
+    test_sha256();
 
     vga_set_color(t_fail ? VGA_LIGHT_RED : VGA_LIGHT_GREEN, VGA_BLACK);
     vga_printf("  %d tests, %d failed\n", t_run, t_fail);

@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.22.0
+Current version: v0.23.0
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,23 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.23.0 (2026-10-07)  — SHA-256: THE FIRST SSH PRIMITIVE
+  Stage S1 of the SSH plan. A hash is where everything else in the protocol
+  gets its integrity from, so it goes first and gets the most vectors.
+  - src/sha256.c is FIPS 180-4 as written: 64-byte block buffer, the eight
+    working words, the compression function in the standard's order. HMAC
+    per RFC 2104, with a key longer than a block hashed first.
+  - SEVEN VECTORS IN `sample`, each chosen to probe a different path: the
+    empty message, "abc", the 56-byte message whose padding spills into a
+    second block, a million 'a's streamed in 1000-byte chunks, two RFC 4231
+    HMAC cases and the one whose 131-byte key exceeds the block. Expected
+    values were produced by Python's hashlib, never by this code.
+  - All seven passed on the first run. That is worth stating because the
+    vectors are the only reason to believe it: a SHA-256 with a wrong
+    constant produces output exactly as plausible-looking as a right one.
+  - Not constant-time, not hardened, for learning and a private network.
+    The header says so. Gate 72; sample is 29 tests.
 
 v0.22.0 (2026-10-07)  — THE PASS: soupOS OVER THE NETWORK
   Asked for SSH; this is the remote shell that comes first, so there is
