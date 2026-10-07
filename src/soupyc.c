@@ -105,13 +105,17 @@ enum {
 /* ============================================================
  * Node pool  (static - reset between script runs)
  * ============================================================ */
+/* Identifier and token length. This is NOT a limit on string values any
+ * more: those are heap-backed (see val_t). */
 #define SVAL_LEN   48
 #define POOL_SIZE 512
 
 typedef struct node {
     int   type, op, ival;
     int   line;          /* source line where this node began (for errors) */
-    char  sval[SVAL_LEN];
+    char  sval[SVAL_LEN];       /* identifier / variable / function name */
+    const char *lit;            /* N_STR: interned literal, any length */
+    uint32_t    litlen;
     struct node *next;   /* next stmt in a block / next arg in a call */
     struct node *left;   /* binop LHS / if–cond / while–cond / beep freq */
     struct node *right;  /* binop RHS / beep ms */
@@ -131,14 +135,68 @@ static node_t *new_node(int type);   /* forward */
 #define VAL_STR 1
 #define VAL_ARR 2          /* ival holds an index into arrays[] */
 
-typedef struct { int type; int ival; char sval[SVAL_LEN]; } val_t;
+/* A string value is a pointer and a length into the per-run string store
+ * below, not a fixed buffer. That 47-character cap was the longest-standing
+ * limitation in the tree: it is why a soupyc script could not write an ELF.
+ *
+ * WHY NOTHING IS FREED UNTIL THE RUN ENDS. val_t is copied by value
+ * everywhere - returned from eval_node, stored into variables and array slots,
+ * passed as arguments - so a string can be referenced from several places at
+ * once with no record of how many. Freeing on overwrite would be a
+ * use-after-free whenever a temporary outlived its slot, and a collector
+ * cannot help: the temporaries live in C locals, invisible to anything
+ * scanning the interpreter's own structures.
+ *
+ * So the store is an arena for the duration of one script, released in full
+ * when the script ends, with a byte budget. A runaway loop that concatenates
+ * forever gets a clean "out of string memory" error instead of starving the
+ * kernel heap that Doom's zone allocator needs. Literals are interned once at
+ * parse time and referenced, not copied, so a loop over a constant costs
+ * nothing. */
+typedef struct { int type; int ival; const char *sval; uint32_t slen; } val_t;
 
-static val_t mkival(int v)         { val_t r; r.type=VAL_INT; r.ival=v; r.sval[0]='\0'; return r; }
-static val_t mksval(const char *s) {
-    val_t r; r.type=VAL_STR; r.ival=0;
-    strncpy(r.sval, s, SVAL_LEN-1); r.sval[SVAL_LEN-1]='\0'; return r;
+#define STR_BUDGET (2u * 1024u * 1024u)
+
+typedef struct str_blk { struct str_blk *next; char data[]; } str_blk_t;
+static str_blk_t *str_head;
+static uint32_t   str_used;
+static const char str_empty[] = "";
+
+static void set_err(const char *m);     /* forward */
+
+/* A writable, NUL-terminated buffer of `len` bytes in the store. */
+static char *str_alloc(uint32_t len) {
+    if (str_used + len + 1 > STR_BUDGET) { set_err("out of string memory"); return 0; }
+    str_blk_t *b = (str_blk_t *)kmalloc(sizeof(str_blk_t) + len + 1);
+    if (!b) { set_err("out of string memory"); return 0; }
+    b->next = str_head; str_head = b;
+    str_used += len + 1;
+    b->data[len] = '\0';
+    return b->data;
 }
-static val_t mkaval(int handle)    { val_t r; r.type=VAL_ARR; r.ival=handle; r.sval[0]='\0'; return r; }
+
+static void str_store_reset(void) {
+    str_blk_t *b = str_head;
+    while (b) { str_blk_t *n = b->next; kfree(b); b = n; }
+    str_head = 0;
+    str_used = 0;
+}
+
+static val_t mkival(int v)      { val_t r; r.type=VAL_INT; r.ival=v; r.sval=str_empty; r.slen=0; return r; }
+static val_t mkaval(int handle) { val_t r; r.type=VAL_ARR; r.ival=handle; r.sval=str_empty; r.slen=0; return r; }
+
+/* Reference a string already in the store (or a static one): no copy. */
+static val_t mksval_ref(const char *s, uint32_t len) {
+    val_t r; r.type=VAL_STR; r.ival=0; r.sval=s?s:str_empty; r.slen=len; return r;
+}
+/* Copy bytes into the store. */
+static val_t mksvaln(const char *s, uint32_t len) {
+    char *b = str_alloc(len);
+    if (!b) return mkival(0);
+    memcpy(b, s, len);
+    return mksval_ref(b, len);
+}
+static val_t mksval(const char *s) { return mksvaln(s, (uint32_t)strlen(s)); }
 
 /* ============================================================
  * Arrays
@@ -286,7 +344,12 @@ static int         cur_line;
 #define MAX_INCLUDE_DEPTH 4
 static int inc_depth;
 
-typedef struct { int type, ival, line; char sval[SVAL_LEN]; } tok_t;
+typedef struct {
+    int type, ival, line;
+    char sval[SVAL_LEN];        /* identifiers and keywords */
+    const char *str;            /* TK_STR: interned literal, any length */
+    uint32_t    slen;
+} tok_t;
 static tok_t tok;
 
 static int is_digit(char c) { return c>='0' && c<='9'; }
@@ -305,7 +368,7 @@ static void skip_ws(void) {
 
 static void next_tok(void) {
     skip_ws();
-    tok.ival = 0; tok.sval[0] = '\0';
+    tok.ival = 0; tok.sval[0] = '\0'; tok.str = str_empty; tok.slen = 0;
     tok.line = cur_line;          /* line where this token starts */
     g_err_line = cur_line;        /* keep error line current during parsing */
     char c = src[src_pos];
@@ -322,14 +385,26 @@ static void next_tok(void) {
 
     /* String literal. A triple quote (""") opens a multi-line string: it runs
      * verbatim (newlines kept, no \-escapes) until the closing """. A single
-     * quote is the usual one-line form with \n and \t escapes. Both share the
-     * 47-char value cap; overflowing it is an error rather than a silent
-     * truncation. */
+     * quote is the usual one-line form with \n and \t escapes. Neither has a
+     * length limit: the literal is interned into the string store. */
     if (c == '"') {
         tok.type = TK_STR;
         int triple = (src[src_pos+1]=='"' && src[src_pos+2]=='"');
         src_pos += triple ? 3 : 1;
-        int i = 0, overflow = 0;
+        /* Measure the raw span first so the exact size can be allocated.
+         * Escapes only ever shrink the result, so this is a safe bound. */
+        uint32_t span = 0;
+        for (int p = src_pos;; p++) {
+            char d = src[p];
+            if (!d) break;
+            if (triple) { if (d=='"' && src[p+1]=='"' && src[p+2]=='"') break; }
+            else        { if (d=='"' || d=='\n') break; }
+            span++;
+        }
+        char *buf = str_alloc(span);
+        if (!buf) return;                                  /* err already set */
+
+        uint32_t i = 0;
         for (;;) {
             char d = src[src_pos];
             if (!d) break;                                 /* unterminated */
@@ -337,7 +412,7 @@ static void next_tok(void) {
                 if (d=='"' && src[src_pos+1]=='"' && src[src_pos+2]=='"')
                     { src_pos += 3; break; }
                 if (d=='\n') cur_line++;
-                if (i < SVAL_LEN-1) tok.sval[i++] = d; else overflow = 1;
+                buf[i++] = d;
                 src_pos++;
             } else {
                 if (d=='"') { src_pos++; break; }
@@ -346,11 +421,12 @@ static void next_tok(void) {
                 if (d=='\\' && src[src_pos+1]=='n') { out='\n'; src_pos+=2; }
                 else if (d=='\\' && src[src_pos+1]=='t') { out='\t'; src_pos+=2; }
                 else { out=d; src_pos++; }
-                if (i < SVAL_LEN-1) tok.sval[i++] = out; else overflow = 1;
+                buf[i++] = out;
             }
         }
-        tok.sval[i] = '\0';
-        if (overflow) set_err("string literal too long (max 47 chars)");
+        buf[i] = '\0';
+        tok.str  = buf;
+        tok.slen = i;
         return;
     }
 
@@ -491,7 +567,7 @@ static node_t *parse_atom(void) {
     }
     if (tok.type == TK_STR) {
         node_t *n = new_node(N_STR); if (!n) return (void *)0;
-        strncpy(n->sval, tok.sval, SVAL_LEN-1); consume(); return n;
+        n->lit = tok.str; n->litlen = tok.slen; consume(); return n;
     }
     if (tok.type == TK_IDENT) {
         char name[SVAL_LEN];
@@ -881,7 +957,9 @@ static val_t eval_node(node_t *n) {
     switch (n->type) {
 
         case N_NUM: return mkival(n->ival);
-        case N_STR: return mksval(n->sval);
+        /* Already in the store from parse time: reference it, do not copy,
+         * so a literal inside a loop costs nothing. */
+        case N_STR: return mksval_ref(n->lit, n->litlen);
 
         case N_VAR: {
             val_t *v = var_find(n->sval);
@@ -908,24 +986,21 @@ static val_t eval_node(node_t *n) {
 
             /* String concatenation */
             if (n->op == TK_PLUS && (l.type==VAL_STR || r.type==VAL_STR)) {
-                char ls[SVAL_LEN], rs[SVAL_LEN];
-                if (l.type==VAL_STR) { strncpy(ls, l.sval, SVAL_LEN-1); ls[SVAL_LEN-1]='\0'; }
-                else int_to_str(l.ival, ls, SVAL_LEN);
-                if (r.type==VAL_STR) { strncpy(rs, r.sval, SVAL_LEN-1); rs[SVAL_LEN-1]='\0'; }
-                else int_to_str(r.ival, rs, SVAL_LEN);
-                if ((int)strlen(ls) + (int)strlen(rs) > SVAL_LEN-1) {
-                    set_err("string too long (max 47 chars)");
-                    return mkival(0);
-                }
-                char tmp[SVAL_LEN];
-                int tlen = (int)strlen(ls);
-                memcpy(tmp, ls, tlen);
-                strcpy(tmp + tlen, rs);
-                return mksval(tmp);
+                char ln[24], rn[24];
+                const char *ls = l.sval; uint32_t ll = l.slen;
+                const char *rs = r.sval; uint32_t rl = r.slen;
+                if (l.type != VAL_STR) { int_to_str(l.ival, ln, sizeof ln); ls = ln; ll = (uint32_t)strlen(ln); }
+                if (r.type != VAL_STR) { int_to_str(r.ival, rn, sizeof rn); rs = rn; rl = (uint32_t)strlen(rn); }
+
+                char *b = str_alloc(ll + rl);
+                if (!b) return mkival(0);
+                memcpy(b, ls, ll);
+                memcpy(b + ll, rs, rl);
+                return mksval_ref(b, ll + rl);
             }
             /* String equality */
             if ((n->op==TK_EQ||n->op==TK_NEQ) && l.type==VAL_STR && r.type==VAL_STR) {
-                int eq = !strcmp(l.sval, r.sval);
+                int eq = (l.slen == r.slen) && !memcmp(l.sval, r.sval, l.slen);
                 return mkival(n->op==TK_EQ ? eq : !eq);
             }
 
@@ -1010,19 +1085,20 @@ static val_t eval_node(node_t *n) {
             return mkival(0);
 
         case N_INPUT: {
-            static char ibuf[SVAL_LEN];
-            int i = 0, c;
+            #define INPUT_MAX 1024u
+            static char ibuf[INPUT_MAX + 1];
+            uint32_t i = 0; int c;
             while ((c = keyboard_getchar()) != '\n') {
                 if (c == '\b') {
                     if (i > 0) { i--; vga_putchar('\b'); }
-                } else if (c >= ' ' && c < 127 && i < SVAL_LEN-1) {
+                } else if (c >= ' ' && c < 127 && i < INPUT_MAX) {
                     ibuf[i++] = (char)c;
                     vga_putchar((char)c);
                 }
             }
             ibuf[i] = '\0';
             vga_putchar('\n');
-            return mksval(ibuf);
+            return mksvaln(ibuf, i);
         }
 
         case N_FUNC_DEF:
@@ -1129,7 +1205,7 @@ static val_t eval_node(node_t *n) {
             int i = as_int(idx);
             /* String index -> 1-character string. */
             if (base.type == VAL_STR) {
-                int slen = (int)strlen(base.sval);
+                int slen = (int)base.slen;
                 if (i < 0 || i >= slen) {
                     set_err("string index out of range"); return mkival(0);
                 }
@@ -1339,16 +1415,16 @@ static int call_builtin(node_t *n, val_t *out) {
         if (err_flag) return 1;
         const char *s  = val_str(&a[0], scratch, SVAL_LEN);
         int    want_up = (name[0] == 'u');
-        char   b[SVAL_LEN];
-        int    i = 0;
-        for (; s[i] && i < SVAL_LEN - 1; i++) {
+        uint32_t len = (uint32_t)strlen(s);
+        char *b = str_alloc(len);
+        if (!b) return 1;
+        for (uint32_t i = 0; i < len; i++) {
             char c = s[i];
             if ( want_up && c >= 'a' && c <= 'z') c -= 32;
             if (!want_up && c >= 'A' && c <= 'Z') c += 32;
             b[i] = c;
         }
-        b[i] = '\0';
-        *out = mksval(b);
+        *out = mksval_ref(b, len);
         return 1;
     }
     if (strcmp(name, "substr") == 0) {
@@ -1363,11 +1439,10 @@ static int call_builtin(node_t *n, val_t *out) {
         if (start > slen)         start = slen;
         if (cnt < 0)              cnt = 0;
         if (start + cnt > slen)   cnt = slen - start;
-        char b[SVAL_LEN];
-        int  i = 0;
-        for (; i < cnt && i < SVAL_LEN - 1; i++) b[i] = s[start + i];
-        b[i] = '\0';
-        *out = mksval(b);
+        char *b = str_alloc((uint32_t)cnt);
+        if (!b) return 1;
+        memcpy(b, s + start, (uint32_t)cnt);
+        *out = mksval_ref(b, (uint32_t)cnt);
         return 1;
     }
 
@@ -1428,17 +1503,21 @@ static int call_builtin(node_t *n, val_t *out) {
         const char *p = val_str(&a[0], scratch, SVAL_LEN);
         if (!ai_available()) { *out = mksval("(ai bridge off)"); return 1; }
         ai_send(p);
-        char buf[SVAL_LEN];
-        int i = 0, got = 0;
+        /* The store cannot resize a block, so take a line's worth and report
+         * the length actually received. */
+        #define AI_REPLY_MAX 1024u
+        char *buf = str_alloc(AI_REPLY_MAX);
+        if (!buf) return 1;
+        uint32_t i = 0; int got = 0;
         for (;;) {
             int c = ai_getc(got ? 600 : 1500);
             if (c < 0 || c == AI_EOT) break;
             if (c == '\r' || c == '\n') continue;       /* keep it a single line */
-            if (i < SVAL_LEN - 1) buf[i++] = (char)c;
+            if (i < AI_REPLY_MAX) buf[i++] = (char)c;
             got = 1;
         }
         buf[i] = '\0';
-        *out = mksval(buf);                             /* capped at 47 chars */
+        *out = mksval_ref(buf, i);
         return 1;
     }
 
@@ -1470,13 +1549,13 @@ static int call_builtin(node_t *n, val_t *out) {
         vfs_node_t *nd = sc_file_get(a[0]);
         if (!nd) { set_err("read: bad file handle"); return 1; }
         int want = as_int(a[1]);
-        if (want < 0)            want = 0;
-        if (want > SVAL_LEN - 1) want = SVAL_LEN - 1;  /* string cap */
-        char buf[SVAL_LEN];
+        if (want < 0) want = 0;
+        char *buf = str_alloc((uint32_t)want);
+        if (!buf) return 1;
         int got = vfs_read(nd, buf, (uint32_t)want);
         if (got < 0) got = 0;
         buf[got] = '\0';
-        *out = mksval(buf);
+        *out = mksval_ref(buf, (uint32_t)got);
         return 1;
     }
     if (strcmp(name, "write") == 0) {
@@ -1532,6 +1611,11 @@ int soupyc_run(const char *source) {
     err_msg[0]  = '\0';
     err_line    = 0;
     g_err_line  = 0;
+    /* Drop the previous run's strings before anything can reference them.
+     * Every val_t still sitting in vars[], arrays[] or return_val points into
+     * that storage, which is why this happens here, with all of them reset in
+     * the same breath. */
+    str_store_reset();
     return_val  = mkival(0);
     for (int i = 0; i < MAX_ARRAYS; i++) arrays[i].used = 0;
     sc_files_reset();   /* close any files a previous run leaked */

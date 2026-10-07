@@ -123,7 +123,9 @@ python3 scripts/qemu_keys.py "$MON" \
     "sniff example.com" "WAIT:6" \
     "reserve 10.0.2.2 19000" "WAIT:6" \
     "holler 10.0.2.2 19001 souptcp" "WAIT:8" \
-    "takeout 10.0.2.2:19002 /soup" "WAIT:9" >/dev/null || {
+    "takeout 10.0.2.2:19002 /soup" "WAIT:9" \
+    "soup LONGSTR.SC" "WAIT:6" \
+    "soup RUNAWAY.SC" "WAIT:22" "pwd" "WAIT:2" >/dev/null || {
         echo "FAIL: could not drive the QEMU monitor"; exit 1; }
 
 fail=0
@@ -382,6 +384,17 @@ check "mouse tracks injected movement" '\[mouse\] at 60,2 '
 # Asserting the content, not the length: a mapping off by one still copies five
 # bytes, just the wrong five.
 check "mouse drag-select feeds the clipboard" '\[clip\] 5 bytes: abcde'
+
+# soupyc's string values used to be a fixed char[48]. These run LAST in the
+# drive sequence on purpose: the runaway check takes twenty seconds and the TCP
+# listeners' accept timeout is a budget for everything before them.
+# Exact lengths, so a truncation anywhere shows up as the wrong number.
+check "soupyc concatenates past 47 chars" 'built 100'
+check "soupyc takes a long literal"       'literal 97'
+check "soupyc reads 100 bytes of a file"  'file 100'
+# And the budget has to fail cleanly rather than taking the kernel with it:
+# the shell has to still be there afterwards.
+check "runaway strings fail cleanly" 'out of string memory'
 
 # vgastress prints whole lines of a single repeated character from two tasks.
 # Any line containing both means vga_puts was interrupted mid-string.

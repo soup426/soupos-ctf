@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.9.9
+Current version: v0.10.0
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,39 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.10.0 (2026-10-07)  — soupyc STRINGS LEAVE THE 47-CHARACTER CAGE
+  Night-queue item 6, first and largest part. docs/next-steps.md has carried
+  this as the longest-standing limitation in the tree: a string value was a
+  fixed char[48], which is why a soupyc script could not write an ELF.
+  - val_t now carries a pointer and a length instead of a buffer. SVAL_LEN
+    stays, but only for identifiers and keywords, where 48 is plenty.
+  - THE OWNERSHIP QUESTION, which is the whole design. val_t is copied by
+    value everywhere - returned from eval_node, stored into variables and
+    array slots, passed as arguments - so one string can be referenced from
+    several places with no record of how many. Freeing on overwrite would be a
+    use-after-free the moment a temporary outlived its slot, and a collector
+    cannot help: the temporaries live in C locals, invisible to anything that
+    scans the interpreter's own structures. So the store is an ARENA for the
+    duration of one script, released in full when the script ends, with a 2 MB
+    budget. A runaway loop gets a clean "out of string memory" error instead of
+    starving the 8 MB heap that Doom's zone allocator needs.
+  - Literals are interned once at parse time and referenced, never copied, so
+    a literal inside a loop costs nothing.
+  - Everything that used to truncate at 47 now allocates what it needs:
+    concatenation, upper, lower, substr, read, input, ai. read() losing its cap
+    is the one that matters - a script can now read a file and write it back.
+  - Gate 50 -> 54 checks, with exact lengths so a truncation anywhere shows up
+    as a wrong number: built 100, literal 97, file 100, and the runaway script
+    failing cleanly with the shell still alive afterwards.
+  - MY OWN BUG, recorded because the symptom was so misleading: adding the new
+    drive commands REPLACED the takeout line instead of following it, so an
+    HTTP check failed with "no match" and looked like a TCP regression. Nothing
+    in this commit touches TCP. Worse, I then read a stale serial log - the
+    gate deletes its log unless KEEP=1, so `ls -t` handed me one from three
+    hours earlier, whose contents are evidence of an ALREADY-FIXED problem.
+    Use KEEP=1 and check the timestamp.
+  Still open from item 6: the per-invocation context, then spawn().
 
 v0.9.9  (2026-10-07)  — DRAG-SELECT IN jot
   Night-queue item 5, finished. The mouse now does something.

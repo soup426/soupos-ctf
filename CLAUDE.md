@@ -3,7 +3,7 @@
 ## What this is
 
 soupOS is a 32-bit x86 hobby OS written in C and NASM assembly (currently
-**v0.9.9**). It boots via GRUB and runs in protected mode with paging, a
+**v0.10.0**). It boots via GRUB and runs in protected mode with paging, a
 physical/heap allocator, and a cooperative scheduler. On top of that:
 
 - **Filesystem**: FAT16 read/write with subdirectories ("bowls") and a VFS shim
@@ -519,6 +519,28 @@ compiled in (10.0.2.15, gateway 10.0.2.2) rather than discovered by DHCP.
   outliving our close. The gate uses a separate listener port per check.
 - Shell: `faucet`, `plumbing [ip|dhcp]`, `table`, `sip <host> [count]`,
   `sniff <host>`, `reserve <host> <port>`.
+
+## soupyc strings are heap-backed (v0.10.0)
+
+`val_t` is a pointer and a length. Strings live in a **per-run arena**
+(`str_alloc`), released in full by `str_store_reset()` when a script ends, with
+a 2 MB budget that turns a runaway loop into a clean error rather than starving
+the heap Doom needs.
+
+**Nothing is freed individually, on purpose.** `val_t` is copied by value
+everywhere, so a string can be referenced from several places with no record of
+how many, and the temporaries live in C locals where no collector can see them.
+If you add a builtin, allocate with `str_alloc` and return `mksval_ref`; never
+`kfree` a string. `SVAL_LEN` is now only the identifier length.
+
+## Two things about the gate that cost me time (v0.10.0)
+
+- **It deletes its serial log unless `KEEP=1`.** `ls -t /tmp/soupos-smoke.*.log`
+  will cheerfully hand you one from hours ago, and a stale log can show symptoms
+  of problems that were fixed long since. Check the timestamp.
+- **When adding drive commands, confirm you added rather than replaced.** A
+  dropped drive line fails as "no match for ..." on a completely unrelated
+  check, which reads exactly like a kernel regression in that subsystem.
 
 ## Drag-select in jot (v0.9.9)
 
