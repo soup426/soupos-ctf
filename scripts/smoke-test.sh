@@ -31,6 +31,7 @@ qemu-system-i386 \
     -drive file=disk.img,format=raw,if=ide,index=0 \
     -cdrom soupOS.iso -boot d \
     -m 128M -no-reboot -no-shutdown \
+    -netdev user,id=n0 -device rtl8139,netdev=n0 \
     -display none \
     -serial "file:$LOG" \
     -monitor "unix:$MON,server,nowait" >/dev/null 2>&1 &
@@ -70,7 +71,8 @@ python3 scripts/qemu_keys.py "$MON" \
     "KEY:ctrl-s" "WAIT:1" "KEY:esc" "WAIT:1" \
     "cook wc.elf < CLIP.TXT" "WAIT:3" \
     "TYPE:clip" "KEY:ctrl-u" "KEY:ctrl-v" "KEY:ret" "WAIT:2" \
-    "cook memtest.elf A | memtest.elf B | memtest.elf C" "WAIT:14" >/dev/null || {
+    "cook memtest.elf A | memtest.elf B | memtest.elf C" "WAIT:14" \
+    "ping 10.0.2.2 3" "WAIT:8" >/dev/null || {
         echo "FAIL: could not drive the QEMU monitor"; exit 1; }
 
 fail=0
@@ -277,6 +279,13 @@ check "Ctrl+V pastes at the prompt" '\[clip\] 4 bytes: clip'
 for tag in A B C; do
     check "concurrent process $tag kept its own pages" "MEMTEST OK tag=$tag"
 done
+
+# ── Networking ────────────────────────────────────────────────────────────
+# The gate's QEMU has a user-mode network with an RTL8139 on it, so the whole
+# path is exercised for real: PCI probe, DMA ring, IRQ 11 through the slave
+# PIC, ARP for the gateway, then ICMP. A reply means every layer worked.
+check "the NIC was found and configured" '\[net\] rtl8139 at io'
+check "ARP resolved and all pings replied" '\[net\] ping done 3/3'
 
 # vgastress prints whole lines of a single repeated character from two tasks.
 # Any line containing both means vga_puts was interrupted mid-string.

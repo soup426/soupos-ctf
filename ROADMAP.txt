@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.8.5
+Current version: v0.9.0
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,42 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.9.0  (2026-10-06)  — NETWORKING: soupOS CAN PING
+  From no concept of a network at all to `ping 10.0.2.2` replying, verified
+  against QEMU's own packet capture rather than against what soupOS claims.
+  - RTL8139 DRIVER (src/rtl8139.c). Chosen because QEMU emulates it and it is
+    all I/O ports plus two DMA areas: no MMIO window, no firmware. The buffers
+    are static arrays, which works precisely because the kernel is
+    identity-mapped, so their addresses already ARE the physical ones the card
+    wants. 8 KB receive ring with the datasheet's wrap allowance, four 1792
+    byte transmit buffers used round-robin.
+  - PCI gained what a driver actually needs: pci_find, config-space reads AND
+    writes, pci_bar, pci_irq_line, and pci_enable_bus_master. Without the
+    bus-master bit the card DMAs nothing and says nothing about it.
+  - STACK (src/net.c): Ethernet, ARP with an 8-entry cache, IPv4 with header
+    checksums, and ICMP echo both ways, so soupOS answers pings as well as
+    sending them. Host byte order everywhere above the wire, converted in one
+    place. Receive runs in the interrupt handler, which is not what a grown-up
+    kernel does, but this one's handlers already do real work and inventing
+    deferred work for one driver is the wrong order.
+  - Addresses are compiled-in defaults matching QEMU's user-mode network
+    (10.0.2.15, gateway 10.0.2.2); DHCP is a later problem. `ifconfig` can
+    change the address at runtime.
+  - Shell: netinfo, ifconfig, arp, ping.
+  - TWO BUGS WORTH RECORDING, both found by the packet capture rather than by
+    reading code:
+      1. Nothing transmitted at all. The transmit path decided a descriptor
+         was busy from the OWN bit, whose polarity is documented
+         inconsistently; inverted, every descriptor looked busy forever. It
+         now tracks completion through TOK/TUN/TABT, which are unambiguous.
+      2. Transmits worked, replies never arrived. idt_init unmasks only IRQ0
+         and IRQ1, so the card's IRQ 11 never reached the CPU. New
+         irq_unmask() opens a line, and for a slave line it also opens the
+         cascade on the master, which is the part that is easy to forget.
+  - Gate 38 -> 40 checks, including a real ARP-then-ICMP exchange.
+  Design notes: docs/superpowers/specs/2026-10-06-networking-design.md
+  Not included: DHCP, UDP, TCP, DNS, anything above ICMP.
 
 v0.8.5  (2026-10-06)  — THE PAGE ALLOCATOR WAS NOT SAFE FOR TWO PROCESSES
   pmm_alloc_page() was completely unguarded:

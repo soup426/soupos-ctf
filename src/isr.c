@@ -132,6 +132,28 @@ void isr_handler(registers_t *regs) {
 /* Table of registered IRQ handlers */
 static irq_handler_t irq_handlers[16];
 
+/* Let an IRQ line through the PIC. idt_init unmasks only the timer and the
+ * keyboard, so any driver that wants interrupts has to ask; a line on the
+ * slave also needs the cascade (IRQ2) open on the master, which is the part
+ * that is easy to forget. */
+static inline uint8_t inb(uint16_t port) {
+    uint8_t r;
+    __asm__ volatile ("inb %1,%0" : "=a"(r) : "Nd"(port));
+    return r;
+}
+
+void irq_unmask(uint8_t irq) {
+    if (irq < 8) {
+        uint8_t m = inb(0x21);
+        outb(0x21, (uint8_t)(m & ~(1u << irq)));
+    } else if (irq < 16) {
+        uint8_t m = inb(0xA1);
+        outb(0xA1, (uint8_t)(m & ~(1u << (irq - 8))));
+        uint8_t mm = inb(0x21);
+        outb(0x21, (uint8_t)(mm & ~(1u << 2)));
+    }
+}
+
 void irq_register(uint8_t irq, irq_handler_t handler) {
     if (irq < 16)
         irq_handlers[irq] = handler;

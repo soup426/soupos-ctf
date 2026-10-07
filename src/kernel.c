@@ -15,6 +15,8 @@
 #include "ata.h"
 #include "fat.h"
 #include "vfs.h"
+#include "rtl8139.h"
+#include "net.h"
 #include "task.h"
 #include "serial.h"
 #include "klog.h"
@@ -161,6 +163,20 @@ void kernel_main(uint32_t mb_magic, uint32_t mb_info) {
     }
     vga_puts("[OK] VFS ready     - files + /dev/{null,zero,serial,kbd}\n");
     vga_puts("[OK] Kernel log    - ring buffer + serial mirror (see: dmesg)\n");
+
+    if (rtl8139_init() == 0) {
+        const uint8_t *m = rtl8139_mac();
+        net_init();
+        vga_printf("[OK] Network       - RTL8139, MAC %x:%x:%x:%x:%x:%x\n",
+                   m[0], m[1], m[2], m[3], m[4], m[5]);
+        uint32_t ip = net_ip();
+        vga_printf("                     IP %u.%u.%u.%u, gateway %u.%u.%u.%u\n",
+                   (ip >> 24) & 0xFF, (ip >> 16) & 0xFF, (ip >> 8) & 0xFF, ip & 0xFF,
+                   (net_gw() >> 24) & 0xFF, (net_gw() >> 16) & 0xFF,
+                   (net_gw() >> 8) & 0xFF, net_gw() & 0xFF);
+    } else {
+        vga_puts("[--] No network card (QEMU needs -device rtl8139)\n");
+    }
 
     /* ---- Scheduler bring-up ---- */
     task_init();

@@ -18,6 +18,8 @@
 #include "task.h"
 #include "proc.h"
 #include "clip.h"
+#include "net.h"
+#include "rtl8139.h"
 #include "vfs.h"
 #include "klog.h"
 #include "users.h"
@@ -404,6 +406,11 @@ static void cmd_menu(void) {
         {0, "                         foreground one; kill <pid> any of them)"},
         {0, "    jobs               - list processes and their exit codes"},
         {0, "    clip               - show the clipboard (^U/^W fill it, ^V pastes)"},
+        {1, "  Network"},
+        {0, "    netinfo            - card, addresses and frame counters"},
+        {0, "    ifconfig [ip]      - show or set this machine's address"},
+        {0, "    arp                - the ARP cache"},
+        {0, "    ping <ip> [count]  - ICMP echo"},
         {0, "    fg [pid] / bg [pid]- resume a job in the fore/background"},
         {0, "                         (Ctrl+Z stops the foreground program)"},
         {0, "    soup <file.sc>     - run a soupyc script"},
@@ -1191,6 +1198,93 @@ static void cmd_bg(const char *args) {
     vga_set_color(VGA_DARK_GREY, VGA_BLACK);
     vga_printf("  [%u] %s &\n", p->pid, p->name);
     vga_set_color(VGA_LIGHT_GREY, VGA_BLACK);
+}
+
+/* ── Networking ──────────────────────────────────────────────────────────── */
+
+static void print_ip(uint32_t ip) {
+    vga_printf("%u.%u.%u.%u", (ip >> 24) & 0xFF, (ip >> 16) & 0xFF,
+               (ip >> 8) & 0xFF, ip & 0xFF);
+}
+
+/* Parse dotted quad. Returns 0 on success. */
+static int parse_ip(const char *s, uint32_t *out) {
+    uint32_t v = 0;
+    for (int part = 0; part < 4; part++) {
+        if (*s < '0' || *s > '9') return -1;
+        uint32_t oct = 0;
+        while (*s >= '0' && *s <= '9') { oct = oct * 10 + (uint32_t)(*s - '0'); s++; }
+        if (oct > 255) return -1;
+        v = (v << 8) | oct;
+        if (part < 3) { if (*s != '.') return -1; s++; }
+    }
+    /* Whatever follows the address belongs to the caller (ping's count, say).
+     * Only a malformed address is rejected here: 10.0.2.2.5 or 10.0.2.2x. */
+    if (*s != '\0' && *s != ' ') return -1;
+    *out = v;
+    return 0;
+}
+
+static void cmd_netinfo(void) {
+    if (!rtl8139_present()) {
+        vga_puts("  No network card. QEMU needs: -device rtl8139\n");
+        return;
+    }
+    const uint8_t *m = rtl8139_mac();
+    uint32_t tx, rx, drop, a, ip, icmp, other;
+    rtl8139_stats(&tx, &rx, &drop);
+    net_stats(&a, &ip, &icmp, &other);
+
+    vga_set_color(VGA_YELLOW, VGA_BLACK);
+    vga_puts("  RTL8139\n");
+    vga_set_color(VGA_LIGHT_GREY, VGA_BLACK);
+    vga_printf("    MAC      %x:%x:%x:%x:%x:%x\n", m[0], m[1], m[2], m[3], m[4], m[5]);
+    vga_puts("    IP       "); print_ip(net_ip());
+    vga_puts("    mask ");     print_ip(net_mask()); vga_putchar('\n');
+    vga_puts("    gateway  "); print_ip(net_gw());   vga_putchar('\n');
+    vga_printf("    frames   tx %u  rx %u  dropped %u\n", tx, rx, drop);
+    vga_printf("    handled  arp %u  ip %u  icmp %u  other %u\n", a, ip, icmp, other);
+}
+
+static void cmd_ifconfig(const char *args) {
+    while (*args == ' ') args++;
+    if (!*args) {
+        vga_puts("  ip "); print_ip(net_ip());
+        vga_puts("  mask "); print_ip(net_mask());
+        vga_puts("  gw ");   print_ip(net_gw());
+        vga_putchar('\n');
+        return;
+    }
+    uint32_t ip;
+    if (parse_ip(args, &ip) < 0) { vga_puts("  Usage: ifconfig [a.b.c.d]\n"); return; }
+    net_set_ip(ip);
+    vga_puts("  ip is now "); print_ip(ip); vga_putchar('\n');
+}
+
+static void cmd_arp(void) {
+    vga_set_color(VGA_YELLOW, VGA_BLACK);
+    vga_puts("  ADDRESS          MAC\n");
+    vga_set_color(VGA_LIGHT_GREY, VGA_BLACK);
+    net_arp_dump();
+}
+
+static void cmd_ping(const char *args) {
+    while (*args == ' ') args++;
+    if (!*args) { vga_puts("  Usage: ping <a.b.c.d> [count]\n"); return; }
+
+    uint32_t ip;
+    if (parse_ip(args, &ip) < 0) { vga_puts("  Usage: ping <a.b.c.d> [count]\n"); return; }
+
+    /* Optional count after the address. */
+    const char *rest = args;
+    while (*rest && *rest != ' ') rest++;
+    while (*rest == ' ') rest++;
+    int count = *rest ? parse_num(rest) : 4;
+    if (count < 1)  count = 1;
+    if (count > 16) count = 16;
+
+    vga_puts("  PING "); print_ip(ip); vga_printf("  %d packets\n", count);
+    net_ping(ip, count);
 }
 
 /* clip - show what is on the clipboard. Mirrored to the kernel log so a
@@ -2576,7 +2670,8 @@ static const char *const cmd_names[] = {
     "jot", "ai", "cook", "soup", "hash",
     "beep", "mandelbrot", "vgademo", "uname", "cal",
     "clock", "wipe", "fortune", "bounce", "recipe", "leftovers", "spill",
-    "freeze", "reheat", "ps", "jobs", "fg", "bg", "kill", "clip", "bgclock", "yieldbg", "spinbg", "sleeptest", "vfstest",
+    "freeze", "reheat", "ps", "jobs", "fg", "bg", "kill", "clip",
+    "netinfo", "ifconfig", "arp", "ping", "bgclock", "yieldbg", "spinbg", "sleeptest", "vfstest",
     "dmesg", "pwd", "cd", "mkbowl", "rmbowl", "bowltest",
     "whoami", "roster", "clockout", "hire", "fire", "perms",
 };
@@ -2808,6 +2903,10 @@ static void dispatch(const char *buf) {
     else if (str_eq(p, "ps"))          cmd_ps();
     else if (str_eq(p, "jobs"))        cmd_jobs();
     else if (str_eq(p, "clip"))        cmd_clip();
+    else if (str_eq(p, "netinfo"))     cmd_netinfo();
+    else if (str_eq(p, "arp"))         cmd_arp();
+    else if (str_startswith(p, "ifconfig")) { const char *a = p + 8; cmd_ifconfig(a); }
+    else if (str_startswith(p, "ping")) { const char *a = p + 4; cmd_ping(a); }
     else if (str_startswith(p, "fg")) { const char *a = p + 2; cmd_fg(a); }
     else if (str_startswith(p, "bg")) { const char *a = p + 2; cmd_bg(a); }
     else if (str_eq(p, "bgclock"))     cmd_bgclock();

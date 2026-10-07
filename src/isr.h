@@ -24,3 +24,7 @@ typedef void (*irq_handler_t)(registers_t *);
 void isr_handler(registers_t *regs);
 void irq_handler(registers_t *regs);
 void irq_register(uint8_t irq, irq_handler_t handler);
+
+/* Open an IRQ line at the PIC. Only the timer and keyboard are open by
+ * default; a slave line (8-15) also opens the cascade on the master. */
+void irq_unmask(uint8_t irq);

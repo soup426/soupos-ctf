@@ -3,7 +3,7 @@
 ## What this is
 
 soupOS is a 32-bit x86 hobby OS written in C and NASM assembly (currently
-**v0.8.5**). It boots via GRUB and runs in protected mode with paging, a
+**v0.9.0**). It boots via GRUB and runs in protected mode with paging, a
 physical/heap allocator, and a cooperative scheduler. On top of that:
 
 - **Filesystem**: FAT16 read/write with subdirectories ("bowls") and a VFS shim
@@ -462,6 +462,28 @@ soupOS runs real ring-3 user programs with hardware memory protection.
   copies prove concurrency) and `hog` (loops forever making NO syscalls, so
   only the IRQ kill path can end it). Link them at `USER_BASE` with
   `user/user.ld`; the disk recipe mcopies each one.
+
+## Networking (`src/rtl8139.c`, `src/net.c`, v0.9.0)
+
+`ping 10.0.2.2` works. QEMU's user-mode network is the target, so addressing is
+compiled in (10.0.2.15, gateway 10.0.2.2) rather than discovered by DHCP.
+
+- **Driver**: RTL8139, all I/O ports plus two DMA areas. The buffers are static
+  arrays because the kernel is identity-mapped, so their addresses are already
+  physical. Transmit tracks completion with TOK/TUN/TABT, **not** the OWN bit,
+  whose polarity is documented inconsistently and which silently wedged every
+  descriptor when it was read the other way round.
+- **`irq_unmask()`**: `idt_init` opens only IRQ0 and IRQ1, so any driver that
+  wants interrupts must ask. A slave line (8-15) also needs the cascade, IRQ2,
+  open on the master. Forgetting that looks exactly like a broken driver:
+  transmits work, nothing is ever received.
+- **Stack**: Ethernet, ARP (8-entry cache), IPv4 with checksums, ICMP echo in
+  both directions. Host byte order above the wire, converted only in the header
+  builders and parsers. Receive runs in the IRQ handler.
+- **Verify with the packet capture, not with printf**: `make run NET_DUMP=1`
+  writes every frame to `net.pcap`. Both bugs above were found that way, one of
+  them (nothing transmitted) being invisible from inside the OS.
+- Shell: `netinfo`, `ifconfig [ip]`, `arp`, `ping <ip> [count]`.
 
 ## Allocator locking (v0.8.5)
 

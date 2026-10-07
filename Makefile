@@ -199,10 +199,19 @@ wad: $(DISK)
 # would have masked it by making the invalid opcode valid.
 ACCEL := $(shell test -w /dev/kvm && echo '-accel kvm -cpu host' || echo '-accel tcg')
 
+# User-mode (SLIRP) networking: 10.0.2.15 for the guest, 10.0.2.2 as the
+# gateway, no privileges needed. NET_DUMP=1 additionally writes every frame to
+# net.pcap, which is ground truth when the stack misbehaves.
+NET   := -netdev user,id=n0 -device rtl8139,netdev=n0
+NET_DUMP ?= 0
+ifeq ($(NET_DUMP),1)
+  NET += -object filter-dump,id=d0,netdev=n0,file=net.pcap
+endif
+
 # Run with VGA window (interactive — click the window to type, Ctrl+Alt+G to release)
 # Primary master (index=0) = disk.img   Secondary master (index=2) = cdrom
 run: iso $(DISK)
-	qemu-system-i386 $(ACCEL) \
+	qemu-system-i386 $(ACCEL) $(NET) \
 	    -drive file=$(DISK),format=raw,if=ide,index=0 \
 	    -cdrom $(ISO) -boot d \
 	    -m 128M -no-reboot -no-shutdown \
@@ -216,7 +225,7 @@ run-ai: iso $(DISK)
 	@rm -f /tmp/soupos-ai.sock
 	@echo "soupOS + AI bridge.  (AI_FAKE=1 for offline replies; else needs Ollama)"
 	@python3 tools/ai_bridge.py /tmp/soupos-ai.sock & echo $$! > /tmp/soupos-ai.pid; \
-	qemu-system-i386 $(ACCEL) \
+	qemu-system-i386 $(ACCEL) $(NET) \
 	    -drive file=$(DISK),format=raw,if=ide,index=0 \
 	    -cdrom $(ISO) -boot d \
 	    -m 128M -no-reboot -no-shutdown \
@@ -232,7 +241,7 @@ run-ai: iso $(DISK)
 # Console on this terminal. Ctrl+A X quits QEMU.
 run-console: iso $(DISK)
 	@echo "soupOS console on this terminal.  (Ctrl+A then X to quit QEMU)"
-	qemu-system-i386 $(ACCEL) \
+	qemu-system-i386 $(ACCEL) $(NET) \
 	    -drive file=$(DISK),format=raw,if=ide,index=0 \
 	    -cdrom $(ISO) -boot d \
 	    -m 128M -no-reboot -no-shutdown \
@@ -244,7 +253,7 @@ run-console: iso $(DISK)
 CONSOLE_PORT ?= 4444
 run-tcp: iso $(DISK)
 	@echo "soupOS console on tcp/$(CONSOLE_PORT) — connect with:  nc 127.0.0.1 $(CONSOLE_PORT)"
-	qemu-system-i386 $(ACCEL) \
+	qemu-system-i386 $(ACCEL) $(NET) \
 	    -drive file=$(DISK),format=raw,if=ide,index=0 \
 	    -cdrom $(ISO) -boot d \
 	    -m 128M -no-reboot -no-shutdown \
