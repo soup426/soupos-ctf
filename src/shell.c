@@ -20,6 +20,7 @@
 #include "clip.h"
 #include "net.h"
 #include "rtl8139.h"
+#include "tcp.h"
 #include "vfs.h"
 #include "klog.h"
 #include "users.h"
@@ -1286,6 +1287,45 @@ static void cmd_table(void) {
     vga_puts("  ADDRESS          MAC\n");
     vga_set_color(VGA_LIGHT_GREY, VGA_BLACK);
     net_arp_dump();
+}
+
+/* reserve <host> <port> - open a TCP connection and hang up again. A table
+ * booked and immediately released: it proves the handshake, which is all
+ * stage one of TCP does. */
+static void cmd_reserve(const char *args) {
+    while (*args == ' ') args++;
+    if (!*args) { vga_puts("  Usage: reserve <host> <port>\n"); return; }
+
+    char host[64];
+    int i = 0;
+    while (args[i] && args[i] != ' ' && i < (int)sizeof(host) - 1) { host[i] = args[i]; i++; }
+    host[i] = '\0';
+
+    const char *rest = args + i;
+    while (*rest == ' ') rest++;
+    int port = parse_num(rest);
+    if (port <= 0 || port > 65535) { vga_puts("  Usage: reserve <host> <port>\n"); return; }
+
+    uint32_t ip;
+    if (net_dns_resolve(host, &ip) < 0) {
+        vga_set_color(VGA_LIGHT_RED, VGA_BLACK);
+        vga_printf("  could not resolve %s\n", host);
+        vga_set_color(VGA_LIGHT_GREY, VGA_BLACK);
+        return;
+    }
+
+    vga_puts("  booking "); print_ip(ip); vga_printf(":%d...\n", port);
+    if (tcp_connect(ip, (uint16_t)port) == 0) {
+        vga_set_color(VGA_LIGHT_GREEN, VGA_BLACK);
+        vga_puts("  table reserved (connection established)\n");
+        vga_set_color(VGA_LIGHT_GREY, VGA_BLACK);
+        tcp_close();
+        vga_puts("  and released\n");
+    } else {
+        vga_set_color(VGA_LIGHT_RED, VGA_BLACK);
+        vga_puts("  no table (connection failed)\n");
+        vga_set_color(VGA_LIGHT_GREY, VGA_BLACK);
+    }
 }
 
 static void cmd_sniff(const char *args) {
@@ -2723,7 +2763,7 @@ static const char *const cmd_names[] = {
     "beep", "mandelbrot", "vgademo", "uname", "cal",
     "clock", "wipe", "fortune", "bounce", "recipe", "leftovers", "spill",
     "freeze", "reheat", "ps", "orders", "plate", "steep", "kill", "scraps",
-    "faucet", "plumbing", "table", "sip", "sniff", "bgclock", "yieldbg", "spinbg", "sleeptest", "vfstest",
+    "faucet", "plumbing", "table", "sip", "sniff", "reserve", "bgclock", "yieldbg", "spinbg", "sleeptest", "vfstest",
     "dmesg", "pwd", "cd", "mkbowl", "rmbowl", "bowltest",
     "whoami", "roster", "clockout", "hire", "fire", "perms",
 };
@@ -2958,6 +2998,7 @@ static void dispatch(const char *buf) {
     else if (str_eq(p, "faucet"))      cmd_faucet();
     else if (str_eq(p, "table"))       cmd_table();
     else if (str_startswith(p, "sniff"))    { const char *a = p + 5; cmd_sniff(a); }
+    else if (str_startswith(p, "reserve")) { const char *a = p + 7; cmd_reserve(a); }
     else if (str_startswith(p, "plumbing")) { const char *a = p + 8; cmd_plumbing(a); }
     else if (str_startswith(p, "sip"))      { const char *a = p + 3; cmd_sip(a); }
     else if (str_startswith(p, "plate")) { const char *a = p + 5; cmd_plate(a); }

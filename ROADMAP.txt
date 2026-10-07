@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.9.2
+Current version: v0.9.3
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,32 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.9.3  (2026-10-07)  — TCP, STAGE ONE: CONNECTION SETUP
+  Night-queue item 2a. soupOS completes a three-way handshake.
+  - src/tcp.c: one connection at a time, the same single-slot model the
+    resolver uses, which keeps the state machine in one visible struct instead
+    of a table. CLOSED -> SYN_SENT -> ESTABLISHED, SYN retransmitted twice
+    before giving up, and a peer RST reported as a refusal.
+  - The rule that matters for everything above it: a SYN occupies one sequence
+    number. snd_nxt is iss + 1 after sending ours, and rcv_nxt is their seq + 1
+    on receiving theirs. Getting that wrong is the classic way to acknowledge
+    one short and stall forever.
+  - A duplicate SYN/ACK is re-acked rather than ignored, which a packet capture
+    showed was needed: the peer retransmits when our ACK is late, and silence
+    makes it keep going until it gives up.
+  - tcp_close() sends RST, not FIN. The graceful close is stage 2c, and
+    pretending otherwise here would leave a half-closed connection nobody
+    handles. Said so in the file.
+  - Shell: `reserve <host> <port>`, which books a table and releases it.
+  - Gate 42 -> 43 checks, hermetic: the gate starts a listener on the host's
+    loopback, which the guest reaches through QEMU's 10.0.2.2, so no external
+    network is involved.
+  - ONE THING LEFT UNEXPLAINED, deliberately. QEMU ignores the first SYN after
+    an ARP exchange and answers the retransmit 7 ms later, costing one second
+    on the first connect. Both SYNs are byte-identical on the wire, same
+    destination MAC, same checksum, so the frame soupOS emits is correct and
+    the behaviour is on QEMU's side. Recorded rather than chased.
 
 v0.9.2  (2026-10-07)  — DHCP
   soupOS takes its address from the network instead of having it compiled in.

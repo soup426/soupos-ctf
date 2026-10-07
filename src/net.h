@@ -65,6 +65,14 @@ void     net_accept_any_dst(int on);
 /* Take an address by DHCP. Returns 0 on success, -1 if nothing answered. */
 int      net_dhcp(void);
 
+/* Hand a built payload to the IP layer. The next hop must already be resolved
+ * (net_arp_resolve), because this does not block. */
+void     net_ip_send(uint32_t dst, uint8_t proto, const void *payload, uint16_t plen);
+
+/* The pseudo-header checksum UDP and TCP share. */
+uint16_t net_pseudo_checksum(uint32_t src, uint32_t dst, uint8_t proto,
+                             const uint8_t *data, uint16_t len);
+
 /* Resolve a hostname to an IPv4 address through the configured resolver.
  * Returns 0 and writes *out on success, -1 on timeout or a failed lookup. */
 int      net_dns_resolve(const char *name, uint32_t *out);

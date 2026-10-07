@@ -49,7 +49,7 @@ working on a network that is not QEMU's.
 The real mountain. Do **not** attempt it in one pass; each stage below should
 build, gate and commit on its own.
 
-### 2a. Connection setup
+### 2a. Connection setup — DONE (v0.9.3)
 
 - A single TCB (one connection at a time, like the resolver's single
   outstanding request). SYN, SYN/ACK, ACK, with an initial sequence number and
@@ -212,3 +212,12 @@ needed. One thing future items should know: SLIRP replies fast enough that a
 UDP response can be handled before the send call returns, so arm the receive
 port with `net_udp_listen` *before* sending anything that expects an answer.
 TCP (item 2) will hit the same timing.
+
+**2026-10-07, item 2a (TCP connection setup): done, v0.9.3, 43 checks green.**
+The gate now starts a listener on the host's loopback and connects to it
+through 10.0.2.2, so it stays hermetic. One thing left unexplained on purpose:
+QEMU ignores the first SYN after an ARP exchange and answers the retransmit
+7 ms later, so the first connect costs a second. Both SYNs are byte-identical
+on the wire with the same destination MAC and checksum, so what soupOS emits is
+correct; the behaviour is QEMU's. Not worth more time, but if stage 2b sees
+odd first-packet behaviour, this is the context.

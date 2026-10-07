@@ -12,11 +12,13 @@
 set -uo pipefail
 cd "$(dirname "$0")/.."
 
+LISTENER_PID=""
 LOG=$(mktemp /tmp/soupos-smoke.XXXXXX.log)
 MON=$(mktemp -u /tmp/soupos-smoke.XXXXXX.sock)
 QEMU_PID=""
 
 cleanup() {
+    [ -n "$LISTENER_PID" ] && kill "$LISTENER_PID" 2>/dev/null
     [ -n "$QEMU_PID" ] && kill "$QEMU_PID" 2>/dev/null
     rm -f "$MON"
     if [ "${KEEP:-0}" = "1" ]; then echo "serial log kept at $LOG"; else rm -f "$LOG"; fi
@@ -25,6 +27,22 @@ trap cleanup EXIT
 
 [ -f soupOS.iso ] || { echo "soupOS.iso missing — run 'make' first"; exit 1; }
 [ -f disk.img ]   || { echo "disk.img missing — run 'make disk' first"; exit 1; }
+
+# Something for the TCP check to connect to. QEMU's user networking maps the
+# guest's 10.0.2.2 to the host's loopback, so a local listener is reachable
+# from inside soupOS without any external network being involved.
+python3 -c "
+import socket
+s = socket.socket()
+s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+s.bind(('127.0.0.1', 19000)); s.listen(8); s.settimeout(300)
+try:
+    while True:
+        c, _ = s.accept(); c.close()
+except Exception:
+    pass
+" >/dev/null 2>&1 &
+LISTENER_PID=$!
 
 echo "booting soupOS headless..."
 qemu-system-i386 \
@@ -73,7 +91,8 @@ python3 scripts/qemu_keys.py "$MON" \
     "TYPE:scraps" "KEY:ctrl-u" "KEY:ctrl-v" "KEY:ret" "WAIT:2" \
     "cook memtest.elf A | memtest.elf B | memtest.elf C" "WAIT:14" \
     "sip 10.0.2.2 3" "WAIT:8" \
-    "sniff example.com" "WAIT:6" >/dev/null || {
+    "sniff example.com" "WAIT:6" \
+    "reserve 10.0.2.2 19000" "WAIT:6" >/dev/null || {
         echo "FAIL: could not drive the QEMU monitor"; exit 1; }
 
 fail=0
@@ -298,6 +317,11 @@ check "ARP resolved and all pings replied" '\[net\] ping done 3/3'
 # asserted, because it needs the host to have working DNS, and a gate that
 # fails when you are offline is a bad gate.
 check "a DNS query was built and sent" '\[net\] dns query id='
+
+# TCP's three-way handshake against a listener on the host, reached through
+# QEMU's gateway, so this is hermetic too. "established" is only logged after
+# SYN, SYN/ACK and our ACK have all been through the state machine.
+check "a TCP connection was established" '\[tcp\] established with 10\.0\.2\.2:19000'
 
 # vgastress prints whole lines of a single repeated character from two tasks.
 # Any line containing both means vga_puts was interrupted mid-string.

@@ -17,12 +17,14 @@
 #include "vga.h"
 #include "klog.h"
 #include "str.h"
+#include "tcp.h"
 
 /* ── Wire formats ──────────────────────────────────────────────────────── */
 #define ETH_TYPE_IP   0x0800
 #define ETH_TYPE_ARP  0x0806
 #define IP_PROTO_ICMP 1
 #define IP_PROTO_UDP  17
+#define IP_PROTO_TCP  6
 
 #define ICMP_ECHO_REQUEST 8
 #define ICMP_ECHO_REPLY   0
@@ -235,14 +237,20 @@ static void ip_send(uint32_t dst, uint8_t proto, const void *payload, uint16_t p
     ip_send_from(my_ip, dst, proto, payload, plen);
 }
 
-/* UDP's checksum covers a pseudo-header of addresses and protocol as well as
- * the datagram, which is why it cannot reuse checksum() directly. */
-static uint16_t udp_checksum(uint32_t src, uint32_t dst,
+/* For protocol modules in their own files (tcp.c). Resolves nothing: the
+ * caller is in task context and resolves its own next hop first. */
+void net_ip_send(uint32_t dst, uint8_t proto, const void *payload, uint16_t plen) {
+    ip_send(dst, proto, payload, plen);
+}
+
+/* UDP and TCP both checksum a pseudo-header of addresses, protocol and length
+ * as well as their own bytes, which is why neither can use checksum() alone. */
+uint16_t net_pseudo_checksum(uint32_t src, uint32_t dst, uint8_t proto,
                              const uint8_t *udp, uint16_t len) {
     uint32_t sum = 0;
     sum += (src >> 16) & 0xFFFF; sum += src & 0xFFFF;
     sum += (dst >> 16) & 0xFFFF; sum += dst & 0xFFFF;
-    sum += IP_PROTO_UDP;
+    sum += proto;
     sum += len;
     for (uint16_t i = 0; i + 1 < len; i += 2)
         sum += (uint32_t)((udp[i] << 8) | udp[i + 1]);
@@ -250,6 +258,11 @@ static uint16_t udp_checksum(uint32_t src, uint32_t dst,
     while (sum >> 16) sum = (sum & 0xFFFF) + (sum >> 16);
     uint16_t c = (uint16_t)~sum;
     return c ? c : 0xFFFF;      /* 0 means "no checksum", so never send it */
+}
+
+static uint16_t udp_checksum(uint32_t src, uint32_t dst,
+                             const uint8_t *udp, uint16_t len) {
+    return net_pseudo_checksum(src, dst, IP_PROTO_UDP, udp, len);
 }
 
 int net_udp_send_from(uint32_t src, uint32_t dst, uint16_t sport, uint16_t dport,
@@ -391,6 +404,8 @@ static void handle_ip(const uint8_t *p, uint16_t len) {
         handle_icmp(get_ip(ih->src), p + hlen, (uint16_t)(total - hlen));
     else if (ih->proto == IP_PROTO_UDP)
         handle_udp(p + hlen, (uint16_t)(total - hlen));
+    else if (ih->proto == IP_PROTO_TCP)
+        tcp_input(get_ip(ih->src), p + hlen, (uint16_t)(total - hlen));
 }
 
 static void net_rx(const uint8_t *frame, uint16_t len) {
