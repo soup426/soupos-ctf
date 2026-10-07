@@ -3,7 +3,7 @@
 ## What this is
 
 soupOS is a 32-bit x86 hobby OS written in C and NASM assembly (currently
-**v0.11.1**). It boots via GRUB and runs in protected mode with paging, a
+**v0.11.2**). It boots via GRUB and runs in protected mode with paging, a
 physical/heap allocator, and a cooperative scheduler. On top of that:
 
 - **Filesystem**: FAT16 read/write with subdirectories ("bowls") and a VFS shim
@@ -527,6 +527,16 @@ VGA cells doubles the work. `vga.c`'s `scroll()` copies 32-bit words (two cells
 per store) and is about twice as fast as the original cell-at-a-time loop;
 `memmove` measured 47% slower than that original. `sample` guards the row
 movement. The same caution applies anywhere a wide copy looks tempting.
+
+## Adding a file that needs the WAD (v0.11.2)
+
+`DOOM=0` filters `doom.c`, `wad.c` and `doomsnd.c` out of `SRC_C`, so anything
+calling the WAD reader must be in that filter AND its shell command must sit
+behind `#ifndef NO_DOOM` - the command body, the dispatch line, the name in the
+completion list, and the help text. Four configurations have to build: default,
+`DOOM=0`, `CHALLENGE=1`, `CHALLENGE=1 DOOM=0`. **Make that check gate the
+commit** rather than just precede it; a `;` instead of `&&` once let a broken
+`DOOM=0` through.
 
 ## Doom sound effects (`src/doomsnd.c`, v0.11.1)
 

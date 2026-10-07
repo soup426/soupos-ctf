@@ -32,7 +32,7 @@ SRC_ASM = $(wildcard src/*.asm)
 # path, and the WAD is 4 MB of a 32 MB disk.
 DOOM   ?= 1
 ifeq ($(DOOM),0)
-  SRC_C  := $(filter-out src/doom.c src/wad.c,$(SRC_C))
+  SRC_C  := $(filter-out src/doom.c src/wad.c src/doomsnd.c,$(SRC_C))
   CFLAGS += -DNO_DOOM
 endif
 

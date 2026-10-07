@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.11.1
+Current version: v0.11.2
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,20 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.11.2 (2026-10-07)  — FIX: DOOM=0 DID NOT BUILD
+  v0.11.1 broke two of the four build configurations and I committed it anyway.
+  - doomsnd.c calls the WAD reader, and DOOM=0 filters out doom.c and wad.c,
+    so the link failed on wad_find_lump, wad_read_lump and wad_init. doomsnd.c
+    now joins that filter, and `sizzle` sits behind #ifndef NO_DOOM with its
+    dispatch entry, its name in the completion list and its help line.
+  - MY PROCESS FAILED, not just the code. I check all the configurations before
+    committing precisely so this cannot happen, and this time the shell line
+    was `for cfg in ...; done; make && ... && git commit`, so the loop printed
+    FAILED while the default build still satisfied the && chain and the commit
+    went through. The check has to GATE the commit, not merely precede it.
+  - All four configurations verified from clean here: default, DOOM=0,
+    CHALLENGE=1 and CHALLENGE=1 DOOM=0. Gate still 66.
 
 v0.11.1 (2026-10-07)  — DOOM HAS SOUND
   Night-queue item 8, second milestone. The pistol fires and the doors open

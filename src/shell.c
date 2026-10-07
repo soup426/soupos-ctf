@@ -24,8 +24,10 @@
 #include "selftest.h"
 #include "mouse.h"
 #include "ac97.h"
+#ifndef NO_DOOM
 #include "doomsnd.h"
 #include "wad.h"
+#endif
 #include "vfs.h"
 #include "klog.h"
 #include "users.h"
@@ -1522,6 +1524,7 @@ static void cmd_sip(const char *args) {
     net_ping(ip, count);
 }
 
+#ifndef NO_DOOM
 /* sizzle - play one of Doom's sound effects (a DS* lump from the WAD). */
 static void cmd_sizzle(const char *args) {
     if (!ac97_present()) { vga_puts("  No sound card. QEMU needs -device AC97.\n"); return; }
@@ -1543,6 +1546,7 @@ static void cmd_sizzle(const char *args) {
     }
     vga_printf("  sizzling %s\n", args);
 }
+#endif /* NO_DOOM: sizzle reads DS* lumps, so it needs the WAD reader */
 
 /* whistle - a tone through the sound card, as the kettle would.
  * `beep` is the PC speaker; this is the AC97. */
@@ -2989,7 +2993,10 @@ static const char *const cmd_names[] = {
     "jot", "ai", "cook", "soup", "hash",
     "beep", "mandelbrot", "vgademo", "uname", "cal",
     "clock", "wipe", "fortune", "bounce", "recipe", "leftovers", "spill",
-    "freeze", "reheat", "ps", "orders", "plate", "steep", "kill", "scraps", "sample", "skewer", "larder", "whistle", "sizzle",
+    "freeze", "reheat", "ps", "orders", "plate", "steep", "kill", "scraps", "sample", "skewer", "larder", "whistle",
+#ifndef NO_DOOM
+    "sizzle",
+#endif
     "faucet", "plumbing", "table", "sip", "sniff", "reserve", "holler",
     "takeout", "bgclock", "yieldbg", "spinbg", "sleeptest", "vfstest",
     "dmesg", "pwd", "cd", "mkbowl", "rmbowl", "bowltest",
@@ -3227,7 +3234,9 @@ static void dispatch(const char *buf) {
     else if (str_eq(p, "skewer"))      cmd_skewer();
     else if (str_eq(p, "larder"))      cmd_larder();
     else if (str_startswith(p, "whistle")) cmd_whistle(p + 7);
+#ifndef NO_DOOM
     else if (str_startswith(p, "sizzle"))  cmd_sizzle(p + 6);
+#endif
     else if (str_eq(p, "faucet"))      cmd_faucet();
     else if (str_eq(p, "table"))       cmd_table();
     else if (str_startswith(p, "sniff"))    { const char *a = p + 5; cmd_sniff(a); }
