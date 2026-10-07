@@ -4,6 +4,8 @@
 #include "fat.h"
 #include "str.h"
 #include "clip.h"
+#include "mouse.h"
+#include "task.h"
 
 /* ── Screen geometry ─────────────────────────────────────────────────────
  * 80×25 text mode. Rows 0..23 show text; row 24 is the status bar. We write
@@ -101,6 +103,20 @@ static void move_vert(int dir) {
     ecur = s + (col < len ? col : len);
 }
 
+/* Which byte of the buffer is under a screen cell. Past the end of a line
+ * clamps to its end, and past the end of the file clamps to the end of the
+ * buffer, so a drag into empty space selects to where the text stops rather
+ * than doing nothing. */
+static int cell_to_offset(int row, int col) {
+    if (row < 0) row = 0;
+    if (row >= TEXT_ROWS) row = TEXT_ROWS - 1;
+    int s, len;
+    if (line_bounds(etop + row, &s, &len) != 0) return elen;
+    if (col < 0)   col = 0;
+    if (col > len) col = len;
+    return s + col;
+}
+
 /* Copy the selection to the clipboard. Returns the number of bytes, 0 if
  * there is nothing marked. */
 static int sel_copy(void) {
@@ -166,6 +182,18 @@ static void render(void) {
             }
         } else {
             put_cell(r, 0, '~', tilde);   /* past end-of-file */
+        }
+    }
+
+    /* The pointer, drawn by inverting whatever is under it rather than by
+     * owning a glyph, so it never hides a character. */
+    if (mouse_present()) {
+        int mx, my, mb;
+        mouse_get(&mx, &my, &mb);
+        if (my >= 0 && my < TEXT_ROWS && mx >= 0 && mx < VGA_W) {
+            uint16_t cell = VGA_MEM[my * VGA_W + mx];
+            char ch = (char)(cell & 0xFF);
+            put_cell(my, mx, ch, ATTR(VGA_BLACK, VGA_LIGHT_GREY));
         }
     }
 
@@ -250,9 +278,45 @@ void editor_run(const char *path) {
 
     keyboard_flush();   /* drop the Enter that launched us */
 
+    uint32_t last_moves = 0;
+    int      last_btn   = 0;
+    mouse_stats(&last_moves, 0);
+
     for (;;) {
         render();
-        int c = keyboard_getchar();
+
+        /* Wait for either a keystroke or a mouse packet. jot used to block in
+         * keyboard_getchar, which cannot see the mouse at all. */
+        int c = -1;
+        for (;;) {
+            if (keyboard_available()) { c = keyboard_getchar(); break; }
+
+            if (mouse_present()) {
+                uint32_t moves;
+                mouse_stats(&moves, 0);
+                if (moves != last_moves) {
+                    last_moves = moves;
+                    int mx, my, mb;
+                    mouse_get(&mx, &my, &mb);
+
+                    if ((mb & 1) && !(last_btn & 1)) {
+                        /* Press: drop the mark here and start the selection. */
+                        emark = cell_to_offset(my, mx);
+                        ecur  = emark;
+                        strcpy(emsg, "mark set");
+                    } else if (mb & 1) {
+                        /* Dragging: the cursor follows, so the highlight the
+                         * renderer already knows how to draw grows with it. */
+                        ecur = cell_to_offset(my, mx);
+                    }
+                    last_btn = mb;
+                    break;                  /* redraw with the new selection */
+                }
+            }
+            task_yield();
+        }
+        if (c < 0) continue;                /* it was the mouse; go redraw */
+
         emsg[0] = '\0';                            /* clear transient msg */
 
         if (c == 27 || c == 0x11) {                /* ESC or Ctrl+Q */

@@ -102,7 +102,7 @@ The gate is end-to-end only; nothing tests a subsystem directly.
   it with one check.
 
 
-## 5. PS/2 mouse — driver DONE (v0.9.8), drag-select next
+## 5. PS/2 mouse — DONE (v0.9.8 driver, v0.9.9 drag-select)
 
 The copy-and-paste milestone said selection is keyboard-only "unless a PS/2
 mouse driver is built first". This is that driver, and it is self-contained.

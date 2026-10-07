@@ -3,7 +3,7 @@
 ## What this is
 
 soupOS is a 32-bit x86 hobby OS written in C and NASM assembly (currently
-**v0.9.8**). It boots via GRUB and runs in protected mode with paging, a
+**v0.9.9**). It boots via GRUB and runs in protected mode with paging, a
 physical/heap allocator, and a cooperative scheduler. On top of that:
 
 - **Filesystem**: FAT16 read/write with subdirectories ("bowls") and a VFS shim
@@ -519,6 +519,23 @@ compiled in (10.0.2.15, gateway 10.0.2.2) rather than discovered by DHCP.
   outliving our close. The gate uses a separate listener port per check.
 - Shell: `faucet`, `plumbing [ip|dhcp]`, `table`, `sip <host> [count]`,
   `sniff <host>`, `reserve <host> <port>`.
+
+## Drag-select in jot (v0.9.9)
+
+The editor waits on the keyboard **or** the mouse (it used to block in
+`keyboard_getchar`, which cannot see a mouse). Press sets `emark`, dragging
+moves `ecur`, and since that is the pair the keyboard selection already uses,
+^C/^X/^V need no new code. `cell_to_offset` clamps past a line's end to its end
+and past EOF to the end of the buffer.
+
+**If a selection test comes back empty, check the pointer's row before the
+code.** A press past the last line puts mark and cursor at the same clamped
+offset, which is an empty selection and looks exactly like a broken driver.
+
+**The gate's TCP listeners take their accept timeout as a budget for the whole
+drive sequence** (now 900s against a ~320s run). Adding checks ahead of the TCP
+ones eats into it, and when it expires the listeners exit and the TCP checks
+fail looking like a kernel regression.
 
 ## PS/2 mouse (`src/mouse.c`, v0.9.8)
 

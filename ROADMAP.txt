@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.9.8
+Current version: v0.9.9
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,33 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.9.9  (2026-10-07)  — DRAG-SELECT IN jot
+  Night-queue item 5, finished. The mouse now does something.
+  - jot used to block in keyboard_getchar, which cannot see a mouse at all, so
+    its input loop now waits on either source and redraws when a packet moves
+    the pointer. Press drops the mark, dragging moves the cursor, and because
+    that is the same mark-and-cursor pair the keyboard selection uses, ^C ^X ^V
+    work on a mouse selection with no new code behind them.
+  - cell_to_offset maps a screen cell to a buffer offset, clamping past the end
+    of a line to its end and past the end of the file to the end of the buffer,
+    so dragging into empty space selects up to where the text stops instead of
+    doing nothing.
+  - The pointer is drawn by inverting whatever is under it rather than owning a
+    glyph, so it never hides a character.
+  - Gate 49 -> 50 checks: press at the start of the line, drag five cells, ^C,
+    and assert the clipboard holds "abcde". The CONTENT, not the length - a
+    mapping off by one still copies five bytes, just the wrong five.
+  - THE GATE ALSO CAUGHT SOMETHING UNRELATED. Three TCP checks went red, and it
+    was not the kernel: the host listeners take a 300-second accept timeout as
+    a budget for the whole drive sequence, and when it expires they exit and
+    everything after gets a refused connection. The run now takes 321 seconds.
+    Raised to 900 with a comment saying what the number is for, because the
+    failure looks like a TCP regression and is not one.
+  - Note for test-writing: my first two attempts at this failed because the
+    press landed on row 12 of a one-line file, where mark and cursor both clamp
+    to the same offset and the selection is empty. The driver was fine both
+    times. Check the coordinates before suspecting the code.
 
 v0.9.8  (2026-10-07)  — PS/2 MOUSE
   Night-queue item 5, first half. The copy-and-paste work said selection would

@@ -35,13 +35,19 @@ trap cleanup EXIT
 # One port per check, deliberately. Three connections in a row to the SAME
 # SLIRP port leave the third unanswered - QEMU-side state that outlives our
 # close, reproducible by hand and not worth working around in the kernel.
+#
+# The accept timeout is a budget for the WHOLE drive sequence, not for one
+# connection: when it expires the listener exits and everything afterwards gets
+# a refused connection. Adding checks ahead of the TCP ones eats into it, which
+# is exactly how the mouse work broke these three. Keep it comfortably above the
+# full run time.
 for port in 19000 19001 19002; do
     python3 -c "
 import socket, sys
 port = int(sys.argv[1])
 s = socket.socket()
 s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-s.bind(('127.0.0.1', port)); s.listen(8); s.settimeout(300)
+s.bind(('127.0.0.1', port)); s.listen(8); s.settimeout(900)
 try:
     while True:
         c, _ = s.accept()
@@ -101,6 +107,10 @@ python3 scripts/qemu_keys.py "$MON" \
     "cook hog.elf | wc.elf &" "WAIT:2" "kill %" "WAIT:2" "kill %" "WAIT:2" \
     "sample" "WAIT:6" \
     "MON:mouse_move 40 -20" "MON:mouse_move 40 -20" "skewer" "WAIT:2" \
+    "strain MOUSE.TXT" "jot MOUSE.TXT" "WAIT:2" "TYPE:abcdefghij" "WAIT:1" \
+    "MON:mouse_move -100 -48" "MON:mouse_move -100 0" "MON:mouse_move -100 0" "WAIT:1" \
+    "MON:mouse_button 1" "WAIT:1" "MON:mouse_move 20 0" "WAIT:1" "MON:mouse_button 0" "WAIT:1" \
+    "KEY:ctrl-c" "WAIT:1" "KEY:ctrl-s" "WAIT:1" "KEY:esc" "WAIT:2" "scraps" "WAIT:2" \
     "strain CLIP.TXT" "WAIT:1" \
     "TYPE:soup is good" "KEY:ctrl-u" "scraps" "WAIT:2" \
     "jot CLIP.TXT" "WAIT:2" "TYPE:abc def" \
@@ -365,6 +375,13 @@ check "in-kernel self-test passes" '\[sample\] [0-9]+ tests, 0 failed'
 # centred at 40,12, and two injections of (40,-20) move it ten cells right and
 # five up each. Exact, so a sign error or a scaling change shows up here.
 check "mouse tracks injected movement" '\[mouse\] at 60,2 '
+
+# Drag-select: press at the start of the line, drag five cells right, release,
+# then the ordinary ^C. Three leftward moves because a PS/2 delta is clamped to
+# a byte, and the pointer stops at the edge, so this lands on 0,0 from anywhere.
+# Asserting the content, not the length: a mapping off by one still copies five
+# bytes, just the wrong five.
+check "mouse drag-select feeds the clipboard" '\[clip\] 5 bytes: abcde'
 
 # vgastress prints whole lines of a single repeated character from two tasks.
 # Any line containing both means vga_puts was interrupted mid-string.
