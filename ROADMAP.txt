@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.14.0
+Current version: v0.14.1
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,33 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.14.1 (2026-10-07)  — DOOM'S FRAME COST, MEASURED (AND LEFT ALONE)
+  New queue item 1. The scaler writes 2.3 MB a frame where mode 13h wrote
+  64 KB, and nobody had measured what that costs. The answer is that it does
+  not matter, and the evidence is worth more than a speedup would have been.
+  - The blocker first: the profiler reports every 50 FRAMES and only the
+    in-level render loop counts frames, so a run that never starts a level
+    reports nothing at all. Getting there headlessly needs THREE returns -
+    main menu, episode, skill. Two is not enough, which is exactly why this
+    looked impossible last night.
+  - Thousands of cycles per frame, same scene, both builds:
+        framebuffer   frame=2088k  copy=558k  vbl=0k
+        mode 13h      frame=1544k  copy= 34k  vbl=18k
+    The scale-and-blit costs about 16x the plain memcpy it replaced, which
+    makes a frame 35% more work. The vblank wait disappears, correctly, since
+    there is no CRT to chase when the card is scanning out an LFB.
+  - AND IT IS FREE ANYWAY. fps reads 50 in both, which is the cap:
+    FRAME_TICKS is 2 ticks of a 100 Hz timer. Uncapped - FRAME_TICKS 0 - the
+    framebuffer build measured 1666 fps, so the 50 fps cap uses about 3% of
+    what the machine can do and the extra 35% is absorbed by idle time.
+  - SO NOTHING WAS OPTIMISED. The 2x scale, the dirty-row tracking and the
+    wider blit the item listed are all unnecessary; writing any of them would
+    have been work in exchange for nothing, which is what measuring first is
+    for. The same instinct, unmeasured, produced a 47% slowdown in v0.10.3.
+  - scripts/doom-profile.sh runs both builds and prints the comparison, with
+    the three-returns recipe and the FRAME_TICKS explanation in its header, so
+    the next performance question costs one command.
 
 v0.14.0 (2026-10-07)  — THE FRAMEBUFFER IS THE DEFAULT, AND DOOM RENDERS INTO IT
   soupOS now boots to a 1024x768 framebuffer with a glyph-rendered console,

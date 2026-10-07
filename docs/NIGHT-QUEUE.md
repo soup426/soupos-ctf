@@ -32,7 +32,7 @@ lessons are about how to test this machine rather than about its code.
 
 ---
 
-## 1. Doom's frame rate on the framebuffer: measure, then decide
+## 1. Doom's frame rate on the framebuffer — DONE (v0.14.1): measured, left alone
 
 The scaler writes about 2.3 MB per frame (960x600x4) where mode 13h wrote
 64 KB. Nobody has measured what that costs, and guessing is how the VGA

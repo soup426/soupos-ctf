@@ -3,7 +3,7 @@
 ## What this is
 
 soupOS is a 32-bit x86 hobby OS written in C and NASM assembly (currently
-**v0.14.0**). It boots via GRUB and runs in protected mode with paging, a
+**v0.14.1**). It boots via GRUB and runs in protected mode with paging, a
 physical/heap allocator, and a cooperative scheduler. On top of that:
 
 - **Filesystem**: FAT16 read/write with subdirectories ("bowls") and a VFS shim
@@ -527,6 +527,16 @@ VGA cells doubles the work. `vga.c`'s `scroll()` copies 32-bit words (two cells
 per store) and is about twice as fast as the original cell-at-a-time loop;
 `memmove` measured 47% slower than that original. `sample` guards the row
 movement. The same caution applies anywhere a wide copy looks tempting.
+
+## Profiling Doom (v0.14.1)
+
+`scripts/doom-profile.sh` prints cycles per frame for both display modes. Two
+things that make this hard to do by hand, both in the script's header: the
+profiler reports every **50 frames** and only the in-level loop counts, so you
+must drive **three returns** (main menu, episode, skill) to reach it; and `fps`
+reads 50 in both modes because `FRAME_TICKS` caps it. Uncapped it measured
+**1666 fps**, so there is roughly 33x headroom and the framebuffer scaler's
+extra 35% per frame costs nothing.
 
 ## The framebuffer is the default (v0.14.0)
 
