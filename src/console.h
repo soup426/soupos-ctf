@@ -34,6 +34,15 @@ void console_rx_poll(void);
 void console_out_char(char c);
 
 /* Runtime switches (both start enabled). */
+/* One received byte, through the terminal-convention translation. The serial
+ * poll uses it, and so does a network session: the handling of CR, DEL and
+ * ANSI escapes is the same whatever carried the byte. */
+void console_rx_byte(int c);
+
+/* A second destination for console output, so a network session sees the same
+ * stream the serial one does. NULL to detach. */
+void console_set_sink(void (*sink)(char c));
+
 void console_set_input(int on);
 void console_set_output(int on);
 int  console_input_enabled(void);

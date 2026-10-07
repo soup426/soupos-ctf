@@ -621,6 +621,15 @@ suspecting the directory parser.
 
 Writing long names is not implemented: a new file still gets a mangled 8.3 name.
 
+## The pass: a shell over TCP (v0.22.0)
+
+`pass <port>` runs `remote.c` as a task that feeds socket bytes into
+`console_rx_byte` and mirrors output through `console_set_sink`. The remote
+user shares the one local shell, as a serial user does. **Clear text, no
+authentication on the wire** - it is the step before SSH, which is the next
+queue item. A test driving it must hold the `nc` session open between
+commands, or EOF closes it before the accept poll runs.
+
 ## Several connections at once (v0.21.0)
 
 `tcp.c` holds a table of four connections; **the listener owns none of them**,

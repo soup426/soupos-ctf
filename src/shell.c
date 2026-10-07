@@ -25,6 +25,7 @@
 #include "mouse.h"
 #include "ac97.h"
 #include "mixer.h"
+#include "remote.h"
 #ifndef NO_DOOM
 #include "music.h"
 #endif
@@ -1548,6 +1549,41 @@ static void cmd_sip(const char *args) {
 }
 
 #ifndef NO_DOOM
+/* pass [port] - let somebody drive the kitchen from the network.
+ * Bare `pass` reports; `pass off` closes it. */
+static void cmd_pass(const char *args) {
+    while (*args == ' ') args++;
+
+    if (!*args) {
+        if (remote_running())
+            vga_printf("  the pass is open on port %u\n", remote_port());
+        else
+            vga_puts("  the pass is closed. `pass <port>` opens it.\n");
+        return;
+    }
+    if (str_eq(args, "off")) {
+        if (!remote_running()) { vga_puts("  the pass is already closed\n"); return; }
+        remote_stop();
+        vga_puts("  closing the pass\n");
+        return;
+    }
+
+    uint32_t port = 0;
+    while (*args >= '0' && *args <= '9') port = port * 10 + (uint32_t)(*args++ - '0');
+    if (!port || port > 65535) { vga_puts("  Usage: pass <port> | pass off\n"); return; }
+
+    int r = remote_start((uint16_t)port);
+    if (r == -1) { vga_printf("  already open on port %u\n", remote_port()); return; }
+    if (r == -2) { vga_puts("  No address yet. Try: plumbing dhcp\n"); return; }
+    if (r < 0)   { vga_puts("  could not open the pass\n"); return; }
+
+    vga_printf("  the pass is open on port %u\n", port);
+    vga_set_color(VGA_YELLOW, VGA_BLACK);
+    vga_puts("  Nothing is encrypted and nothing authenticates: whoever reaches\n"
+             "  that port gets this keyboard. Local networks only.\n");
+    vga_set_color(VGA_LIGHT_GREY, VGA_BLACK);
+}
+
 /* hatch <port> - a serving hatch: answer HTTP GETs for files on the disk.
  *
  * One request at a time, because the TCP stack holds one connection and the
@@ -3167,7 +3203,7 @@ static const char *const cmd_names[] = {
     "jot", "ai", "cook", "soup", "hash",
     "beep", "mandelbrot", "vgademo", "uname", "cal",
     "clock", "wipe", "fortune", "bounce", "recipe", "leftovers", "spill",
-    "freeze", "reheat", "ps", "orders", "plate", "steep", "kill", "scraps", "sample", "skewer", "larder", "whistle", "hatch", "hush",
+    "freeze", "reheat", "ps", "orders", "plate", "steep", "kill", "scraps", "sample", "skewer", "larder", "whistle", "hatch", "hush", "pass",
 #ifndef NO_DOOM
     "sizzle", "hum",
 #endif
@@ -3415,6 +3451,7 @@ static void dispatch(const char *buf) {
     else if (str_startswith(p, "sizzle"))  cmd_sizzle(p + 6);
     else if (str_startswith(p, "hum"))     cmd_hum(p + 3);
     else if (str_startswith(p, "hatch"))   cmd_hatch(p + 5);
+    else if (str_startswith(p, "pass"))    cmd_pass(p + 4);
 #endif
     else if (str_eq(p, "faucet"))      cmd_faucet();
     else if (str_eq(p, "table"))       cmd_table();

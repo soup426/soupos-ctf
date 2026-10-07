@@ -119,6 +119,58 @@ was the whole change and the state machine did not move. Lesson for the next
 script: a bare `wait` also waits for QEMU, which never exits, and that looked
 like a slow server until the fetches were timed at 4-21 ms each.
 
+---
+
+## SSH, in stages (asked for 2026-10-07; takes priority over 5-8 below)
+
+The pass (v0.22.0) gives clear-text access today. SSH replaces it with the
+real thing. Every stage is its own commit, and every primitive is checked
+against PUBLISHED test vectors before anything is built on it - a hand-rolled
+cipher that "looks right" is the one thing worse than no cipher, because it
+convinces people to trust it.
+
+Two honest notes up front. This is crypto written from scratch in a hobby
+kernel: it is for learning and for a private network, and it should say so
+wherever it is advertised. And soupOS has no entropy source worth the name,
+which matters more than any of the ciphers, so that comes early.
+
+### S1. SHA-256 and HMAC-SHA256
+FIPS 180-4 vectors for the hash ("abc", the 448-bit and million-'a' cases),
+RFC 4231 vectors for HMAC. `sample` runs them.
+
+### S2. Entropy
+A `random.c` that mixes RDRAND when CPUID says it exists, timer and keyboard
+timing jitter, and the RTC, through SHA-256 into a pool. The check is not a
+test vector - there is none - but that two boots produce different output and
+that a megabyte of it passes a simple monobit and runs test.
+
+### S3. ChaCha20 and Poly1305
+RFC 8439 vectors, including the AEAD construction (section 2.8.2), because
+SSH's chacha20-poly1305@openssh.com uses it in a particular way.
+
+### S4. Curve25519
+RFC 7748 vectors: the two scalar-multiplication cases and the iterated one
+(1, 1000 iterations; the million is optional). Needs 255-bit field
+arithmetic in 32-bit limbs, which is the bulk of the work and where a bug
+hides silently - the iterated vector is what catches it.
+
+### S5. Ed25519
+RFC 8032 vectors, for the host key. Shares the field arithmetic with S4.
+Generate the host key once at first boot with S2 and keep it on the FAT
+volume, so the host fingerprint is stable across reboots.
+
+### S6. SSH transport and key exchange
+Version string exchange, the binary packet protocol, and
+curve25519-sha256 kex with an ssh-ed25519 host key. Verify by connecting
+with the real `ssh` client with -vvv: it must reach "SSH2_MSG_NEWKEYS sent"
+and report the expected fingerprint, even before auth exists.
+
+### S7. Userauth and the session channel
+Password auth against users.c; then a session channel with pty-req and shell,
+attached to the same console sink and byte translator the pass uses. The
+acceptance test is `ssh headchef@localhost -p <port>` from the host giving a
+working shell, with `pass` then retired or left disabled by default.
+
 ## 5. A live view of the machine
 
 `ps` has CPU% now but it is a snapshot you have to keep re-typing.

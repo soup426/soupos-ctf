@@ -56,7 +56,19 @@ int  console_output_enabled(void)  { return out_enabled; }
 
 /* ── output mirror ─────────────────────────────────────────────────────── */
 
+/* A second place for output to go, so a network session sees the same stream
+ * a serial one does. One sink is enough: soupOS has one shell, and two remote
+ * viewers of one shell is a different feature. */
+static void (*extra_sink)(char c);
+
+void console_set_sink(void (*sink)(char c)) { extra_sink = sink; }
+
 void console_out_char(char c) {
+    /* The sink gets the raw character and does its own CR/backspace handling,
+     * because a socket and a UART want the same expansion but the code below
+     * is tangled with `ready`, which is about the UART only. */
+    if (extra_sink) extra_sink(c);
+
     if (!ready || !out_enabled) return;
 
     if (c == '\n') {
@@ -121,11 +133,11 @@ static void emit_normal(int c) {
     keyboard_inject(c);
 }
 
-void console_rx_poll(void) {
-    if (!ready || !in_enabled) return;
-
-    int c;
-    while ((c = serial_getc_nb()) >= 0) {
+/* One received byte, through the terminal-convention state machine. Split out
+ * from the serial poll so a network session can feed it the same way: the
+ * translation - CR, DEL, ANSI arrows - is identical whatever carried the byte. */
+void console_rx_byte(int c) {
+    {
         switch (state) {
         case S_NORMAL:
             if (c == 0x1B) { state = S_ESC; esc_tick = timer_get_ticks(); }
@@ -182,3 +194,10 @@ void console_rx_poll(void) {
         state = S_NORMAL;
     }
 }
+
+void console_rx_poll(void) {
+    if (!ready || !in_enabled) return;
+    int c;
+    while ((c = serial_getc_nb()) >= 0) console_rx_byte(c);
+}
+

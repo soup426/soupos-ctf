@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.21.0
+Current version: v0.22.0
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,30 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.22.0 (2026-10-07)  — THE PASS: soupOS OVER THE NETWORK
+  Asked for SSH; this is the remote shell that comes first, so there is
+  working access while the crypto is built underneath it.
+  - soupOS already had everything but the carrier. console.c translates
+    incoming bytes into the codes the PS/2 driver produces and mirrors output
+    back - that is how the serial console works - so the translator was split
+    out as console_rx_byte and a second output sink added, and remote.c pumps
+    a TCP connection through both. `pass 23` opens it.
+  - THE REMOTE USER DRIVES THE SAME SHELL AS THE LOCAL ONE, exactly as a serial
+    user does, rather than getting a session of their own. soupOS has one
+    shell; a second would mean a second cell buffer, cursor and line editor.
+    It runs as a task, because a command sitting in a loop reading the socket
+    could not also be the shell.
+  - NOTHING IS ENCRYPTED AND NOTHING AUTHENTICATES ON THE WIRE. Whoever reaches
+    the port gets the keyboard, and the login prompt they meet is typed in
+    clear. The command says so in yellow when it opens. This is the
+    local-network convenience before SSH, not a substitute for it.
+  - Verified from the host: nc into the forwarded port, type `whoami` and
+    `larder`, and both answers come back over the socket. One trap for the
+    test: a string piped into nc gives it EOF at once and it hangs up before
+    the server's one-second accept poll gets there, which looks exactly like a
+    server that never answers. The session has to be held open.
+  - Gate 72; scripts/pass-test.sh is the network check.
 
 v0.21.0 (2026-10-07)  — MORE THAN ONE CONNECTION AT A TIME
   Third queue, item 4. `hatch` served one client, then listened again, because
