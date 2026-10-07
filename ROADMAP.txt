@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.9.5
+Current version: v0.9.6
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,36 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.9.6  (2026-10-07)  — THE PREEMPTION AUDIT, CLOSED
+  Night-queue item 3. docs/next-steps.md has carried "drivers are not
+  preemption-safe" since before processes existed; this closes it with an
+  answer per file rather than a vague worry. docs/preemption-audit.md has the
+  whole thing; the summary:
+  - TWO REAL RACES, both reachable, both fixed:
+      1. The pipe ring. pipe_read_op and pipe_write_op both read-modify-write
+         p->count, and the reader and writer are by definition different
+         tasks, so a preemption inside either copy loop loses or duplicates
+         bytes. Both loops now run under preempt_disable.
+      2. The network transmit staging buffers. txf and the IP and UDP buffers
+         are file-scope, and transmits happen from task context (ping, DNS,
+         tcp_send) AND interrupt context (ICMP reply, ARP reply, TCP ACK). A
+         task halfway through building a frame, interrupted by the card, had
+         its frame overwritten before the hardware saw it. Build and hand-over
+         now run with interrupts off.
+  - SAFE TODAY, with the reason recorded: soupyc (69 statics, but reached only
+    from two call sites in shell.c, both on the shell task - and the trigger
+    that changes that is spawn(), which is why item 6 lists a per-invocation
+    context as a prerequisite rather than a tidy-up), users.c and shell.c (shell
+    task only), the rest of vfs.c (handle table guarded in v0.8.5; per-node
+    state belongs to one process because fd tables do).
+  - KNOWN AND LEFT: klog's ring buffer is written from both contexts, but the
+    modulo keeps the indices in range, so the worst case is two interleaved
+    lines in a debugging aid. Guarding it means interrupts off around a serial
+    poll at 38400 baud, which would be felt. Deliberate.
+  - The method is in the doc: by call graph, not by looking for missing locks.
+    The files declared safe are safe because nothing can reach them from two
+    tasks, not because their contents look harmless.
 
 v0.9.5  (2026-10-07)  — TCP, STAGE THREE: CLOSE, AND AN HTTP CLIENT
   Night-queue item 2c, and the end of the TCP arc. `takeout example.com /`

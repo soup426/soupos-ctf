@@ -3,7 +3,7 @@
 ## What this is
 
 soupOS is a 32-bit x86 hobby OS written in C and NASM assembly (currently
-**v0.9.5**). It boots via GRUB and runs in protected mode with paging, a
+**v0.9.6**). It boots via GRUB and runs in protected mode with paging, a
 physical/heap allocator, and a cooperative scheduler. On top of that:
 
 - **Filesystem**: FAT16 read/write with subdirectories ("bowls") and a VFS shim
@@ -519,6 +519,16 @@ compiled in (10.0.2.15, gateway 10.0.2.2) rather than discovered by DHCP.
   outliving our close. The gate uses a separate listener port per check.
 - Shell: `faucet`, `plumbing [ip|dhcp]`, `table`, `sip <host> [count]`,
   `sniff <host>`, `reserve <host> <port>`.
+
+## What is reachable from two tasks (v0.9.6)
+
+`docs/preemption-audit.md` answers this per file. The short version: the pipe
+ring and the network transmit staging buffers were genuinely racy and are now
+guarded; `soupyc`, `users.c` and `shell.c` are reached only from the shell task
+and are safe **until `spawn()` exists**; `klog`'s ring is shared with interrupt
+handlers but can only interleave lines, never escape the buffer, and is left
+alone deliberately. Add to that document when adding state, and check
+reachability by call graph rather than by looking for missing locks.
 
 ## Allocator locking (v0.8.5)
 

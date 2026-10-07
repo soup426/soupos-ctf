@@ -99,12 +99,18 @@ static int pipe_read_op(vfs_node_t *n, void *buf, uint32_t count) {
         preempt_enable();
     }
 
+    /* The reader and the writer are different tasks, and both do a
+     * read-modify-write on p->count. Unguarded, a preemption in the middle of
+     * one of these loops loses or duplicates bytes. The copy is short and
+     * never yields, so holding off preemption is enough. */
+    preempt_disable();
     uint32_t got = 0;
     while (got < count && p->count > 0) {
         out[got++] = p->data[p->tail];
         p->tail = (p->tail + 1) % PIPE_CAP;
         p->count--;
     }
+    preempt_enable();
     n->pos += got;
     if (got) task_wake(&p->wwq);
     return (int)got;              /* 0 = every writer closed and we drained it */
@@ -126,11 +132,13 @@ static int pipe_write_op(vfs_node_t *n, const void *buf, uint32_t count) {
         }
         if (p->readers == 0) return put ? (int)put : -1;   /* nobody left to read */
 
+        preempt_disable();              /* see the note in pipe_read_op */
         while (put < count && p->count < PIPE_CAP) {
             p->data[p->head] = in[put++];
             p->head = (p->head + 1) % PIPE_CAP;
             p->count++;
         }
+        preempt_enable();
         task_wake(&p->rwq);
     }
     n->pos += put;

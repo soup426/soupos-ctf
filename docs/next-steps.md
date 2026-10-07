@@ -127,7 +127,13 @@ Still open from the original plan here: `fork`/`exec` and pipes, then `fg`/`bg`
 and process groups. See
 `docs/superpowers/specs/2026-10-06-concurrent-processes-design.md`.
 
-### Drivers are not preemption-safe (partly fixed)
+### ~~Drivers are not preemption-safe~~ AUDITED AND CLOSED 2026-10-07
+
+See `docs/preemption-audit.md`: two real races found and fixed (the pipe ring
+and the network transmit buffers), the rest answered per file with the reason
+recorded. Original note below.
+
+### Drivers are not preemption-safe (original note, partly fixed earlier)
 
 v0.7.4 armed timer preemption but only `heap.c` was guarded. `fat.c` now takes
 a sleeping recursive mutex, `ata.c` takes its own, and `vga.c` serialises text

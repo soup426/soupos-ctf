@@ -155,19 +155,40 @@ static int arp_find(uint32_t ip, uint8_t *out) {
     return -1;
 }
 
-/* ── Transmit helpers ──────────────────────────────────────────────────── */
+/* ── Transmit helpers ──────────────────────────────────────────────────────
+ *
+ * The staging buffers below are file-scope, and transmits happen from BOTH
+ * task context (a ping, a DNS query, tcp_send) and interrupt context (an ICMP
+ * echo reply, an ARP reply, a TCP ACK). A task halfway through filling one of
+ * them, interrupted by the card, would have its frame overwritten before it
+ * reached the hardware.
+ *
+ * Interrupts off for the build-and-hand-over rather than a mutex: the work is
+ * two memcpys of at most 1500 bytes, it never yields, and an interrupt handler
+ * cannot wait on a lock anyway. */
+static inline uint32_t irq_save(void) {
+    uint32_t f;
+    __asm__ volatile ("pushf; pop %0; cli" : "=r"(f) :: "memory");
+    return f;
+}
+static inline void irq_restore(uint32_t f) {
+    __asm__ volatile ("push %0; popf" :: "r"(f) : "memory", "cc");
+}
+
 static const uint8_t eth_bcast[6] = { 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF };
 static uint8_t txf[ETH_FRAME_MAX];
 
 static void eth_send(const uint8_t *dst_mac, uint16_t type,
                      const void *payload, uint16_t plen) {
     if (plen > ETH_FRAME_MAX - (uint16_t)sizeof(eth_hdr_t)) return;
+    uint32_t flags = irq_save();
     eth_hdr_t *e = (eth_hdr_t *)txf;
     memcpy(e->dst, dst_mac, 6);
     memcpy(e->src, rtl8139_mac(), 6);
     e->type = hton16(type);
     memcpy(txf + sizeof(eth_hdr_t), payload, plen);
     rtl8139_send(txf, (uint16_t)(sizeof(eth_hdr_t) + plen));
+    irq_restore(flags);
 }
 
 static void arp_send(uint16_t op, const uint8_t *target_mac, uint32_t target_ip) {
@@ -214,8 +235,9 @@ static void ip_send_from(uint32_t src, uint32_t dst, uint8_t proto,
     }
 
     static uint8_t buf[ETH_FRAME_MAX];
-    ip_hdr_t *ih = (ip_hdr_t *)buf;
     static uint16_t ip_id;
+    uint32_t flags = irq_save();          /* buf and ip_id are shared too */
+    ip_hdr_t *ih = (ip_hdr_t *)buf;
 
     ih->ver_ihl   = 0x45;
     ih->tos       = 0;
@@ -231,6 +253,7 @@ static void ip_send_from(uint32_t src, uint32_t dst, uint8_t proto,
 
     memcpy(buf + sizeof(ip_hdr_t), payload, plen);
     eth_send(dmac, ETH_TYPE_IP, buf, (uint16_t)(sizeof(ip_hdr_t) + plen));
+    irq_restore(flags);
 }
 
 static void ip_send(uint32_t dst, uint8_t proto, const void *payload, uint16_t plen) {
@@ -278,6 +301,7 @@ int net_udp_send_from(uint32_t src, uint32_t dst, uint16_t sport, uint16_t dport
         if (net_arp_resolve(next_hop, hop_mac) < 0) return -1;
     }
 
+    uint32_t uflags = irq_save();         /* pkt is shared with the IRQ path */
     udp_hdr_t *u = (udp_hdr_t *)pkt;
     uint16_t total = (uint16_t)(sizeof(udp_hdr_t) + len);
     u->sport = hton16(sport);
@@ -288,6 +312,7 @@ int net_udp_send_from(uint32_t src, uint32_t dst, uint16_t sport, uint16_t dport
     u->csum = hton16(udp_checksum(src, dst, pkt, total));
 
     ip_send_from(src, dst, IP_PROTO_UDP, pkt, total);
+    irq_restore(uflags);
     return 0;
 }
 

@@ -75,7 +75,7 @@ build, gate and commit on its own.
   internet, assert only what is hermetic (the connection to a local port) and
   leave the HTTP check as a manual step, the way the DNS answer is handled.
 
-## 3. Preemption-safety debt
+## 3. Preemption-safety debt — DONE (v0.9.6)
 
 `docs/next-steps.md` has flagged this since before processes existed, and
 processes made part of it reachable. Two sites were fixed this session (the
