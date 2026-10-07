@@ -16,6 +16,7 @@
 #define NET_DEFAULT_IP   IPV4(10, 0, 2, 15)
 #define NET_DEFAULT_GW   IPV4(10, 0, 2, 2)
 #define NET_DEFAULT_MASK IPV4(255, 255, 255, 0)
+#define NET_DEFAULT_DNS  IPV4(10, 0, 2, 3)     /* SLIRP's resolver */
 
 void     net_init(void);
 
@@ -32,5 +33,16 @@ int      net_ping(uint32_t dst, int count);
 int      net_arp_resolve(uint32_t ip, uint8_t *mac_out);
 void     net_arp_dump(void);
 
+/* Send one UDP datagram. Returns 0 if it went to the card. */
+int      net_udp_send(uint32_t dst, uint16_t sport, uint16_t dport,
+                      const void *data, uint16_t len);
+
+/* Resolve a hostname to an IPv4 address through the configured resolver.
+ * Returns 0 and writes *out on success, -1 on timeout or a failed lookup. */
+int      net_dns_resolve(const char *name, uint32_t *out);
+uint32_t net_dns(void);
+void     net_set_dns(uint32_t ip);
+
 /* Counters for `netinfo`: frames handled by each protocol. */
-void     net_stats(uint32_t *arp, uint32_t *ip, uint32_t *icmp, uint32_t *other);
+void     net_stats(uint32_t *arp, uint32_t *ip, uint32_t *icmp, uint32_t *udp,
+                   uint32_t *other);
