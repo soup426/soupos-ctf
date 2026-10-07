@@ -63,8 +63,10 @@ make wad
 ./scripts/check.sh               # THE pre-commit check: five configs + gate + every
                                  # test script, all in parallel (~the slowest piece)
 ./scripts/check.sh quick         # configs + gate only
-./scripts/smoke-test.sh          # the gate alone: boots, drives the shell, greps serial markers
-KEEP=1 ./scripts/smoke-test.sh   # keep the serial log for inspection
+./scripts/smoke-test.sh          # the gate alone: eight segments under scripts/gate/,
+                                 # each its own headless boot, all at once (~100 s)
+./scripts/gate/jobs.sh           # one segment by itself while working on it
+KEEP=1 ./scripts/smoke-test.sh   # keep every segment's serial log for inspection
 ```
 It boots with `-display none`, types into the guest through the QEMU monitor
 (`scripts/qemu_keys.py`), and checks boot, preemption arming, all four ring-3
@@ -134,7 +136,10 @@ src/
 scripts/
   check.sh          Everything before a commit, in parallel: configs in tree
                     copies, the gate and the side scripts each on their own QEMU
-  smoke-test.sh     Headless boot + shell-driver test (the gate)
+  smoke-test.sh     The gate: hands over to gate.sh
+  gate.sh           Runs every segment under gate/ in parallel, one verdict
+  gate/lib.sh       Boot, drive, check and verdict shared by the segments
+  gate/<seg>.sh     boot, jobs, fat, vga, desk, net, soupyc, audio
   qemu_keys.py      Types into a running guest via the QEMU monitor
 ```
 
@@ -869,9 +874,19 @@ how many, and the temporaries live in C locals where no collector can see them.
 If you add a builtin, allocate with `str_alloc` and return `mksval_ref`; never
 `kfree` a string. `SVAL_LEN` is now only the identifier length.
 
+## The gate is segments (v0.30.2)
+
+`scripts/gate/*.sh` each boot their own QEMU and run at once; `gate.sh` is
+the runner. The split follows one rule: **a check that counts lines (two IRQ
+kills, three `killed`, the last two hello.elf exits) lives in the segment
+whose drive sequence produces every line it counts.** Add a drive step and its
+checks to the same segment; a new subsystem gets a new segment, which is cheap
+(it adds nothing to the wall time until it is the slowest). The serial logs
+are `/tmp/soupos-gate-<segment>.*.log` under `KEEP=1`.
+
 ## Two things about the gate that cost me time (v0.10.0)
 
-- **It deletes its serial log unless `KEEP=1`.** `ls -t /tmp/soupos-smoke.*.log`
+- **It deletes its serial log unless `KEEP=1`.** `ls -t /tmp/soupos-gate-*.log`
   will cheerfully hand you one from hours ago, and a stale log can show symptoms
   of problems that were fixed long since. Check the timestamp.
 - **When adding drive commands, confirm you added rather than replaced.** A

@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.30.1
+Current version: v0.30.2
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,25 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.30.2 (2026-10-07)  — THE GATE IN SEGMENTS: 410 s TO 98 s
+  The second half of "make the gates go faster".
+  - smoke-test.sh was one boot and one five-minute drive sequence. It is
+    now eight segments under scripts/gate/ (boot, jobs, fat, vga, desk,
+    net, soupyc, audio), each its own headless boot, run at once by
+    gate.sh; smoke-test.sh hands over to it so nothing that called the
+    gate changes. gate/lib.sh holds the boot, the typing, the grep and the
+    verdict, so a segment is only its own sequence and its own checks.
+  - THE CUT FOLLOWS ONE RULE: a check that counts lines across the log
+    (two IRQ kills, three `killed`, the last two hello.elf exits, the
+    marker interleave) lives in the segment whose sequence produces every
+    line it counts. Every one of the old gate's 71 distinct assertions
+    carried over, verified by diffing the description sets; the only
+    difference is that "no kernel panic" is now asserted per segment.
+  - First run: 98 s against 410 s, all green. The slowest segment is desk
+    at 63 s, so the next cut, if it is ever worth it, is there.
+  - check.sh's total is now bounded by doom-fb-test's two ISO builds
+    (60 s) and the gate, not by five minutes of fixed waits.
 
 v0.30.1 (2026-10-07)  — scripts/check.sh: THE PRE-COMMIT CHECK, IN PARALLEL
   Tooling, asked for: "is there a way to make the gates go faster".
