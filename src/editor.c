@@ -10,8 +10,10 @@
 /* ── Screen geometry ─────────────────────────────────────────────────────
  * 80×25 text mode. Rows 0..23 show text; row 24 is the status bar. We write
  * cells straight into the VGA buffer so a full redraw never scrolls. */
-#define VGA_W      80
-#define VGA_H      25
+/* Ask, do not assume: the framebuffer console is larger than the hardware
+ * text mode, and the editor has to fill whatever it is given. */
+#define VGA_W      (vga_cols())
+#define VGA_H      (vga_rows())
 #define TEXT_ROWS  24
 #define STATUS_ROW 24
 #define VGA_MEM    (vga_cells())   /* never 0xB8000: dead on FB boots */

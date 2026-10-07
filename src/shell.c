@@ -242,7 +242,9 @@ static const char *hist_get(int offset) {
 }
 
 /* ---- Line editing with proper cursor positioning ---- */
-#define VGA_W      80
+/* The console's real width, which is not 80 on a framebuffer boot: the line
+ * editor wraps on it, so a stale 80 would wrap in the wrong place. */
+#define VGA_W      (vga_cols())
 
 static int prompt_row = 0;   /* VGA row where current prompt was printed */
 static int prompt_len = 8;   /* width of the printed prompt (includes cwd) */

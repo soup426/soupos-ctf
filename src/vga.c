@@ -15,8 +15,17 @@
 
 #include <stdarg.h>
 
-#define VGA_WIDTH   80
-#define VGA_HEIGHT  25
+/* The geometry is runtime state, not a constant, because the framebuffer
+ * console is larger than the hardware text mode. Everything below keeps using
+ * VGA_WIDTH and VGA_HEIGHT, which now read these. */
+static int v_cols = 80, v_rows = 25;
+#define VGA_WIDTH   v_cols
+#define VGA_HEIGHT  v_rows
+
+int  vga_cols(void) { return v_cols; }
+int  vga_rows(void) { return v_rows; }
+
+
 /* The cell store. On an ordinary boot this is the text-mode hardware at
  * 0xB8000. On a framebuffer boot that window is DEAD - reads come back as all
  * ones and writes are discarded, because the card is scanning out the linear
@@ -38,7 +47,15 @@ static inline void outb(uint16_t port, uint8_t val) {
 
 static int vga_row;
 static int vga_col;
-static uint8_t vga_attr;  /* high nibble = bg, low nibble = fg */
+
+void vga_set_geometry(int cols, int rows) {
+    if (cols < 1 || rows < 1) return;
+    if (cols > VGA_COLS_MAX || rows > VGA_ROWS_MAX) return;
+    v_cols = cols;
+    v_rows = rows;
+    if (vga_row >= rows) vga_row = rows - 1;
+    if (vga_col >= cols) vga_col = cols - 1;
+}static uint8_t vga_attr;  /* high nibble = bg, low nibble = fg */
 
 static uint8_t make_color(vga_color_t fg, vga_color_t bg) {
     return (uint8_t)((bg << 4) | fg);
@@ -84,7 +101,7 @@ static void scroll(void) {
  * alignment assumption would shift the screen by half a cell, which looks
  * like corruption and is easy to mistake for a font problem. Saves the real
  * screen, runs the check on a known pattern, puts the screen back. */
-static uint16_t scroll_test_save[VGA_WIDTH * VGA_HEIGHT];
+static uint16_t scroll_test_save[VGA_COLS_MAX * VGA_ROWS_MAX];
 
 int vga_scroll_selftest(void) {
     preempt_disable();

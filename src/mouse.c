@@ -18,6 +18,7 @@
  */
 #include "mouse.h"
 #include "isr.h"
+#include "vga.h"
 #include "klog.h"
 
 #define PS2_DATA   0x60
@@ -37,9 +38,11 @@
 #define MOUSE_ENABLE       0xF4
 #define MOUSE_ACK          0xFA
 
-/* Text cells, so the pointer lines up with everything else on screen. */
-#define SCREEN_W 80
-#define SCREEN_H 25
+/* Text cells, so the pointer lines up with everything else on screen. The
+ * console's size is asked for rather than assumed, because a framebuffer boot
+ * is bigger than the hardware text mode and the pointer must reach the edge. */
+#define SCREEN_W (vga_cols())
+#define SCREEN_H (vga_rows())
 /* Raw counts per cell. The mouse reports far finer movement than a character
  * grid can show, and moving a cell per count makes the pointer unusable. */
 #define COUNTS_PER_CELL 4

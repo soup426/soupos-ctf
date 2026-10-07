@@ -25,12 +25,15 @@
 #include "klog.h"
 #include "font8x16.h"
 
-#define COLS 80
-#define ROWS 25
+/* The glyph size is fixed by the font; the console's size is whatever vga.c
+ * says, so this renderer follows a resize rather than defining one. MAX sizes
+ * the shadow, which is static. */
+#define COLS (vga_cols())
+#define ROWS (vga_rows())
 #define GW   8
 #define GH   16
 
-static uint16_t shadow[COLS * ROWS];
+static uint16_t shadow[VGA_COLS_MAX * VGA_ROWS_MAX];
 static uint32_t ox, oy;              /* centring offsets in pixels */
 static int      last_cr = -1, last_cc = -1;
 static volatile int paused;      /* a mode 13h program owns the screen */

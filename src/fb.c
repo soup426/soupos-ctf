@@ -29,7 +29,7 @@
 #include "vga.h"
 #include "klog.h"
 
-static uint16_t text_backing[80 * 25];   /* the cell store on FB boots */
+static uint16_t text_backing[VGA_COLS_MAX * VGA_ROWS_MAX];  /* cell store on FB boots */
 
 static uint8_t *fb;              /* mapped base            */
 static uint32_t fb_pitch, fb_w, fb_h;
@@ -50,7 +50,7 @@ void fb_early(uint32_t mb_info_addr) {
     multiboot_info_t *mb = (multiboot_info_t *)mb_info_addr;
     if (!(mb->flags & MULTIBOOT_FLAG_FRAMEBUFFER)) return;
     if (mb->framebuffer_type == MULTIBOOT_FB_EGA) return;
-    for (int i = 0; i < 80 * 25; i++) text_backing[i] = 0x0720;
+    for (int i = 0; i < VGA_COLS_MAX * VGA_ROWS_MAX; i++) text_backing[i] = 0x0720;
     vga_set_backing(text_backing);
 }
 
