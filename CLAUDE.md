@@ -3,7 +3,7 @@
 ## What this is
 
 soupOS is a 32-bit x86 hobby OS written in C and NASM assembly (currently
-**v0.11.0**). It boots via GRUB and runs in protected mode with paging, a
+**v0.11.1**). It boots via GRUB and runs in protected mode with paging, a
 physical/heap allocator, and a cooperative scheduler. On top of that:
 
 - **Filesystem**: FAT16 read/write with subdirectories ("bowls") and a VFS shim
@@ -527,6 +527,19 @@ VGA cells doubles the work. `vga.c`'s `scroll()` copies 32-bit words (two cells
 per store) and is about twice as fast as the original cell-at-a-time loop;
 `memmove` measured 47% slower than that original. `sample` guards the row
 movement. The same caution applies anywhere a wide copy looks tempting.
+
+## Doom sound effects (`src/doomsnd.c`, v0.11.1)
+
+DS* lumps are DMX format: 8-byte header, then **unsigned** 8-bit samples
+centred on 128, at 11025 Hz. `doomsnd_play("DSPISTOL")` recentres, widens and
+resamples to the card's rate, non-blocking. `sizzle <LUMP>` plays any effect
+from the shell, which is how to test without driving the game. One sound at a
+time: the hardware has a single PCM-out channel and nothing mixes yet.
+
+**Port numbers are 16-bit.** `outb_((uint8_t)port, ...)` compiles happily and
+sends the byte to a completely different port; it cost an hour here, because the
+first sound after boot worked and only later ones were silent. When a device
+looks half-alive, read its registers back before theorising.
 
 ## AC97 sound (`src/ac97.c`, v0.11.0)
 

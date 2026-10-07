@@ -12,6 +12,7 @@
 
 #include "doom.h"
 #include "wad.h"
+#include "doomsnd.h"
 #include "vga.h"
 #include "vga13h.h"
 #include "keyboard.h"
@@ -2080,6 +2081,7 @@ static void fire_weapon(void) {
     if (!lv_things || !lv_thing_ai) return;
     pl_ammo--;
     pl_fire_cd = FIRE_CD_TICKS;
+    doomsnd_play("DSPISTOL");       /* non-blocking: the frame carries on */
     int32_t px   = pl_x >> 8, py = pl_y >> 8;
     int32_t fw_x = view_cos[pl_angle];   /* forward vector ×1024 */
     int32_t fw_y = view_sin[pl_angle];
@@ -2169,6 +2171,7 @@ static void door_activate(int sec, int stays_open) {
         return;
     }
     if (g_ndoors >= MAX_DOORS) return;
+    doomsnd_play("DSDOROPN");
     d = &g_doors[g_ndoors++];
     d->sec        = sec;
     d->close_h    = lv_sectors[sec].ceil_h;

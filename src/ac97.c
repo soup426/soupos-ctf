@@ -179,11 +179,23 @@ int ac97_init(void) {
     return 0;
 }
 
-/* Hand the card a run of buffers and wait for it to finish them. */
-static int ac97_run(int nbuf, uint32_t last_samples) {
+int16_t *ac97_staging(uint32_t *max_samples) {
+    if (max_samples) *max_samples = AC97_NBUF * AC97_BUF_SAMPLES;
+    return (int16_t *)pcm;
+}
+
+int ac97_busy(void) {
+    if (!present) return 0;
+    return (inw_((uint16_t)(nabm + NABM_PO_SR)) & SR_DCH) ? 0 : 1;
+}
+
+/* Hand the card a run of buffers. `wait` polls until the DMA halts; without it
+ * this returns as soon as the card is running, which is what a sound effect
+ * during a game needs. */
+static int ac97_run(int nbuf, uint32_t last_samples, int wait) {
     uint16_t cr = (uint16_t)(nabm + NABM_PO_CR);
 
-    outb_((uint8_t)cr, CR_RESET);
+    outb_((uint16_t)cr, CR_RESET);
     for (int i = 0; i < 1000 && (inb_((uint16_t)cr) & CR_RESET); i++) task_sleep(1);
 
     for (int i = 0; i < nbuf; i++) {
@@ -196,8 +208,16 @@ static int ac97_run(int nbuf, uint32_t last_samples) {
     outw_((uint16_t)(nabm + NABM_PO_SR), 0x1C);        /* clear stale status */
     outb_((uint16_t)cr, CR_RUN);
 
-    /* Poll rather than take the interrupt: one tone at a time needs no ring,
-     * and this keeps the first milestone honest about what is being tested. */
+    /* Without `wait` the channel is left running and we return at once. The
+     * reset at the top of this function is what makes that safe to do twice:
+     * a channel left running has its index past LVI, and starting it again
+     * without the reset plays nothing at all. That write spent a while going
+     * to port 0x1B instead of 0xC41B because of a truncating cast, which made
+     * the first sound work and every later one silent. */
+    if (!wait) return 0;
+
+    /* Poll rather than take the interrupt: one sound at a time needs no ring,
+     * and it keeps what is being tested honest. */
     uint32_t total_frames = ((uint32_t)(nbuf - 1) * AC97_BUF_SAMPLES + last_samples) / 2;
     uint32_t ms = (total_frames * 1000) / rate;
     for (uint32_t waited = 0; waited < ms + 500; waited += 10) {
@@ -206,6 +226,18 @@ static int ac97_run(int nbuf, uint32_t last_samples) {
     }
     outb_((uint16_t)cr, 0);
     return 0;
+}
+
+/* Play `samples` int16s already sitting in the staging area. */
+int ac97_play(uint32_t samples, int wait) {
+    if (!present || !samples) return -1;
+    uint32_t cap = AC97_NBUF * AC97_BUF_SAMPLES;
+    if (samples > cap) samples = cap;
+    samples &= ~1u;                                  /* whole frames */
+
+    int nbuf = (int)((samples + AC97_BUF_SAMPLES - 1) / AC97_BUF_SAMPLES);
+    uint32_t last = samples - (uint32_t)(nbuf - 1) * AC97_BUF_SAMPLES;
+    return ac97_run(nbuf, last, wait);
 }
 
 int ac97_tone(uint32_t hz, uint32_t ms) {
@@ -231,5 +263,5 @@ int ac97_tone(uint32_t hz, uint32_t ms) {
     if (!nbuf) return -1;
 
     klog("[ac97] tone %u Hz for %u ms, %d buffer%s\n", hz, ms, nbuf, nbuf == 1 ? "" : "s");
-    return ac97_run(nbuf, last);
+    return ac97_run(nbuf, last, 1);
 }

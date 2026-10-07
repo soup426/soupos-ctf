@@ -17,5 +17,18 @@ uint32_t ac97_rate(void);
 int      ac97_tone(uint32_t hz, uint32_t ms);
 
 /* Fill `samples` int16s of interleaved stereo sine into `out`, carrying the
- * 8.24 phase accumulator across calls. Exposed for tests. */
+ * phase accumulator across calls. Exposed for tests. */
 int      ac97_fill_tone(int16_t *out, uint32_t samples, uint32_t hz, uint32_t *phase);
+
+/* The staging area the card plays from: write interleaved 16-bit stereo here,
+ * then call ac97_play. One sound at a time, which is what the hardware's
+ * single PCM-out channel gives us without mixing in software. */
+int16_t *ac97_staging(uint32_t *max_samples);
+
+/* Play `samples` int16s from the staging area. `wait` blocks until the card
+ * has finished; without it this returns immediately, which is what a sound
+ * effect fired mid-game needs. */
+int      ac97_play(uint32_t samples, int wait);
+
+/* Is the card still playing? */
+int      ac97_busy(void);

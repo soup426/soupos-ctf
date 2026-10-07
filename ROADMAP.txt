@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.11.0
+Current version: v0.11.1
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,42 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.11.1 (2026-10-07)  — DOOM HAS SOUND
+  Night-queue item 8, second milestone. The pistol fires and the doors open
+  with the WAD's own effects.
+  - A DS* lump is DMX format: eight bytes of header (format 3, sample rate,
+    sample count) then UNSIGNED eight-bit samples centred on 128. Each sample
+    needs recentring, widening to signed sixteen-bit, and resampling from
+    11025 Hz to the card's 48000. Nearest-neighbour, because on eight-bit
+    effects recorded in 1993 an interpolating resampler is inaudible; what IS
+    audible is getting the ratio backwards, which plays a pistol at quarter
+    speed and sounds like a different weapon.
+  - `sizzle <LUMP>` plays any effect from the shell, which is how this is
+    tested without driving the game. doom.c fires DSPISTOL on the shot being
+    spent and DSDOROPN when a door starts opening, both non-blocking so the
+    frame carries on.
+  - AC97 grew a staging area and a non-blocking play, since a sound effect
+    cannot block a game frame for half a second.
+  - THE BUG, AND HOW IT MISLED ME. The reset write at the top of the play path
+    was `outb_((uint8_t)cr, ...)` - a truncating cast that sent it to port 0x1B
+    instead of 0xC41B. The first sound after boot worked and every later one
+    was silent. My first hypothesis was wrong: I predicted two tones in a row
+    would also fail, tested it, and both played, because the blocking path
+    clears the run bit itself and that was enough. What settled it was reading
+    the controller's registers 50 ms in - CIV, PICB, SR, CR - which showed the
+    card running and consuming samples at exactly 48000 frames a second while
+    producing nothing. The channel was fine; the reset was going to the wrong
+    port.
+  - Verified against the source material, not by ear: the captured effect is
+    0.513 s, the same as the lump's 5661 samples at 11025 Hz, and its envelope
+    correlates with the original at 1.0000.
+  - Gate 64 -> 66. QEMU's wav backend writes only while the card is active, so
+    the tone and the effect land back to back as one 813 ms burst; measuring
+    across both averages a sine with a gunshot and reports 585 Hz. The tone is
+    measured over the first 250 ms and the effect is the remainder.
+  Left in item 8: mixing more than one effect at once, which needs a software
+  mixer because the hardware has a single PCM-out channel.
 
 v0.11.0 (2026-10-07)  — SOUND: AC97, AND A TONE THAT IS MEASURED
   Night-queue item 8, first milestone. The PCI groundwork from the network card

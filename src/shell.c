@@ -24,6 +24,8 @@
 #include "selftest.h"
 #include "mouse.h"
 #include "ac97.h"
+#include "doomsnd.h"
+#include "wad.h"
 #include "vfs.h"
 #include "klog.h"
 #include "users.h"
@@ -1520,6 +1522,28 @@ static void cmd_sip(const char *args) {
     net_ping(ip, count);
 }
 
+/* sizzle - play one of Doom's sound effects (a DS* lump from the WAD). */
+static void cmd_sizzle(const char *args) {
+    if (!ac97_present()) { vga_puts("  No sound card. QEMU needs -device AC97.\n"); return; }
+    while (*args == ' ') args++;
+    if (!*args) { vga_puts("  Usage: sizzle <LUMP>   e.g. sizzle DSPISTOL\n"); return; }
+
+    /* The WAD stays open once loaded, so repeated sizzles are cheap. */
+    static int wad_open = 0;
+    if (!wad_open) {
+        if (wad_init("DOOM1.WAD") < 0) {
+            vga_puts("  No DOOM1.WAD on the disk.\n");
+            return;
+        }
+        wad_open = 1;
+    }
+    if (doomsnd_play(args) < 0) {
+        vga_printf("  Could not play %s (is it a DS* lump?)\n", args);
+        return;
+    }
+    vga_printf("  sizzling %s\n", args);
+}
+
 /* whistle - a tone through the sound card, as the kettle would.
  * `beep` is the PC speaker; this is the AC97. */
 static void cmd_whistle(const char *args) {
@@ -2965,7 +2989,7 @@ static const char *const cmd_names[] = {
     "jot", "ai", "cook", "soup", "hash",
     "beep", "mandelbrot", "vgademo", "uname", "cal",
     "clock", "wipe", "fortune", "bounce", "recipe", "leftovers", "spill",
-    "freeze", "reheat", "ps", "orders", "plate", "steep", "kill", "scraps", "sample", "skewer", "larder", "whistle",
+    "freeze", "reheat", "ps", "orders", "plate", "steep", "kill", "scraps", "sample", "skewer", "larder", "whistle", "sizzle",
     "faucet", "plumbing", "table", "sip", "sniff", "reserve", "holler",
     "takeout", "bgclock", "yieldbg", "spinbg", "sleeptest", "vfstest",
     "dmesg", "pwd", "cd", "mkbowl", "rmbowl", "bowltest",
@@ -3203,6 +3227,7 @@ static void dispatch(const char *buf) {
     else if (str_eq(p, "skewer"))      cmd_skewer();
     else if (str_eq(p, "larder"))      cmd_larder();
     else if (str_startswith(p, "whistle")) cmd_whistle(p + 7);
+    else if (str_startswith(p, "sizzle"))  cmd_sizzle(p + 6);
     else if (str_eq(p, "faucet"))      cmd_faucet();
     else if (str_eq(p, "table"))       cmd_table();
     else if (str_startswith(p, "sniff"))    { const char *a = p + 5; cmd_sniff(a); }

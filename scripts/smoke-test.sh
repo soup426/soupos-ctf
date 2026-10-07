@@ -131,7 +131,8 @@ python3 scripts/qemu_keys.py "$MON" \
     "soup RUNAWAY.SC" "WAIT:22" "pwd" "WAIT:2" \
     "soup SPAWN.SC" "WAIT:1" "ps" "WAIT:5" \
     "larder" "WAIT:2" \
-    "whistle 440 300" "WAIT:4" >/dev/null || {
+    "whistle 440 300" "WAIT:4" \
+    "sizzle DSPISTOL" "WAIT:4" >/dev/null || {
         echo "FAIL: could not drive the QEMU monitor"; exit 1; }
 
 fail=0
@@ -431,13 +432,21 @@ check "soupyc can delete a file" 'removed 1'
 check "a let inside a loop survives 200 passes" 'SCOPE total 39800'
 
 check "the sound card accepted a tone" '\[ac97\] tone 440 Hz'
+check "a Doom sound lump was decoded" '\[doomsnd\] DSPISTOL: 5661 samples at 11025 Hz'
 
-# And the tone is checked on the HOST, from the samples QEMU captured, rather
-# than by ear: this is the only check here that proves the DMA, the descriptor
-# list, the mixer and the oscillator all did the right thing together. The
-# header sizes are not patched because QEMU gets killed, so the PCM is read
-# past the fixed 44-byte header directly.
-tone_hz=$(python3 - "$WAV" <<'PYTONE' 2>/dev/null
+# Both sounds are checked on the HOST, from the samples QEMU captured, rather
+# than by ear. These are the only checks here that prove the DMA, the
+# descriptor list, the mixer and the resampler worked together.
+#
+# QEMU's wav backend writes only while the card is active, so the two sounds
+# land back to back with no silence between them: one burst of about 813 ms,
+# being the 300 ms tone followed by the 513 ms gunshot. Measuring zero
+# crossings across the whole thing averages a sine with a gunshot and reports
+# 585 Hz, so the tone is measured over the first 250 ms and the effect is what
+# is left after the tone's known length. The header sizes are not patched,
+# because QEMU is killed rather than asked to quit, so the PCM is read straight
+# past the fixed 44-byte header.
+read -r tone_hz sfx_ms <<<"$(python3 - "$WAV" <<'PYAUDIO' 2>/dev/null
 import struct, sys
 try:
     d = open(sys.argv[1], "rb").read()
@@ -446,19 +455,30 @@ try:
     pcm = d[44:]
     s = struct.unpack("<" + "h" * (len(pcm) // 2), pcm[:len(pcm) // 2 * 2])
     left = s[0::ch]
-    a = next(i for i, v in enumerate(left) if abs(v) > 1000)
-    b = next(i for i in range(len(left) - 1, 0, -1) if abs(left[i]) > 1000)
-    t = left[a:b + 1]
+    a = next(i for i, v in enumerate(left) if abs(v) > 400)
+    b = next(i for i in range(len(left) - 1, a, -1) if abs(left[i]) > 400)
+    t = left[a:a + sr // 4]                      # 250 ms, inside the tone
     xs = [i for i in range(1, len(t)) if t[i - 1] < 0 <= t[i]]
-    print(round(sr / ((xs[-1] - xs[0]) / (len(xs) - 1))))
+    hz = round(sr / ((xs[-1] - xs[0]) / (len(xs) - 1))) if len(xs) > 2 else 0
+    print(hz, round((b - a) * 1000 / sr) - 300)
 except Exception:
-    print(0)
-PYTONE
-)
+    print(0, 0)
+PYAUDIO
+)"
+
 if [ "${tone_hz:-0}" -ge 438 ] && [ "${tone_hz:-0}" -le 442 ]; then
     echo "  ok    the captured tone measures ${tone_hz} Hz"
 else
     echo "  FAIL  the captured tone measures ${tone_hz:-0} Hz, expected 440"
+    fail=1
+fi
+
+# DSPISTOL is 5661 samples at 11025 Hz, so 513 ms. Getting the resample ratio
+# backwards would give 118 ms or 2.2 s, both far outside this window.
+if [ "${sfx_ms:-0}" -ge 470 ] && [ "${sfx_ms:-0}" -le 555 ]; then
+    echo "  ok    the Doom sound effect lasts ${sfx_ms} ms"
+else
+    echo "  FAIL  the Doom sound effect lasts ${sfx_ms:-0} ms, expected about 513"
     fail=1
 fi
 
