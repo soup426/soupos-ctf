@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.8.1
+Current version: v0.8.2
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,41 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.8.2  (2026-10-06)  — JOB CONTROL
+  Ctrl-Z stops the foreground program and hands the shell back; `bg` resumes it
+  in the background, `fg` resumes it in the foreground and waits again. M2 of
+  the process milestones.
+  - proc_state_t gains PROC_STOPPED. A stopped process is alive, keeps its
+    address space, and its task is BLOCKED, so it costs nothing but RAM.
+  - It parks at the same three safe points the kill unwind uses, for the same
+    reason: no kernel lock is held there, so parking cannot strand a mutex.
+    Syscall entry, syscall exit, and an IRQ that interrupted ring-3 code. That
+    third one is what lets a program making no syscalls be stopped at all.
+  - proc_take_stop enables interrupts to park (both safe points are interrupt
+    gates, and task_block_on ends in hlt, so parking with IF clear would never
+    wake) and restores the caller's IF afterwards. The IRQ handler in
+    particular must not continue with interrupts on, since it goes on to call
+    sched_preempt.
+  - Ctrl-Z (0x1A) is raised in the keyboard IRQ next to Ctrl-C, because a
+    foreground program means the shell is blocked in proc_wait reading nothing.
+  - proc_wait reports two outcomes now: 1 exited (code written, slot
+    collected), 0 stopped (slot kept, job still exists). A stopped child wakes
+    its parent exactly like an exited one, which is what returns the prompt.
+  - proc_kill continues a stopped process as well as flagging it, or the kill
+    would be noticed only when something else woke it, which may be never.
+  - `fg [pid]`, `bg [pid]`, both defaulting to the newest job; `jobs` shows T
+    for stopped; proc_most_recent counts stopped jobs as live, so a bare `fg`
+    and `kill %` can reach them.
+  - Deliberately not included: process groups (a job is one process until pipes
+    exist, so a group of one is bookkeeping with no behaviour) and user-space
+    signal handlers (every disposition here is taken by the kernel, so there is
+    no new ABI to get wrong).
+  - Gate 22 -> 27 checks. The new ones use marker.elf, which prints a tagged
+    line every 100 ms, so its output IS the evidence: nothing printed while
+    parked, printing again after bg, the shell taking commands in between, and
+    a stopped job still being killable.
+  Design notes: docs/superpowers/specs/2026-10-06-job-control-design.md
 
 v0.8.1  (2026-10-06)  — DOOM IS 23x FASTER
   "Doom runs horribly." It did, for two independent reasons, one in the port

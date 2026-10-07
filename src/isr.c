@@ -160,8 +160,14 @@ void irq_handler(registers_t *regs) {
      *
      * This is also how a program that makes no syscalls at all gets killed:
      * the 100 Hz timer is the only thing that ever re-enters the kernel. */
-    if ((regs->cs & 3) == 3 && proc_kill_pending())
-        usermode_killed("irq");         /* does not return */
+    if ((regs->cs & 3) == 3) {
+        proc_t *pr = proc_current();
+        /* Stop first: a stopped process that is also flagged for death gets
+         * woken by proc_kill and takes the kill on the way out of the park. */
+        if (pr && pr->stop_pending) proc_take_stop();
+        if (proc_kill_pending())
+            usermode_killed("irq");     /* does not return */
+    }
 
     /* Timer-driven preemption: do it AFTER the EOI (so the PIC is ready for
      * the next tick) and still with interrupts disabled. sched_preempt may

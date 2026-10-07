@@ -138,9 +138,13 @@ static void keyboard_irq_handler(registers_t *regs) {
          * the IRQ. Flag the program and swallow the key. With no foreground
          * program it falls through to the shell, which uses 0x03 to cancel the
          * input line. */
-        if (c == 0x03) {
+        if (c == 0x03 || c == 0x1A) {
             proc_t *fg = proc_foreground();
-            if (fg) { proc_flag_kill(fg); return; }
+            if (fg) {
+                if (c == 0x03) proc_flag_kill(fg);   /* Ctrl-C: terminate */
+                else           proc_flag_stop(fg);   /* Ctrl-Z: park it   */
+                return;
+            }
         }
         kb_push((int)(unsigned char)c);
     }

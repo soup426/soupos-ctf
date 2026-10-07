@@ -29,7 +29,8 @@
 typedef enum {
     PROC_FREE    = 0,     /* slot unused                                   */
     PROC_RUNNING = 1,     /* task alive (loading, in ring 3, or in syscall) */
-    PROC_ZOMBIE  = 2,     /* exited; exit_code valid, waiting to be reaped  */
+    PROC_STOPPED = 2,     /* parked at a safe point; alive, costs only RAM  */
+    PROC_ZOMBIE  = 3,     /* exited; exit_code valid, waiting to be reaped  */
 } proc_state_t;
 
 typedef struct proc {
@@ -38,6 +39,7 @@ typedef struct proc {
     proc_state_t  state;
     int           exit_code;
     volatile int  killed;              /* pending kill, taken at a safe point */
+    volatile int  stop_pending;        /* Ctrl-Z, parked at a safe point     */
     volatile int  in_user;             /* executing ring 3 right now        */
     int           background;
     int           reported;            /* finished bg job already announced */
@@ -48,6 +50,7 @@ typedef struct proc {
     vfs_node_t   *ufds[PROC_UFD_MAX];
     char          args[PROC_ARGS_MAX];
     wait_queue_t  waiters;             /* the parent blocks here            */
+    wait_queue_t  cont_wq;             /* the process itself parks here      */
     struct task  *task;                /* NULL once the process has exited  */
 } proc_t;
 
@@ -60,9 +63,13 @@ proc_t  *proc_current(void);
 int      proc_spawn(const char *path, const char *args, int background,
                     uint32_t *out_pid);
 
-/* Block until `pid` exits, then collect it and return its exit code. Returns
- * -1 if there is no such process. Frees the slot. */
-int      proc_wait(uint32_t pid);
+/* Block until `pid` exits or stops.
+ *   1  it exited: *code holds the exit code and the slot has been collected
+ *   0  it stopped: the slot is kept, the job still exists (see proc_continue)
+ *  -1  no such process
+ * A stopped child wakes its parent exactly like an exited one, which is how
+ * Ctrl-Z returns the shell to a prompt. */
+int      proc_wait(uint32_t pid, int *code);
 
 /* Flag `pid` to be killed. The process tears itself down at its next safe
  * point (syscall entry, or a timer IRQ that interrupted ring-3 code), because
@@ -73,8 +80,17 @@ int      proc_wait(uint32_t pid);
 int      proc_kill(uint32_t pid);
 
 /* Flag a process directly, with no lookup and no logging. Interrupt-safe;
- * this is the Ctrl-C path. */
+ * these are the Ctrl-C and Ctrl-Z paths. */
 void     proc_flag_kill(proc_t *p);
+void     proc_flag_stop(proc_t *p);
+
+/* Called by a process on itself, at a safe point, when a stop is pending: it
+ * parks until continued or killed. Enables interrupts first, because both safe
+ * points are interrupt gates and parking ends in hlt. */
+void     proc_take_stop(void);
+
+/* Resume a stopped process. No-op on anything else. */
+void     proc_continue(proc_t *p);
 
 /* Called by the process's own task when the program is done. */
 void     proc_exit(proc_t *p, int exit_code);

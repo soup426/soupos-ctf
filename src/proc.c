@@ -49,13 +49,14 @@ proc_t *proc_next(int *idx) {
 uint32_t proc_count_live(void) {
     uint32_t n = 0;
     for (int i = 0; i < PROC_MAX; i++)
-        if (procs[i].state == PROC_RUNNING) n++;
+        if (procs[i].state == PROC_RUNNING || procs[i].state == PROC_STOPPED) n++;
     return n;
 }
 
 char proc_state_letter(proc_state_t s) {
     switch (s) {
         case PROC_RUNNING: return 'R';
+        case PROC_STOPPED: return 'T';
         case PROC_ZOMBIE:  return 'Z';
         case PROC_FREE:    return '-';
     }
@@ -162,7 +163,7 @@ void proc_exit(proc_t *p, int exit_code) {
     preempt_enable();
 }
 
-int proc_wait(uint32_t pid) {
+int proc_wait(uint32_t pid, int *code) {
     proc_t *p = proc_by_pid(pid);
     if (!p) return -1;
 
@@ -177,37 +178,105 @@ int proc_wait(uint32_t pid) {
         preempt_enable();
     }
 
-    int code = p->exit_code;
+    /* Stopped, not finished: the job lives on, so the slot stays. */
+    if (p->state == PROC_STOPPED) return 0;
+
+    if (code) *code = p->exit_code;
     if (foreground == p) foreground = 0;
     p->state = PROC_FREE;            /* collected */
-    return code;
+    return 1;
 }
 
 /* Just set the flag. Safe from interrupt context: one volatile store, no
  * logging, no allocation, no lock. This is what the keyboard IRQ calls for
  * Ctrl-C, where the interrupted task is very often the target itself. */
 void proc_flag_kill(proc_t *p) {
-    if (p && p->state == PROC_RUNNING) p->killed = 1;
+    if (p && (p->state == PROC_RUNNING || p->state == PROC_STOPPED))
+        p->killed = 1;
+}
+
+void proc_flag_stop(proc_t *p) {
+    if (p && p->state == PROC_RUNNING) p->stop_pending = 1;
+}
+
+/* Park the calling process until someone continues it (or kills it).
+ *
+ * Only ever called from a safe point, so no kernel lock is held and parking
+ * cannot strand one. Interrupts are enabled first: both safe points are
+ * reached through interrupt gates, so IF is clear, and task_block_on ends in
+ * hlt when nothing else is runnable - parking with interrupts off would never
+ * wake. SYS_YIELD sets the same precedent. */
+void proc_take_stop(void) {
+    proc_t *p = proc_current();
+    if (!p) return;
+
+    p->stop_pending = 0;
+    p->state        = PROC_STOPPED;
+    /* Hand the terminal back and wake whoever is waiting on us, so the shell
+     * returns to a prompt instead of blocking on a process that is not going
+     * to finish. */
+    if (proc_foreground() == p) proc_set_foreground(0);
+    task_wake(&p->waiters);
+    klog("[proc %u] %s stopped\n", p->pid, p->name);
+
+    /* Park with interrupts on, then put IF back the way the caller had it.
+     * Both safe points are interrupt gates, so the caller's IF is clear, and
+     * the IRQ handler in particular must not continue with interrupts on: it
+     * goes on to call sched_preempt, which expects to be the only thing
+     * entering the scheduler. */
+    uint32_t caller_flags;
+    __asm__ volatile ("pushf; pop %0" : "=r"(caller_flags));
+    __asm__ volatile ("sti");
+
+    /* Same lost-wakeup guard as proc_wait: re-check inside the region, and let
+     * a pending kill out of the loop so the safe point we return to can take
+     * it. */
+    for (;;) {
+        preempt_disable();
+        if (p->state != PROC_STOPPED || p->killed) { preempt_enable(); break; }
+        task_block_on(&p->cont_wq);
+        preempt_enable();
+    }
+    p->state = PROC_RUNNING;
+    if (!(caller_flags & 0x200)) __asm__ volatile ("cli");
+}
+
+void proc_continue(proc_t *p) {
+    if (!p || p->state != PROC_STOPPED) return;
+    preempt_disable();
+    p->state = PROC_RUNNING;
+    task_wake(&p->cont_wq);
+    preempt_enable();
+    klog("[proc %u] %s continued\n", p->pid, p->name);
 }
 
 int proc_kill(uint32_t pid) {
     proc_t *p = proc_by_pid(pid);
-    if (!p || p->state != PROC_RUNNING) return -1;
+    if (!p || (p->state != PROC_RUNNING && p->state != PROC_STOPPED)) return -1;
     /* Flagging the caller's own process is deliberately allowed: the flag is
      * acted on at the next safe point, which for a self-kill is the return
      * from this very trap. The keyboard IRQ depends on that, since the task it
      * interrupted is usually the program being Ctrl-C'd. */
     proc_flag_kill(p);
+    /* A stopped process is parked and would never reach a safe point to
+     * notice. Wake it so it can die. */
+    if (p->state == PROC_STOPPED) {
+        preempt_disable();
+        p->state = PROC_RUNNING;
+        task_wake(&p->cont_wq);
+        preempt_enable();
+    }
     klog("[proc %u] kill flagged\n", pid);
     return 0;
 }
 
-/* The most recently spawned live process: what the shell's `kill %` targets.
- * Highest pid wins, because task ids only ever increase. */
+/* The newest job: what a bare `fg`, `bg` and `kill %` target. Stopped counts
+ * as live, since resuming one is the whole point of job control. Highest pid
+ * wins, because task ids only ever increase. */
 proc_t *proc_most_recent(void) {
     proc_t *best = 0;
     for (int i = 0; i < PROC_MAX; i++)
-        if (procs[i].state == PROC_RUNNING &&
+        if ((procs[i].state == PROC_RUNNING || procs[i].state == PROC_STOPPED) &&
             (!best || procs[i].pid > best->pid))
             best = &procs[i];
     return best;

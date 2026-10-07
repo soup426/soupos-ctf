@@ -54,7 +54,10 @@ python3 scripts/qemu_keys.py "$MON" \
     "cook hog.elf" "WAIT:2" "KEY:ctrl-c" "WAIT:2" \
     "cook systest.elf afterctrlc" "WAIT:3" \
     "cook systest.elf post" "WAIT:3" \
-    "cook hello.elf" "WAIT:2" "cook hello.elf" "WAIT:2" >/dev/null || {
+    "cook hello.elf" "WAIT:2" "cook hello.elf" "WAIT:2" \
+    "cook marker.elf Z" "WAIT:1" "KEY:ctrl-z" "WAIT:3" \
+    "jobs" "WAIT:1" "bg" "WAIT:3" \
+    "cook marker.elf K" "WAIT:1" "KEY:ctrl-z" "WAIT:1" "kill %" "WAIT:2" >/dev/null || {
         echo "FAIL: could not drive the QEMU monitor"; exit 1; }
 
 fail=0
@@ -164,6 +167,53 @@ if [ "$n" -ge 2 ]; then
     fi
 else
     echo "  FAIL  need two hello.elf exits to compare page counts, found $n"
+    fail=1
+fi
+
+# ── Job control ───────────────────────────────────────────────────────────
+# marker.elf prints a tagged line every 100 ms, so its output IS the evidence
+# of whether it is running. Ctrl-Z it, and those lines must stop.
+check "Ctrl-Z stopped the foreground job" '\[proc [0-9]+\] /marker\.elf stopped'
+
+stop_line=$(grep -nE '/marker\.elf stopped' "$LOG" | head -1 | cut -d: -f1)
+cont_line=$(grep -nE '/marker\.elf continued' "$LOG" | head -1 | cut -d: -f1)
+if [ -n "$stop_line" ] && [ -n "$cont_line" ]; then
+    while_parked=$(awk -v a="$stop_line" -v b="$cont_line" 'NR>a && NR<b' "$LOG" \
+                   | grep -cE '\[p:Z\]' || true)
+    if [ "$while_parked" = "0" ]; then
+        echo "  ok    a stopped job really is parked (no output for $(( cont_line - stop_line )) log lines)"
+    else
+        echo "  FAIL  stopped job kept running: $while_parked lines while parked"
+        fail=1
+    fi
+    after=$(awk -v b="$cont_line" 'NR>b' "$LOG" | grep -cE '\[p:Z\]' || true)
+    if [ "$after" -gt 0 ]; then
+        echo "  ok    bg resumed the stopped job ($after more steps)"
+    else
+        echo "  FAIL  bg did not resume the job: no output after it continued"
+        fail=1
+    fi
+else
+    echo "  FAIL  job control markers missing (stopped=${stop_line:-none} continued=${cont_line:-none})"
+    fail=1
+fi
+
+# The point of Ctrl-Z: the shell comes back. Something it ran afterwards must
+# have produced output.
+if [ -n "${stop_line:-}" ] && awk -v a="$stop_line" 'NR>a' "$LOG" | grep -qE '\[proc [0-9]+\] spawned /marker\.elf K'; then
+    echo "  ok    shell took commands again after Ctrl-Z"
+else
+    echo "  FAIL  shell did not come back after Ctrl-Z"
+    fail=1
+fi
+
+# A stopped job is parked on a wait queue and would never reach a safe point on
+# its own, so kill has to wake it to let it die.
+last_stop=$(grep -nE '/marker\.elf stopped' "$LOG" | tail -1 | cut -d: -f1)
+if [ -n "$last_stop" ] && awk -v a="$last_stop" 'NR>a' "$LOG" | grep -qE '\[proc [0-9]+\] killed'; then
+    echo "  ok    a stopped job can still be killed"
+else
+    echo "  FAIL  killing a stopped job did not end it"
     fail=1
 fi
 

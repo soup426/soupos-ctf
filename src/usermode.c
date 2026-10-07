@@ -275,9 +275,11 @@ static int user_stdin_getchar(proc_t *pr) {
 void syscall_dispatch(registers_t *r) {
     proc_t *pr = proc_current();
 
-    /* A pending kill takes effect here, at the syscall boundary, where the
-     * kernel holds no locks and the trap frame can be abandoned safely. Must
-     * stay before anything that takes a lock or allocates. */
+    /* A pending stop or kill takes effect here, at the syscall boundary, where
+     * the kernel holds no locks: the trap frame can be abandoned safely and
+     * parking the task cannot strand a mutex. Must stay before anything that
+     * takes a lock or allocates. */
+    if (pr && pr->stop_pending) proc_take_stop();       /* parks until resumed */
     if (pr && pr->killed) usermode_killed("syscall");   /* does not return */
 
     switch (r->eax) {
@@ -404,9 +406,10 @@ void syscall_dispatch(registers_t *r) {
             r->eax = (uint32_t)-1;
     }
 
-    /* A kill can also arrive *during* a syscall: the FAT mutex yields, and
-     * stdin waits. Checking again on the way out bounds the latency to one
+    /* A stop or kill can also arrive *during* a syscall: the FAT mutex yields,
+     * and stdin waits. Checking again on the way out bounds the latency to one
      * syscall without ever unwinding from inside a lock. */
+    if (pr && pr->stop_pending) proc_take_stop();
     if (pr && pr->killed) usermode_killed("syscall-exit");  /* no return */
 }
 

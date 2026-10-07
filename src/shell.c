@@ -400,6 +400,8 @@ static void cmd_menu(void) {
         {0, "    cook <prog.elf> &  - ... in the background (Ctrl+C kills the"},
         {0, "                         foreground one; kill <pid> any of them)"},
         {0, "    jobs               - list processes and their exit codes"},
+        {0, "    fg [pid] / bg [pid]- resume a job in the fore/background"},
+        {0, "                         (Ctrl+Z stops the foreground program)"},
         {0, "    soup <file.sc>     - run a soupyc script"},
         {0, "    soup -c \"code\"     - run inline soupyc"},
         {0, "    hash <text>        - AlphaSOUP-32 hash"},
@@ -984,9 +986,16 @@ static void cmd_cook(const char *args) {
     vga_printf("  cooking %s in ring 3...\n", path);
     vga_set_color(VGA_LIGHT_GREY, VGA_BLACK);
 
-    int code = proc_wait(pid);
+    int code = 0;
+    int done = proc_wait(pid, &code);
     proc_set_foreground(0);
 
+    if (done == 0) {            /* Ctrl-Z: the job lives on, we go back to the prompt */
+        vga_set_color(VGA_YELLOW, VGA_BLACK);
+        vga_printf("  [%u] stopped  %s   (fg / bg / kill %%)\n", pid, path);
+        vga_set_color(VGA_LIGHT_GREY, VGA_BLACK);
+        return;
+    }
     if (code == PROC_EXIT_KILLED) {
         vga_set_color(VGA_YELLOW, VGA_BLACK);
         vga_printf("  [%s killed]\n", path);
@@ -997,6 +1006,63 @@ static void cmd_cook(const char *args) {
         vga_set_color(VGA_DARK_GREY, VGA_BLACK);
         vga_printf("  [%s exited with code %d]\n", path, code);
     }
+    vga_set_color(VGA_LIGHT_GREY, VGA_BLACK);
+}
+
+/* Resolve a job argument: a pid, or empty for the newest job. */
+static proc_t *job_arg(const char *args) {
+    while (*args == ' ') args++;
+    if (!*args) return proc_most_recent();
+    return proc_by_pid((uint32_t)parse_num(args));
+}
+
+/* fg [pid] - put a job back in the foreground: give it the terminal, resume it
+ * if it was stopped, and wait for it again. */
+static void cmd_fg(const char *args) {
+    proc_t *p = job_arg(args);
+    if (!p || (p->state != PROC_RUNNING && p->state != PROC_STOPPED)) {
+        vga_puts("fg: no such job (try: jobs)\n");
+        return;
+    }
+    uint32_t pid = p->pid;
+    p->background = 0;
+    vga_set_color(VGA_DARK_GREY, VGA_BLACK);
+    vga_printf("  %s\n", p->name);
+    vga_set_color(VGA_LIGHT_GREY, VGA_BLACK);
+
+    proc_set_foreground(p);
+    proc_continue(p);
+
+    int code = 0;
+    int done = proc_wait(pid, &code);
+    proc_set_foreground(0);
+
+    if (done == 0) {
+        vga_set_color(VGA_YELLOW, VGA_BLACK);
+        vga_printf("  [%u] stopped\n", pid);
+    } else if (code == PROC_EXIT_KILLED) {
+        vga_set_color(VGA_YELLOW, VGA_BLACK);
+        vga_printf("  [%u] killed\n", pid);
+    } else {
+        vga_set_color(VGA_DARK_GREY, VGA_BLACK);
+        vga_printf("  [%u] exited with code %d\n", pid, code);
+    }
+    vga_set_color(VGA_LIGHT_GREY, VGA_BLACK);
+}
+
+/* bg [pid] - resume a stopped job in the background. The shell keeps the
+ * terminal, so the job's stdin reads see EOF from here on. */
+static void cmd_bg(const char *args) {
+    proc_t *p = job_arg(args);
+    if (!p) { vga_puts("bg: no such job (try: jobs)\n"); return; }
+    if (p->state != PROC_STOPPED) {
+        vga_printf("bg: job %u is not stopped\n", p->pid);
+        return;
+    }
+    p->background = 1;
+    proc_continue(p);
+    vga_set_color(VGA_DARK_GREY, VGA_BLACK);
+    vga_printf("  [%u] %s &\n", p->pid, p->name);
     vga_set_color(VGA_LIGHT_GREY, VGA_BLACK);
 }
 
@@ -2351,7 +2417,7 @@ static const char *const cmd_names[] = {
     "jot", "ai", "cook", "soup", "hash",
     "beep", "mandelbrot", "vgademo", "uname", "cal",
     "clock", "wipe", "fortune", "bounce", "recipe", "leftovers", "spill",
-    "freeze", "reheat", "ps", "jobs", "kill", "bgclock", "yieldbg", "spinbg", "sleeptest", "vfstest",
+    "freeze", "reheat", "ps", "jobs", "fg", "bg", "kill", "bgclock", "yieldbg", "spinbg", "sleeptest", "vfstest",
     "dmesg", "pwd", "cd", "mkbowl", "rmbowl", "bowltest",
     "whoami", "roster", "clockout", "hire", "fire", "perms",
 };
@@ -2582,6 +2648,8 @@ static void dispatch(const char *buf) {
     else if (str_eq(p, "cat"))       cmd_cat();  /* hidden */
     else if (str_eq(p, "ps"))          cmd_ps();
     else if (str_eq(p, "jobs"))        cmd_jobs();
+    else if (str_startswith(p, "fg")) { const char *a = p + 2; cmd_fg(a); }
+    else if (str_startswith(p, "bg")) { const char *a = p + 2; cmd_bg(a); }
     else if (str_eq(p, "bgclock"))     cmd_bgclock();
     else if (str_eq(p, "yieldbg"))     cmd_yieldbg();
     else if (str_eq(p, "spinbg"))      cmd_spinbg();

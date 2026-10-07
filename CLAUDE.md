@@ -3,7 +3,7 @@
 ## What this is
 
 soupOS is a 32-bit x86 hobby OS written in C and NASM assembly (currently
-**v0.8.1**). It boots via GRUB and runs in protected mode with paging, a
+**v0.8.2**). It boots via GRUB and runs in protected mode with paging, a
 physical/heap allocator, and a cooperative scheduler. On top of that:
 
 - **Filesystem**: FAT16 read/write with subdirectories ("bowls") and a VFS shim
@@ -487,9 +487,17 @@ reaper are reused unchanged.
   program runs the shell is blocked in `proc_wait` and reads no keys, so `0x03`
   flags the foreground process and is swallowed. With no foreground process it
   reaches the shell and cancels the input line as before.
-- Shell surface: `cook prog &`, `jobs`, `kill <pid>`, `kill %` (newest
-  process), `ps` marks which tasks are processes, and a finished background job
-  is announced before the next prompt.
+- **Stopping** (v0.8.2): `PROC_STOPPED` is a live process parked on
+  `cont_wq` at one of the same three safe points. `proc_take_stop` enables
+  interrupts to park (the safe points are interrupt gates and `task_block_on`
+  ends in `hlt`) and restores the caller's IF after. Ctrl-Z (`0x1A`) raises it
+  from the keyboard IRQ, like Ctrl-C. `proc_kill` continues a stopped process
+  as well as flagging it, otherwise the kill would never be noticed.
+- `proc_wait(pid, &code)` returns 1 for exited (slot collected), 0 for stopped
+  (slot kept), -1 for no such process.
+- Shell surface: `cook prog &`, `jobs`, `fg [pid]`, `bg [pid]`, `kill <pid>`,
+  `kill %` (newest job), `ps` marks which tasks are processes, and a finished
+  background job is announced before the next prompt.
 
 ## Doom Port — performance notes (v0.8.1)
 
