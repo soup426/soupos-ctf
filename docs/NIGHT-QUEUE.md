@@ -79,7 +79,7 @@ independent of mode 13h's, because the hardware mode cannot be 640x400, so the
 buffers want sizing by a maximum with the live dimensions as runtime values.
 Same shape as the console resize: generalise in its own commit, then change.
 
-## 3. Writing long filenames
+## 3. Writing long filenames — DONE (v0.20.0)
 
 Reading them landed in v0.16.0; a file created with a long name still gets a
 mangled 8.3 name, which is an asymmetry that will bite someone.
@@ -92,6 +92,12 @@ mangled 8.3 name, which is an asymmetry that will bite someone.
 - Verify by writing a long name from soupyc, then reading the image with
   `mdir` on the host: mtools is an independent implementation, so it agreeing
   is real evidence.
+
+**2026-10-07: done, v0.20.0, gate 72.** mtools reads both written names with
+distinct aliases. The consecutive-slot requirement was the part the item did not
+mention and the old allocator could not meet. Noted while there: soupOS's
+permission byte is VFAT's case-flags byte, so other tools display our aliases in
+lower case - cosmetic, pre-existing, now documented.
 
 ## 4. More than one connection at a time
 

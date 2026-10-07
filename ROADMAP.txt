@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.19.1
+Current version: v0.20.0
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,39 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.20.0 (2026-10-07)  — WRITING LONG FILENAMES
+  Third queue, item 3. Reading them landed in v0.16.0 and left an asymmetry:
+  a file created with a long name still got a mangled 8.3 one. Both halves
+  work now, and an independent implementation agrees.
+  - A name that will not survive 8.3 unchanged - too long, lower case, spaces,
+    more than one dot - gets an alias plus a chain of long entries in front of
+    it. Both are decided BEFORE any cluster is touched, so a directory with no
+    room for the chain fails early rather than leaving a file nothing can name.
+  - THE ALIAS IS THE FIDDLY HALF, as the item predicted. Spaces and dots are
+    dropped rather than folded, anything outside the permitted set becomes an
+    underscore, and the ~N tail is checked against a real directory lookup
+    rather than assumed unique. "My Long Note.txt" and "My Long Novel.txt"
+    share a stem and correctly get MYLONG~1 and MYLONG~2.
+  - The chain needs CONSECUTIVE slots, which the old allocator could not
+    promise - it hands out one at a time. dir_alloc_run reserves a whole run,
+    numbering slots across the directory so a run may cross a sector boundary
+    without the caller caring. If no run is long enough, the write falls back
+    to an 8.3-only name instead of failing: a file under an ugly name beats no
+    file.
+  - VERIFIED BY SOMEBODY ELSE. scripts/fat-longname-test.sh writes the names
+    from soupOS and then has MTOOLS read the image: a separate implementation
+    seeing "My Long Note.txt" and "My Long Novel.txt" with distinct aliases is
+    real evidence that the chain order, the checksum, the UCS-2 encoding and
+    the tail are all right, where soupOS reading its own file back would only
+    prove self-consistency.
+  - FOUND WHILE LOOKING: mtools displays soupOS's aliases in lower case,
+    because byte 12 of a directory entry holds VFAT's "base is lower case"
+    (0x08) and "extension is lower case" (0x10) flags, and soupOS keeps its
+    permission mode in that byte - FAT_PERM_OX and FAT_PERM_OW are those exact
+    bits. Pre-existing, cosmetic, and now written down rather than puzzled
+    over again later.
+  - Gate 70 -> 72.
 
 v0.19.1 (2026-10-07)  — THE JOB-CONTROL FLAKE: NOT REPRODUCED, NOT PAPERED OVER
   Third queue, item 1. A gate run had failed with "stopped job kept running:

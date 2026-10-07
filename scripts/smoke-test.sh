@@ -139,6 +139,7 @@ python3 scripts/qemu_keys.py "$MON" \
     "serve" "WAIT:2" \
     "pour A Long Recipe Name.txt" "WAIT:2" \
     "pour ALONGR~1.TXT" "WAIT:2" \
+    "soup LONGWR.SC" "WAIT:5" \
     "soup RUNAWAY.SC" "WAIT:22" "pwd" "WAIT:2" \
     "soup SPAWN.SC" "WAIT:1" "ps" "WAIT:5" \
     "larder" "WAIT:2" \
@@ -480,6 +481,13 @@ check "a long name is listed"            'A Long Recipe Name.txt'
 check "a long name opens the file"       'A file whose name does not fit in 8.3'
 # Two opens of the same file, so the count proves the 8.3 alias worked too.
 check "the 8.3 alias opens it as well"   -c2 'A file whose name does not fit in 8.3'
+
+# Writing them, which is the other half. The script creates two files whose
+# aliases collide on the same stem, so this also covers the ~N tail, and reads
+# both back - a name that writes but will not open is the failure to catch.
+# scripts/fat-longname-test.sh goes further and has mtools read the image.
+check "a long name was written and read back" 'read back written by soupOS'
+check "a colliding alias got its own name"    'read two the second one'
 
 check "the mixer accepted a tone" '\[mixer\] tone 440 Hz'
 check "a Doom sound lump was decoded" '\[doomsnd\] DSPISTOL: 5661 samples at 11025 Hz'

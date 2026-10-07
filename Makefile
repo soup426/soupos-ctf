@@ -212,6 +212,8 @@ $(DISK):
 	    | mcopy -i $(DISK) - ::FILLDISK.SC
 	printf '# A `let` inside a while body used to accumulate a binding per pass and\n# die at 64 iterations with "too many variables".\nlet n = 0\nlet total = 0\nwhile n < 200 {\n    let item = n * 2\n    total = total + item\n    n = n + 1\n}\npour "SCOPE total " + total\n' \
 	    | mcopy -i $(DISK) - ::SCOPE.SC
+	printf '# Write files whose names do not fit 8.3, then read them back.\n# The last two collide on their alias stem, which is what exercises ~N.\nlet f = 0\nf = open("My Long Note.txt", "w")\nwrite(f, "written by soupOS")\nclose(f)\nf = open("My Long Novel.txt", "w")\nwrite(f, "the second one")\nclose(f)\npour "wrote it"\nf = open("My Long Note.txt")\npour "read back " + read(f, 40)\nclose(f)\nf = open("My Long Novel.txt")\npour "read two " + read(f, 40)\nclose(f)\n' \
+	    | mcopy -i $(DISK) - ::LONGWR.SC
 	# Long names, for the VFAT read path. mtools writes a proper LFN chain
 	# plus the mangled 8.3 alias, which is exactly what has to be parsed.
 	printf 'A file whose name does not fit in 8.3 at all.\n' \

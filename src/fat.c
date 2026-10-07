@@ -686,6 +686,140 @@ static int dir_alloc_slot(uint32_t dir_cl, uint32_t *out_lba, int *out_idx) {
 
 /* ---- Public: fat_write ---- */
 
+
+/* ---- Writing long names ----
+ *
+ * A name that will not fit 8.3 needs two things on disk: an alias that DOES
+ * fit, because every tool that cannot read long names still has to see the
+ * file, and a chain of LFN entries immediately before it carrying the real
+ * name. The chain is stored in reverse - highest sequence number first - and
+ * every entry repeats the checksum of the alias, which is what binds the two
+ * together.
+ */
+
+/* Does this name need a long entry at all? Anything that does not survive
+ * being folded into 8.3 unchanged does: too long, lower case, spaces, or more
+ * than one dot. */
+static int needs_lfn(const char *name) {
+    int dots = 0, base = 0, ext = 0, seen_dot = 0;
+    for (const char *p = name; *p; p++) {
+        if (*p == '.') { dots++; seen_dot = 1; continue; }
+        if (*p == ' ') return 1;
+        if (*p >= 'a' && *p <= 'z') return 1;
+        if (seen_dot) ext++; else base++;
+    }
+    if (dots > 1) return 1;
+    return base > 8 || ext > 3;
+}
+
+/* A character the 8.3 half can hold. */
+static char alias_char(char c) {
+    if (c >= 'a' && c <= 'z') return (char)(c - 32);
+    if ((c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9')) return c;
+    if (c == '-' || c == '_' || c == '~') return c;
+    return '_';
+}
+
+/* Build an 8.3 alias for `name` that no entry in `dir_cl` already uses. The
+ * tail is ~1, ~2, ... which is the convention every other implementation
+ * follows, and the uniqueness check is a real directory lookup rather than a
+ * guess. */
+static int make_alias(uint32_t dir_cl, const char *name, char fname[8], char fext[3]) {
+    const char *dot = 0;
+    for (const char *p = name; *p; p++) if (*p == '.') dot = p;
+
+    char stem[8];
+    int  sn = 0;
+    for (const char *p = name; *p && (!dot || p < dot) && sn < 6; p++) {
+        if (*p == ' ' || *p == '.') continue;      /* dropped, not folded */
+        stem[sn++] = alias_char(*p);
+    }
+    if (!sn) { stem[0] = '_'; sn = 1; }
+
+    for (int i = 0; i < 3; i++) fext[i] = ' ';
+    if (dot) {
+        int e = 0;
+        for (const char *p = dot + 1; *p && e < 3; p++) fext[e++] = alias_char(*p);
+    }
+
+    for (int n = 1; n <= 99; n++) {
+        int i = 0;
+        for (; i < sn && i < (n < 10 ? 6 : 5); i++) fname[i] = stem[i];
+        fname[i++] = '~';
+        if (n >= 10) fname[i++] = (char)('0' + n / 10);
+        fname[i++] = (char)('0' + n % 10);
+        while (i < 8) fname[i++] = ' ';
+
+        char probe[FAT_NAME_MAX];
+        format_83(fname, fext, probe);
+        if (dir_find(dir_cl, probe, 0, 0, 0) != 1) return 0;   /* free */
+    }
+    return -1;
+}
+
+/* Logical slot number -> where it lives. Slots are numbered across the whole
+ * directory, so a run can cross a sector boundary without the caller caring. */
+static int dir_slot_at(uint32_t dir_cl, uint32_t slot, uint32_t *lba, int *idx) {
+    int eps = bps / 32;
+    int r = dir_sector_lba(dir_cl, slot / (uint32_t)eps, lba);
+    if (r <= 0) return r;
+    *idx = (int)(slot % (uint32_t)eps);
+    return 1;
+}
+
+/* First run of `count` consecutive free slots. */
+static int dir_alloc_run(uint32_t dir_cl, int count, uint32_t *out_slot) {
+    uint32_t run_start = 0;
+    int      run = 0;
+    for (uint32_t slot = 0; slot < 65536; slot++) {
+        uint32_t lba; int idx;
+        int r = dir_slot_at(dir_cl, slot, &lba, &idx);
+        if (r <= 0) break;                       /* end of directory */
+        if (ata_read_sector(lba, sec_buf) < 0) return -1;
+        uint8_t f = (uint8_t)((dirent_t *)sec_buf)[idx].name[0];
+        if (f == 0x00 || f == 0xE5) {
+            if (!run) run_start = slot;
+            if (++run == count) { *out_slot = run_start; return 0; }
+        } else {
+            run = 0;
+        }
+    }
+    return -1;      /* no run that long; the caller falls back to 8.3 only */
+}
+
+/* Write the LFN chain for `name` into the `n` slots before the short entry. */
+static int write_lfn_chain(uint32_t dir_cl, uint32_t first_slot, int n,
+                           const char *name, uint8_t sum) {
+    int len = (int)strlen(name);
+    static const int off[13] = { 1,3,5,7,9, 14,16,18,20,22,24, 28,30 };
+
+    for (int e = 0; e < n; e++) {
+        int seq = n - e;                         /* highest first, on disk */
+        uint32_t lba; int idx;
+        if (dir_slot_at(dir_cl, first_slot + (uint32_t)e, &lba, &idx) <= 0) return -1;
+        if (ata_read_sector(lba, sec_buf) < 0) return -1;
+
+        uint8_t *raw = (uint8_t *)&((dirent_t *)sec_buf)[idx];
+        for (int i = 0; i < 32; i++) raw[i] = 0;
+        raw[0]  = (uint8_t)(seq | (e == 0 ? 0x40 : 0));   /* first on disk ends it */
+        raw[11] = FAT_ATTR_LFN;
+        raw[13] = sum;
+
+        int base = (seq - 1) * 13;
+        for (int k = 0; k < 13; k++) {
+            int o = base + k;
+            uint16_t ch;
+            if (o < len)       ch = (uint16_t)(uint8_t)name[o];
+            else if (o == len) ch = 0x0000;                /* terminator */
+            else               ch = 0xFFFF;                /* padding    */
+            raw[off[k]]     = (uint8_t)(ch & 0xFF);
+            raw[off[k] + 1] = (uint8_t)(ch >> 8);
+        }
+        if (ata_write_sector(lba, sec_buf) < 0) return -1;
+    }
+    return 0;
+}
+
 static int fat_write_impl(const char *path, const uint8_t *buf, uint32_t size) {
     if (!initialized || !path || fs_type_val == 32) return -1;
 
@@ -693,14 +827,27 @@ static int fat_write_impl(const char *path, const uint8_t *buf, uint32_t size) {
     char     leaf[FAT_LFN_MAX];
     if (path_split(path, &parent_cl, leaf) != 0 || !leaf[0]) return -1;
 
+    /* A name that does not survive 8.3 needs an alias plus a chain of long
+     * entries in front of it. Both are decided here, before any cluster is
+     * touched, so a directory with no room for the chain fails early rather
+     * than leaving a file nothing can name. */
     char fname[8], fext[3];
-    parse_83(leaf, fname, fext);
+    int  want_lfn = needs_lfn(leaf);
+    int  lfn_ents = want_lfn ? (((int)strlen(leaf) + 12) / 13) : 0;
+
+    if (want_lfn) {
+        if (make_alias(parent_cl, leaf, fname, fext) < 0) return -1;
+    } else {
+        parse_83(leaf, fname, fext);
+    }
 
     /* Existing entry -> free its chain and reuse the slot; else find a slot.
      * An overwrite keeps the file's existing owner/mode; a new file is
      * stamped with the current creator uid and default permissions. */
     uint32_t dir_lba    = 0;
     int      dir_idx    = -1;
+    uint32_t lfn_slot   = 0;
+    int      lfn_count  = 0;
     uint8_t  ent_mode   = FAT_PERM_DEFAULT;
     uint8_t  ent_owner  = creator_uid;
     dirent_t de;
@@ -717,7 +864,25 @@ static int fat_write_impl(const char *path, const uint8_t *buf, uint32_t size) {
         dir_lba = e_lba;
         dir_idx = e_idx;
     } else {
-        if (dir_alloc_slot(parent_cl, &dir_lba, &dir_idx) < 0) return -1;
+        if (want_lfn) {
+            /* The chain and the short entry have to be consecutive, so the
+             * run is reserved as one piece. If the directory cannot offer
+             * one, fall back to an 8.3-only name rather than failing the
+             * write: a file under an ugly name beats no file. */
+            uint32_t first;
+            if (dir_alloc_run(parent_cl, lfn_ents + 1, &first) == 0) {
+                lfn_slot  = first;
+                lfn_count = lfn_ents;
+                if (dir_slot_at(parent_cl, first + (uint32_t)lfn_ents,
+                                &dir_lba, &dir_idx) <= 0) return -1;
+            } else {
+                want_lfn = 0;
+                parse_83(leaf, fname, fext);
+                if (dir_alloc_slot(parent_cl, &dir_lba, &dir_idx) < 0) return -1;
+            }
+        } else if (dir_alloc_slot(parent_cl, &dir_lba, &dir_idx) < 0) {
+            return -1;
+        }
     }
 
     /* Allocate clusters and write data. */
@@ -757,6 +922,17 @@ static int fat_write_impl(const char *path, const uint8_t *buf, uint32_t size) {
     }
 
     if (fat_flush_cache() < 0) goto fail;
+
+    /* The long-name chain first: it sits in the slots immediately before the
+     * short entry, and every entry carries the checksum of the alias, which is
+     * what a reader uses to decide the chain belongs to this file. */
+    if (lfn_count > 0) {
+        char alias[11];
+        for (int i = 0; i < 8; i++) alias[i] = fname[i];
+        for (int i = 0; i < 3; i++) alias[8 + i] = fext[i];
+        if (write_lfn_chain(parent_cl, lfn_slot, lfn_count, leaf,
+                            lfn_checksum(alias)) < 0) goto fail;
+    }
 
     /* Write the directory entry. */
     if (ata_read_sector(dir_lba, sec_buf) < 0) goto fail;

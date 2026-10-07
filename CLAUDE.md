@@ -593,6 +593,20 @@ span-based measurement sweeps in whatever played next (a 513 ms effect read as
 4251 ms). Fine-grained timing lives in `scripts/sound-test.sh`, which plays
 exactly two things. The main gate checks only what the serial log can answer.
 
+## Long filenames, write side (v0.20.0)
+
+`fat_write` generates an 8.3 alias (spaces and dots dropped, `~N` checked
+against a real lookup) and writes the LFN chain into a **run of consecutive
+slots** reserved by `dir_alloc_run`; without a long enough run it falls back to
+an 8.3-only name rather than failing. `scripts/fat-longname-test.sh` has
+**mtools** read the image, which is the only evidence that is not
+self-referential.
+
+**soupOS's permission byte collides with VFAT's case flags.** Byte 12 holds
+"base/extension is lower case" (0x08/0x10) in VFAT and `FAT_PERM_OX`/`OW` in
+soupOS, so other tools show our aliases lower case. Cosmetic; the long name is
+authoritative.
+
 ## Long filenames (v0.16.0, read side)
 
 `fat_entry_t` carries both `name` (8.3) and `lfn`; use `fat_display_name()` to
