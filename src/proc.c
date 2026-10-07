@@ -94,7 +94,7 @@ static void proc_entry(void *arg) {
 }
 
 int proc_spawn(const char *path, const char *args, int background,
-               uint32_t *out_pid) {
+               vfs_node_t *in, vfs_node_t *out, uint32_t *out_pid) {
     if (!path || !*path) return -1;
 
     preempt_disable();      /* slot claim + linking must be indivisible */
@@ -115,6 +115,11 @@ int proc_spawn(const char *path, const char *args, int background,
         strncpy(p->args, args, PROC_ARGS_MAX - 1);
         p->args[PROC_ARGS_MAX - 1] = '\0';
     }
+
+    /* Inherited stdio, bound before the task can run. NULL leaves the
+     * descriptor unbound, which the syscall layer reads as "use the console". */
+    p->ufds[0] = in;
+    p->ufds[1] = out;
 
     task_t *t = task_spawn(basename_of(p->name), proc_entry, p);
     if (!t) {

@@ -79,7 +79,8 @@ OBJS    = $(OBJ_C) $(OBJ_ASM)
 UCFLAGS  = -m32 -ffreestanding -fno-pie -no-pie -fno-stack-protector \
            -nostdlib -Isrc -mgeneral-regs-only -O2
 USER_ELFS = user/hello.elf user/cat.elf user/echo.elf user/systest.elf user/spin.elf \
-            user/crash.elf user/unhex.elf user/marker.elf user/hog.elf
+            user/crash.elf user/unhex.elf user/marker.elf user/hog.elf \
+            user/upper.elf user/wc.elf
 
 .PHONY: all clean distclean run run-ai run-console run-tcp iso disk user
 
@@ -161,6 +162,8 @@ $(DISK):
 	mcopy -i $(DISK) -o user/unhex.elf   ::UNHEX.ELF
 	mcopy -i $(DISK) -o user/marker.elf  ::MARKER.ELF
 	mcopy -i $(DISK) -o user/hog.elf     ::HOG.ELF
+	mcopy -i $(DISK) -o user/upper.elf   ::UPPER.ELF
+	mcopy -i $(DISK) -o user/wc.elf      ::WC.ELF
 	@if [ -f DOOM1.WAD ]; then \
 	    echo "  Copying DOOM1.WAD to disk image..."; \
 	    mcopy -i $(DISK) DOOM1.WAD ::DOOM1.WAD; \

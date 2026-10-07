@@ -5,7 +5,9 @@ SCRIPT = sys.argv[2:]
 
 KEYMAP = {' ':'spc', '\n':'ret', '.':'dot', '-':'minus', '_':'shift-minus',
           '/':'slash', ':':'shift-semicolon',
-          '&':'shift-7', '%':'shift-5'}
+          '&':'shift-7', '%':'shift-5',
+          '|':'shift-backslash', '<':'shift-comma', '>':'shift-dot',
+          ',':'comma', '=':'equal', '+':'shift-equal', '*':'shift-8'}
 
 def keys_for(ch):
     if ch in KEYMAP: return [KEYMAP[ch]]

@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.8.2
+Current version: v0.8.3
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,48 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.8.3  (2026-10-06)  — PIPES, REDIRECTION, AND A SEGMENT BUG FROM v0.7.0
+  `cook echo.elf hi | upper.elf | wc.elf` and `cook cat.elf < A.TXT > B.TXT`
+  work. Getting there turned up a latent kernel bug that had been waiting since
+  ring 3 was introduced.
+  - THE BUG. The ISR/IRQ/syscall stubs never touched the segment registers, so
+    after a trap from ring 3 the kernel ran on the USER data selector. That was
+    survivable only because it is flat, and because segment registers are
+    global state that task_switch does not save. The first time a ring-3
+    program BLOCKED inside a syscall (which nothing did before pipes), the
+    sequence became: the reader blocks; another task runs and leaves DS set to
+    the kernel selector (user_mode_exit does exactly that); the reader resumes
+    and irets to ring 3 holding a DPL-0 data segment; the CPU nulls every data
+    segment whose DPL is below the new CPL; the program's next memory access
+    faults; the fault handler faults the same way because DS is null; the
+    machine dies with interrupts off before anything can be logged.
+    Diagnosed from a register dump showing DS=ES=FS=GS=0000 and QEMU's -d int
+    showing no exceptions at all. Each stub now saves the interrupted
+    context's data selector, loads the kernel one for the handler, and
+    restores it before iret, so the kernel no longer depends on who it
+    interrupted. registers_t gains `ds` as its first member to match.
+  - FDS 0-2 ARE BINDABLE. An entry in proc_t.ufds wins over the console
+    default, so a spawn can be handed stdin/stdout. usermode_run clears the fd
+    table from 3 up now, or it would wipe what the spawner just bound.
+  - PIPES are a VFS backend: one 4 KB ring shared by two ordinary vfs_node_t
+    handles. A reader blocks while the pipe is empty and a writer exists, and
+    reads 0 once the last writer closes; a writer blocks while full and a
+    reader exists, and fails once every reader closes. Both give up when the
+    running process has a kill pending, so a program parked on a pipe nobody
+    will write to stays killable, and both enable interrupts to block for the
+    same reason proc_take_stop does.
+  - THE SHELL runs pipelines: `|` up to 4 stages, `<` and `>` on the ends, a
+    trailing `&` for the whole thing. Every stage is checked before any is
+    started, the last stage gets the terminal, and the shell waits for it
+    first, because it is the one Ctrl-C and Ctrl-Z act on.
+  - cat.elf became a filter with no argument; upper.elf and wc.elf are new.
+  - fork() was dropped from this milestone with reasons: soupOS's shell lives
+    in the kernel, so nothing duplicates itself before exec, and proc_spawn
+    already makes a process from nothing. It is worth building the first time
+    a user program needs a child.
+  - Gate 27 -> 32 checks.
+  Design notes: docs/superpowers/specs/2026-10-06-pipes-and-redirection-design.md
 
 v0.8.2  (2026-10-06)  — JOB CONTROL
   Ctrl-Z stops the foreground program and hands the shell back; `bg` resumes it

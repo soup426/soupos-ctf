@@ -57,6 +57,7 @@ typedef struct vfs_node {
     int              backend_fd;/* FAT fd for read-mode files, else -1  */
     uint8_t         *buf;       /* write-mode scratch buffer            */
     uint32_t         cap;       /* capacity of buf                      */
+    void            *priv;      /* backend-private state (pipes)        */
     int              used;
 } vfs_node_t;
 
@@ -84,6 +85,16 @@ int      vfs_eof  (vfs_node_t *n);
 
 /* Flush (write-mode files) and release the handle. */
 void     vfs_close(vfs_node_t *n);
+
+/* Create a pipe: whatever is written to *wr can be read from *rd. Both are
+ * ordinary handles and are closed with vfs_close like anything else; the
+ * shared buffer goes away when both ends are closed.
+ *
+ * read blocks while the pipe is empty and a writer still exists, and returns 0
+ * (EOF) once the buffer is empty and the last writer has closed. write blocks
+ * while the pipe is full and a reader still exists, and returns -1 once every
+ * reader has closed. Returns 0, or -1 if the handle table or memory is out. */
+int      vfs_pipe(vfs_node_t **rd, vfs_node_t **wr);
 
 /* List a directory ("bowl"). The root listing merges the FAT root with the
  * /dev nodes; subdirectories list their FAT contents. Returns entry count,

@@ -915,96 +915,219 @@ static void cmd_ai(const char *args) {
     vga_set_color(VGA_LIGHT_GREY, VGA_BLACK);
 }
 
-/* cook <program.elf> - load and run an ELF32 binary as a real ring-3
- * user-mode process. Returns to the shell when the program exits. */
+/* ── Pipelines ────────────────────────────────────────────────────────────
+ *
+ *   cook echo.elf hello | upper.elf | wc.elf
+ *   cook cat.elf < README.TXT > COPY.TXT
+ *   cook marker.elf A &
+ *
+ * Each stage is a process of its own (that is all a pipeline is here), wired
+ * stdout-to-stdin with vfs_pipe. The last stage gets the terminal, because it
+ * is the one whose output you are watching and the one Ctrl-C and Ctrl-Z
+ * should act on.
+ */
+#define PIPE_MAX_STAGES  4
+
+typedef struct {
+    char prog[FAT_PATH_MAX];      /* as typed            */
+    char path[FAT_PATH_MAX];      /* resolved            */
+    char args[PROC_ARGS_MAX];
+} stage_t;
+
+/* Next whitespace-delimited token, advancing *sp. The shell metacharacters
+ * < > | & are tokens on their own, so `a.elf|b.elf` and `>OUT.TXT` work
+ * without spaces around them. Returns 0 when the line is exhausted. */
+static int shell_token(const char **sp, char *out, int max) {
+    const char *s = *sp;
+    while (*s == ' ' || *s == '\t') s++;
+    if (!*s) { *sp = s; return 0; }
+
+    if (*s == '<' || *s == '>' || *s == '|' || *s == '&') {
+        out[0] = *s++; out[1] = '\0';
+        *sp = s;
+        return 1;
+    }
+    int n = 0;
+    while (*s && *s != ' '  && *s != '\t' && *s != '<' &&
+                 *s != '>'  && *s != '|'  && *s != '&' && n < max - 1)
+        out[n++] = *s++;
+    out[n] = '\0';
+    *sp = s;
+    return 1;
+}
+
+static void stage_add_arg(stage_t *st, const char *tok) {
+    int len = (int)strlen(st->args);
+    if (len && len < PROC_ARGS_MAX - 1) st->args[len++] = ' ';
+    int i = 0;
+    while (tok[i] && len < PROC_ARGS_MAX - 1) st->args[len++] = tok[i++];
+    st->args[len] = '\0';
+}
+
+static void cook_err(const char *msg) {
+    vga_set_color(VGA_LIGHT_RED, VGA_BLACK);
+    vga_printf("  %s\n", msg);
+    vga_set_color(VGA_LIGHT_GREY, VGA_BLACK);
+}
+
 static void cmd_cook(const char *args) {
     while (*args == ' ') args++;
-    if (!*args) { vga_puts("Usage: cook <program.elf> [args] [&]\n"); return; }
-    /* Split the program name from the rest of the line (passed to the program). */
-    char name[FAT_PATH_MAX];
-    int i = 0;
-    while (args[i] && args[i] != ' ' && i < FAT_PATH_MAX - 1) { name[i] = args[i]; i++; }
-    name[i] = '\0';
-    const char *prog_args = args + i;
-    while (*prog_args == ' ') prog_args++;
-
-    /* A trailing & backgrounds the program. Only a trailing one: an & anywhere
-     * else is the program's own argument, not shell syntax. */
-    char argbuf[PROC_ARGS_MAX];
-    strncpy(argbuf, prog_args, PROC_ARGS_MAX - 1);
-    argbuf[PROC_ARGS_MAX - 1] = '\0';
-    int background = 0;
-    int alen = (int)strlen(argbuf);
-    while (alen > 0 && argbuf[alen - 1] == ' ') argbuf[--alen] = '\0';
-    if (alen > 0 && argbuf[alen - 1] == '&') {
-        background = 1;
-        argbuf[--alen] = '\0';
-        while (alen > 0 && argbuf[alen - 1] == ' ') argbuf[--alen] = '\0';
-    }
-
-    char path[FAT_PATH_MAX];
-    resolve_path(name, path);
-    if (!fat_exists(path) || fat_is_dir(path)) {
-        vga_set_color(VGA_LIGHT_RED, VGA_BLACK);
-        vga_printf("  No such program: %s\n", name);
-        vga_set_color(VGA_LIGHT_GREY, VGA_BLACK);
+    if (!*args) {
+        vga_puts("Usage: cook <prog.elf> [args] [| prog.elf ...] [< in] [> out] [&]\n");
         return;
     }
-    if (!may(path, 'r') || !may(path, 'x')) { deny(path); return; }
 
-    /* The program gets a task of its own either way. Even in the foreground
-     * that matters: the shell stays out of ring 3, so it can be woken to
-     * report the exit code, and a program that never exits can be killed
-     * instead of wedging the shell forever. */
-    uint32_t pid = 0;
-    int rc = proc_spawn(path, argbuf, background, &pid);
-    if (rc == -1) {
-        vga_set_color(VGA_LIGHT_RED, VGA_BLACK);
-        vga_printf("  Too many processes (max %d). Try: jobs\n", PROC_MAX);
-        vga_set_color(VGA_LIGHT_GREY, VGA_BLACK);
-        return;
+    stage_t st[PIPE_MAX_STAGES];
+    char infile[FAT_PATH_MAX];  infile[0]  = '\0';
+    char outfile[FAT_PATH_MAX]; outfile[0] = '\0';
+    int  nst = 1, background = 0;
+    st[0].prog[0] = st[0].args[0] = '\0';
+
+    char tok[FAT_PATH_MAX];
+    const char *sp = args;
+    while (shell_token(&sp, tok, sizeof(tok))) {
+        if (!tok[1] && (tok[0] == '|' || tok[0] == '<' || tok[0] == '>' || tok[0] == '&')) {
+            switch (tok[0]) {
+            case '|':
+                if (!st[nst - 1].prog[0]) { cook_err("Nothing before the |."); return; }
+                if (nst >= PIPE_MAX_STAGES) {
+                    cook_err("Too many pipeline stages (max 4)."); return;
+                }
+                st[nst].prog[0] = st[nst].args[0] = '\0';
+                nst++;
+                break;
+            case '<':
+                if (!shell_token(&sp, infile, sizeof(infile))) {
+                    cook_err("No file after <."); return;
+                }
+                break;
+            case '>':
+                if (!shell_token(&sp, outfile, sizeof(outfile))) {
+                    cook_err("No file after >."); return;
+                }
+                break;
+            case '&': background = 1; break;
+            }
+            continue;
+        }
+        if (!st[nst - 1].prog[0]) strncpy(st[nst - 1].prog, tok, FAT_PATH_MAX - 1);
+        else                      stage_add_arg(&st[nst - 1], tok);
     }
-    if (rc < 0) {
-        vga_set_color(VGA_LIGHT_RED, VGA_BLACK);
-        vga_puts("  Out of memory starting the process.\n");
-        vga_set_color(VGA_LIGHT_GREY, VGA_BLACK);
+    if (!st[nst - 1].prog[0]) { cook_err("Nothing after the |."); return; }
+
+    /* Check every stage before starting any of them: half a pipeline is worse
+     * than none, and a typo in stage 3 should not leave stages 1 and 2 running. */
+    for (int i = 0; i < nst; i++) {
+        resolve_path(st[i].prog, st[i].path);
+        if (!fat_exists(st[i].path) || fat_is_dir(st[i].path)) {
+            vga_set_color(VGA_LIGHT_RED, VGA_BLACK);
+            vga_printf("  No such program: %s\n", st[i].prog);
+            vga_set_color(VGA_LIGHT_GREY, VGA_BLACK);
+            return;
+        }
+        if (!may(st[i].path, 'r') || !may(st[i].path, 'x')) { deny(st[i].path); return; }
+    }
+
+    /* Redirections. The process that receives one owns it and closes it on
+     * exit, so nothing here is closed on the success path. */
+    vfs_node_t *fin = 0, *fout = 0;
+    if (infile[0]) {
+        char path[FAT_PATH_MAX];
+        resolve_path(infile, path);
+        if (!may(path, 'r')) { deny(path); return; }
+        fin = vfs_open(path, VFS_RDONLY);
+        if (!fin) { cook_err("Cannot read the input file."); return; }
+    }
+    if (outfile[0]) {
+        char path[FAT_PATH_MAX];
+        resolve_path(outfile, path);
+        if (fat_exists(path) && !may(path, 'w')) { deny(path); if (fin) vfs_close(fin); return; }
+        fout = vfs_open(path, VFS_WRONLY | VFS_CREATE);
+        if (!fout) { cook_err("Cannot write the output file."); if (fin) vfs_close(fin); return; }
+    }
+
+    uint32_t pids[PIPE_MAX_STAGES];
+    int started = 0;
+    vfs_node_t *stage_in = fin;
+
+    for (int i = 0; i < nst; i++) {
+        vfs_node_t *rd = 0, *wr = 0;
+        vfs_node_t *out = fout;                 /* last stage writes here */
+        if (i + 1 < nst) {
+            if (vfs_pipe(&rd, &wr) < 0) { cook_err("Out of pipes."); break; }
+            out = wr;
+        }
+        int rc = proc_spawn(st[i].path, st[i].args, background, stage_in, out, &pids[i]);
+        if (rc < 0) {
+            cook_err(rc == -1 ? "Too many processes (try: jobs)"
+                              : "Out of memory starting the process.");
+            if (stage_in) vfs_close(stage_in);
+            if (rd) vfs_close(rd);
+            if (out) vfs_close(out);
+            break;
+        }
+        started++;
+        stage_in = rd;                          /* next stage reads the pipe */
+    }
+
+    if (started == 0) return;
+    if (started < nst) {                        /* partial pipeline: undo it */
+        for (int i = 0; i < started; i++) proc_kill(pids[i]);
         return;
     }
 
     if (background) {
         vga_set_color(VGA_DARK_GREY, VGA_BLACK);
-        vga_printf("  [%u] %s\n", pid, path);
+        vga_printf("  [%u] %s%s\n", pids[nst - 1], st[0].prog,
+                   nst > 1 ? " | ..." : "");
         vga_set_color(VGA_LIGHT_GREY, VGA_BLACK);
         return;
     }
 
-    /* Foreground: this process owns the keyboard (so stdin reaches it and
-     * Ctrl-C kills it rather than cancelling our input line), and we block
-     * until it is done. */
-    proc_set_foreground(proc_by_pid(pid));
-    vga_set_color(VGA_DARK_GREY, VGA_BLACK);
-    vga_printf("  cooking %s in ring 3...\n", path);
-    vga_set_color(VGA_LIGHT_GREY, VGA_BLACK);
+    /* The last stage owns the terminal and is what we report on. Wait for it
+     * FIRST: if it stops or is killed, waiting on an earlier stage would block
+     * the shell against a pipe nobody is draining. */
+    uint32_t last = pids[nst - 1];
+    proc_set_foreground(proc_by_pid(last));
+    if (nst == 1) {
+        vga_set_color(VGA_DARK_GREY, VGA_BLACK);
+        vga_printf("  cooking %s in ring 3...\n", st[0].path);
+        vga_set_color(VGA_LIGHT_GREY, VGA_BLACK);
+    }
 
     int code = 0;
-    int done = proc_wait(pid, &code);
+    int done = proc_wait(last, &code);
     proc_set_foreground(0);
 
-    if (done == 0) {            /* Ctrl-Z: the job lives on, we go back to the prompt */
+    if (done == 0) {
+        /* Stopped. Leave the rest of the pipeline alone; mark the earlier
+         * stages as jobs so the prompt collects them when they finish. */
+        for (int i = 0; i < nst - 1; i++) {
+            proc_t *q = proc_by_pid(pids[i]);
+            if (q) q->background = 1;
+        }
         vga_set_color(VGA_YELLOW, VGA_BLACK);
-        vga_printf("  [%u] stopped  %s   (fg / bg / kill %%)\n", pid, path);
+        vga_printf("  [%u] stopped  %s   (fg / bg / kill %%)\n", last, st[nst - 1].path);
         vga_set_color(VGA_LIGHT_GREY, VGA_BLACK);
         return;
     }
+
+    /* Collect the earlier stages. They have finished, or will as soon as their
+     * next write fails against a pipe with no reader left. */
+    for (int i = 0; i < nst - 1; i++) {
+        int c = 0;
+        proc_wait(pids[i], &c);
+    }
+
     if (code == PROC_EXIT_KILLED) {
         vga_set_color(VGA_YELLOW, VGA_BLACK);
-        vga_printf("  [%s killed]\n", path);
+        vga_printf("  [%s killed]\n", st[nst - 1].path);
     } else if (code == -1) {
         vga_set_color(VGA_LIGHT_RED, VGA_BLACK);
         vga_puts("  Not a runnable soupOS program (need a 32-bit i386 ET_EXEC ELF).\n");
     } else {
         vga_set_color(VGA_DARK_GREY, VGA_BLACK);
-        vga_printf("  [%s exited with code %d]\n", path, code);
+        vga_printf("  [%s exited with code %d]\n", st[nst - 1].path, code);
     }
     vga_set_color(VGA_LIGHT_GREY, VGA_BLACK);
 }

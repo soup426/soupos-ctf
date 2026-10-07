@@ -6,6 +6,8 @@
  *                   buffer and are flushed with fat_write() on close
  *                   (fat.c has no streaming-write API).
  *   *_dev ops     - /dev/null, /dev/zero, /dev/serial, /dev/kbd.
+ *   pipe_ops      - one 4 KB ring shared by a read end and a write end,
+ *                   with blocking semantics on both sides (vfs_pipe).
  */
 
 #include "vfs.h"
@@ -14,6 +16,8 @@
 #include "str.h"
 #include "keyboard.h"
 #include "serial.h"
+#include "task.h"
+#include "proc.h"
 
 /* ---- open-handle table ---- */
 static vfs_node_t nodes[VFS_MAX_OPEN];
@@ -34,6 +38,132 @@ static void copy_name(char *dst, const char *src) {
     uint32_t i = 0;
     while (src[i] && i < VFS_NAME_MAX - 1) { dst[i] = src[i]; i++; }
     dst[i] = 0;
+}
+
+
+/* ---- pipe backend --------------------------------------------------------
+ *
+ * One ring buffer shared by two handles. The interesting part is not the ring,
+ * it is when each side gives up:
+ *
+ *   - a reader blocks while the pipe is empty AND a writer still exists; once
+ *     the last writer closes, an empty pipe reads 0, which is EOF;
+ *   - a writer blocks while the pipe is full AND a reader still exists; once
+ *     the last reader closes, writing fails rather than blocking forever.
+ *
+ * Both also give up when the running process has a kill pending, so a program
+ * parked on a pipe nobody will ever write to stays killable. Without that,
+ * `cook cat.elf` with no input would be an unkillable process.
+ */
+#define PIPE_CAP  4096
+
+typedef struct {
+    uint8_t      data[PIPE_CAP];
+    uint32_t     head, tail, count;
+    int          readers, writers;
+    wait_queue_t rwq, wwq;
+} pipe_t;
+
+/* Block with interrupts enabled, then put the caller's IF back.
+ *
+ * Pipe I/O is reached from syscall_dispatch, which arrives through an
+ * interrupt gate with IF clear, and task_block_on ends in hlt when nothing
+ * else is runnable: blocking with interrupts off would never wake. Same
+ * requirement proc_take_stop has. */
+static void pipe_block(wait_queue_t *wq) {
+    uint32_t fl;
+    __asm__ volatile ("pushf; pop %0" : "=r"(fl));
+    __asm__ volatile ("sti");
+    task_block_on(wq);
+    if (!(fl & 0x200)) __asm__ volatile ("cli");
+}
+
+static int pipe_read_op(vfs_node_t *n, void *buf, uint32_t count) {
+    pipe_t *p = (pipe_t *)n->priv;
+    uint8_t *out = (uint8_t *)buf;
+    if (!p || count == 0) return 0;
+
+    for (;;) {
+        preempt_disable();
+        if (p->count > 0 || p->writers == 0) { preempt_enable(); break; }
+        if (proc_kill_pending())             { preempt_enable(); return 0; }
+        pipe_block(&p->rwq);
+        preempt_enable();
+    }
+
+    uint32_t got = 0;
+    while (got < count && p->count > 0) {
+        out[got++] = p->data[p->tail];
+        p->tail = (p->tail + 1) % PIPE_CAP;
+        p->count--;
+    }
+    n->pos += got;
+    if (got) task_wake(&p->wwq);
+    return (int)got;              /* 0 = every writer closed and we drained it */
+}
+
+static int pipe_write_op(vfs_node_t *n, const void *buf, uint32_t count) {
+    pipe_t *p = (pipe_t *)n->priv;
+    const uint8_t *in = (const uint8_t *)buf;
+    if (!p) return -1;
+
+    uint32_t put = 0;
+    while (put < count) {
+        for (;;) {
+            preempt_disable();
+            if (p->count < PIPE_CAP || p->readers == 0) { preempt_enable(); break; }
+            if (proc_kill_pending())                    { preempt_enable(); return (int)put; }
+            pipe_block(&p->wwq);
+            preempt_enable();
+        }
+        if (p->readers == 0) return put ? (int)put : -1;   /* nobody left to read */
+
+        while (put < count && p->count < PIPE_CAP) {
+            p->data[p->head] = in[put++];
+            p->head = (p->head + 1) % PIPE_CAP;
+            p->count++;
+        }
+        task_wake(&p->rwq);
+    }
+    n->pos += put;
+    return (int)put;
+}
+
+/* Closing one end wakes the other, so a peer blocked on a pipe that just lost
+ * its last writer (or reader) re-tests and leaves. The buffer goes when both
+ * ends are gone. */
+static void pipe_close_op(vfs_node_t *n) {
+    pipe_t *p = (pipe_t *)n->priv;
+    if (!p) return;
+    if (n->flags & VFS_WRONLY) p->writers--; else p->readers--;
+    task_wake(&p->rwq);
+    task_wake(&p->wwq);
+    n->priv = 0;
+    if (p->readers <= 0 && p->writers <= 0) kfree(p);
+}
+
+static const vfs_ops_t pipe_ops = { pipe_read_op, pipe_write_op, 0, pipe_close_op };
+
+int vfs_pipe(vfs_node_t **rd, vfs_node_t **wr) {
+    if (!rd || !wr) return -1;
+    vfs_node_t *r = alloc_node();
+    if (!r) return -1;
+    vfs_node_t *w = alloc_node();
+    if (!w) { r->used = 0; return -1; }
+
+    pipe_t *p = (pipe_t *)kmalloc(sizeof(pipe_t));
+    if (!p) { r->used = 0; w->used = 0; return -1; }
+    memset(p, 0, sizeof(*p));
+    p->readers = 1;
+    p->writers = 1;
+
+    copy_name(r->name, "pipe:r");  r->type = VFS_CHARDEV;
+    r->flags = VFS_RDONLY; r->ops = &pipe_ops; r->priv = p;
+    copy_name(w->name, "pipe:w");  w->type = VFS_CHARDEV;
+    w->flags = VFS_WRONLY; w->ops = &pipe_ops; w->priv = p;
+
+    *rd = r; *wr = w;
+    return 0;
 }
 
 /* ---- FAT read-only backend ---- */

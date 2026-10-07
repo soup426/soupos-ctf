@@ -204,7 +204,10 @@ int usermode_run(proc_t *pr) {
 
     pr->upages = 0;
     pr->brk    = USER_HEAP;
-    for (int i = 0; i < PROC_UFD_MAX; i++) pr->ufds[i] = 0;
+    /* From 3 up only: 0-2 may hold the stdin/stdout the spawner bound (a pipe
+     * end or a redirected file), and clearing them here would quietly undo
+     * every redirection. */
+    for (int i = 3; i < PROC_UFD_MAX; i++) pr->ufds[i] = 0;
 
     elf32_phdr_t *ph = (elf32_phdr_t *)(buf + eh->e_phoff);
     for (int i = 0; i < eh->e_phnum; i++) {
@@ -292,15 +295,18 @@ void syscall_dispatch(registers_t *r) {
             uint32_t fd = r->ebx, len = r->edx;
             const char *p = (const char *)r->ecx;
             if (!user_ok(r->ecx, len)) { r->eax = (uint32_t)-1; break; }
-            if (fd == FD_STDOUT) {
+            /* A binding wins over the console default, which is what makes
+             * `> file` and `| next` work at all. Nothing binds 0-2 for a
+             * program run normally, so normal runs are unaffected. */
+            if (pr && fd < PROC_UFD_MAX && pr->ufds[fd]) {
+                int w = vfs_write(pr->ufds[fd], p, len);
+                r->eax = (uint32_t)(w < 0 ? -1 : w);
+            } else if (fd == FD_STDOUT) {
                 for (uint32_t i = 0; i < len; i++) vga_putchar(p[i]);
                 r->eax = len;
             } else if (fd == FD_STDERR) {
                 for (uint32_t i = 0; i < len; i++) serial_putc(p[i]);
                 r->eax = len;
-            } else if (pr && fd >= 3 && fd < PROC_UFD_MAX && pr->ufds[fd]) {
-                int w = vfs_write(pr->ufds[fd], p, len);
-                r->eax = (uint32_t)(w < 0 ? -1 : w);
             } else {
                 r->eax = (uint32_t)-1;
             }
@@ -311,16 +317,16 @@ void syscall_dispatch(registers_t *r) {
             uint32_t fd = r->ebx, max = r->edx;
             char *p = (char *)r->ecx;
             if (!user_ok(r->ecx, max)) { r->eax = (uint32_t)-1; break; }
-            if (fd == FD_STDIN) {
+            if (pr && fd < PROC_UFD_MAX && pr->ufds[fd]) {
+                int got = vfs_read(pr->ufds[fd], p, max);
+                r->eax = (uint32_t)(got < 0 ? 0 : got);
+            } else if (fd == FD_STDIN) {
                 uint32_t n = 0;
                 if (max > 0) {
                     int c = user_stdin_getchar(pr);
                     if (c >= 0 && c < 256) p[n++] = (char)c;
                 }
                 r->eax = n;               /* 0 = EOF */
-            } else if (pr && fd >= 3 && fd < PROC_UFD_MAX && pr->ufds[fd]) {
-                int got = vfs_read(pr->ufds[fd], p, max);
-                r->eax = (uint32_t)(got < 0 ? 0 : got);
             } else {
                 r->eax = (uint32_t)-1;
             }

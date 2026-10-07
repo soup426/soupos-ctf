@@ -59,9 +59,15 @@ proc_t  *proc_current(void);
 
 /* Load `path` and run it in ring 3 on a task of its own. Returns 0 and sets
  * *out_pid on success, -1 if every slot is in use, -2 if the task or its stack
- * could not be allocated. Does not wait: see proc_wait. */
+ * could not be allocated. Does not wait: see proc_wait.
+ *
+ * `in` and `out` bind the process's stdin and stdout before it starts; NULL
+ * leaves that descriptor on the console default. The process owns whatever is
+ * passed and closes it when it exits, which is what signals EOF down a pipe,
+ * so the caller must not close them or hand the same handle to two
+ * processes. */
 int      proc_spawn(const char *path, const char *args, int background,
-                    uint32_t *out_pid);
+                    vfs_node_t *in, vfs_node_t *out, uint32_t *out_pid);
 
 /* Block until `pid` exits or stops.
  *   1  it exited: *code holds the exit code and the slot has been collected

@@ -3,7 +3,7 @@
 ## What this is
 
 soupOS is a 32-bit x86 hobby OS written in C and NASM assembly (currently
-**v0.8.2**). It boots via GRUB and runs in protected mode with paging, a
+**v0.8.3**). It boots via GRUB and runs in protected mode with paging, a
 physical/heap allocator, and a cooperative scheduler. On top of that:
 
 - **Filesystem**: FAT16 read/write with subdirectories ("bowls") and a VFS shim
@@ -395,6 +395,15 @@ soupOS runs real ring-3 user programs with hardware memory protection.
 - **Paging** (`paging.c`): `map_page` ORs the user bit into the PDE when a user
   PTE is added; kernel PTEs stay `U=0` so kernel memory is unreachable from
   ring 3 (privilege is AND-ed PDE&PTE). `paging_unmap` frees a mapping.
+- **Stubs own the data segments (v0.8.3)**: every ISR/IRQ/syscall stub saves
+  the interrupted context's `ds`, loads `SEL_KDATA` for the handler, and
+  restores it before `iret`; `registers_t.ds` is that saved value. Do not
+  "simplify" this away. Segment registers are global state that `task_switch`
+  does not save, so without it a task that blocks inside a syscall can resume
+  after another task left `ds` set to the kernel selector, `iret` to ring 3
+  holding a DPL-0 data segment, and have the CPU null every data segment.
+  The program then faults, the fault handler faults identically because `ds`
+  is null, and the machine dies with interrupts off and nothing logged.
 - **Syscalls**: `int 0x80`, DPL-3 gate → `isr128` stub → `syscall_dispatch`
   (`usermode.c`). eax=number, ebx/ecx/edx=args, eax=return. Numbers in
   `syscall_nr.h` (9 calls):
@@ -495,9 +504,21 @@ reaper are reused unchanged.
   as well as flagging it, otherwise the kill would never be noticed.
 - `proc_wait(pid, &code)` returns 1 for exited (slot collected), 0 for stopped
   (slot kept), -1 for no such process.
-- Shell surface: `cook prog &`, `jobs`, `fg [pid]`, `bg [pid]`, `kill <pid>`,
-  `kill %` (newest job), `ps` marks which tasks are processes, and a finished
-  background job is announced before the next prompt.
+- **Pipes and redirection (v0.8.3)**: `vfs_pipe()` returns two ordinary
+  `vfs_node_t` handles over one 4 KB ring. A reader blocks while empty with a
+  writer alive and reads 0 (EOF) once the last writer closes; a writer blocks
+  while full with a reader alive and fails once every reader closes. Both
+  abandon the wait when the process has a kill pending, which is what keeps a
+  program parked on a dead pipe killable.
+- **fds 0-2 are bindable**: `proc_t.ufds[fd]` wins over the console default, so
+  `proc_spawn` can hand a process its stdin/stdout. `usermode_run` clears the
+  table from fd 3 up, deliberately: clearing from 0 would undo redirection.
+  The process owns what it was given and closes it on exit, which is what
+  sends EOF down a pipe.
+- Shell surface: `cook a.elf | b.elf | c.elf` (4 stages max), `< in`, `> out`,
+  `cook prog &`, `jobs`, `fg [pid]`, `bg [pid]`, `kill <pid>`, `kill %` (newest
+  job), `ps` marks which tasks are processes, and a finished background job is
+  announced before the next prompt.
 
 ## Doom Port — performance notes (v0.8.1)
 

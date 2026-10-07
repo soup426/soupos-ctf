@@ -57,7 +57,12 @@ python3 scripts/qemu_keys.py "$MON" \
     "cook hello.elf" "WAIT:2" "cook hello.elf" "WAIT:2" \
     "cook marker.elf Z" "WAIT:1" "KEY:ctrl-z" "WAIT:3" \
     "jobs" "WAIT:1" "bg" "WAIT:3" \
-    "cook marker.elf K" "WAIT:1" "KEY:ctrl-z" "WAIT:1" "kill %" "WAIT:2" >/dev/null || {
+    "cook marker.elf K" "WAIT:1" "KEY:ctrl-z" "WAIT:1" "kill %" "WAIT:2" \
+    "cook echo.elf hello pipes | wc.elf" "WAIT:3" \
+    "cook echo.elf pipes are plumbing | upper.elf | wc.elf" "WAIT:4" \
+    "cook echo.elf through a file > P.TXT" "WAIT:2" \
+    "cook wc.elf < P.TXT" "WAIT:3" \
+    "cook hog.elf | wc.elf &" "WAIT:2" "kill %" "WAIT:2" "kill %" "WAIT:2" >/dev/null || {
         echo "FAIL: could not drive the QEMU monitor"; exit 1; }
 
 fail=0
@@ -141,7 +146,11 @@ fi
 
 # The shell has to survive killing a program: a ring-3 program run AFTER the
 # kill must still produce output.
-kill_line=$(grep -nE 'killed \(irq\)' "$LOG" | tail -1 | cut -d: -f1)
+# The FIRST irq kill is the dedicated one from `cook hog.elf &` + `kill %`,
+# which the drive script follows immediately with a systest run. Anchoring to
+# the last one instead would point past it, because the pipe tests kill things
+# at the end of the script.
+kill_line=$(grep -nE 'killed \(irq\)' "$LOG" | head -1 | cut -d: -f1)
 if [ -n "$kill_line" ] && awk -v k="$kill_line" 'NR>k' "$LOG" | grep -qE 'TESTOUT'; then
     echo "  ok    shell still runs programs after a kill"
 else
@@ -214,6 +223,24 @@ if [ -n "$last_stop" ] && awk -v a="$last_stop" 'NR>a' "$LOG" | grep -qE '\[proc
     echo "  ok    a stopped job can still be killed"
 else
     echo "  FAIL  killing a stopped job did not end it"
+    fail=1
+fi
+
+# ── Pipes and redirection ─────────────────────────────────────────────────
+# wc.elf echoes its counts to serial, so a pipeline's RESULT is readable
+# headless rather than inferred from the stages having run.
+check "two-stage pipeline carries the data"  'WCOUT lines=1 words=2 bytes=12'
+check "three-stage pipeline works"           'WCOUT lines=1 words=3 bytes=19'
+check "the middle stage ran and exited"      '/upper\.elf exited with code 0'
+check "> redirection reached the filesystem" 'WCOUT lines=1 words=3 bytes=15'
+
+# A reader parked on a pipe nobody will write to must still be killable: hog.elf
+# never writes and never exits, so wc.elf blocks forever on the read. Without
+# the kill check inside the pipe wait, this is an unkillable process.
+if grep -qE '/wc\.elf' "$LOG" && [ "$(grep -cE '\[proc [0-9]+\] killed' "$LOG")" -ge 3 ]; then
+    echo "  ok    a process parked on an empty pipe can be killed"
+else
+    echo "  FAIL  a process blocked on a pipe survived kill"
     fail=1
 fi
 
