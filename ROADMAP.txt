@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.9.1
+Current version: v0.9.2
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,31 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.9.2  (2026-10-07)  — DHCP
+  soupOS takes its address from the network instead of having it compiled in.
+  Night-queue item 1.
+  - DISCOVER, OFFER, REQUEST, ACK, with the address, netmask, gateway and
+    resolver read out of the ACK's options. Lease time is logged and then
+    deliberately ignored: there is no timer-driven background work to renew on,
+    and a hobby OS that reboots more often than its lease expires loses nothing.
+  - The compiled-in addresses remain as the fallback for a network with no DHCP
+    server, and boot says which it used: "IP 10.0.2.15 (dhcp)" or "(static)".
+    `faucet` says the same, and `plumbing dhcp` re-leases on demand.
+  - Two things the IP layer had to learn, both predicted in the queue entry:
+    sending from a source of 0.0.0.0 (we have no address when we ask for one)
+    and sending to 255.255.255.255 without trying to ARP for it. ip_send is now
+    a wrapper over ip_send_from, and net_accept_any_dst opens the "is this for
+    us?" test for the duration of the exchange, since the reply is addressed to
+    an address we do not hold yet.
+  - A BUG WORTH RECORDING: the first version sent three DISCOVERs, got three
+    OFFERs on the wire, and reported "no offer". SLIRP answers from inside the
+    same process, fast enough that the reply reached the interrupt handler
+    before net_udp_wait had armed the port, so every one was dropped as
+    unexpected. The fix is net_udp_listen, called BEFORE the request goes out;
+    DNS had worked only because it happened to arm first by accident.
+  - Gate 41 -> 42 checks. This one is hermetic, unlike the DNS check: SLIRP
+    serves DHCP itself, so it needs no real network.
 
 v0.9.1  (2026-10-06)  — UDP, DNS, AND KITCHEN NAMES FOR ALL OF IT
   `sniff example.com` resolves, and `sip example.com` pings the result: soupOS

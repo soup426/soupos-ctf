@@ -86,6 +86,7 @@ static uint16_t checksum(const void *data, uint32_t len) {
 static uint32_t my_ip = NET_DEFAULT_IP, my_gw = NET_DEFAULT_GW, my_mask = NET_DEFAULT_MASK;
 static uint32_t my_dns = NET_DEFAULT_DNS;
 static uint32_t n_arp, n_ip, n_icmp, n_udp, n_other;
+static int      leased;          /* did the address come from DHCP? */
 
 /* One outstanding UDP request at a time, which is all a resolver needs and
  * keeps this free of a socket table. The interrupt handler drops the reply
@@ -106,7 +107,11 @@ static volatile int      ping_got;
 uint32_t net_ip(void)   { return my_ip; }
 uint32_t net_gw(void)   { return my_gw; }
 uint32_t net_mask(void) { return my_mask; }
-void     net_set_ip(uint32_t ip) { my_ip = ip; }
+void     net_set_ip(uint32_t ip)     { my_ip = ip; leased = 0; }
+void     net_set_leased(int on)       { leased = on ? 1 : 0; }
+int      net_leased(void)             { return leased; }
+void     net_set_mask(uint32_t mask)  { my_mask = mask; }
+void     net_set_gw(uint32_t gw)      { my_gw = gw; }
 
 uint32_t net_dns(void) { return my_dns; }
 void     net_set_dns(uint32_t ip) { my_dns = ip; }
@@ -149,6 +154,7 @@ static int arp_find(uint32_t ip, uint8_t *out) {
 }
 
 /* ── Transmit helpers ──────────────────────────────────────────────────── */
+static const uint8_t eth_bcast[6] = { 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF };
 static uint8_t txf[ETH_FRAME_MAX];
 
 static void eth_send(const uint8_t *dst_mac, uint16_t type,
@@ -174,24 +180,35 @@ static void arp_send(uint16_t op, const uint8_t *target_mac, uint32_t target_ip)
     memcpy(a.tha, target_mac, 6);
     put_ip(a.tpa, target_ip);
 
-    static const uint8_t bcast[6] = { 0xFF,0xFF,0xFF,0xFF,0xFF,0xFF };
-    eth_send((op == 1) ? bcast : target_mac, ETH_TYPE_ARP, &a, sizeof(a));
+    eth_send((op == 1) ? eth_bcast : target_mac, ETH_TYPE_ARP, &a, sizeof(a));
 }
 
-static void ip_send(uint32_t dst, uint8_t proto, const void *payload, uint16_t plen) {
+/* The general form. DHCP needs both of the things it adds over ip_send: a
+ * source address of 0.0.0.0, because we do not have one yet when we ask for
+ * one, and a broadcast destination, which goes to the Ethernet broadcast
+ * address and must not try to ARP for 255.255.255.255. */
+static void ip_send_from(uint32_t src, uint32_t dst, uint8_t proto,
+                         const void *payload, uint16_t plen) {
     uint8_t mac[6];
-    /* Anything off our subnet goes via the gateway, which is the whole of the
-     * routing table. */
-    uint32_t next_hop = ((dst & my_mask) == (my_ip & my_mask)) ? dst : my_gw;
-    if (arp_find(next_hop, mac) < 0) {
+    const uint8_t *dmac;
+
+    if (dst == 0xFFFFFFFFu) {
+        dmac = eth_bcast;
+    } else {
+        /* Anything off our subnet goes via the gateway, which is the whole of
+         * the routing table. */
+        uint32_t next_hop = ((dst & my_mask) == (my_ip & my_mask)) ? dst : my_gw;
+        if (arp_find(next_hop, mac) < 0) {
         /* Callers in task context resolve first; this path is also reached
          * from the interrupt handler (an ICMP reply), where blocking to ARP
          * would be wrong. Say so rather than dropping the packet in silence,
          * which is exactly how the DNS query went missing the first time. */
-        klog("[net] drop: no arp entry for %u.%u.%u.%u\n",
-             (next_hop >> 24) & 0xFF, (next_hop >> 16) & 0xFF,
-             (next_hop >> 8) & 0xFF, next_hop & 0xFF);
-        return;
+            klog("[net] drop: no arp entry for %u.%u.%u.%u\n",
+                 (next_hop >> 24) & 0xFF, (next_hop >> 16) & 0xFF,
+                 (next_hop >> 8) & 0xFF, next_hop & 0xFF);
+            return;
+        }
+        dmac = mac;
     }
 
     static uint8_t buf[ETH_FRAME_MAX];
@@ -206,12 +223,16 @@ static void ip_send(uint32_t dst, uint8_t proto, const void *payload, uint16_t p
     ih->ttl       = 64;
     ih->proto     = proto;
     ih->csum      = 0;
-    put_ip(ih->src, my_ip);
+    put_ip(ih->src, src);
     put_ip(ih->dst, dst);
     ih->csum = hton16(checksum(ih, sizeof(ip_hdr_t)));
 
     memcpy(buf + sizeof(ip_hdr_t), payload, plen);
-    eth_send(mac, ETH_TYPE_IP, buf, (uint16_t)(sizeof(ip_hdr_t) + plen));
+    eth_send(dmac, ETH_TYPE_IP, buf, (uint16_t)(sizeof(ip_hdr_t) + plen));
+}
+
+static void ip_send(uint32_t dst, uint8_t proto, const void *payload, uint16_t plen) {
+    ip_send_from(my_ip, dst, proto, payload, plen);
 }
 
 /* UDP's checksum covers a pseudo-header of addresses and protocol as well as
@@ -231,16 +252,18 @@ static uint16_t udp_checksum(uint32_t src, uint32_t dst,
     return c ? c : 0xFFFF;      /* 0 means "no checksum", so never send it */
 }
 
-int net_udp_send(uint32_t dst, uint16_t sport, uint16_t dport,
-                 const void *data, uint16_t len) {
+int net_udp_send_from(uint32_t src, uint32_t dst, uint16_t sport, uint16_t dport,
+                      const void *data, uint16_t len) {
     static uint8_t pkt[ETH_FRAME_MAX];
     if (len > sizeof(pkt) - sizeof(udp_hdr_t)) return -1;
 
-    /* Make sure the next hop is known before building the datagram: this is
-     * task context, so it is allowed to block, and ip_send will not resolve. */
-    uint32_t next_hop = ((dst & my_mask) == (my_ip & my_mask)) ? dst : my_gw;
-    uint8_t  hop_mac[6];
-    if (net_arp_resolve(next_hop, hop_mac) < 0) return -1;
+    /* A broadcast has no next hop to resolve. Anything else does, and this is
+     * task context, so it is allowed to block: ip_send itself will not ARP. */
+    if (dst != 0xFFFFFFFFu) {
+        uint32_t next_hop = ((dst & my_mask) == (my_ip & my_mask)) ? dst : my_gw;
+        uint8_t  hop_mac[6];
+        if (net_arp_resolve(next_hop, hop_mac) < 0) return -1;
+    }
 
     udp_hdr_t *u = (udp_hdr_t *)pkt;
     uint16_t total = (uint16_t)(sizeof(udp_hdr_t) + len);
@@ -249,11 +272,48 @@ int net_udp_send(uint32_t dst, uint16_t sport, uint16_t dport,
     u->len   = hton16(total);
     u->csum  = 0;
     memcpy(pkt + sizeof(udp_hdr_t), data, len);
-    u->csum = hton16(udp_checksum(my_ip, dst, pkt, total));
+    u->csum = hton16(udp_checksum(src, dst, pkt, total));
 
-    ip_send(dst, IP_PROTO_UDP, pkt, total);
+    ip_send_from(src, dst, IP_PROTO_UDP, pkt, total);
     return 0;
 }
+
+int net_udp_send(uint32_t dst, uint16_t sport, uint16_t dport,
+                 const void *data, uint16_t len) {
+    return net_udp_send_from(my_ip, dst, sport, dport, data, len);
+}
+
+/* Arm the receiver BEFORE sending the request it answers. SLIRP replies from
+ * inside the same process, so a reply can land in the interrupt handler before
+ * a send call has even returned; anything arriving before the port is armed is
+ * dropped, which looks exactly like the server ignoring us. */
+void net_udp_listen(uint16_t port) {
+    udp_want_port = port;
+    udp_got       = 0;
+    udp_rx_len    = 0;
+}
+
+/* Wait for one datagram on `port`. Returns its length, or -1 on timeout. The
+ * single-slot model from the resolver applies: one outstanding request. */
+int net_udp_wait(uint16_t port, uint8_t *out, uint16_t max, uint32_t ticks) {
+    if (udp_want_port != port) net_udp_listen(port);    /* not armed: arm now */
+
+    uint32_t until = timer_get_ticks() + ticks;
+    while (!udp_got && timer_get_ticks() < until) task_yield();
+
+    if (!udp_got) { udp_want_port = 0; return -1; }
+    uint16_t n = udp_rx_len;
+    if (n > max) n = max;
+    memcpy(out, (const void *)udp_rx, n);
+    udp_want_port = 0;
+    return (int)n;
+}
+
+/* DHCP replies arrive before we have an address, so the "is it for us?" test
+ * in handle_ip would throw them away. This opens that gate while a lease is
+ * being taken. */
+static volatile int accept_any_dst;
+void net_accept_any_dst(int on) { accept_any_dst = on ? 1 : 0; }
 
 /* ── Receive ───────────────────────────────────────────────────────────── */
 static void handle_arp(const uint8_t *p, uint16_t len) {
@@ -322,7 +382,7 @@ static void handle_ip(const uint8_t *p, uint16_t len) {
     if (checksum(ih, hlen) != 0) return;            /* corrupt header */
 
     uint32_t dst = get_ip(ih->dst);
-    if (dst != my_ip && dst != 0xFFFFFFFFu) return; /* not ours */
+    if (dst != my_ip && dst != 0xFFFFFFFFu && !accept_any_dst) return; /* not ours */
     n_ip++;
 
     uint16_t total = ntoh16(ih->total_len);

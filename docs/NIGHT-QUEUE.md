@@ -28,7 +28,7 @@ stopping between items always leaves the tree in a good state.
 
 ---
 
-## 1. DHCP client
+## 1. DHCP client — DONE (v0.9.2)
 
 Removes the compiled-in address, which is the last thing stopping soupOS from
 working on a network that is not QEMU's.
@@ -206,3 +206,9 @@ rather than improvising a different plan.
 
 Append here rather than editing items above: what was finished, what was
 stopped on and why, and anything that needs a human decision.
+
+**2026-10-07, item 1 (DHCP): done, v0.9.2, 42 checks green.** No decisions
+needed. One thing future items should know: SLIRP replies fast enough that a
+UDP response can be handled before the send call returns, so arm the receive
+port with `net_udp_listen` *before* sending anything that expects an answer.
+TCP (item 2) will hit the same timing.

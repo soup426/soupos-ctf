@@ -3,7 +3,7 @@
 ## What this is
 
 soupOS is a 32-bit x86 hobby OS written in C and NASM assembly (currently
-**v0.9.1**). It boots via GRUB and runs in protected mode with paging, a
+**v0.9.2**). It boots via GRUB and runs in protected mode with paging, a
 physical/heap allocator, and a cooperative scheduler. On top of that:
 
 - **Filesystem**: FAT16 read/write with subdirectories ("bowls") and a VFS shim
@@ -491,7 +491,14 @@ compiled in (10.0.2.15, gateway 10.0.2.2) rather than discovered by DHCP.
   a name or an address by the same path. `ip_send` requires its next hop to be
   in the ARP cache and now logs when it drops a packet for want of one, which
   is how a silently-vanishing DNS query cost an hour.
-- Shell: `faucet`, `plumbing [ip]`, `table`, `sip <host> [count]`,
+- **DHCP (v0.9.2, `src/dhcp.c`)**: address, mask, gateway and resolver come
+  from the lease; the compiled-in values are the fallback when nothing answers,
+  and boot/`faucet` say which was used. **Arm the receiver before you send**:
+  `net_udp_listen(port)` then send then `net_udp_wait`. SLIRP answers from
+  inside the same process, so a reply can reach the interrupt handler before
+  the send call returns, and anything arriving before the port is armed is
+  dropped - which looks exactly like the server ignoring you.
+- Shell: `faucet`, `plumbing [ip|dhcp]`, `table`, `sip <host> [count]`,
   `sniff <host>`.
 
 ## Allocator locking (v0.8.5)

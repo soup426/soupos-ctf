@@ -167,11 +167,16 @@ void kernel_main(uint32_t mb_magic, uint32_t mb_info) {
     if (rtl8139_init() == 0) {
         const uint8_t *m = rtl8139_mac();
         net_init();
+        /* Ask for a lease, but do not hang on it: a network with no DHCP
+         * server is a normal situation, and the compiled-in defaults are the
+         * fallback. */
+        int leased = (net_dhcp() == 0);
         vga_printf("[OK] Network       - RTL8139, MAC %x:%x:%x:%x:%x:%x\n",
                    m[0], m[1], m[2], m[3], m[4], m[5]);
         uint32_t ip = net_ip();
-        vga_printf("                     IP %u.%u.%u.%u, gateway %u.%u.%u.%u\n",
+        vga_printf("                     IP %u.%u.%u.%u (%s), gateway %u.%u.%u.%u\n",
                    (ip >> 24) & 0xFF, (ip >> 16) & 0xFF, (ip >> 8) & 0xFF, ip & 0xFF,
+                   leased ? "dhcp" : "static",
                    (net_gw() >> 24) & 0xFF, (net_gw() >> 16) & 0xFF,
                    (net_gw() >> 8) & 0xFF, net_gw() & 0xFF);
     } else {

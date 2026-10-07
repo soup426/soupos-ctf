@@ -24,6 +24,12 @@ uint32_t net_ip(void);
 uint32_t net_gw(void);
 uint32_t net_mask(void);
 void     net_set_ip(uint32_t ip);
+void     net_set_mask(uint32_t mask);
+/* Whether the current address came from DHCP (set by the client) or is the
+ * compiled-in fallback / something typed into `plumbing`. */
+int      net_leased(void);
+void     net_set_leased(int on);
+void     net_set_gw(uint32_t gw);
 
 /* Send `count` echo requests to `dst`, one every 100 ms, and return how many
  * replies came back. Writes per-reply lines to the console as it goes. */
@@ -36,6 +42,28 @@ void     net_arp_dump(void);
 /* Send one UDP datagram. Returns 0 if it went to the card. */
 int      net_udp_send(uint32_t dst, uint16_t sport, uint16_t dport,
                       const void *data, uint16_t len);
+
+/* The same, with an explicit source address, for the case where we do not have
+ * one yet (DHCP). A destination of 255.255.255.255 goes to the Ethernet
+ * broadcast address without trying to ARP for it. */
+int      net_udp_send_from(uint32_t src, uint32_t dst, uint16_t sport,
+                           uint16_t dport, const void *data, uint16_t len);
+
+/* Arm the receiver for `port`. Call this BEFORE sending the request it
+ * answers: a reply can arrive in the interrupt handler before the send returns,
+ * and anything received before the port is armed is dropped. */
+void     net_udp_listen(uint16_t port);
+
+/* Block for one datagram on `port`, up to `ticks` (100 Hz). Returns its
+ * length, or -1 on timeout. One outstanding request at a time. */
+int      net_udp_wait(uint16_t port, uint8_t *out, uint16_t max, uint32_t ticks);
+
+/* Accept IP datagrams not addressed to us. Needed only while taking a DHCP
+ * lease, since the reply arrives before we have an address. */
+void     net_accept_any_dst(int on);
+
+/* Take an address by DHCP. Returns 0 on success, -1 if nothing answered. */
+int      net_dhcp(void);
 
 /* Resolve a hostname to an IPv4 address through the configured resolver.
  * Returns 0 and writes *out on success, -1 on timeout or a failed lookup. */

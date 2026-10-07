@@ -1240,6 +1240,7 @@ static void cmd_faucet(void) {
     vga_puts("  RTL8139\n");
     vga_set_color(VGA_LIGHT_GREY, VGA_BLACK);
     vga_printf("    MAC      %x:%x:%x:%x:%x:%x\n", m[0], m[1], m[2], m[3], m[4], m[5]);
+    vga_printf("    address  %s\n", net_leased() ? "from DHCP" : "static");
     vga_puts("    IP       "); print_ip(net_ip());
     vga_puts("    mask ");     print_ip(net_mask()); vga_putchar('\n');
     vga_puts("    gateway  "); print_ip(net_gw());   vga_putchar('\n');
@@ -1258,8 +1259,24 @@ static void cmd_plumbing(const char *args) {
         vga_putchar('\n');
         return;
     }
+    if (str_eq(args, "dhcp")) {
+        vga_puts("  asking for a lease...\n");
+        if (net_dhcp() == 0) {
+            vga_puts("  ip ");   print_ip(net_ip());
+            vga_puts("  mask "); print_ip(net_mask());
+            vga_puts("  gw ");   print_ip(net_gw());
+            vga_puts("  dns ");  print_ip(net_dns());
+            vga_putchar('\n');
+        } else {
+            vga_set_color(VGA_LIGHT_RED, VGA_BLACK);
+            vga_puts("  no answer from a DHCP server\n");
+            vga_set_color(VGA_LIGHT_GREY, VGA_BLACK);
+        }
+        return;
+    }
+
     uint32_t ip;
-    if (parse_ip(args, &ip) < 0) { vga_puts("  Usage: plumbing [a.b.c.d]\n"); return; }
+    if (parse_ip(args, &ip) < 0) { vga_puts("  Usage: plumbing [a.b.c.d | dhcp]\n"); return; }
     net_set_ip(ip);
     vga_puts("  ip is now "); print_ip(ip); vga_putchar('\n');
 }

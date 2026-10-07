@@ -286,6 +286,11 @@ done
 # path is exercised for real: PCI probe, DMA ring, IRQ 11 through the slave
 # PIC, ARP for the gateway, then ICMP. A reply means every layer worked.
 check "the NIC was found and configured" '\[net\] rtl8139 at io'
+
+# DHCP is hermetic: SLIRP serves it, so this needs no real network. The lease
+# line only appears after DISCOVER/OFFER/REQUEST/ACK have all completed and the
+# ACK's options have been read.
+check "an address was taken by DHCP" '\[dhcp\] lease 10\.0\.2\.15 mask 255\.255\.255\.0'
 check "ARP resolved and all pings replied" '\[net\] ping done 3/3'
 
 # The UDP path end to end, as far as the wire: the resolver's MAC is resolved,
