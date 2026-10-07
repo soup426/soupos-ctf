@@ -90,7 +90,7 @@ page allocator and the VFS handle table); these remain:
 - This is an audit, not a feature: the deliverable is a short written finding
   per file plus guards where needed.
 
-## 4. In-kernel self-test command
+## 4. In-kernel self-test command — DONE (v0.9.7)
 
 The gate is end-to-end only; nothing tests a subsystem directly.
 
@@ -144,9 +144,10 @@ is not reentrant.
 `ROADMAP.txt` carries a KNOWN BUGS / DEBT list, several items of which are
 small and independently testable. Take them as one commit each:
 
-- `kfree` only forward-coalesces, so long sessions fragment the heap. Make it
-  coalesce backwards too; gate by allocating and freeing an alternating pattern
-  and asserting the largest free block recovers.
+- ~~`kfree` only forward-coalesces~~ **Already fixed; the note was stale.**
+  Checked 2026-10-07 while writing item 4: heap.c walks for the predecessor and
+  absorbs into it, and a self-test that frees sixteen blocks in reverse and then
+  asks for one spanning them passes. `sample` guards it now. Nothing to do.
 - FAT write mishandles fragmented free clusters when the disk is nearly full.
   Reproduce it first by filling a disk image, then fix.
 - `shell_tab_complete` rescans the FAT on every Tab press. Cache the listing

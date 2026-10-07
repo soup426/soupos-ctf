@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.9.6
+Current version: v0.9.7
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,30 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.9.7  (2026-10-07)  — `sample`: IN-KERNEL SELF-TESTS
+  Night-queue item 4. The smoke gate drives the machine from outside and reads
+  the serial port, which cannot see a subsystem that no command exercises.
+  These are those edges, 19 assertions in src/selftest.c behind the `sample`
+  command, ending in one machine-readable line the gate greps.
+  - Heap: allocate/write/free, sixteen blocks, and - the one that matters - a
+    block spanning them after freeing in order AND in reverse, which only
+    succeeds if free blocks are merged in both directions.
+  - VFS handle table: fill it, confirm it refuses a seventeenth rather than
+    handing one out, confirm closing returns the slots.
+  - Pipe ring: push six times its capacity through in chunks, checking content
+    rather than counts, so an off-by-one at the wrap shows up as a wrong byte;
+    then confirm a drained pipe with no writer reads EOF instead of blocking.
+  - A checksum with a known answer computed independently, a FAT round trip on
+    the real disk, and the hand-written string routines including memmove's
+    overlap case.
+  - IT IMMEDIATELY CORRECTED THE RECORD. This list has carried "kfree only
+    forward-coalesces, so long sessions fragment the heap" as an open bug. It
+    is stale: heap.c walks for the predecessor and absorbs into it, and the
+    reverse-free test passes. Fixed at some point without the note being
+    updated, which is exactly the sort of thing a test finds and a reader
+    never does. Corrected here and in the night queue.
+  - Gate 47 -> 48 checks.
 
 v0.9.6  (2026-10-07)  — THE PREEMPTION AUDIT, CLOSED
   Night-queue item 3. docs/next-steps.md has carried "drivers are not

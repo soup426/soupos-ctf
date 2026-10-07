@@ -3,7 +3,7 @@
 ## What this is
 
 soupOS is a 32-bit x86 hobby OS written in C and NASM assembly (currently
-**v0.9.6**). It boots via GRUB and runs in protected mode with paging, a
+**v0.9.7**). It boots via GRUB and runs in protected mode with paging, a
 physical/heap allocator, and a cooperative scheduler. On top of that:
 
 - **Filesystem**: FAT16 read/write with subdirectories ("bowls") and a VFS shim
@@ -519,6 +519,16 @@ compiled in (10.0.2.15, gateway 10.0.2.2) rather than discovered by DHCP.
   outliving our close. The gate uses a separate listener port per check.
 - Shell: `faucet`, `plumbing [ip|dhcp]`, `table`, `sip <host> [count]`,
   `sniff <host>`, `reserve <host> <port>`.
+
+## `sample`: in-kernel self-tests (v0.9.7)
+
+`src/selftest.c`, run by the `sample` command: allocator patterns (including a
+reverse free, which is the case a one-directional coalescer fails), the VFS
+handle table at exhaustion, the pipe ring across its wrap checked by content,
+a known-answer checksum, a FAT round trip and the hand-written string routines.
+Self-contained, so it is safe on a live machine. It ends with
+`[sample] N tests, M failed`, which the gate greps; add tests freely, the gate
+pattern does not care about the count.
 
 ## What is reachable from two tasks (v0.9.6)
 

@@ -21,6 +21,7 @@
 #include "net.h"
 #include "rtl8139.h"
 #include "tcp.h"
+#include "selftest.h"
 #include "vfs.h"
 #include "klog.h"
 #include "users.h"
@@ -1516,6 +1517,16 @@ static void cmd_sip(const char *args) {
     net_ping(ip, count);
 }
 
+/* sample - taste the soup: run the in-kernel subsystem checks. */
+static void cmd_sample(void) {
+    int failed = selftest_run();
+    if (failed) {
+        vga_set_color(VGA_LIGHT_RED, VGA_BLACK);
+        vga_puts("  something is off in the kitchen.\n");
+        vga_set_color(VGA_LIGHT_GREY, VGA_BLACK);
+    }
+}
+
 /* clip - show what is on the clipboard. Mirrored to the kernel log so a
  * headless test can read the result of a copy or a cut. */
 static void cmd_scraps(void) {
@@ -2899,7 +2910,7 @@ static const char *const cmd_names[] = {
     "jot", "ai", "cook", "soup", "hash",
     "beep", "mandelbrot", "vgademo", "uname", "cal",
     "clock", "wipe", "fortune", "bounce", "recipe", "leftovers", "spill",
-    "freeze", "reheat", "ps", "orders", "plate", "steep", "kill", "scraps",
+    "freeze", "reheat", "ps", "orders", "plate", "steep", "kill", "scraps", "sample",
     "faucet", "plumbing", "table", "sip", "sniff", "reserve", "holler",
     "takeout", "bgclock", "yieldbg", "spinbg", "sleeptest", "vfstest",
     "dmesg", "pwd", "cd", "mkbowl", "rmbowl", "bowltest",
@@ -3133,6 +3144,7 @@ static void dispatch(const char *buf) {
     else if (str_eq(p, "ps"))          cmd_ps();
     else if (str_eq(p, "orders"))      cmd_orders();
     else if (str_eq(p, "scraps"))      cmd_scraps();
+    else if (str_eq(p, "sample"))      cmd_sample();
     else if (str_eq(p, "faucet"))      cmd_faucet();
     else if (str_eq(p, "table"))       cmd_table();
     else if (str_startswith(p, "sniff"))    { const char *a = p + 5; cmd_sniff(a); }

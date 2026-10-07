@@ -99,6 +99,7 @@ python3 scripts/qemu_keys.py "$MON" \
     "cook echo.elf through a file > P.TXT" "WAIT:2" \
     "cook wc.elf < P.TXT" "WAIT:3" \
     "cook hog.elf | wc.elf &" "WAIT:2" "kill %" "WAIT:2" "kill %" "WAIT:2" \
+    "sample" "WAIT:6" \
     "strain CLIP.TXT" "WAIT:1" \
     "TYPE:soup is good" "KEY:ctrl-u" "scraps" "WAIT:2" \
     "jot CLIP.TXT" "WAIT:2" "TYPE:abc def" \
@@ -352,6 +353,12 @@ check "TCP received the echo"            '\[tcp\] rx 7 bytes'
 # read until the server hangs up, and a FIN exchange in both directions.
 check "an HTTP page was fetched over TCP" '\[tcp\] takeout 3[0-9] bytes'
 check "the connection closed gracefully"  '\[tcp\] closed cleanly'
+
+# The in-kernel checks: allocator patterns, the handle table at exhaustion, the
+# pipe ring across its wrap, a known-answer checksum, a filesystem round trip
+# and the hand-written string routines. One line, so the count can grow without
+# touching the gate.
+check "in-kernel self-test passes" '\[sample\] [0-9]+ tests, 0 failed'
 
 # vgastress prints whole lines of a single repeated character from two tasks.
 # Any line containing both means vga_puts was interrupted mid-string.
