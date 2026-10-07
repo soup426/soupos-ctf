@@ -54,7 +54,7 @@ stop is requested, so stop latency alone does not explain a line landing after
 it. A second anomaly appeared once in fourteen - the job never logged
 "continued" - which may or may not be the same bug seen from the other side.
 
-## 2. Doom at the framebuffer's own resolution
+## 2. Doom at the framebuffer's own resolution — DEFERRED (user asked to keep to OS work)
 
 Doom renders 320x200 and the scaler blows it up 3x. The framebuffer is
 1024x768 and `doom-profile` says there is 33x headroom at the 50 fps cap, so
@@ -68,6 +68,16 @@ the pixels are available.
 - Verify with `doom-profile` (the frame cost will rise; check it still clears
   the cap) and with a screendump compared against the 3x-scaled version for
   the same scene - the picture should be the same picture, more finely drawn.
+
+**2026-10-07: set aside at the user's request, to keep this queue on the
+operating system rather than the game.** The survey is worth keeping for
+whenever it is picked up: 41 references to VGA13_W/H in doom.c, four
+width-sized scratch arrays, two full-screen buffers, and - the real one -
+`PROJ_DIST 160`, which is the projection distance for a 90 degree field of
+view and is therefore VGA13_W/2. Doom's internal resolution also has to become
+independent of mode 13h's, because the hardware mode cannot be 640x400, so the
+buffers want sizing by a maximum with the live dimensions as runtime values.
+Same shape as the console resize: generalise in its own commit, then change.
 
 ## 3. Writing long filenames
 
