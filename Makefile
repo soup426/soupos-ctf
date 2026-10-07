@@ -189,6 +189,12 @@ $(DISK):
 	    | mcopy -i $(DISK) - ::FILLDISK.SC
 	printf '# A `let` inside a while body used to accumulate a binding per pass and\n# die at 64 iterations with "too many variables".\nlet n = 0\nlet total = 0\nwhile n < 200 {\n    let item = n * 2\n    total = total + item\n    n = n + 1\n}\npour "SCOPE total " + total\n' \
 	    | mcopy -i $(DISK) - ::SCOPE.SC
+	# Long names, for the VFAT read path. mtools writes a proper LFN chain
+	# plus the mangled 8.3 alias, which is exactly what has to be parsed.
+	printf 'A file whose name does not fit in 8.3 at all.\n' \
+	    | mcopy -i $(DISK) - ::"A Long Recipe Name.txt"
+	printf 'Second long name, to prove the chain resets between entries.\n' \
+	    | mcopy -i $(DISK) - ::"kitchen notes for tomorrow.md"
 	printf '# a tiny library - included by INCLUDE.SC\nfn cube(n) { return n * n * n }\n' \
 	    | mcopy -i $(DISK) - ::MATHLIB.SC
 	printf '# include + new builtins demo - run with: soup INCLUDE.SC\ninclude "MATHLIB.SC"\npour "cube(3)  = " + cube(3)\nlet nums = [5, 2, 9, 1, 7]\nsort(nums)\npour "sorted   ="\npour nums\npour "sum      = " + sum(nums)\nreverse(nums)\npour "reversed ="\npour nums\npour "find OS  = " + find("soupOS", "OS")\n' \

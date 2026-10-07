@@ -11,15 +11,25 @@
 #define FAT_ATTR_LFN     0x0F   /* all four low bits set */
 
 #define FAT_NAME_MAX  13        /* 8 + '.' + 3 + '\0' */
+/* Long names, as VFAT stores them. 63 is a working limit rather than the
+ * format's 255: an entry sits in arrays of FAT_LS_MAX, so every byte here
+ * costs 128 of them, and nothing on this disk needs more. */
+#define FAT_LFN_MAX   64
 #define FAT_PATH_MAX  128       /* absolute path buffer size */
 #define FAT_LS_MAX    128
 
 typedef struct {
-    char     name[FAT_NAME_MAX];
+    char     name[FAT_NAME_MAX];   /* the 8.3 name, always present      */
+    char     lfn[FAT_LFN_MAX];     /* the long name, or "" if it has none */
     uint8_t  attr;
     uint32_t cluster;
     uint32_t size;
 } fat_entry_t;
+
+/* What to show a person: the long name when there is one. */
+static inline const char *fat_display_name(const fat_entry_t *e) {
+    return e->lfn[0] ? e->lfn : e->name;
+}
 
 /* Returns 0=ok, -1=no drive / unrecognised filesystem */
 int fat_init(void);

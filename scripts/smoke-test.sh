@@ -135,6 +135,9 @@ python3 scripts/qemu_keys.py "$MON" \
     "takeout 10.0.2.2:19002 /soup" "WAIT:9" \
     "soup LONGSTR.SC" "WAIT:6" \
     "soup SCOPE.SC" "WAIT:4" \
+    "serve" "WAIT:2" \
+    "pour A Long Recipe Name.txt" "WAIT:2" \
+    "pour ALONGR~1.TXT" "WAIT:2" \
     "soup RUNAWAY.SC" "WAIT:22" "pwd" "WAIT:2" \
     "soup SPAWN.SC" "WAIT:1" "ps" "WAIT:5" \
     "larder" "WAIT:2" \
@@ -143,7 +146,21 @@ python3 scripts/qemu_keys.py "$MON" \
         echo "FAIL: could not drive the QEMU monitor"; exit 1; }
 
 fail=0
-check() {   # check <description> <grep-pattern>
+check() {   # check <description> [-cN] <grep-pattern>
+    # -cN asserts the pattern appears at least N times, which is how a repeat
+    # of the same output (two opens of one file) gets distinguished from one.
+    if [ "${2#-c}" != "$2" ]; then
+        local want=${2#-c}
+        local got
+        got=$(grep -cE "$3" "$LOG")
+        if [ "$got" -ge "$want" ]; then
+            echo "  ok    $1"
+        else
+            echo "  FAIL  $1  (saw $got of $want for /$3/)"
+            fail=1
+        fi
+        return
+    fi
     if grep -qE "$2" "$LOG"; then
         echo "  ok    $1"
     else
@@ -437,6 +454,15 @@ check "soupyc can delete a file" 'removed 1'
 # MAX_VARS, which is 64. 200 iterations, and the exact sum, so a scoping change
 # that drops the wrong bindings shows up as a wrong total rather than a crash.
 check "a let inside a loop survives 200 passes" 'SCOPE total 39800'
+
+# VFAT long names. The listing must show the name a person typed, and BOTH
+# names must open the file: the long one and the mangled 8.3 alias mtools
+# generated beside it. The alias is the half that keeps working for everything
+# written before long names existed.
+check "a long name is listed"            'A Long Recipe Name.txt'
+check "a long name opens the file"       'A file whose name does not fit in 8.3'
+# Two opens of the same file, so the count proves the 8.3 alias worked too.
+check "the 8.3 alias opens it as well"   -c2 'A file whose name does not fit in 8.3'
 
 check "the mixer accepted a tone" '\[mixer\] tone 440 Hz'
 check "a Doom sound lump was decoded" '\[doomsnd\] DSPISTOL: 5661 samples at 11025 Hz'

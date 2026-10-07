@@ -74,7 +74,11 @@ static char cwd[FAT_PATH_MAX] = "/";
 /* Normalise an absolute path: collapse "//", ".", and ".." into a clean
  * "/a/b/c" form (or "/"). `out` must be >= FAT_PATH_MAX bytes. */
 static void normalize_path(const char *in, char *out) {
-    char comp[FAT_NAME_MAX];
+    /* FAT_LFN_MAX, not FAT_NAME_MAX: this is a path component, which can be a
+     * long name. Capping at 12 characters here truncated the name before
+     * fat_read ever saw it, so a file that LISTED correctly could not be
+     * opened - the second place the same mistake was hiding. */
+    char comp[FAT_LFN_MAX];
     out[0] = '/';
     out[1] = '\0';
     int len = 1;                        /* out[len] is always the NUL */
@@ -84,7 +88,7 @@ static void normalize_path(const char *in, char *out) {
         if (!*p) break;
         int i = 0;
         while (*p && *p != '/') {
-            if (i < FAT_NAME_MAX - 1) comp[i++] = *p;
+            if (i < FAT_LFN_MAX - 1) comp[i++] = *p;
             p++;
         }
         comp[i] = '\0';
@@ -598,13 +602,25 @@ static void cmd_serve(void) {
         vga_set_color(VGA_DARK_GREY, VGA_BLACK);
         vga_printf("%s  ", ps);
         print_padded(users_name_of(owner), 10);
+        /* The long name if the entry has one, which is what a person typed
+         * when they made the file. The 8.3 name still opens it either way.
+         *
+         * print_padded pads but does not cut, so a name wider than the column
+         * runs into the size and the table stops lining up. Cut it here. */
+        #define NAME_COL 30
+        char shownbuf[NAME_COL + 1];
+        const char *full_name = fat_display_name(&entries[i]);
+        strncpy(shownbuf, full_name, NAME_COL);
+        shownbuf[NAME_COL] = '\0';
+        if (strlen(full_name) > NAME_COL) shownbuf[NAME_COL - 1] = '~';
+        const char *shown = shownbuf;
         if (entries[i].attr & FAT_ATTR_DIR) {
             vga_set_color(VGA_LIGHT_CYAN, VGA_BLACK);
-            print_padded(entries[i].name, 16);
+            print_padded(shown, NAME_COL + 1);
             vga_puts("<bowl>\n");
         } else {
             vga_set_color(VGA_LIGHT_GREY, VGA_BLACK);
-            print_padded(entries[i].name, 16);
+            print_padded(shown, NAME_COL + 1);
             vga_printf("%u B\n", entries[i].size);
         }
     }
@@ -3154,7 +3170,9 @@ static void shell_tab_complete(char *input, int *pos, int *len) {
     int n = fat_ls(cwd, entries, FAT_LS_MAX);
     for (int i = 0; i < n && nmatches < max_matches; i++) {
         if (prefix_match_ci(entries[i].name, input + word_start, word_len)) {
-            strncpy(matches[nmatches], entries[i].name, FAT_NAME_MAX);
+            /* Offer the long name: completing to an 8.3 name a person never
+             * typed is worse than not completing at all. */
+            strncpy(matches[nmatches], fat_display_name(&entries[i]), FAT_NAME_MAX);
             matches[nmatches][FAT_NAME_MAX] = '\0';
             nmatches++;
         }

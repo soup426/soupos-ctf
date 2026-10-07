@@ -71,7 +71,7 @@ net_rx now learns the sender's MAC from every IP frame. One connection at a
 time, by design - the listener is the connection - so a backlog is still open if
 anyone wants it.
 
-## 3. VFAT long filenames, read side at least
+## 3. VFAT long filenames — DONE (v0.16.0, read side)
 
 8.3 names are a real limitation now that scripts, WADs and test files matter.
 `LONGSTR.SC` is already a name chosen to fit, not a name anyone wanted.
@@ -82,6 +82,13 @@ anyone wants it.
   LFN chains show up as garbage filenames.
 - `fat_ls` and `fat_find` are the two places that matter. Writing LFNs is a
   separate item; do not start it in the same commit.
+
+**2026-10-07: done, v0.16.0, gate 70.** Listing and opening both work, by long
+name or by 8.3 alias, with the checksum validated. The predicted trap (skipping
+the checksum) was handled; the ACTUAL trap was a 13-byte path-component buffer,
+in two files - next_component in fat.c and normalize_path in shell.c - so the
+name was truncated before the directory parser was ever reached. Writing long
+names remains open and is still worth its own item.
 
 ## 4. Doom's music: the D_* lumps through the mixer
 

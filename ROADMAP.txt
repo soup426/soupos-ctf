@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.15.0
+Current version: v0.16.0
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,36 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.16.0 (2026-10-07)  — LONG FILENAMES, READ SIDE
+  New queue item 3. `serve` lists the name a person actually typed, and `pour`
+  opens a file by either its long name or the 8.3 alias beside it.
+  - A long name lives in the entries IMMEDIATELY BEFORE its 8.3 entry, in
+    reverse order, 13 UCS-2 characters each in three runs - the fields a real
+    entry uses for the cluster and size had to be stepped around. The
+    accumulator lives outside the sector loop, because a chain can straddle a
+    sector boundary.
+  - THE CHECKSUM IS VALIDATED, which is the step that gets skipped. Every LFN
+    entry carries a checksum OF THE 8.3 NAME, and without checking it a chain
+    orphaned by a tool that removed the short entry gets attached to whatever
+    entry follows, so a file lists under a name belonging to something else.
+    A chain with a missing piece or a mismatched checksum is distrusted and the
+    8.3 name is used instead.
+  - THE SAME BUG, TWICE, IN TWO FILES. Listing worked immediately and opening
+    did not, because a path component was copied into a 13-byte buffer:
+    next_component in fat.c capped at FAT_NAME_MAX-1, and after fixing that it
+    still failed because normalize_path in shell.c had its own identical cap.
+    "A Long Recipe Name.txt" became "A Long Recip" before fat_read ever saw it.
+    A file that lists but will not open means the name is being truncated on
+    the way in, not that the directory parsing is wrong.
+  - Writing long names is NOT done: a file created with one still gets a
+    mangled 8.3 name. The item said read side, and the asymmetry is honest
+    rather than hidden.
+  - scripts/qemu_keys.py learned '~', '?' and '!', because an 8.3 alias
+    contains a tilde and the gate now types one.
+  - The gate's check helper takes an optional -cN to assert a pattern appears
+    at least N times, which is how two opens of the same file are told apart
+    from one. Gate 67 -> 70.
 
 v0.15.0 (2026-10-07)  — soupOS ANSWERS: A LISTENING SOCKET AND AN HTTP SERVER
   New queue item 2. The stack could only ever dial out; now it can be dialled.

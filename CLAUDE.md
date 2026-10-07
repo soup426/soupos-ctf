@@ -3,7 +3,7 @@
 ## What this is
 
 soupOS is a 32-bit x86 hobby OS written in C and NASM assembly (currently
-**v0.15.0**). It boots via GRUB and runs in protected mode with paging, a
+**v0.16.0**). It boots via GRUB and runs in protected mode with paging, a
 physical/heap allocator, and a cooperative scheduler. On top of that:
 
 - **Filesystem**: FAT16 read/write with subdirectories ("bowls") and a VFS shim
@@ -527,6 +527,20 @@ VGA cells doubles the work. `vga.c`'s `scroll()` copies 32-bit words (two cells
 per store) and is about twice as fast as the original cell-at-a-time loop;
 `memmove` measured 47% slower than that original. `sample` guards the row
 movement. The same caution applies anywhere a wide copy looks tempting.
+
+## Long filenames (v0.16.0, read side)
+
+`fat_entry_t` carries both `name` (8.3) and `lfn`; use `fat_display_name()` to
+show one. Either name opens a file. **The LFN checksum is validated against the
+8.3 name** - do not skip it, or an orphaned chain attaches to the wrong entry.
+
+**A path component can be a long name**, so its buffer is `FAT_LFN_MAX`, not
+`FAT_NAME_MAX`. That cap bit twice: `next_component` (fat.c) and
+`normalize_path` (shell.c). **If a file lists but will not open, the name is
+being truncated on the way in** - look for a 13-byte component buffer before
+suspecting the directory parser.
+
+Writing long names is not implemented: a new file still gets a mangled 8.3 name.
 
 ## Serving: the listening socket (v0.15.0)
 

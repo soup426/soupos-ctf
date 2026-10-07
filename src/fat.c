@@ -162,6 +162,16 @@ static void format_83(const char *n8, const char *e3, char *out) {
 }
 
 /* Case-insensitive match between user input and a FAT directory entry. */
+/* Case-insensitive compare, the same folding name_matches uses: FAT names are
+ * case-preserving but not case-sensitive, long ones included. */
+static int name_eq_ci(const char *a, const char *b) {
+    while (*a && *b) {
+        if (to_upper(*a) != to_upper(*b)) return 0;
+        a++; b++;
+    }
+    return *a == '\0' && *b == '\0';
+}
+
 static int name_matches(const char *input, const dirent_t *de) {
     char formatted[FAT_NAME_MAX];
     format_83(de->name, de->ext, formatted);
@@ -174,6 +184,74 @@ static int name_matches(const char *input, const dirent_t *de) {
     return (*a == '\0' && *b == '\0');
 }
 
+/* ---- Long names (VFAT) ----
+ *
+ * A long name is carried by the entries IMMEDIATELY BEFORE its 8.3 entry, in
+ * reverse order: sequence n first, sequence 1 last. Each holds 13 UCS-2
+ * characters in three runs, because the fields a real directory entry uses
+ * for the cluster and the size had to be stepped around.
+ *
+ * Every one of them also carries a CHECKSUM OF THE 8.3 NAME, and validating it
+ * is the step that gets skipped. Without it, a chain orphaned by a tool that
+ * deleted the short entry gets attached to whatever entry follows it, and the
+ * listing shows a file under a name that belongs to something else.
+ */
+static uint8_t lfn_checksum(const char *name83) {   /* 11 bytes, no dot */
+    uint8_t sum = 0;
+    for (int i = 0; i < 11; i++)
+        sum = (uint8_t)(((sum & 1) << 7) + (sum >> 1) + (uint8_t)name83[i]);
+    return sum;
+}
+
+/* State while walking one directory. Reset after each 8.3 entry, and kept
+ * across sector boundaries because a chain can straddle one. */
+typedef struct {
+    char    buf[FAT_LFN_MAX];
+    uint8_t sum;                /* checksum the chain claims     */
+    int     have;               /* any pieces collected          */
+    int     broken;             /* a gap or overflow: distrust it */
+} lfn_acc_t;
+
+static void lfn_reset(lfn_acc_t *a) {
+    a->buf[0] = '\0'; a->sum = 0; a->have = 0; a->broken = 0;
+}
+
+/* Fold one LFN entry into the accumulator. */
+static void lfn_add(lfn_acc_t *a, const dirent_t *de) {
+    const uint8_t *raw = (const uint8_t *)de;
+    uint8_t seq = (uint8_t)(raw[0] & 0x1F);
+    if (seq == 0 || seq > (FAT_LFN_MAX / 13)) { a->broken = 1; return; }
+
+    if (raw[0] & 0x40) {                 /* last in the chain: starts fresh */
+        for (int i = 0; i < FAT_LFN_MAX; i++) a->buf[i] = '\0';
+        a->sum    = raw[13];
+        a->have   = 1;
+        a->broken = 0;
+    } else if (!a->have || raw[13] != a->sum) {
+        a->broken = 1;                   /* a piece with no head, or a mixed chain */
+        return;
+    }
+
+    /* The 13 characters, in the three runs VFAT splits them into. */
+    static const int off[13] = { 1,3,5,7,9, 14,16,18,20,22,24, 28,30 };
+    int base = (seq - 1) * 13;
+    for (int k = 0; k < 13; k++) {
+        int o = base + k;
+        if (o >= FAT_LFN_MAX - 1) { a->broken = 1; return; }
+        uint16_t ch = (uint16_t)(raw[off[k]] | (raw[off[k] + 1] << 8));
+        if (ch == 0x0000 || ch == 0xFFFF) continue;        /* end or padding */
+        a->buf[o] = (ch < 0x80) ? (char)ch : '?';          /* ASCII, or a stand-in */
+    }
+}
+
+/* The finished name, or NULL if there is not a trustworthy one. */
+static const char *lfn_name(const lfn_acc_t *a, const dirent_t *de) {
+    if (!a->have || a->broken) return 0;
+    if (a->sum != lfn_checksum(de->name)) return 0;   /* belongs to another entry */
+    if (!a->buf[0]) return 0;
+    return a->buf;
+}
+
 static int is_valid(const dirent_t *de) {
     if ((uint8_t)de->name[0] == 0x00) return 0;  /* free / end */
     if ((uint8_t)de->name[0] == 0xE5) return 0;  /* deleted */
@@ -184,6 +262,7 @@ static int is_valid(const dirent_t *de) {
 
 static void fill_entry(const dirent_t *de, fat_entry_t *out) {
     format_83(de->name, de->ext, out->name);
+    out->lfn[0]  = '\0';
     out->attr    = de->attr;
     out->cluster = ((uint32_t)de->cluster_hi << 16) | de->cluster_lo;
     out->size    = de->file_size;
@@ -225,13 +304,16 @@ static void parse_83(const char *name, char fname[8], char fext[3]) {
 
 /* Copy the next '/'-delimited component of *pp into comp (FAT_NAME_MAX).
  * Advances *pp. Returns 1 if a component was produced, 0 at end of path. */
+/* One path component. The limit is FAT_LFN_MAX, not FAT_NAME_MAX: a component
+ * can be a long name now, and capping at 12 characters silently truncated
+ * "A Long Recipe Name.txt" to "A Long Recip" so nothing ever matched it. */
 static int next_component(const char **pp, char *comp) {
     const char *p = *pp;
     while (*p == '/') p++;
     if (!*p) { *pp = p; return 0; }
     int i = 0;
     while (*p && *p != '/') {
-        if (i < FAT_NAME_MAX - 1) comp[i++] = *p;
+        if (i < FAT_LFN_MAX - 1) comp[i++] = *p;
         p++;
     }
     comp[i] = '\0';
@@ -263,6 +345,8 @@ static int dir_sector_lba(uint32_t dir_cl, uint32_t idx, uint32_t *lba) {
 static int dir_find(uint32_t dir_cl, const char *name,
                     dirent_t *out, uint32_t *ent_lba, int *ent_idx) {
     int eps = bps / 32;
+    lfn_acc_t acc;
+    lfn_reset(&acc);
     for (uint32_t s = 0; ; s++) {
         uint32_t lba;
         int r = dir_sector_lba(dir_cl, s, &lba);
@@ -271,8 +355,18 @@ static int dir_find(uint32_t dir_cl, const char *name,
         dirent_t *dir = (dirent_t *)sec_buf;
         for (int i = 0; i < eps; i++) {
             if ((uint8_t)dir[i].name[0] == 0x00) return 0;   /* end of dir */
-            if (!is_valid(&dir[i])) continue;
-            if (name_matches(name, &dir[i])) {
+
+            if (dir[i].attr == FAT_ATTR_LFN &&
+                (uint8_t)dir[i].name[0] != 0xE5) { lfn_add(&acc, &dir[i]); continue; }
+            if (!is_valid(&dir[i])) { lfn_reset(&acc); continue; }
+
+            /* Either name opens the file: the 8.3 one it has always had, or
+             * the long one a person would actually type. */
+            const char *lng = lfn_name(&acc, &dir[i]);
+            int hit = name_matches(name, &dir[i]) ||
+                      (lng && name_eq_ci(name, lng));
+            lfn_reset(&acc);
+            if (hit) {
                 if (out)     *out     = dir[i];
                 if (ent_lba) *ent_lba = lba;
                 if (ent_idx) *ent_idx = i;
@@ -287,7 +381,7 @@ static int dir_find(uint32_t dir_cl, const char *name,
 static int dir_resolve(const char *path, uint32_t *out_cl) {
     uint32_t cur = ROOT_DIR_CL;
     const char *p = path ? path : "";
-    char comp[FAT_NAME_MAX];
+    char comp[FAT_LFN_MAX];
     while (next_component(&p, comp)) {
         dirent_t de;
         if (dir_find(cur, comp, &de, 0, 0) != 1) return -1;
@@ -299,13 +393,13 @@ static int dir_resolve(const char *path, uint32_t *out_cl) {
 }
 
 /* Split `path` into the directory holding the final component (*parent_cl)
- * and that component's name (leaf, buffer >= FAT_NAME_MAX).
+ * and that component's name (leaf, buffer >= FAT_LFN_MAX).
  * Returns 0 ok, 1 if `path` names the root itself (leaf is ""), -1 if an
  * intermediate component is missing or is not a directory. */
 static int path_split(const char *path, uint32_t *parent_cl, char *leaf) {
     const char *p = path ? path : "";
-    char comp[FAT_NAME_MAX];
-    char prev[FAT_NAME_MAX];
+    char comp[FAT_LFN_MAX];
+    char prev[FAT_LFN_MAX];
     uint32_t cur = ROOT_DIR_CL;
     int have = 0;
     leaf[0] = '\0';
@@ -395,6 +489,9 @@ static int fat_ls_impl(const char *path, fat_entry_t *out, int max) {
 
     int count = 0;
     int eps   = bps / 32;
+    lfn_acc_t acc;
+    lfn_reset(&acc);                       /* outside the loop: chains span sectors */
+
     for (uint32_t s = 0; count < max; s++) {
         uint32_t lba;
         int r = dir_sector_lba(dir_cl, s, &lba);
@@ -403,9 +500,18 @@ static int fat_ls_impl(const char *path, fat_entry_t *out, int max) {
         dirent_t *dir = (dirent_t *)sec_buf;
         for (int i = 0; i < eps && count < max; i++) {
             if ((uint8_t)dir[i].name[0] == 0x00) return count;  /* end of dir */
-            if (!is_valid(&dir[i]))    continue;
-            if (dir[i].name[0] == '.') continue;   /* hide '.' and '..' */
-            fill_entry(&dir[i], &out[count++]);
+
+            if (dir[i].attr == FAT_ATTR_LFN &&
+                (uint8_t)dir[i].name[0] != 0xE5) { lfn_add(&acc, &dir[i]); continue; }
+
+            if (!is_valid(&dir[i]))    { lfn_reset(&acc); continue; }
+            if (dir[i].name[0] == '.') { lfn_reset(&acc); continue; }
+
+            fill_entry(&dir[i], &out[count]);
+            const char *lng = lfn_name(&acc, &dir[i]);
+            if (lng) strncpy(out[count].lfn, lng, FAT_LFN_MAX - 1);
+            count++;
+            lfn_reset(&acc);
         }
     }
     return count;
@@ -417,7 +523,7 @@ static int fat_read_impl(const char *path, uint8_t *buf, uint32_t bufsize, uint3
     if (!initialized || !path || !buf) return -1;
 
     uint32_t parent_cl;
-    char     leaf[FAT_NAME_MAX];
+    char     leaf[FAT_LFN_MAX];
     if (path_split(path, &parent_cl, leaf) != 0 || !leaf[0]) return -1;
 
     dirent_t de;
@@ -584,7 +690,7 @@ static int fat_write_impl(const char *path, const uint8_t *buf, uint32_t size) {
     if (!initialized || !path || fs_type_val == 32) return -1;
 
     uint32_t parent_cl;
-    char     leaf[FAT_NAME_MAX];
+    char     leaf[FAT_LFN_MAX];
     if (path_split(path, &parent_cl, leaf) != 0 || !leaf[0]) return -1;
 
     char fname[8], fext[3];
@@ -705,7 +811,7 @@ static int fat_mkdir_impl(const char *path) {
     if (!initialized || !path || fs_type_val == 32) return -1;
 
     uint32_t parent_cl;
-    char     leaf[FAT_NAME_MAX];
+    char     leaf[FAT_LFN_MAX];
     if (path_split(path, &parent_cl, leaf) != 0 || !leaf[0]) return -1;
 
     /* Must not already exist. */
@@ -762,7 +868,7 @@ static int fat_rmdir_impl(const char *path) {
     if (!initialized || !path || fs_type_val == 32) return -1;
 
     uint32_t parent_cl;
-    char     leaf[FAT_NAME_MAX];
+    char     leaf[FAT_LFN_MAX];
     if (path_split(path, &parent_cl, leaf) != 0 || !leaf[0]) return -1;
 
     dirent_t de;
@@ -810,7 +916,7 @@ empty_ok:
 static int fat_is_dir_impl(const char *path) {
     if (!initialized) return 0;
     uint32_t parent_cl;
-    char     leaf[FAT_NAME_MAX];
+    char     leaf[FAT_LFN_MAX];
     int sr = path_split(path, &parent_cl, leaf);
     if (sr == 1) return 1;                  /* the root is a directory */
     if (sr != 0 || !leaf[0]) return 0;
@@ -822,7 +928,7 @@ static int fat_is_dir_impl(const char *path) {
 static int fat_exists_impl(const char *path) {
     if (!initialized) return 0;
     uint32_t parent_cl;
-    char     leaf[FAT_NAME_MAX];
+    char     leaf[FAT_LFN_MAX];
     int sr = path_split(path, &parent_cl, leaf);
     if (sr == 1) return 1;
     if (sr != 0 || !leaf[0]) return 0;
@@ -834,7 +940,7 @@ static int fat_exists_impl(const char *path) {
 static int fat_stat_impl(const char *path, uint8_t *owner, uint8_t *mode) {
     if (!initialized) return -1;
     uint32_t parent_cl;
-    char     leaf[FAT_NAME_MAX];
+    char     leaf[FAT_LFN_MAX];
     int sr = path_split(path, &parent_cl, leaf);
     if (sr == 1) {                          /* the root */
         if (owner) *owner = 0;
@@ -860,7 +966,7 @@ static int fat_stat_impl(const char *path, uint8_t *owner, uint8_t *mode) {
 static int fat_set_meta(const char *path, uint8_t mode, uint8_t owner) {
     if (!initialized || fs_type_val == 32) return -1;
     uint32_t parent_cl;
-    char     leaf[FAT_NAME_MAX];
+    char     leaf[FAT_LFN_MAX];
     if (path_split(path, &parent_cl, leaf) != 0 || !leaf[0]) return -1;
     dirent_t de;
     uint32_t e_lba;
@@ -891,7 +997,7 @@ static int fat_delete_impl(const char *path) {
     if (!initialized || !path || fs_type_val == 32) return -1;
 
     uint32_t parent_cl;
-    char     leaf[FAT_NAME_MAX];
+    char     leaf[FAT_LFN_MAX];
     if (path_split(path, &parent_cl, leaf) != 0 || !leaf[0]) return -1;
 
     dirent_t de;
@@ -939,7 +1045,7 @@ static int fat_fopen_impl(const char *path) {
     if (fd < 0) return -1;                  /* too many open files */
 
     uint32_t parent_cl;
-    char     leaf[FAT_NAME_MAX];
+    char     leaf[FAT_LFN_MAX];
     if (path_split(path, &parent_cl, leaf) != 0 || !leaf[0]) return -1;
 
     dirent_t de;

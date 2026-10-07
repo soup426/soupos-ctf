@@ -7,7 +7,10 @@ KEYMAP = {' ':'spc', '\n':'ret', '.':'dot', '-':'minus', '_':'shift-minus',
           '/':'slash', ':':'shift-semicolon',
           '&':'shift-7', '%':'shift-5',
           '|':'shift-backslash', '<':'shift-comma', '>':'shift-dot',
-          ',':'comma', '=':'equal', '+':'shift-equal', '*':'shift-8'}
+          ',':'comma', '=':'equal', '+':'shift-equal', '*':'shift-8',
+          # 8.3 aliases of long names contain '~' (ALONGR~1.TXT), so typing
+          # one has to be possible.
+          '~':'shift-grave_accent', '?':'shift-slash', '!':'shift-1'}
 
 def keys_for(ch):
     if ch in KEYMAP: return [KEYMAP[ch]]
