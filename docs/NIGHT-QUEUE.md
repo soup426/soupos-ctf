@@ -46,7 +46,7 @@ Swap is 16 MB, shared. Measure whether one cook's processes can take all of
 it, and what happens to another cook's process that then needs a page. If
 it is real, give swap the same kind of per-cook share as the process table.
 
-## 3. A message of the day
+## 3. A message of the day — DONE v0.55.6
 
 /etc/motd, if it exists, shown after every login: console, pass and vault.
 The headchef's to write. A small one, after the last two queues.

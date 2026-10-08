@@ -142,6 +142,7 @@ void users_seal_system(void) {
         { "/etc",        FAT_PERM_OR | FAT_PERM_OW | FAT_PERM_OX | FAT_PERM_AR | FAT_PERM_AX },
         { "/home",       FAT_PERM_OR | FAT_PERM_OW | FAT_PERM_OX | FAT_PERM_AR | FAT_PERM_AX },
         { "/etc/logins", FAT_PERM_OR | FAT_PERM_OW | FAT_PERM_AR },
+        { "/etc/motd",   FAT_PERM_OR | FAT_PERM_OW | FAT_PERM_AR },
         { "/AUTHKEYS",   FAT_PERM_OR | FAT_PERM_OW | FAT_PERM_AR },
         { "/HOSTKEY.ED", FAT_PERM_OR | FAT_PERM_OW },
     };

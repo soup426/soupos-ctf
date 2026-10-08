@@ -340,6 +340,31 @@ static void ip_dotted(uint32_t a, char *out) {          /* out: 16 bytes */
     out[k] = '\0';
 }
 
+/* /etc/motd, if there is one, after every interactive login: console, pass
+ * and vault (v0.55.6). The headchef's to write (/etc is closed to cooks and
+ * users_seal_system pins it rw-r--). Control characters other than newline
+ * and tab are dropped, so the file cannot send a terminal escape sequences;
+ * at most 2 KB is shown. */
+static void show_motd(void) {
+    static char motd[2049];
+    uint32_t got = 0;
+    if (fat_read("/etc/motd", (uint8_t *)motd, sizeof(motd) - 1, &got) < 0 || got == 0) return;
+    if (got > sizeof(motd) - 1) got = sizeof(motd) - 1;     /* fat_read reports the file's size */
+    t_color(VGA_YELLOW, VGA_BLACK);
+    int at_start = 1;
+    for (uint32_t i = 0; i < got; i++) {
+        char c = motd[i];
+        if (c == '\r') continue;
+        if (c != '\n' && c != '\t' && (c < ' ' || c == 127)) continue;
+        if (at_start && c != '\n') { t_puts("  "); at_start = 0; }
+        t_putc(c);
+        if (c == '\n') at_start = 1;
+    }
+    if (!at_start) t_putc('\n');
+    t_putc('\n');
+    t_color(VGA_LIGHT_GREY, VGA_BLACK);
+}
+
 static void do_login(void) {
     char name[USER_NAME_MAX];
     char secret[64];
@@ -373,6 +398,7 @@ static void do_login(void) {
                        users_current_name(),
                        users_is_headchef() ? " (headchef -- run of the kitchen)" : "");
             t_color(VGA_LIGHT_GREY, VGA_BLACK);
+            show_motd();
             return;
         }
         t_color(VGA_LIGHT_RED, VGA_BLACK);
@@ -4356,6 +4382,7 @@ static void session_task(void *arg) {
         t_printf("\n  soupOS over SSH: a shell of your own. Welcome to the kitchen, %s.\n\n",
                  users_current_name());
         t_color(VGA_LIGHT_GREY, VGA_BLACK);
+        show_motd();
         prompt();
         shell_loop(input, saved, &pos, &len, &hb);
     }

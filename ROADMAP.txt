@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.55.5
+Current version: v0.55.6
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,21 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.55.6 (2026-10-08)  — A MESSAGE OF THE DAY
+  Thirteenth queue, item 3 (item 2, swap shares, is set aside; see the
+  queue's notes).
+  - /etc/motd, if it exists, is shown after every interactive login: the
+    console, the pass (which is the console) and vault sessions. Not to
+    `ssh host command`, whose output a script may be reading. Control
+    characters other than newline and tab are dropped, so the file cannot
+    send a terminal escape sequences; at most 2 KB is shown. The file is
+    the headchef's: /etc is closed to cooks, and users_seal_system now pins
+    /etc/motd rw-r--.
+  - scripts/motd-test.sh, in check.sh: a motd with an embedded clear-screen
+    escape; a console login and an SSH login show it with the ESC byte
+    dropped, `ssh host whoami` gets its answer and no message, and the
+    file is the headchef's, rw-r--.
 
 v0.55.5 (2026-10-08)  — ONE COOK CANNOT FILL THE DISK AGAINST THE HEADCHEF
   Thirteenth queue, item 1.
