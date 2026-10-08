@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.39.1
+Current version: v0.39.2
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,23 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.39.2 (2026-10-07)  — TCP WAITS HALT; THE CPU THEY WERE BLAMED FOR IS NOT THEIRS
+  Fourth queue, item 6, closed with the premise measured false.
+  - The item said TCP's yield loops burn the cpu. Idle, with an SSH session
+    connected: vault 0%, session 0%, machine 100% idle. Under load (the
+    host fetching a 1 MB file from hatch in a loop, about 7 MB/s, which
+    first needed v0.39.1's fix to work at all): hatch 95%, idle 5%.
+  - The loops were changed to halt between checks, like every other wait
+    loop since v0.31.0 (net_wait: yield, then halt if interrupts are on).
+    Result: hatch 97%, idle 3%. No change. A TSC profile said why: 320
+    waits across 46 fetches, because SLIRP's ACK has always arrived by the
+    time the loop looks. The cost is the emulated NIC - 47,338 frames at
+    about 42,000 cycles each to transmit, plus the ACKs' receive
+    interrupts - which is real work charged to whoever is running.
+  - Kept, as hygiene and for the rule, with the measurement in the comment
+    so nobody mistakes it for a speed-up. hatch now logs the machine's idle
+    figure when it closes. Gate 92.
 
 v0.39.1 (2026-10-07)  — HATCH LEAKED KERNEL MEMORY; FIVE fat_read CALLERS OVERRAN
   Found while setting up a measurement for queue item 6, not by looking.

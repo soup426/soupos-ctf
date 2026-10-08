@@ -131,7 +131,7 @@ wake it, and halt in between (so the host gets the cpu to finish the I/O).
 Measure before and after with the swap greedy run under KVM and with the
 free-cluster yardstick; both numbers are in the log.
 
-## 6. The TCP waits burn the cpu
+## 6. The TCP waits burn the cpu — CLOSED v0.39.2: measured false (the cost is the emulated NIC); waits halt anyway
 
 `tcp_send_on` waits for the ack in a `task_yield()` loop with no halt, and
 the receive side polls. With honest cpu figures (v0.31.0) this shows: watch

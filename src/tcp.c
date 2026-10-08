@@ -273,6 +273,24 @@ void tcp_input(uint32_t src_ip, const uint8_t *seg, uint16_t len) {
     }
 }
 
+/* Wait for the network, and do not burn the cpu doing it (queue item 6):
+ * let any other task run, then halt until the next interrupt - the NIC's,
+ * when an ACK or data arrives. Only when interrupts are on: the pass's
+ * console sink can call tcp_send_on from inside a syscall, and halting with
+ * interrupts off would never wake. Measured, though: this changed nothing.
+ * hatch serving 1 MB files in a loop takes 95-98% of the machine before and
+ * after, and a TSC profile shows why - 320 waits in 46 fetches, because
+ * SLIRP's ACK has always arrived by the time the loop looks. The cost is
+ * the emulated NIC (about 42,000 cycles a frame to transmit, plus the
+ * receive interrupts), which is real work. Kept because every other wait
+ * loop in the kernel halts and this one should not be the exception. */
+static void net_wait(void) {
+    task_yield();
+    uint32_t f;
+    __asm__ volatile ("pushf; pop %0" : "=r"(f));
+    if (f & 0x200) cpu_halt();
+}
+
 int tcp_send_on(int h, const void *data, uint16_t len) {
     tcp_conn_t *c = conn_at(h);
     if (!c) return -1;
@@ -298,7 +316,7 @@ int tcp_send_on(int h, const void *data, uint16_t len) {
             while (timer_get_ticks() < until) {
                 if ((int32_t)(c->snd_una - (seq + chunk)) >= 0) { acked = 1; break; }
                 if (c->refused || c->state != TCP_ESTABLISHED) return -1;
-                task_yield();
+                net_wait();
             }
         }
         if (!acked) {
@@ -325,7 +343,7 @@ int tcp_recv_on(int h, uint8_t *out, uint16_t max, uint32_t ticks) {
     uint32_t until = timer_get_ticks() + ticks;
     while (c->rx_len == 0 && timer_get_ticks() < until) {
         if (c->refused || c->peer_fin) break;
-        task_yield();
+        net_wait();
     }
     if (c->rx_len == 0) return 0;
 
@@ -400,7 +418,7 @@ int tcp_connect(uint32_t dst_ip, uint16_t dst_port) {
                      (dst_ip >> 8) & 0xFF, dst_ip & 0xFF, dst_port);
                 return -1;
             }
-            task_yield();
+            net_wait();
         }
     }
 
@@ -442,7 +460,7 @@ void tcp_close_on(int h) {
     while (timer_get_ticks() < until) {
         if (c->state == TCP_CLOSED || c->state == TCP_TIME_WAIT) break;
         if (c->refused) break;
-        task_yield();
+        net_wait();
     }
 
     /* TIME_WAIT exists so a late duplicate of the last segment cannot be
@@ -454,7 +472,7 @@ void tcp_close_on(int h) {
      * reusing a port pair within that window could confuse a peer. */
     if (c->state == TCP_TIME_WAIT) {
         uint32_t linger = timer_get_ticks() + 20;
-        while (timer_get_ticks() < linger) task_yield();
+        while (timer_get_ticks() < linger) net_wait();
         c->state = TCP_CLOSED;
         klog("[tcp] closed cleanly\n");
         return;
@@ -524,8 +542,7 @@ int tcp_accept(uint16_t port, uint32_t ticks) {
             }
         }
         if (timer_get_ticks() - start >= ticks) return -1;
-        task_yield();
-        cpu_halt();
+        net_wait();
     }
 }
 
