@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.7
+Current version: v0.60.8
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,14 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.8 (2026-10-08)  — FLIP
+  - flip.elf turns every line backwards, byte by byte, as rev does under
+    LC_ALL=C: the newline stays at the end of its line and a last line with
+    no newline comes out with none. It reads a file or stdin.
+  - scripts/flip-test.sh compares nine forms with the host's rev byte for
+    byte (an empty line, a 6 KB line, a file of only newlines, pipes, and a
+    file flipped twice coming back unchanged).
 
 v0.60.7 (2026-10-08)  — KITCHEN NAMES FOR THE TEST AND DEMO PROGRAMS
   - As the user asked after v0.60.6: hello.elf is greet, hog glutton, spin

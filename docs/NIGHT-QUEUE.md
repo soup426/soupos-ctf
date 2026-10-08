@@ -32,7 +32,7 @@ two more tools and makes the prompt finish words for you.
 
 ---
 
-## 1. flip.elf
+## 1. flip.elf — DONE v0.60.8
 
 Each line reversed, character by character, as rev does; a last line with
 no newline keeps none. Compare with the host's rev.

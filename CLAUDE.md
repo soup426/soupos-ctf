@@ -3,7 +3,7 @@
 ## What this is
 
 soupOS is a 32-bit x86 hobby OS written in C and NASM assembly (currently
-**v0.60.7**; ROADMAP.txt is the authority on the version). It boots via GRUB and runs in protected mode with paging, a
+**v0.60.8**; ROADMAP.txt is the authority on the version). It boots via GRUB and runs in protected mode with paging, a
 physical/heap allocator, and a cooperative scheduler. On top of that:
 
 - **Filesystem**: FAT16 read/write with subdirectories ("bowls") and a VFS shim
@@ -902,7 +902,7 @@ for 6 s at 0.3 s into the boot; the old driver garbled the login 3 of 3.
 ## Kitchen names (v0.60.6)
 
 Every new command gets a kitchen name: shell builtins AND ring-3 programs
-(sift.elf, not grep.elf; spoon.elf, not spoon.elf). Tests compare behaviour with the host tool under
+(sift.elf, not grep.elf; spoon.elf, not cat.elf). Tests compare behaviour with the host tool under
 its real name; only the soupOS side is kitchen-named. sh syntax keywords
 (for, if, while, ...) stay as sh has them.
 
