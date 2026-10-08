@@ -40,7 +40,7 @@ breaks when a cook fills the disk, then keep a reserve of clusters only the
 headchef (and the kernel's own files) may use, the way ext filesystems keep
 5% for root. Check with fsck and mtools.
 
-## 2. One cook can fill swap
+## 2. One cook can fill swap — SET ASIDE 2026-10-08 (see the note at the bottom)
 
 Swap is 16 MB, shared. Measure whether one cook's processes can take all of
 it, and what happens to another cook's process that then needs a page. If
@@ -59,4 +59,8 @@ Carried; the user asked to keep to OS work.
 
 ## Notes left by unattended runs
 
-(none yet)
+- 2026-10-08, item 2: set aside, unbuilt. The measurement found that one
+  cook's background processes can take all 4096 swap pages, after which
+  another cook's program that needs a page is killed. No fix was written,
+  and the throwaway test-program change used to measure it was reverted.
+  Leave it for a person to decide whether and how to pick it up.
