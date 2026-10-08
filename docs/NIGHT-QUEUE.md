@@ -1,11 +1,11 @@
 # Night queue
 
-Fifteenth queue. The first fourteen are in `docs/queue-archive-2026-10-0*.md`.
+Sixteenth queue. The first fifteen are in `docs/queue-archive-2026-10-0*.md`.
 Two items wait on a person, with notes in their archives: the seventh's
-syscall-pointer item and the thirteenth's swap-shares item. The fourteenth
-added >>, grep, head, tail and sort, and fixed redirection losing big output;
-this one adds the next tools a pipeline wants. Each is checked byte for byte
-against the host's own.
+syscall-pointer item and the thirteenth's swap-shares item. The fifteenth
+added uniq, wc's flags, tee and cut; this one adds tr, then teaches the
+shell to chain commands on their exit codes, which the tools now give
+honestly.
 
 ## Standing rules
 
@@ -33,30 +33,26 @@ against the host's own.
 
 ---
 
-## 1. uniq.elf — DONE v0.56.5
+## 1. tr.elf
 
-Adjacent duplicate lines folded, with -c (counts, in the host's format) and
--d (only the repeated ones). Compare with the host's uniq over the same
-inputs, sorted and unsorted, with and without a final newline.
+Translate one set of characters to another, with ranges (a-z) and the
+shorter set padded with its last character as tr does; -d deletes the set;
+-s squeezes runs. Compare with the host's tr in the C locale.
 
-## 2. wc.elf learns -l, -w and -c — DONE v0.56.6
+## 2. ; && and || in the shell
 
-wc.elf prints its own format. Give it the host's: the counts it is asked
-for, in the host's column widths, from a file (with its name) or stdin.
-Compare with the host's wc for each flag.
+`a ; b` runs both, `a && b` runs b only if a exited 0, `a || b` only if it
+did not. Left to right, as sh groups them. A builtin's status counts too
+(0, or 1 when it refused). Compare the sequence of what ran with the host
+shell running the same commands.
 
-## 3. tee.elf — DONE v0.56.7
+## 3. $? in the shell
 
-stdin to stdout and to a file, -a to append; the file follows the cook's
-permissions like any other write. Compare the stdout and the file with the
-host's tee.
+The last command's exit status, substituted where `$?` appears in a
+command line. Test it after a program that exits 0, one that exits
+non-zero, one killed, and a builtin that refused.
 
-## 4. cut.elf — DONE v0.56.8
-
--d C -f N[,M...] and -f N-M: fields by a one-character delimiter, lines
-without it printed whole as cut does. Compare with the host's cut.
-
-## 5. Doom at the framebuffer's own resolution — DEFERRED
+## 4. Doom at the framebuffer's own resolution — DEFERRED
 
 Carried; the user asked to keep to OS work.
 
