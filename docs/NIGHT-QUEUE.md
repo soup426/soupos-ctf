@@ -40,7 +40,7 @@ with the user in front), accept a key only for the cook it names, keep
 reading the old bare form as headchef-only rather than everyone, and test
 that saucier's key does not open headchef's account.
 
-## 2. Guessing a password over the network costs time
+## 2. Guessing a password over the network costs time — DONE v0.50.0 (124 a minute to about 2)
 
 The vault allows six attempts per connection and a client can reconnect at
 once, so the only limit on guessing is PBKDF2's 50 ms. Add a delay after each

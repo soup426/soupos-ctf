@@ -75,6 +75,8 @@ typedef struct {
     int      chan_open;
     int      close_sent;
     uint8_t  uid;                   /* who authenticated */
+    uint32_t peer_ip;               /* for the failed-login count (v0.50.0) */
+    uint32_t pw_fails;              /* failed passwords on this connection */
     int      pty_cols, pty_rows;    /* from pty-req, for the terminal */
     term_stream_t term;             /* the channel, as a terminal (v0.36.0) */
     void    *shell;                 /* the session shell on it, once started */
@@ -194,14 +196,19 @@ static int namelist_has(const uint8_t *list, uint32_t len, const char *name) {
 /* One session at a time, and a second client should be told so rather than
  * left to time out. Lines before the version string are allowed by RFC 4253
  * and OpenSSH prints them, so the reason reaches the person's terminal. */
+static void refuse_with(int other, const char *why);
 static void refuse_busy(int other) {
+    klog("[ssh] refused a client: all %u sessions busy\n", (unsigned)SSH_MAX_CONN);
+    refuse_with(other, "the vault is busy: every session slot is in use, try again later");
+}
+
+static void refuse_with(int other, const char *why) {
     /* A line before the version string is only shown by `ssh -v`. What the
      * client prints unprompted is a DISCONNECT, so: our version line, then a
      * plain (pre-key-exchange) DISCONNECT with reason 12, "too many
      * connections", and the words. The client shows "Received disconnect
      * from ...: 12: the vault is busy ...". */
     static const char ver[] = "SSH-2.0-soupOS_0.34\r\n";
-    static const char why[] = "the vault is busy: every session slot is in use, try again later";
     uint8_t pkt[128]; wbuf_t b; w_init(&b, pkt + 5, sizeof(pkt) - 5);
     w_u8(&b, MSG_DISCONNECT); w_u32(&b, 12); w_cstr(&b, why); w_cstr(&b, "");
     uint32_t len = b.len, pad = 8 - ((5 + len) % 8);
@@ -213,7 +220,6 @@ static void refuse_busy(int other) {
     tcp_send_on(other, ver, sizeof(ver) - 1);
     tcp_send_on(other, pkt, (uint16_t)(4 + plen));
     tcp_close_on(other);
-    klog("[ssh] refused a client: all %u sessions busy\n", (unsigned)SSH_MAX_CONN);
 }
 
 /* ── packets ────────────────────────────────────────────────────────────── */
@@ -608,6 +614,46 @@ static int key_authorized(const char *user, const uint8_t *blob, uint32_t blob_l
     return 0;
 }
 
+/* ── guessing costs time (v0.50.0) ─────────────────────────────────────────
+ * Measured before: the real client got 124 wrong guesses a minute through
+ * one address, bounded only by the key exchange and PBKDF2. Now each failed
+ * password costs its connection a pause (1 s, doubling, capped at 8), and an
+ * address with FAIL_LIMIT failures inside FAIL_WINDOW is refused at the door
+ * until it has been quiet that long. A successful login clears its count. */
+#define FAIL_LIMIT  10
+#define FAIL_WINDOW (5 * 60 * 100)                 /* ticks: five minutes */
+static struct { uint32_t ip, fails, last; } fail_table[8];
+
+static int fail_slot(uint32_t ip, int make) {
+    int oldest = 0;
+    for (int i = 0; i < 8; i++) {
+        if (fail_table[i].ip == ip && fail_table[i].fails) return i;
+        if (fail_table[i].last < fail_table[oldest].last) oldest = i;
+    }
+    if (!make) return -1;
+    fail_table[oldest].ip = ip; fail_table[oldest].fails = 0;
+    return oldest;
+}
+
+static int address_locked(uint32_t ip) {
+    int i = fail_slot(ip, 0);
+    if (i < 0) return 0;
+    if (timer_get_ticks() - fail_table[i].last > FAIL_WINDOW) { fail_table[i].fails = 0; return 0; }
+    return fail_table[i].fails >= FAIL_LIMIT;
+}
+
+static void note_failure(uint32_t ip) {
+    int i = fail_slot(ip, 1);
+    if (timer_get_ticks() - fail_table[i].last > FAIL_WINDOW) fail_table[i].fails = 0;
+    fail_table[i].fails++;
+    fail_table[i].last = timer_get_ticks();
+}
+
+static void note_success(uint32_t ip) {
+    int i = fail_slot(ip, 0);
+    if (i >= 0) fail_table[i].fails = 0;
+}
+
 /* ── userauth: password against the roster, or an ed25519 key on the disk ── */
 static int userauth(void) {
     for (int attempts = 0; attempts < 6; attempts++) {
@@ -669,11 +715,21 @@ static int userauth(void) {
             }
         }
         if (ok) {
+            note_success(S.peer_ip);
             if (strcmp(m, "password") == 0) klog("[ssh] %s authenticated by password\n", u);
             uint8_t ok_msg = MSG_USERAUTH_SUCCESS;
             return write_packet(&ok_msg, 1);
         }
         klog("[ssh] userauth %s by %s: refused\n", u, m);
+        if (strcmp(m, "password") == 0) {
+            /* A wrong password, not the client's "none" probe or a key
+             * question: it costs this connection a pause, and the address
+             * a mark. */
+            note_failure(S.peer_ip);
+            uint32_t pause = 1000u << (S.pw_fails < 3 ? S.pw_fails : 3);
+            S.pw_fails++;
+            task_sleep(pause);
+        }
         uint8_t mem[64]; wbuf_t b; w_init(&b, mem, sizeof(mem));
         w_u8(&b, MSG_USERAUTH_FAILURE); w_cstr(&b, "publickey,password"); w_u8(&b, 0);
         if (write_packet(b.p, b.len) < 0) return -1;
@@ -813,9 +869,11 @@ static void connection_loop(void) {
 static void session(void) {
     ssh_t *me = &S;
     task_t *t = me->task;
+    uint32_t ip = me->peer_ip;              /* set by the listener before the wipe */
     memset(me, 0, sizeof(*me));
     me->task = t;
     me->used = 1;
+    me->peer_ip = ip;
     S.h = -1;
     S.ohead = S.otail = 0;
 }
@@ -920,7 +978,20 @@ static void ssh_task(void *arg) {
             if (!conn_slots[i].used) { slot = &conn_slots[i]; slot->used = 1; slot->task = 0; break; }
         preempt_enable();
         if (!slot) { refuse_busy(h); continue; }
+        uint32_t pip = 0;
+        tcp_conn_at(h, 0, &pip, 0, 0);
+        if (address_locked(pip)) {
+            /* The busy refusal's shape, with its own reason. */
+            /* Logged first: the refusal ends with a graceful close that
+             * waits for the peer, and the log line should not wait on it. */
+            klog("[ssh] refused %u.%u.%u.%u: too many failed logins\n",
+                 (pip >> 24) & 255, (pip >> 16) & 255, (pip >> 8) & 255, pip & 255);
+            refuse_with(h, "too many failed logins from your address; try again in a few minutes");
+            preempt_disable(); slot->used = 0; preempt_enable();
+            continue;
+        }
         slot->h = h;
+        slot->peer_ip = pip;
         if (!task_spawn("ssh:conn", ssh_conn_task, slot)) {
             slot->used = 0;
             tcp_close_on(h);

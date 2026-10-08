@@ -914,6 +914,10 @@ may be large, stream with `vfs_open`/`vfs_read` instead, as hatch now does.
 
 ## The vault is per connection (v0.42.0)
 
+Failed passwords pause the connection and count against the address
+(`fail_table`, 10 in 5 minutes locks it; v0.50.0). Every SSH test connects from
+10.0.2.2, so a test that fails passwords on purpose must boot its own soupOS.
+
 `conn_slots[SSH_MAX_CONN]` (4), a worker task each; `S` is `*cur_ssh()`, the
 slot of the calling task. Code that runs on a SESSION task (the terminal's
 `stream_write`) must use its ctx pointer, never `S`. Any new buffer in ssh.c

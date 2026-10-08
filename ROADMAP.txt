@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.49.0
+Current version: v0.50.0
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,30 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.50.0 (2026-10-07)  — GUESSING A PASSWORD OVER THE NETWORK COSTS TIME
+  Seventh queue, item 2.
+  - Measured first, with the real client from one address: 124 wrong
+    guesses a minute, bounded only by the key exchange and PBKDF2 -
+    about 178,000 a day.
+  - Each wrong password now pauses its connection before the answer (1 s,
+    doubling, capped at 8), and ten failures from one address inside five
+    minutes shut that address out at the door - a DISCONNECT saying why -
+    until it has been quiet that long. A successful login clears the count.
+    Key questions and the client's "none" probe do not count.
+  - Measured after: with the pauses alone, 41 a minute. With the lockout,
+    10 guesses and then 210 refused connections in the rest of the minute:
+    about two a minute sustained, from 124.
+  - Two bugs on the way, both in the change itself and both found by its
+    own test: the per-connection slot wipe zeroed the peer address the
+    listener had just stored, so every failure was recorded against
+    address 0 and the lockout never fired; and the refusal's log line ran
+    after a graceful close that waits on the peer, so a test that stops
+    quickly never saw it. The test's first failure was its own: it read
+    "Permission denied, please try again" as the end of a connection.
+  - scripts/guess-test.sh boots its own soupOS (it locks the host out,
+    which would break any test after it): three wrong guesses take at
+    least 7 s, and after ten the right password is refused at the door.
 
 v0.49.0 (2026-10-07)  — A KEY LOGS IN AS ITS OWN COOK
   Seventh queue, item 1.
