@@ -32,7 +32,7 @@ arithmetic, while loops (and a way out of them), and script arguments.
 
 ---
 
-## 1. Arithmetic
+## 1. Arithmetic — DONE v0.60.0
 
 $(( EXPR )) with integers: + - * / % and parentheses, unary -, the
 comparisons < <= > >= == != (1 or 0), $NAME and bare NAME for variables,

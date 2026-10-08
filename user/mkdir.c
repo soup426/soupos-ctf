@@ -9,8 +9,8 @@
 #include "ulib.h"
 
 int main(void) {
-    char *argv[16];
-    int argc = uargv(argv, 16);   /* quoted names may hold spaces (v0.57.2) */
+    char *argv[64];                 /* 128 bytes of arguments hold up to 64 (v0.60.0: 16 dropped the 17th) */
+    int argc = uargv(argv, 64);   /* quoted names may hold spaces (v0.57.2) */
     if (argc <= 0) { eprint("usage: mkdir.elf PATH [PATH...]\n"); return 1; }
     int failed = 0;
     for (int i = 0; i < argc; i++) {

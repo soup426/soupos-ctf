@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.59.4
+Current version: v0.60.0
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,23 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.0 (2026-10-08)  — ARITHMETIC
+  Twenty-second queue, item 1.
+  - $(( EXPR )) in expand_seg: integers, + - * / % and parentheses, unary
+    - and +, the comparisons < <= > >= == != (1 or 0), variables as NAME
+    or $NAME (unset or not a number: 0), with C's precedence as sh has.
+    A recursive-descent evaluator. Division by zero, or something that is
+    not an expression, is said, and the command is not run, status 1. One
+    difference, written down: sh running a script ends the whole script on
+    such an error; soupOS stops that command only.
+  - Found by the test: echo.elf, rm.elf and mkdir.elf had room for 16
+    arguments and dropped the rest silently (echo printed 16 of 17
+    values). 128 bytes of arguments hold up to 64; they take 64 now.
+  - scripts/arith-test.sh, in check.sh: 17 expressions (precedence,
+    parentheses, the comparisons, negative division and remainder, an
+    unset name) give sh's values; N=$((N+1)) twice counts to 2; 1/0 is
+    said, its command not run, status 1.
 
 v0.59.4 (2026-10-08)  — cmp.elf
   Twenty-first queue, item 3.

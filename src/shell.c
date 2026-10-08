@@ -4419,8 +4419,90 @@ static void cmd_unset(const char *args) {
         }
 }
 
-/* Expand one command's text: ~, $NAME / ${NAME} and $?, quotes left in
- * for the parts that follow (v0.57.1-v0.58.0; one function since v0.59.3). */
+/* $(( EXPR )) (v0.60.0): integers, + - * / % and parentheses, unary - and
+ * +, the comparisons < <= > >= == != giving 1 or 0, variables as NAME or
+ * $NAME (empty or not a number: 0). C's precedence, as sh's. Division by
+ * zero sets arith_err: the command is not run and its status is 1. */
+static int arith_err;
+static const char *ap;               /* where the parser is */
+static long a_eq(void);
+static void a_sp(void) { while (*ap == ' ') ap++; }
+static long a_var(const char *name) {
+    shell_t *me = cur_shell();
+    for (int v = 0; v < me->nvars; v++)
+        if (str_eq(me->vname[v], name)) {
+            const char *x = me->vval[v]; long n = 0; int neg = 0;
+            while (*x == ' ') x++;
+            if (*x == '-') { neg = 1; x++; }
+            while (*x >= '0' && *x <= '9') n = n * 10 + (*x++ - '0');
+            return neg ? -n : n;
+        }
+    return 0;
+}
+static long a_prim(void) {
+    a_sp();
+    if (*ap == '(') { ap++; long v = a_eq(); a_sp(); if (*ap == ')') ap++; else arith_err = 1; return v; }
+    if (*ap == '-') { ap++; return -a_prim(); }
+    if (*ap == '+') { ap++; return a_prim(); }
+    if (*ap >= '0' && *ap <= '9') { long v = 0; while (*ap >= '0' && *ap <= '9') v = v * 10 + (*ap++ - '0'); return v; }
+    if (*ap == '$') ap++;
+    if (*ap == '_' || (*ap >= 'A' && *ap <= 'Z') || (*ap >= 'a' && *ap <= 'z')) {
+        char name[16]; int n = 0;
+        while ((*ap == '_' || (*ap >= 'A' && *ap <= 'Z') || (*ap >= 'a' && *ap <= 'z') || (*ap >= '0' && *ap <= '9')) && n < 15) name[n++] = *ap++;
+        name[n] = '\0';
+        return a_var(name);
+    }
+    arith_err = 1;
+    return 0;
+}
+static long a_mul(void) {
+    long v = a_prim();
+    for (;;) {
+        a_sp();
+        char o = *ap;
+        if (o != '*' && o != '/' && o != '%') return v;
+        ap++;
+        long r = a_prim();
+        if (o == '*') v *= r;
+        else if (r == 0) { arith_err = 2; return 0; }
+        else if (o == '/') v /= r;
+        else v %= r;
+    }
+}
+static long a_add(void) {
+    long v = a_mul();
+    for (;;) { a_sp(); if (*ap == '+') { ap++; v += a_mul(); } else if (*ap == '-') { ap++; v -= a_mul(); } else return v; }
+}
+static long a_rel(void) {
+    long v = a_add();
+    for (;;) {
+        a_sp();
+        if (ap[0] == '<' && ap[1] == '=') { ap += 2; v = v <= a_add(); }
+        else if (ap[0] == '>' && ap[1] == '=') { ap += 2; v = v >= a_add(); }
+        else if (ap[0] == '<') { ap++; v = v < a_add(); }
+        else if (ap[0] == '>') { ap++; v = v > a_add(); }
+        else return v;
+    }
+}
+static long a_eq(void) {
+    long v = a_rel();
+    for (;;) {
+        a_sp();
+        if (ap[0] == '=' && ap[1] == '=') { ap += 2; v = v == a_rel(); }
+        else if (ap[0] == '!' && ap[1] == '=') { ap += 2; v = v != a_rel(); }
+        else return v;
+    }
+}
+static long arith(const char *expr) {
+    ap = expr;
+    long v = a_eq();
+    a_sp();
+    if (*ap && !arith_err) arith_err = 1;            /* something left over */
+    return v;
+}
+
+/* Expand one command's text: ~, $NAME / ${NAME}, $? and $((...)), quotes
+ * left in for the parts that follow (v0.57.1-v0.60.0). */
 static void expand_seg(const char *seg, char *ex) {
     int  k = 0;
     char sq = 0;                     /* inside '...', $? is left alone */
@@ -4440,6 +4522,23 @@ static void expand_seg(const char *seg, char *ex) {
             const char *h = home;
             if (seg[i + 1] == '/' && h[0] == '/' && h[1] == '\0') h = "";   /* ~/X with home / */
             while (*h && k < INPUT_MAX - 1) ex[k++] = *h++;
+            continue;
+        }
+        if (seg[i] == '$' && seg[i + 1] == '(' && seg[i + 2] == '(' && sq != '\'') {
+            int j = i + 3, depth = 0;
+            while (seg[j] && !(depth == 0 && seg[j] == ')' && seg[j + 1] == ')')) {
+                if (seg[j] == '(') depth++; else if (seg[j] == ')') depth--;
+                j++;
+            }
+            if (!seg[j]) { ex[k++] = seg[i]; continue; }       /* no )): leave it */
+            char expr[INPUT_MAX]; int el = j - (i + 3);
+            memcpy(expr, seg + i + 3, (uint32_t)el); expr[el] = '\0';
+            long v = arith(expr);
+            char d[24]; int nd = 0; unsigned long u = v < 0 ? (unsigned long)(-v) : (unsigned long)v;
+            do { d[nd++] = (char)('0' + u % 10); u /= 10; } while (u);
+            if (v < 0) d[nd++] = '-';
+            while (nd && k < INPUT_MAX - 1) ex[k++] = d[--nd];
+            i = j + 1;
             continue;
         }
         /* $NAME and ${NAME} (v0.58.0): a shell variable, empty if unset;
@@ -4477,7 +4576,13 @@ static void run_one(const char *seg) {
     const char *q = seg; while (*q == ' ') q++;
     if (!*q) return;
     char ex[INPUT_MAX];
+    arith_err = 0;
     expand_seg(seg, ex);
+    if (arith_err) {
+        t_puts(arith_err == 2 ? "  arithmetic: division by zero\n" : "  arithmetic: not an expression\n");
+        cur_shell()->last_status = 1;
+        return;
+    }
     if (!try_assign(ex)) dispatch(ex);
 }
 
