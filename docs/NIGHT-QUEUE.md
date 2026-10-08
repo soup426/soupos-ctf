@@ -42,7 +42,7 @@ no newline keeps none. Compare with the host's rev.
 Lines numbered as `nl -ba` numbers them (every line, empty ones included,
 the number right-aligned in six columns and a tab). Compare with the host.
 
-## 3. Tab finishes a word at the prompt
+## 3. Tab finishes a word at the prompt — DONE v0.60.10
 
 Tab after part of the first word finishes it to a command name when only
 one fits (a builtin, or a program on the disk); after a later word it
@@ -58,6 +58,14 @@ doubling buffer leaves every old copy behind in the bump allocator. Keep
 only the last N lines (a ring of line starts over a bounded buffer, or
 reading a regular file from its end) so any size works; compare with the
 host's tail at that size.
+
+## 6. A cook who clocks in sees the last cook's history
+
+Seen 2026-10-08 in tab-test: after headchef clocks out and intern clocks
+in on the console, `leftovers` lists headchef's commands (including the
+`hire` lines). The history belongs to the console's shell, not the cook.
+Clear it at clockout (or keep one per cook); check that the up arrow
+shows nothing from before, too.
 
 ## 4. Doom at the framebuffer's own resolution — DEFERRED
 

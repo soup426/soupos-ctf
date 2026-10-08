@@ -80,6 +80,7 @@ typedef struct {
     char    parg[9][64];         /* a script's $1..$9 (v0.60.2)            */
     int     npargs;              /* $#                                      */
     uint32_t started, last_input;/* ticks: for `who`                          */
+    int     tabs;                /* Tabs in a row: the second lists (v0.60.10) */
 } shell_t;
 
 /* The console's shell. A session's shell_t is kmalloc'd by
@@ -684,7 +685,7 @@ static void cmd_menu(void) {
         {0, "    sleeptest          - test task_sleep and wait-queue (500 ms sleep)"},
         {0, "    vfstest            - test the VFS shim (/dev nodes + file round-trip)"},
         {0, "    dmesg              - dump the kernel log ring buffer"},
-        {0, "  (up/down arrows, Tab to complete filenames)"},
+        {0, "  (up/down arrows, Tab finishes commands, programs, paths)"},
         {0, "  (Ctrl+A/E home/end, Ctrl+U clear line, Ctrl+W kill word, Ctrl+C cancel)"},
     };
     page_begin();
@@ -4119,62 +4120,155 @@ static int prefix_match_ci(const char *name, const char *pfx, int pfx_len) {
     return 1;
 }
 
+static char lower_c(char c) { return (c >= 'A' && c <= 'Z') ? (char)(c + 32) : c; }
+static int str_ieq(const char *a, const char *b) {
+    int l = (int)strlen(b);
+    return (int)strlen(a) == l && prefix_match_ci(a, b, l);
+}
+
+/* Tab (v0.60.10). The word before the cursor is finished from what fits
+ * where it stands:
+ *   - a command's first word (the line's, or after ; && ||): the builtins;
+ *   - the word after `cook`, or after a | : programs, the .ELF files in the
+ *     root (where cook looks) and in the current bowl;
+ *   - anything else, and any word with a / in it: a path, from its bowl,
+ *     which is only listed if the cook may read it (a private home's names
+ *     are not given away by Tab any more than by peek).
+ * One fit: the rest of it, then '/' after a bowl or a space after anything
+ * else. More than one: as much as they all share; a Tab that has nothing
+ * more to add lists them. FAT ignores case, so what a person typed in
+ * lowercase is finished in lowercase when the fit is an all-capitals 8.3
+ * name (cook fl<Tab> gives flip.elf, not flIP.ELF). */
+#define TAB_MAX (FAT_LS_MAX * 2 + 128)
+typedef struct {
+    char        name[TAB_MAX][FAT_LFN_MAX];
+    uint8_t     is_dir[TAB_MAX];
+    int         n;
+    fat_entry_t ents[FAT_LS_MAX];
+} tab_fits_t;
+
+static void tab_add(tab_fits_t *t, const char *name, int is_dir) {
+    if (t->n >= TAB_MAX) return;
+    for (int i = 0; i < t->n; i++)              /* the root and the bowl can both hold it */
+        if (str_ieq(t->name[i], name)) return;
+    strncpy(t->name[t->n], name, FAT_LFN_MAX - 1);
+    t->name[t->n][FAT_LFN_MAX - 1] = '\0';
+    t->is_dir[t->n++] = (uint8_t)is_dir;
+}
+
+/* Every entry of the bowl at `dir` starting with leaf[0..leaf_len); only
+ * .ELF files when `programs`. */
+static void tab_from_bowl(tab_fits_t *t, const char *dir, const char *leaf, int leaf_len, int programs) {
+    if (!may(dir, 'r')) return;
+    int n = fat_ls(dir, t->ents, FAT_LS_MAX);
+    for (int i = 0; i < n; i++) {
+        const char *nm = fat_display_name(&t->ents[i]);
+        int dirent = (t->ents[i].attr & FAT_ATTR_DIR) != 0;
+        if (str_eq(nm, ".") || str_eq(nm, "..")) continue;
+        if (programs) {
+            int l = (int)strlen(nm);
+            if (dirent || l < 4 || !str_ieq(nm + l - 4, ".elf")) continue;
+        }
+        if (prefix_match_ci(nm, leaf, leaf_len)) tab_add(t, nm, dirent);
+    }
+}
+
 static void shell_tab_complete(char *input, int *pos, int *len) {
-    /* Find the start of the last word before cursor */
-    int word_start = *pos;
-    while (word_start > 0 && input[word_start - 1] != ' ') word_start--;
-    int word_len = *pos - word_start;
+    shell_t *sh = cur_shell();
+    int tabs = ++sh->tabs;
 
-    /* First word on the line? Skip leading spaces to decide. */
-    int line_start = 0;
-    while (line_start < word_start && input[line_start] == ' ') line_start++;
-    int complete_commands = (word_start == line_start);
+    /* The word: back to a space or a character that ends one. */
+    int ws = *pos;
+    while (ws > 0 && input[ws - 1] != ' ' && !strchr("|;&<>", input[ws - 1])) ws--;
+    const char *word = input + ws;
+    int word_len = *pos - ws;
 
-    /* Collect candidates: commands (if first word) + filenames */
-    static char matches[FAT_LS_MAX + 32][FAT_NAME_MAX + 1];
-    int max_matches = (int)(sizeof(matches) / sizeof(matches[0]));
-    int nmatches = 0;
-
-    if (complete_commands) {
-        for (int i = 0; i < CMD_COUNT && nmatches < max_matches; i++) {
-            if (prefix_match_ci(cmd_names[i], input + word_start, word_len)) {
-                strncpy(matches[nmatches], cmd_names[i], FAT_NAME_MAX);
-                matches[nmatches][FAT_NAME_MAX] = '\0';
-                nmatches++;
-            }
-        }
+    /* Where it stands. */
+    enum { AT_CMD, AT_PROG, AT_PATH } at = AT_PATH;
+    int j = ws;
+    while (j > 0 && input[j - 1] == ' ') j--;
+    if (j == 0) at = AT_CMD;
+    else if (input[j - 1] == '<' || input[j - 1] == '>') at = AT_PATH;
+    else if (input[j - 1] == '|') at = (j >= 2 && input[j - 2] == '|') ? AT_CMD : AT_PROG;
+    else if (input[j - 1] == ';' || input[j - 1] == '&') at = AT_CMD;
+    else {
+        int k = j;
+        while (k > 0 && input[k - 1] != ' ') k--;
+        char prev[12];
+        int pl = j - k < (int)sizeof(prev) - 1 ? j - k : (int)sizeof(prev) - 1;
+        memcpy(prev, input + k, (size_t)pl); prev[pl] = '\0';
+        if (str_eq(prev, "cook")) at = AT_PROG;
+        else if (str_eq(prev, "then") || str_eq(prev, "do") || str_eq(prev, "else")) at = AT_CMD;
     }
+    int slash = -1;
+    for (int i = 0; i < word_len; i++) if (word[i] == '/') slash = i;
+    if (slash >= 0) at = AT_PATH;
 
-    static fat_entry_t entries[FAT_LS_MAX];
-    int n = fat_ls(cur_shell()->cwd, entries, FAT_LS_MAX);
-    for (int i = 0; i < n && nmatches < max_matches; i++) {
-        if (prefix_match_ci(entries[i].name, input + word_start, word_len)) {
-            /* Offer the long name: completing to an 8.3 name a person never
-             * typed is worse than not completing at all. */
-            strncpy(matches[nmatches], fat_display_name(&entries[i]), FAT_NAME_MAX);
-            matches[nmatches][FAT_NAME_MAX] = '\0';
-            nmatches++;
-        }
-    }
-    if (nmatches == 0) return;
+    /* The part being finished is what follows the word's last '/'. */
+    const char *leaf = word + slash + 1;
+    int leaf_len = word_len - (slash + 1);
 
-    if (nmatches == 1) {
-        /* Single match - insert the remaining characters */
-        const char *completion = matches[0] + word_len;
-        while (*completion) shell_insert(input, pos, len, *completion++);
+    tab_fits_t *t = kmalloc(sizeof(tab_fits_t));
+    if (!t) return;
+    t->n = 0;
+    if (at == AT_CMD) {
+        for (int i = 0; i < CMD_COUNT; i++)
+            if (prefix_match_ci(cmd_names[i], leaf, leaf_len)) tab_add(t, cmd_names[i], 0);
+    } else if (at == AT_PROG) {
+        tab_from_bowl(t, "/", leaf, leaf_len, 1);
+        if (!str_eq(sh->cwd, "/")) tab_from_bowl(t, sh->cwd, leaf, leaf_len, 1);
     } else {
-        /* Multiple matches - list them below, then redraw the prompt */
+        char dir[FAT_PATH_MAX];
+        if (slash < 0) strcpy(dir, sh->cwd);
+        else {
+            char part[FAT_PATH_MAX];
+            int pl = slash + 1 < (int)sizeof(part) - 1 ? slash + 1 : (int)sizeof(part) - 1;
+            memcpy(part, word, (size_t)pl); part[pl] = '\0';
+            resolve_path(part, dir);
+        }
+        if (fat_is_dir(dir)) tab_from_bowl(t, dir, leaf, leaf_len, 0);
+    }
+    if (t->n == 0) { kfree(t); return; }
+
+    /* As much as every fit shares. */
+    int common = (int)strlen(t->name[0]);
+    for (int i = 1; i < t->n; i++) {
+        int c = 0;
+        while (c < common && t->name[i][c] && lower_c(t->name[i][c]) == lower_c(t->name[0][c])) c++;
+        common = c;
+    }
+    int typed_lower = 0, fit_lower = 0;
+    for (int i = 0; i < leaf_len; i++) if (leaf[i] >= 'a' && leaf[i] <= 'z') typed_lower = 1;
+    for (const char *c = t->name[0]; *c; c++) if (*c >= 'a' && *c <= 'z') fit_lower = 1;
+    int fold = typed_lower && !fit_lower;
+
+    if (common > leaf_len) {
+        for (int i = leaf_len; i < common; i++) {
+            char c = t->name[0][i];
+            shell_insert(input, pos, len, fold ? lower_c(c) : c);
+        }
+        sh->tabs = 1;           /* it did what it could: the next Tab lists */
+    }
+    if (t->n == 1) {
+        if (t->is_dir[0]) shell_insert(input, pos, len, '/');
+        else if (*pos == *len || input[*pos] != ' ') shell_insert(input, pos, len, ' ');
+        sh->tabs = 0;
+    } else if (common <= leaf_len && tabs >= 2) {
+        /* Nothing more to add, asked twice: show what fits, then the line again. */
         cursor_to(*len);
         t_putc('\n');
-        for (int i = 0; i < nmatches; i++) {
-            t_puts(matches[i]);
+        for (int i = 0; i < t->n; i++) {
+            t_puts(t->name[i]);
+            if (t->is_dir[i]) t_putc('/');
             t_putc(' ');
         }
         t_putc('\n');
         prompt();   /* updates cur_shell()->prompt_row */
         for (int i = 0; i < *len; i++) t_putc(input[i]);
         cursor_to(*pos);
+        sh->tabs = 0;
     }
+    kfree(t);
 }
 
 /* ---- prompt & dispatch ---- */
@@ -5093,6 +5187,7 @@ static void shell_loop(char *input, char *saved, int *pos_p, int *len_p, int *hb
         int c = t_getc();
         if (c < 0) break;
         cur_shell()->last_input = timer_get_ticks();
+        if (c != '\t') cur_shell()->tabs = 0;
         if (console_hangup && cur_shell() == &the_shell) {
             /* The pass caller left logged in (v0.55.1). */
             console_hangup = 0;
