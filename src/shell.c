@@ -2648,7 +2648,31 @@ static void cmd_chef_elevate(const char *args) {
         char secret[64];
         t_puts("  headchef's secret: ");
         read_line(secret, sizeof(secret), '*');
-        if (users_check("headchef", secret) != 0) {
+        int ok = users_check("headchef", secret) == 0;
+        memset(secret, 0, sizeof(secret));
+#ifdef NO_CHALLENGE
+        /* chef asks for the headchef's secret, so it is a door like the
+         * others (v0.55.2). Measured on v0.55.1: 137 wrong guesses a minute
+         * from one SSH session, none recorded. Now each one is recorded as
+         * "chef:<cook>", and costs 1, 2, 4, then 8 s, counted per cook - not
+         * per session, so opening more sessions does not reset it. A right
+         * secret clears the count. CHALLENGE keeps the old chef: its stage 2
+         * is one chef with a cracked preimage, and that build stays as it
+         * was. */
+        static uint8_t chef_fails[256];
+        char where[16];
+        strcpy(where, "chef:");
+        strncpy(where + 5, users_current_name(), sizeof(where) - 6); where[sizeof(where) - 1] = '\0';
+        logins_record("headchef", where, ok);
+        if (ok) chef_fails[saved] = 0;
+        else {
+            uint32_t pause = 1000u << (chef_fails[saved] < 3 ? chef_fails[saved] : 3);
+            if (chef_fails[saved] < 255) chef_fails[saved]++;
+            klog("[users] %s: wrong headchef secret at chef, %u ms pause\n", users_current_name(), pause);
+            task_sleep(pause);
+        }
+#endif
+        if (!ok) {
             t_color(VGA_LIGHT_RED, VGA_BLACK);
             t_puts("  The headchef shakes their head. Denied.\n");
             t_color(VGA_LIGHT_GREY, VGA_BLACK);

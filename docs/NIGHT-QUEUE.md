@@ -32,7 +32,7 @@ around.
 
 ---
 
-## 1. chef is a secret-guessing oracle without brakes
+## 1. chef is a secret-guessing oracle without brakes — DONE v0.55.2
 
 `chef <command>` asks for the headchef's secret. Logins over the vault and
 the pass now cost time per wrong secret and are recorded; chef may do

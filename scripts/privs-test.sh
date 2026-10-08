@@ -24,6 +24,7 @@ keys() { python3 scripts/qemu_keys.py "$WORK/mon.sock" "$@" >/dev/null 2>&1 || {
 keys "headchef" "rosemary" "WAIT:1" "vault 22" "WAIT:2" "stir /PUBLIC.TXT anyone may read this" "WAIT:1" "clockout" "WAIT:1" \
      "cook" "soup" "WAIT:2" "vault off" "WAIT:1" "vault rekey 5" "WAIT:1" "vault idle 3" "WAIT:1" "pass 23" "WAIT:1" \
      "spill" "WAIT:1" "freeze" "WAIT:1" "reheat" "WAIT:1" "fatstress" "WAIT:1" "bowltest" "WAIT:1" "vault" "WAIT:1" \
+     "chef whoami" "WAIT:1" "wrongone" "WAIT:3" "chef whoami" "WAIT:1" "wrongtwo" "WAIT:4" \
      "chef vault idle 0" "WAIT:1" "rosemary" "WAIT:2" "hatch 80" "WAIT:2"
 code() { curl -s -o "$WORK/body" -w '%{http_code}' -m 10 "http://127.0.0.1:$PORT$1"; }
 k=$(code /etc/kitchen); h=$(code /HOSTKEY.ED); pub=$(code /PUBLIC.TXT); body=$(cat "$WORK/body")
@@ -46,4 +47,11 @@ echo "$L" | grep -q "the vault never ends an idle session" \
     && echo "  ok    chef still runs one as the headchef" || { echo "  FAIL  chef vault idle 0"; fail=1; }
 [ "$(echo "$L" | grep -c "kernel_main")" = 1 ] && echo "$L" | grep -qE "cook  \(uid 1\)" \
     && echo "  ok    the machine never went down, and the cook carries on" || { echo "  FAIL  the machine rebooted or stopped"; fail=1; }
+# chef is a door too (v0.55.2): measured on v0.55.1, 137 wrong guesses a
+# minute through it, none recorded.
+echo "$L" | grep -q "cook: wrong headchef secret at chef, 1000 ms pause" && echo "$L" | grep -q "cook: wrong headchef secret at chef, 2000 ms pause" \
+    && echo "  ok    wrong secrets at chef cost 1 s, then 2 s" || { echo "  FAIL  chef pauses"; fail=1; }
+R=$(mtype -i "$WORK/disk.img" ::/etc/logins 2>/dev/null)
+[ "$(echo "$R" | grep -cE "refused +headchef +chef:cook")" = 2 ] && echo "$R" | grep -qE "ok +headchef +chef:cook" \
+    && echo "  ok    chef's refusals and its success are in the login record, naming the cook" || { echo "  FAIL  chef in /etc/logins"; fail=1; }
 exit $fail
