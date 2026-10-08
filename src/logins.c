@@ -18,6 +18,7 @@
 #include "task.h"
 #include "heap.h"
 #include "str.h"
+#include "users.h"
 
 static mutex_t logins_mtx;
 
@@ -49,6 +50,7 @@ void logins_record(const char *cook, const char *where, int ok) {
     uint8_t *buf = kmalloc(cap);
     if (!buf) return;
     mutex_lock(&logins_mtx);
+    users_sys_begin();                      /* may use the disk's reserve */
     if (!fat_is_dir("/etc")) { fat_mkdir("/etc"); fat_chown("/etc", 0); }   /* never the cook's */
     uint32_t got = 0;
     if (fat_read(LOGINS_PATH, buf, (uint32_t)(cap - ll), &got) < 0) got = 0;
@@ -73,6 +75,7 @@ void logins_record(const char *cook, const char *where, int ok) {
         fat_chown(LOGINS_PATH, 0);
         fat_chmod(LOGINS_PATH, FAT_PERM_MARK | FAT_PERM_OR | FAT_PERM_OW | FAT_PERM_AR);
     }
+    users_sys_end();
     mutex_unlock(&logins_mtx);
     kfree(buf);
 }

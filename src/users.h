@@ -37,6 +37,10 @@ int  users_add(const char *name, const char *secret);
 int  users_set_secret(const char *name, const char *secret);
 /* Pin every system file's owner and mode (v0.54.2). */
 void users_seal_system(void);
+/* Bracket a kernel-internal write made on a cook's behalf, so it may use
+ * the disk's reserve (v0.55.5). Nests. */
+void users_sys_begin(void);
+void users_sys_end(void);
 /* Could every cook read this path? (hatch serves only these, v0.55.0) */
 int  users_public(const char *path);
 int  users_remove(const char *name);

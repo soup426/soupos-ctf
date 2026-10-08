@@ -171,6 +171,9 @@ void fat_set_creator(uint8_t uid) { creator_uid = uid; }
 static uint8_t (*creator_hook)(void);
 void fat_set_creator_hook(uint8_t (*hook)(void)) { creator_hook = hook; }
 static uint8_t creator_now(void) { return creator_hook ? creator_hook() : creator_uid; }
+static int (*reserve_hook)(void);
+void fat_set_reserve_hook(int (*hook)(void)) { reserve_hook = hook; }
+static uint32_t fat_free_clusters_impl(void);
 
 /* The cluster number that represents "the root directory" in this module.
  * On FAT16 the root is a fixed sector range, not a cluster - we use 0 as a
@@ -697,6 +700,14 @@ static int fat_free_chain(uint32_t cluster) {
 
 /* Find the first free cluster, mark it EOC, return it. 0 on failure. */
 static uint32_t fat_alloc_cluster(void) {
+    if (reserve_hook && fat_free_clusters_impl() <= FAT_RESERVE_CLUSTERS && !reserve_hook()) {
+        static uint32_t said;
+        if (timer_get_ticks() - said > 500 || !said) {          /* once in 5 s, not per cluster */
+            said = timer_get_ticks() | 1;
+            klog("[fat] only the reserve is left: refused a cluster to uid %u\n", creator_now());
+        }
+        return 0;
+    }
     uint32_t eoc  = (fs_type_val == 32) ? 0x0FFFFFFFu : 0xFFFFu;
     uint32_t last = cluster_count + 1;
     if (fat_alloc_hint < 2 || fat_alloc_hint > last) fat_alloc_hint = 2;

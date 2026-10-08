@@ -121,6 +121,7 @@ void task_init(void) {
     t->entry      = 0;
     t->arg        = 0;
     t->preempt_depth = 0;   /* kmalloc does not zero */
+    t->sys_write     = 0;   /* not inside a kernel-internal write (v0.55.5) */
     t->user_resume_esp = 0; /* never been in ring 3 */
     t->proc          = 0;
     t->term          = 0;
@@ -150,6 +151,7 @@ task_t *task_spawn(const char *name, void (*entry)(void *), void *arg) {
     t->entry      = entry;
     t->arg        = arg;
     t->preempt_depth = 0;   /* kmalloc does not zero */
+    t->sys_write     = 0;   /* not inside a kernel-internal write (v0.55.5) */
     t->user_resume_esp = 0; /* never been in ring 3 */
     t->proc          = 0;
     t->page_dir      = paging_kernel_dir();

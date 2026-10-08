@@ -287,7 +287,13 @@ static void deny(const char *path) {
  * keeps the root, as root traditionally does. Made at `hire`, or at the
  * first login of a cook hired before homes existed. Built here with the
  * kernel's own hands, not the cook's, since a cook may not write in /home. */
+static void ensure_home_inner(uint8_t uid, char *cwd_out);
 static void ensure_home(uint8_t uid, char *cwd_out) {
+    users_sys_begin();            /* a home may use the disk's reserve (v0.55.5) */
+    ensure_home_inner(uid, cwd_out);
+    users_sys_end();
+}
+static void ensure_home_inner(uint8_t uid, char *cwd_out) {
     if (uid == 0) { strcpy(cwd_out, "/"); return; }
     const char *name = users_name_of(uid);
     char home[FAT_PATH_MAX];
@@ -2505,8 +2511,12 @@ static void cmd_hire(const char *args) {
     if (users_add(name, secret) == 0) {
         char home[FAT_PATH_MAX];
         ensure_home((uint8_t)users_uid_of(name), home);
-        if (str_eq(home, "/"))
+        char want[FAT_PATH_MAX];
+        strcpy(want, "/home/"); strncpy(want + 6, name, sizeof(want) - 7); want[sizeof(want) - 1] = '\0';
+        if (str_eq(home, "/") && fat_is_dir(want))
             t_printf("  Hired: %s now has a place in the kitchen, but no home: /home/%s is not theirs.\n", name, name);
+        else if (str_eq(home, "/"))
+            t_printf("  Hired: %s now has a place in the kitchen, but /home/%s could not be made (disk full?).\n", name, name);
         else
             t_printf("  Hired: %s now has a place in the kitchen, and a home at %s.\n", name, home);
     }

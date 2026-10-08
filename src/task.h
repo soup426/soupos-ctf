@@ -49,6 +49,10 @@ typedef struct task {
     uint32_t      cpu_last;      /* ... and in the second just finished:
                                   * the window is 100 ticks, so this IS a
                                   * percentage, no division needed          */
+    int           sys_write;     /* inside a kernel-internal write (the roster,
+                                  * the login record, a home...): may use the
+                                  * disk's reserve whoever the task's cook is
+                                  * (v0.55.5) */
 } task_t;
 
 /* Simple intrusive wait queue - FIFO singly-linked list of blocked tasks.

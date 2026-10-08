@@ -107,6 +107,12 @@ void fat_set_creator(uint8_t uid);
 /* If set, consulted instead of the fat_set_creator value: the uid of the
  * task creating the file, so a file made from an SSH session is that cook's. */
 void fat_set_creator_hook(uint8_t (*hook)(void));
+/* The last FAT_RESERVE_CLUSTERS free clusters are kept for writes the hook
+ * allows (the headchef's, and the kernel's own on anyone's behalf): one
+ * cook filling the disk used to stop the headchef opening the vault, which
+ * writes its host key (v0.55.5). No hook: no reserve. */
+#define FAT_RESERVE_CLUSTERS 128
+void fat_set_reserve_hook(int (*hook)(void));
 
 /* Read a path's owner uid and permission mode. Returns 0=ok, -1=missing. */
 int  fat_stat (const char *path, uint8_t *owner, uint8_t *mode);

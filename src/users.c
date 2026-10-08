@@ -1,4 +1,5 @@
 #include "users.h"
+#include "task.h"
 #include "fat.h"
 #include "alphasoup.h"
 #include "str.h"
@@ -129,6 +130,13 @@ static void seal_roster(void) {
  * NOT here on purpose: it runs as the headchef, so resetting its mode would
  * bless whatever a cook might have written into it; run_rc refuses an
  * unsafe one instead. Paths that do not exist are left alone. */
+void users_sys_begin(void) { task_t *t = task_current(); if (t) t->sys_write++; }
+void users_sys_end(void)   { task_t *t = task_current(); if (t && t->sys_write > 0) t->sys_write--; }
+static int may_use_reserve(void) {
+    task_t *t = task_current();
+    return users_current_uid() == 0 || !t || t->sys_write > 0;
+}
+
 void users_seal_system(void) {
     static const struct { const char *path; uint8_t mode; } pins[] = {
         { "/etc",        FAT_PERM_OR | FAT_PERM_OW | FAT_PERM_OX | FAT_PERM_AR | FAT_PERM_AX },
@@ -168,9 +176,11 @@ static int users_save(void) {
         }
         buf[len++] = '\n';
     }
+    users_sys_begin();
     fat_mkdir("/etc");                       /* harmless if it already exists */
     int rc = fat_write(KITCHEN_PATH, (const uint8_t *)buf, len);
     if (rc == 0) seal_roster();
+    users_sys_end();
     return rc;
 }
 
@@ -218,6 +228,7 @@ static void parse_line(const char *line, int len) {
 /* ---- public ---- */
 
 void users_init(void) {
+    fat_set_reserve_hook(may_use_reserve);
     n_users = 0;
     cur_uid = 0;
 

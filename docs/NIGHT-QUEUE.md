@@ -31,7 +31,7 @@ record; this one looks at the other things the cooks share.
 
 ---
 
-## 1. One cook can fill the disk
+## 1. One cook can fill the disk — DONE v0.55.5
 
 A cook may write in their home and anywhere they have write permission, and
 nothing stops them filling the volume. Then the kernel's own writes fail:

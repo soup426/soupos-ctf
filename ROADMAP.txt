@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.55.4
+Current version: v0.55.5
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,30 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.55.5 (2026-10-08)  — ONE COOK CANNOT FILL THE DISK AGAINST THE HEADCHEF
+  Thirteenth queue, item 1.
+  - Nothing stopped a cook filling the volume. Proven on v0.55.4: with the
+    disk nearly full, the ordinary cook copied files into their home until
+    no cluster was left; then the headchef's `vault 22` failed ("could not
+    read or write the host key on disk") and a newly hired cook got no
+    home (with a message wrongly saying the home was not theirs). The
+    roster and login record still squeezed through, rewriting clusters
+    they already held, but only until they needed one more.
+  - The last FAT_RESERVE_CLUSTERS (128, 256 KB) are now kept, as ext keeps
+    5% for root: fat_alloc_cluster refuses a cluster from the reserve
+    unless users.c's hook allows it - the headchef, or a task inside a
+    kernel-internal write made on anyone's behalf (users_sys_begin/end
+    around the roster, the login record, the host key, AUTHKEYS rewrites
+    and homes). The free count was already kept up to date. kmalloc does
+    not zero, so the new task field is set in both creation paths; left
+    out, a cook's task could have started "inside" a system write.
+  - hire now says when a home could not be made (disk full) rather than
+    that it belongs to someone else.
+  - scripts/reserve-test.sh, in check.sh: with 160 clusters free, the
+    cook's copies stop at the reserve (130 left, refusal logged); the
+    headchef still opens the vault and hires a cook, who gets a home, with
+    the roster saved; fsck is clean.
 
 v0.55.4 (2026-10-08)  — REFUSALS CANNOT FLUSH THE LOGIN RECORD
   Twelfth queue, item 3.
