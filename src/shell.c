@@ -5140,6 +5140,26 @@ static int command_subst(const char *cmd, char *out, int max) {
 /* Into ex, at most max bytes with the NUL (v0.60.30: was always INPUT_MAX).
  * 1 if the expansion did not fit and was cut, which callers must not run
  * as if it had: a command cut short can name a different file. */
+/* One character that came out of an expansion, written so that what reads
+ * the line afterwards (uargv, slurp, first_word, unquote, cook's tokens)
+ * takes it as text (v0.60.39): sh never re-reads an expansion's quotes, and
+ * a | or > in a value is not a pipe or a redirection. Outside quotes ' and
+ * " are wrapped in the other quote and | < > & in single quotes; inside
+ * "..." only " needs it (close, '"', reopen). 0 if there was no room. */
+static int put_lit(char *ex, int *k, int max, char c, int in_dq) {
+    char one[4] = { c, 0, 0, 0 };
+    const char *rep = one;
+    if (in_dq) { if (c == '"') rep = "\"'\"'\""; }
+    else if (c == '\'') rep = "\"'\"";
+    else if (c == '"') rep = "'\"'";
+    else if (c == '|' || c == '<' || c == '>' || c == '&') { one[0] = '\''; one[1] = c; one[2] = '\''; }
+    int n = (int)strlen(rep);
+    if (*k + n >= max - 1) return 0;
+    memcpy(ex + *k, rep, (uint32_t)n);
+    *k += n;
+    return 1;
+}
+
 static int expand_into(const char *seg, char *ex, int max) {
     int cut = 0;
     int  k = 0;
@@ -5202,8 +5222,14 @@ static int expand_into(const char *seg, char *ex, int max) {
                 assign = (a == k - 1 && ex[a] == '=');
             }
             if (assign && k < max - 1) ex[k++] = '"';
-            k += command_subst(inner, ex + k, max - 2 - k);
-            if (subst_cut) cut = 1;
+            char *out = kmalloc((uint32_t)max);
+            if (out) {
+                int n = command_subst(inner, out, max - 2 - k);
+                if (subst_cut) cut = 1;
+                for (int o = 0; o < n; o++)
+                    if (!put_lit(ex, &k, max - 1, out[o], assign || sq == '"')) { cut = 1; break; }
+                kfree(out);
+            }
             if (assign && k < max - 1) ex[k++] = '"';
             i = j;
             continue;
@@ -5219,10 +5245,10 @@ static int expand_into(const char *seg, char *ex, int max) {
             } else if (c == '@') {
                 for (int a = 0; a < me->npargs; a++) {
                     if (a && k < max - 1) ex[k++] = ' ';
-                    for (const char *v = me->parg[a]; *v && k < max - 1; v++) ex[k++] = *v;
+                    for (const char *v = me->parg[a]; *v; v++) if (!put_lit(ex, &k, max, *v, sq == '"')) { cut = 1; break; }
                 }
             } else if (c - '1' < me->npargs) {
-                for (const char *v = me->parg[c - '1']; *v && k < max - 1; v++) ex[k++] = *v;
+                for (const char *v = me->parg[c - '1']; *v; v++) if (!put_lit(ex, &k, max, *v, sq == '"')) { cut = 1; break; }
             }
             i++;
             continue;
@@ -5241,7 +5267,8 @@ static int expand_into(const char *seg, char *ex, int max) {
             shell_t *me = cur_shell();
             for (int v = 0; v < me->nvars; v++)
                 if (str_eq(me->vname[v], name)) {
-                    for (const char *val = me->vval[v]; *val && k < max - 1; val++) ex[k++] = *val;
+                    for (const char *val = me->vval[v]; *val; val++)
+                        if (!put_lit(ex, &k, max, *val, sq == '"')) { cut = 1; break; }
                     break;
                 }
             i = j - 1;

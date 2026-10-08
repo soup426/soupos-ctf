@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.38
+Current version: v0.60.39
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,20 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.39 (2026-10-08)  — WHAT AN EXPANSION GIVES IS TEXT
+  - expand_seg put a value into the line as it was, and everything that
+    read the line after it (uargv, slurp, first_word, unquote, cook's
+    tokens) took its ' and " for quotes and, on a cook line, its | < > &
+    for pipes and redirections: v="it's" ; slurp $v printed "its", and
+    v='x > Y.TXT' ; cook call.elf $v would have made Y.TXT. sh never
+    re-reads an expansion. Each character from $NAME, $1..$9, $@ and
+    $(...) now goes in through put_lit, written so those readers take it
+    as text: outside quotes ' and " wrapped in the other quote and | < > &
+    in single quotes; inside "..." only " needs it. Globs are left alone,
+    as sh globs an unquoted expansion.
+  - scripts/litexp-test.sh compares thirteen lines with bash and checks
+    the > made no file.
 
 v0.60.38 (2026-10-08)  — SLURP SPLITS WORDS AS ECHO DOES
   - Measured first, against bash: programs' arguments (uargv) and for's word

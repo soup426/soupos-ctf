@@ -90,7 +90,7 @@ them. soupOS keeps the expansion as it is. Decide where splitting belongs
 (expand_seg marks the text from expansions; the builtins that take words
 split there) and compare echo/slurp, for and a program's args with bash.
 
-## 10. Quotes that come out of an expansion are text
+## 10. Quotes that come out of an expansion are text — DONE v0.60.39
 
 Found with item 9: v="it's" ; `slurp $v` prints "its", and `cook call.elf
 $v` gets an unbalanced quote: expand_seg puts the value into the line as
