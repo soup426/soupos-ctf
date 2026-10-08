@@ -34,6 +34,12 @@ void sha256(const void *data, size_t len, uint8_t out[SHA256_DIGEST]);
 
 /* HMAC-SHA256 (RFC 2104). A key longer than a block is hashed first, as the
  * RFC requires; the long-key vector in `sample` is what proves that path. */
+/* PBKDF2 with HMAC-SHA256 (RFC 8018), for stored passwords (v0.46.0). The
+ * HMAC inner and outer states are computed once, so an iteration costs two
+ * compressions. Checked in `sample` against Python's hashlib.pbkdf2_hmac. */
+void pbkdf2_hmac_sha256(const void *pw, size_t pw_len, const void *salt, size_t salt_len,
+                        uint32_t iterations, uint8_t *out, size_t out_len);
+
 void hmac_sha256(const void *key, size_t key_len,
                  const void *data, size_t data_len,
                  uint8_t out[SHA256_DIGEST]);

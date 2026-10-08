@@ -268,6 +268,14 @@ static void test_sha256(void) {
     memset(key, 0xaa, sizeof(key));
     hmac_sha256(key, sizeof(key), "Test Using Larger Than Block-Size Key - Hash Key First", 54, d);
     check("hmac key longer than block", hex_eq(d, "60e431591ee0b67f0d8a26aacbf5b77f8e0bc6213728c5140546040f0ee37f54"));
+    /* PBKDF2 (v0.46.0), for stored passwords. 1 and 4096 iterations, the
+     * second timed: it is what a login costs. Expected values from hashlib. */
+    pbkdf2_hmac_sha256("password", 8, "salt", 4, 1, d, 32);
+    check("pbkdf2-sha256 1 iteration", hex_eq(d, "120fb6cffcf8b32c43e7225256c4f837a86548c92ccc35480805987cb70be17b"));
+    uint32_t pt0 = timer_get_ticks();
+    pbkdf2_hmac_sha256("password", 8, "salt", 4, 4096, d, 32);
+    klog("[sample] pbkdf2 4096 iterations took %u ticks\n", timer_get_ticks() - pt0);
+    check("pbkdf2-sha256 4096 iterations", hex_eq(d, "c5e478d59288c841aa530db6845c4c8d962893a001ce4e11a4963873aa98134a"));
 }
 
 /* ── Entropy ──────────────────────────────────────────────────────────────

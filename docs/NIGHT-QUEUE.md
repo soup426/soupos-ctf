@@ -29,7 +29,7 @@ example of modelling a policy on the host before trusting a kernel number.
 
 ---
 
-## 1. Passwords that survive the network
+## 1. Passwords that survive the network — DONE v0.46.0 (and it found v0.45.1's FAT bug)
 
 users.c stores each cook's secret as an unsalted 32-bit AlphaSOUP hash, and
 any preimage logs in. In the CHALLENGE=1 build that is deliberate - it is the

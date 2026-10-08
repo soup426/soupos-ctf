@@ -2,14 +2,63 @@
 #include "fat.h"
 #include "alphasoup.h"
 #include "str.h"
+#include "sha256.h"
+#include "random.h"
+#include "klog.h"
+#include "timer.h"
 
 /* ---- roster ---- */
+
+/* Two ways a secret is kept (v0.46.0).
+ *   SECRET_SOUP32  the AlphaSOUP-32 hash, unsalted, any preimage accepted.
+ *                  The CHALLENGE build keeps exactly this: it is challenge
+ *                  stage 2. Line: name:uid:8hex
+ *   SECRET_PBKDF2  PBKDF2-HMAC-SHA256, a random 16-byte salt, an iteration
+ *                  count stored with it. The ordinary build makes these, and
+ *                  rewrites a SOUP32 entry as one at its first good login.
+ *                  Line: name:uid:$p$iterations$32hex-salt$64hex-key */
+#define SECRET_SOUP32 0
+#define SECRET_PBKDF2 1
+#define PBKDF2_ITERS  20000      /* ~50 ms a login under KVM; stored per entry */
 
 typedef struct {
     char     name[USER_NAME_MAX];
     uint8_t  uid;
-    uint32_t hash;          /* AlphaSOUP-32 hash of the secret */
+    uint8_t  kind;
+    uint32_t hash;          /* SOUP32 */
+    uint32_t iters;         /* PBKDF2 */
+    uint8_t  salt[16];
+    uint8_t  key[32];
 } user_t;
+
+#ifdef NO_CHALLENGE
+#define MAKE_PBKDF2 1        /* the ordinary build */
+#else
+#define MAKE_PBKDF2 0        /* the challenge build: stage 2 needs SOUP32 */
+#endif
+
+static void set_secret(user_t *u, const char *secret) {
+    if (MAKE_PBKDF2) {
+        u->kind  = SECRET_PBKDF2;
+        u->iters = PBKDF2_ITERS;
+        random_bytes(u->salt, sizeof(u->salt));
+        pbkdf2_hmac_sha256(secret, strlen(secret), u->salt, sizeof(u->salt), u->iters, u->key, sizeof(u->key));
+    } else {
+        u->kind = SECRET_SOUP32;
+        u->hash = alphasoup_hash(secret, (uint32_t)strlen(secret));
+    }
+}
+
+static int secret_matches(const user_t *u, const char *secret) {
+    if (u->kind == SECRET_PBKDF2) {
+        uint8_t k[32];
+        pbkdf2_hmac_sha256(secret, strlen(secret), u->salt, sizeof(u->salt), u->iters, k, sizeof(k));
+        uint8_t diff = 0;                                  /* constant time */
+        for (int i = 0; i < 32; i++) diff |= (uint8_t)(k[i] ^ u->key[i]);
+        return diff == 0;
+    }
+    return u->hash == alphasoup_hash(secret, (uint32_t)strlen(secret));
+}
 
 static user_t  roster[USERS_MAX];
 static int     n_users  = 0;
@@ -19,9 +68,6 @@ static uint8_t cur_uid  = 0;
 
 /* ---- small string helpers ---- */
 
-static uint32_t hash_secret(const char *s) {
-    return alphasoup_hash(s, (uint32_t)strlen(s));
-}
 
 /* uint32 -> 8 lowercase hex digits (always 8, zero-padded). */
 static void u32_to_hex(uint32_t v, char *out) {
@@ -64,16 +110,26 @@ static void copy_name(char *dst, const char *src) {
 
 /* Serialise the roster to /etc/kitchen. Returns 0=ok, -1=disk error. */
 static int users_save(void) {
-    static char buf[USERS_MAX * (USER_NAME_MAX + 16)];
+    static char buf[USERS_MAX * (USER_NAME_MAX + 128)];
     uint32_t len = 0;
     for (int i = 0; i < n_users; i++) {
         for (int k = 0; roster[i].name[k]; k++) buf[len++] = roster[i].name[k];
         buf[len++] = ':';
         len += (uint32_t)u_to_dec(roster[i].uid, buf + len);
         buf[len++] = ':';
-        char hx[9];
-        u32_to_hex(roster[i].hash, hx);
-        for (int k = 0; k < 8; k++) buf[len++] = hx[k];
+        if (roster[i].kind == SECRET_PBKDF2) {
+            static const char d[] = "0123456789abcdef";
+            buf[len++] = '$'; buf[len++] = 'p'; buf[len++] = '$';
+            len += (uint32_t)u_to_dec(roster[i].iters, buf + len);
+            buf[len++] = '$';
+            for (int k = 0; k < 16; k++) { buf[len++] = d[roster[i].salt[k] >> 4]; buf[len++] = d[roster[i].salt[k] & 15]; }
+            buf[len++] = '$';
+            for (int k = 0; k < 32; k++) { buf[len++] = d[roster[i].key[k] >> 4];  buf[len++] = d[roster[i].key[k] & 15]; }
+        } else {
+            char hx[9];
+            u32_to_hex(roster[i].hash, hx);
+            for (int k = 0; k < 8; k++) buf[len++] = hx[k];
+        }
         buf[len++] = '\n';
     }
     fat_mkdir("/etc");                       /* harmless if it already exists */
@@ -93,14 +149,31 @@ static void parse_line(const char *line, int len) {
         uid = uid * 10 + (uint32_t)(line[i++] - '0');
     if (i >= len || line[i] != ':') return;
     i++;
-    char hx[9];
-    int  h = 0;
-    while (i < len && h < 8) hx[h++] = line[i++];
-    hx[h] = '\0';
     if (n_users >= USERS_MAX) return;
-    copy_name(roster[n_users].name, name);
-    roster[n_users].uid  = (uint8_t)uid;
-    roster[n_users].hash = hex_to_u32(hx);
+    user_t *u = &roster[n_users];
+    memset(u, 0, sizeof(*u));
+    if (len - i > 3 && line[i] == '$' && line[i + 1] == 'p' && line[i + 2] == '$') {
+        i += 3;
+        uint32_t it = 0;
+        while (i < len && line[i] >= '0' && line[i] <= '9') it = it * 10 + (uint32_t)(line[i++] - '0');
+        if (i >= len || line[i] != '$' || it == 0) return;
+        i++;
+        for (int k = 0; k < 16; k++, i += 2) { if (i + 1 >= len) return; char t[3] = { line[i], line[i + 1], 0 }; u->salt[k] = (uint8_t)hex_to_u32(t); }
+        if (i >= len || line[i] != '$') return;
+        i++;
+        for (int k = 0; k < 32; k++, i += 2) { if (i + 1 >= len) return; char t[3] = { line[i], line[i + 1], 0 }; u->key[k] = (uint8_t)hex_to_u32(t); }
+        u->kind  = SECRET_PBKDF2;
+        u->iters = it;
+    } else {
+        char hx[9];
+        int  h = 0;
+        while (i < len && h < 8) hx[h++] = line[i++];
+        hx[h] = '\0';
+        u->kind = SECRET_SOUP32;
+        u->hash = hex_to_u32(hx);
+    }
+    copy_name(u->name, name);
+    u->uid = (uint8_t)uid;
     n_users++;
 }
 
@@ -110,7 +183,7 @@ void users_init(void) {
     n_users = 0;
     cur_uid = 0;
 
-    static uint8_t buf[USERS_MAX * (USER_NAME_MAX + 16) + 16];
+    static uint8_t buf[USERS_MAX * (USER_NAME_MAX + 128) + 16];
     uint32_t size = 0;
     if (fat_read(KITCHEN_PATH, buf, sizeof(buf) - 1, &size) == 0 && size > 0) {
         if (size > sizeof(buf) - 1) size = sizeof(buf) - 1;   /* fat_read fills at most bufsize but reports the FILE's size */
@@ -131,11 +204,11 @@ void users_init(void) {
         /* Not guessable, and it does not need to be: users_check compares
          * hashes, so any preimage of this 32-bit hash is accepted. That is
          * the whole of challenge stage 2. */
-        roster[0].hash = hash_secret("rosemary");
+        set_secret(&roster[0], "rosemary");
         /* The account players are given. Ordinary cook, no privileges. */
         copy_name(roster[1].name, "cook");
         roster[1].uid  = 1;
-        roster[1].hash = hash_secret("soup");
+        set_secret(&roster[1], "soup");
         n_users = 2;
         users_save();
     }
@@ -160,8 +233,18 @@ const char *users_name_of(uint8_t uid) {
 int users_check(const char *name, const char *secret) {
     for (int i = 0; i < n_users; i++) {
         if (strcmp(roster[i].name, name) == 0) {
-            if (roster[i].hash == hash_secret(secret)) return (int)roster[i].uid;
-            return -1;
+            uint32_t t0 = timer_get_ticks();
+            if (!secret_matches(&roster[i], secret)) return -1;
+            if (roster[i].kind == SECRET_PBKDF2)
+                klog("[users] %s: pbkdf2 check took %u ticks\n", name, timer_get_ticks() - t0);
+            /* A SOUP32 entry in the ordinary build is upgraded on the first
+             * login that proves the secret: the only moment it is known. */
+            if (MAKE_PBKDF2 && roster[i].kind == SECRET_SOUP32) {
+                set_secret(&roster[i], secret);
+                users_save();
+                klog("[users] %s: secret upgraded to pbkdf2\n", name);
+            }
+            return (int)roster[i].uid;
         }
     }
     return -1;
@@ -184,7 +267,7 @@ int users_add(const char *name, const char *secret) {
 
     copy_name(roster[n_users].name, name);
     roster[n_users].uid  = (uint8_t)uid;
-    roster[n_users].hash = hash_secret(secret ? secret : "");
+    set_secret(&roster[n_users], secret ? secret : "");
     n_users++;
     return users_save();
 }

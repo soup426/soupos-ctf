@@ -118,3 +118,51 @@ void hmac_sha256(const void *key, size_t key_len,
     sha256_update(&s, inner, SHA256_DIGEST);
     sha256_final(&s, out);
 }
+
+/* ── PBKDF2-HMAC-SHA256 ─────────────────────────────────────────────────── */
+static void hmac_states(const uint8_t *key, size_t key_len, sha256_t *in, sha256_t *out) {
+    uint8_t k[SHA256_BLOCK];
+    memset(k, 0, sizeof(k));
+    if (key_len > SHA256_BLOCK) sha256(key, key_len, k);
+    else                        memcpy(k, key, key_len);
+    uint8_t ipad[SHA256_BLOCK], opad[SHA256_BLOCK];
+    for (int i = 0; i < SHA256_BLOCK; i++) { ipad[i] = k[i] ^ 0x36; opad[i] = k[i] ^ 0x5c; }
+    sha256_init(in);  sha256_update(in,  ipad, SHA256_BLOCK);
+    sha256_init(out); sha256_update(out, opad, SHA256_BLOCK);
+}
+
+static void hmac_from(const sha256_t *in, const sha256_t *out, const uint8_t *msg, size_t len,
+                      uint8_t mac[SHA256_DIGEST]) {
+    sha256_t s = *in;
+    uint8_t inner[SHA256_DIGEST];
+    sha256_update(&s, msg, len);
+    sha256_final(&s, inner);
+    s = *out;
+    sha256_update(&s, inner, SHA256_DIGEST);
+    sha256_final(&s, mac);
+}
+
+void pbkdf2_hmac_sha256(const void *pw, size_t pw_len, const void *salt, size_t salt_len,
+                        uint32_t iterations, uint8_t *out, size_t out_len) {
+    sha256_t in, outer;
+    hmac_states(pw, pw_len, &in, &outer);
+    uint8_t first[64 + 4];                 /* salt || INT(block), salts up to 64 bytes */
+    if (salt_len > 64) salt_len = 64;
+    for (uint32_t block = 1; out_len; block++) {
+        memcpy(first, salt, salt_len);
+        first[salt_len]     = (uint8_t)(block >> 24);
+        first[salt_len + 1] = (uint8_t)(block >> 16);
+        first[salt_len + 2] = (uint8_t)(block >> 8);
+        first[salt_len + 3] = (uint8_t)block;
+        uint8_t u[SHA256_DIGEST], t[SHA256_DIGEST];
+        hmac_from(&in, &outer, first, salt_len + 4, u);
+        memcpy(t, u, sizeof(t));
+        for (uint32_t i = 1; i < iterations; i++) {
+            hmac_from(&in, &outer, u, sizeof(u), u);
+            for (int k = 0; k < SHA256_DIGEST; k++) t[k] ^= u[k];
+        }
+        size_t take = out_len < SHA256_DIGEST ? out_len : SHA256_DIGEST;
+        memcpy(out, t, take);
+        out += take; out_len -= take;
+    }
+}

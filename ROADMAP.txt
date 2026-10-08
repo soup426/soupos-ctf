@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.45.0
+Current version: v0.46.0
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,43 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.46.0 (2026-10-07)  — PASSWORDS THAT SURVIVE THE NETWORK
+  Sixth queue, item 1.
+  - users.c kept each secret as an unsalted 32-bit AlphaSOUP hash, and any
+    preimage logged in. The CHALLENGE build keeps exactly that, because it
+    is the whole of challenge stage 2. The ordinary build now sits behind
+    `vault`, where a password crosses the network, so it stores salted
+    PBKDF2-HMAC-SHA256: a 16-byte salt from the entropy pool, 20,000
+    iterations kept with the entry, compared in constant time, in a line
+    format ("name:uid:$p$iters$salt$key") the old one can be told from.
+  - PBKDF2 is in sha256.c with the HMAC states computed once, so an
+    iteration is two compressions; `sample` checks it against
+    hashlib.pbkdf2_hmac at 1 and 4,096 iterations. A login costs 3-4 ticks.
+  - OLD ENTRIES still log in, and the first good login rewrites that entry
+    (only that one) as PBKDF2 - the one moment the secret is known.
+  - scripts/users-test.sh, in check.sh, judges by what mtools reads back
+    from /etc/kitchen: a fresh disk holds only PBKDF2 entries with distinct
+    salts, a hired cook gets one too, wrong secrets are refused in both
+    formats, an old-format kitchen (built on the host with a port of
+    AlphaSOUP-32 that is checked against soupOS's own `hash`) logs in and
+    upgrades just the cook who logged in, and the next boot logs in again.
+  - It found the FAT bug in the commit before this one on its first run.
+    Gate 99.
+
+v0.45.1 (2026-10-07)  — OVERWRITING A LONG-NAMED FILE ORPHANED ITS LONG NAME
+  - fat_write made a new 8.3 alias before checking whether the file
+    existed, and the existing file's own alias made "~1" look taken. So an
+    overwrite renamed the short entry to KITCHE~2 while the long-name
+    entries kept ~1's checksum: mtools could no longer find /etc/kitchen
+    by name and fsck reported "Wrong checksum for long file name". soupOS
+    still found it (by the alias), which is why nothing noticed: users-test
+    found it by reading /etc/kitchen back with mtools after `hire`.
+  - An existing file now keeps its own short name. fsck-test was supposed
+    to cover this path and did not: its `hire` never ran, because the two
+    secret prompts were not answered and swallowed the next commands. It
+    now answers them, and runs LONGWR.SC twice so long-named files are
+    overwritten too.
 
 v0.45.0 (2026-10-07)  — MEMORY PER PROCESS, WHERE YOU CAN SEE IT
   Fifth queue, item 6.

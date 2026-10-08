@@ -874,6 +874,15 @@ how many, and the temporaries live in C locals where no collector can see them.
 If you add a builtin, allocate with `str_alloc` and return `mksval_ref`; never
 `kfree` a string. `SVAL_LEN` is now only the identifier length.
 
+## Secrets (v0.46.0)
+
+users.c has two kinds: SOUP32 (the CHALLENGE build's, challenge stage 2, never
+change it there) and PBKDF2 (the ordinary build's, `name:uid:$p$iters$salt$key`).
+`MAKE_PBKDF2` follows `NO_CHALLENGE`. An old entry upgrades at its first good
+login. scripts/users-test.sh judges from /etc/kitchen via mtools. When a test
+drives a command that prompts (hire asks for the secret twice), answer every
+prompt, or the following commands are swallowed as input and silently skipped.
+
 ## FAT metadata, and keeping disk.img pristine (v0.41.0)
 
 Owner and mode are in directory-entry bytes 13 (200 + uid) and 14 (mode), via
