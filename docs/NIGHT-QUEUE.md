@@ -1,10 +1,11 @@
 # Night queue
 
-Fourteenth queue. The first thirteen are in `docs/queue-archive-2026-10-0*.md`.
+Fifteenth queue. The first fourteen are in `docs/queue-archive-2026-10-0*.md`.
 Two items wait on a person, with notes in their archives: the seventh's
-syscall-pointer item and the thirteenth's swap-shares item. After several
-queues of hardening, this one is ordinary features: the small tools that
-make pipes worth having. Each is checked against the same tool on the host.
+syscall-pointer item and the thirteenth's swap-shares item. The fourteenth
+added >>, grep, head, tail and sort, and fixed redirection losing big output;
+this one adds the next tools a pipeline wants. Each is checked byte for byte
+against the host's own.
 
 ## Standing rules
 
@@ -32,40 +33,30 @@ make pipes worth having. Each is checked against the same tool on the host.
 
 ---
 
-## 1. >> appends — DONE v0.56.0
+## 1. uniq.elf
 
-`cook echo.elf x > F` overwrites; nothing appends. Add `>>` to the shell's
-redirection (the cook's write permission rules as for `>`), and check the
-result against the host shell doing the same with the same input.
+Adjacent duplicate lines folded, with -c (counts, in the host's format) and
+-d (only the repeated ones). Compare with the host's uniq over the same
+inputs, sorted and unsorted, with and without a final newline.
 
-## 2. grep.elf — DONE v0.56.1
+## 2. wc.elf learns -l, -w and -c
 
-A fixed-string filter for pipes and files: `grep.elf [-v] [-c] [-i] word
-[file]`. Compare its output with `grep -F` on the host over the same files,
-long lines and empty ones included.
+wc.elf prints its own format. Give it the host's: the counts it is asked
+for, in the host's column widths, from a file (with its name) or stdin.
+Compare with the host's wc for each flag.
 
-## 3. head.elf and tail.elf — DONE v0.56.2
+## 3. tee.elf
 
-`-n N`, default 10, from a file or a pipe. Compare with the host's head and
-tail, including files shorter than N and files with no final newline.
+stdin to stdout and to a file, -a to append; the file follows the cook's
+permissions like any other write. Compare the stdout and the file with the
+host's tee.
 
-## 4. sort.elf — DONE v0.56.3
+## 4. cut.elf
 
-Lines in byte order, with -r and -n. Compare with `LC_ALL=C sort` on the
-host. Find the largest input it handles and say so.
+-d C -f N[,M...] and -f N-M: fields by a one-character delimiter, lines
+without it printed whole as cut does. Compare with the host's cut.
 
-## 5. > loses output past about 2 MB, and says nothing — DONE v0.56.4
-
-Found measuring sort.elf: `cook sort.elf /B3.TXT > /O3.TXT` left exactly
-2097152 bytes of a 3 MB result, and 5 and 7 MB results left empty files,
-every time with exit code 0. A redirect buffers the whole file in the 8 MB
-kernel heap and writes it on close; when the buffer cannot grow, the write
-fails and nobody hears. Make the output reach the disk in pieces (or, at
-the least, make a failed write fail loudly: the program sees it, the shell
-says the file was cut, and nothing pretends it worked). Test with a 5 MB
-result checked against the host.
-
-## 6. Doom at the framebuffer's own resolution — DEFERRED
+## 5. Doom at the framebuffer's own resolution — DEFERRED
 
 Carried; the user asked to keep to OS work.
 
