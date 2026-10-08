@@ -59,7 +59,7 @@ run "gate"                      ./scripts/smoke-test.sh
 if [ "$MODE" = "full" ]; then
     for t in ssh-test pass-test hatch-test console-test fat-longname-test \
              random-test x25519-test sound-test mixer-test music-test \
-             framebuffer-test fullness-test; do
+             framebuffer-test fullness-test lines-test; do
         run "$t" "./scripts/$t.sh"
     done
     # doom-fb-test rebuilds two ISOs, so it gets a tree of its own.

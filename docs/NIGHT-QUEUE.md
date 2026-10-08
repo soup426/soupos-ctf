@@ -224,7 +224,7 @@ lines can interleave. It cannot corrupt memory, only the log.
 - Verify by logging hard from a task while an interrupt handler logs too, and
   checking every line in the ring is whole.
 
-## 7. soupyc writes files properly
+## 7. soupyc writes files properly — DONE v0.32.0 (`lines`, `write_lines`, scripts/lines-test.sh)
 
 The language can create, read and now delete, but a script still cannot do the
 one thing scripts are for: produce a file from another file.

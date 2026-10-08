@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.31.0
+Current version: v0.32.0
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,29 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.32.0 (2026-10-07)  — soupyc: A FILE FROM A FILE
+  Queue item 7. The language could create, read and delete files, but not
+  do the one thing scripts are for.
+  - `lines(path)` returns the file as an array of strings, one per line,
+    newlines dropped (a trailing \r too, so a file from a PC reads the
+    same). A missing file is an empty array; more lines than an array
+    holds (48) is an error rather than a silent cut. `write_lines(path,
+    array)` writes the array back with a newline after every element,
+    replacing the file, and returns the count. Both sit on the heap-backed
+    strings and the array pool that were already there.
+  - LINES.SC on the disk reads SOUP.TXT (six lines: mixed lengths, an
+    empty one, one longer than the old 47-character string), numbers,
+    upper-cases and reverses them into SOUPUP.TXT, and reads it back.
+    The gate's soupyc segment asserts all three steps.
+  - THE BYTES ARE CHECKED ON THE HOST: scripts/lines-test.sh boots a copy
+    of the disk, runs the script, has mtools pull both files out of the
+    image, and compares SOUPUP.TXT with the same transform done in
+    Python. 148 bytes, identical. soupOS reading its own file back only
+    proves it is self-consistent; this proves it is right.
+  - Worth knowing: `make clean` does not touch disk.img, so a change to
+    the files the Makefile embeds needs `rm disk.img && make disk`.
+    Gate 79.
 
 v0.31.0 (2026-10-07)  — kitchen, HONEST CPU FIGURES, AND THE FLAKE EXPLAINED
   Queue item 5, which on the way closed items 1 and 6.

@@ -1616,6 +1616,74 @@ static int call_builtin(node_t *n, val_t *out) {
     }
 
     /* ---- file I/O (backed by the VFS) ---- */
+
+    /* lines(path) - the file as an array of strings, one per line, without
+     * the newlines (a trailing \r goes too, so a file written on a PC reads
+     * the same). A missing file is an empty array. More lines than an array
+     * holds is an error rather than a silent cut. */
+    if (strcmp(name, "lines") == 0) {
+        if (count_args(n) != 1) { set_err("lines expects 1 arg"); return 1; }
+        eval_args(n, a, 1);
+        if (err_flag) return 1;
+        const char *path = val_str(&a[0], scratch, SVAL_LEN);
+        int h = arr_alloc();
+        if (h < 0) { set_err("lines: no free array"); return 1; }
+        vfs_node_t *nd = vfs_open(path, VFS_RDONLY);
+        if (!nd) { *out = mkaval(h); return 1; }
+        uint32_t size = vfs_size(nd);
+        char *buf = str_alloc(size);
+        if (!buf) { vfs_close(nd); return 1; }
+        uint32_t got = 0;
+        while (got < size) {
+            int r = vfs_read(nd, buf + got, size - got);
+            if (r <= 0) break;
+            got += (uint32_t)r;
+        }
+        vfs_close(nd);
+        arr_t *arr = &arrays[h];
+        uint32_t i = 0;
+        while (i < got) {
+            uint32_t j = i;
+            while (j < got && buf[j] != '\n') j++;
+            uint32_t len = j - i;
+            if (len && buf[i + len - 1] == '\r') len--;
+            if (arr->len >= ARR_CAP) { set_err("lines: file has more lines than an array holds"); return 1; }
+            char *line = str_alloc(len);
+            if (!line) return 1;
+            memcpy(line, buf + i, len);
+            line[len] = '\0';
+            arr->elems[arr->len++] = mksval_ref(line, len);
+            i = j + 1;
+        }
+        *out = mkaval(h);
+        return 1;
+    }
+
+    /* write_lines(path, array) - the array as a file, a newline after every
+     * element, replacing whatever was there. Returns the number of lines
+     * written, or -1 if the file could not be opened. */
+    if (strcmp(name, "write_lines") == 0) {
+        if (count_args(n) != 2) { set_err("write_lines expects 2 args"); return 1; }
+        eval_args(n, a, 2);
+        if (err_flag) return 1;
+        const char *path = val_str(&a[0], scratch, SVAL_LEN);
+        if (a[1].type != VAL_ARR || !arr_valid(a[1].ival)) { set_err("write_lines: second arg is not an array"); return 1; }
+        vfs_node_t *nd = vfs_open(path, VFS_WRONLY | VFS_CREATE);
+        if (!nd) { *out = mkival(-1); return 1; }
+        arr_t *arr = &arrays[a[1].ival];
+        int written = 0;
+        for (int k = 0; k < arr->len; k++) {
+            const char *line = val_str(&arr->elems[k], scratch, SVAL_LEN);
+            uint32_t len = (uint32_t)strlen(line);
+            if (len && vfs_write(nd, line, len) != (int)len) break;
+            if (vfs_write(nd, "\n", 1) != 1) break;
+            written++;
+        }
+        vfs_close(nd);
+        *out = mkival(written);
+        return 1;
+    }
+
     if (strcmp(name, "open") == 0) {
         int nargs = count_args(n);
         if (nargs < 1 || nargs > 2) { set_err("open expects 1 or 2 args"); return 1; }

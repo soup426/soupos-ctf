@@ -7,7 +7,8 @@ gate_drive \
     "soup LONGSTR.SC" "WAIT:6" \
     "soup SCOPE.SC" "WAIT:4" \
     "soup RUNAWAY.SC" "WAIT:22" "pwd" "WAIT:2" \
-    "soup SPAWN.SC" "WAIT:1" "ps" "WAIT:5"
+    "soup SPAWN.SC" "WAIT:1" "ps" "WAIT:5" \
+    "soup LINES.SC" "WAIT:3"
 # Exact lengths, so a truncation anywhere shows up as the wrong number.
 check "soupyc concatenates past 47 chars" 'built 100'
 check "soupyc takes a long literal"       'literal 97'
@@ -23,4 +24,10 @@ check "the spawned script is a live task"  'soup:ticker'
 check "parent keeps its arrays"            '\[parent\] array still 2 2'
 check "child gets arrays of its own"       '\[child\] array 3 8'
 check "the spawned script finishes"        '\[child\] done'
+# A file from a file: lines() in, a transform, write_lines() out, and the
+# result read back by lines() again. The bytes on disk are compared with
+# the host's own transform in scripts/lines-test.sh.
+check "lines() read the seed file"          'read 6 lines'
+check "write_lines() wrote the result"      'wrote 6 lines'
+check "the written file reads back"         'first line back: 6: SERVE'
 gate_finish

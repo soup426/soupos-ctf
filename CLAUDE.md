@@ -874,6 +874,15 @@ how many, and the temporaries live in C locals where no collector can see them.
 If you add a builtin, allocate with `str_alloc` and return `mksval_ref`; never
 `kfree` a string. `SVAL_LEN` is now only the identifier length.
 
+## soupyc file I/O, and the disk image is not a build product of `make` (v0.32.0)
+
+`lines(path)` and `write_lines(path, array)` live with the other file builtins
+in `soupyc.c`; `scripts/lines-test.sh` compares the written bytes with the host.
+The scripts and seed files on the disk are `printf | mcopy` recipes in the
+Makefile's `$(DISK)` rule, and **`make clean` leaves disk.img alone**: after
+changing an embedded file, `rm disk.img && make disk`, or the gate boots the old
+image and fails on a "missing" file.
+
 ## Idle is counted, klog lines are whole, the FAT knows its free count (v0.31.0)
 
 - Every wait loop halts through `cpu_halt()`, never a bare `hlt`: the timer

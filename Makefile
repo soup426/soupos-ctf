@@ -220,6 +220,14 @@ $(DISK):
 	    | mcopy -i $(DISK) - ::SCOPE.SC
 	printf '# Write files whose names do not fit 8.3, then read them back.\n# The last two collide on their alias stem, which is what exercises ~N.\nlet f = 0\nf = open("My Long Note.txt", "w")\nwrite(f, "written by soupOS")\nclose(f)\nf = open("My Long Novel.txt", "w")\nwrite(f, "the second one")\nclose(f)\npour "wrote it"\nf = open("My Long Note.txt")\npour "read back " + read(f, 40)\nclose(f)\nf = open("My Long Novel.txt")\npour "read two " + read(f, 40)\nclose(f)\n' \
 	    | mcopy -i $(DISK) - ::LONGWR.SC
+	# A seed for lines()/write_lines(): mixed line lengths, an empty line,
+	# and one line longer than the old 47-character string. The script
+	# numbers, upper-cases and reverses it into SOUPUP.TXT, which
+	# scripts/lines-test.sh then compares byte for byte with the host.
+	printf 'stock\nsimmer the bones for six hours\n\nskim\nseason to taste, then serve it hot to whoever is hungry and waiting at the table\nserve\n' \
+	    | mcopy -i $(DISK) - ::SOUP.TXT
+	printf '# lines() and write_lines(): a file from a file - run with: soup LINES.SC\nlet src = lines(\"SOUP.TXT\")\npour \"read \" + len(src) + \" lines\"\nlet out = []\nlet i = len(src) - 1\nwhile i >= 0 {\n    push(out, (i + 1) + \": \" + upper(src[i]))\n    i = i - 1\n}\npour \"wrote \" + write_lines(\"SOUPUP.TXT\", out) + \" lines\"\nlet back = lines(\"SOUPUP.TXT\")\npour \"first line back: \" + back[0]\n' \
+	    | mcopy -i $(DISK) - ::LINES.SC
 	# Long names, for the VFAT read path. mtools writes a proper LFN chain
 	# plus the mangled 8.3 alias, which is exactly what has to be parsed.
 	printf 'A file whose name does not fit in 8.3 at all.\n' \
