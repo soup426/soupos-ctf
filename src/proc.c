@@ -16,6 +16,7 @@
  *     proc_report_finished), never by the process itself.
  */
 #include "proc.h"
+#include "users.h"
 #include "timer.h"
 #include "swap.h"
 #include "usermode.h"
@@ -112,6 +113,7 @@ int proc_spawn(const char *path, const char *args, int background,
     p->start_tick = timer_get_ticks();     /* claims the slot                    */
     p->parent_id = task_current() ? task_current()->id : 0;
     p->background = background;
+    p->owner     = users_current_uid();    /* the spawning shell's cook */
     strncpy(p->name, path, PROC_NAME_MAX - 1);
     p->name[PROC_NAME_MAX - 1] = '\0';
     if (args) {

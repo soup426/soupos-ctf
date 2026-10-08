@@ -48,7 +48,7 @@ failed attempt (doubling, capped), and a per-address count that refuses new
 connections from an address with too many recent failures. Measure: attempts
 per minute from one address before and after, with the real client.
 
-## 3. Only your own processes
+## 3. Only your own processes — DONE v0.51.0 (the hole proven on the old kernel: a cook killed fbcon)
 
 `kill`, `fg`/`plate`, `bg`/`steep` and `kill %` act on any process, so a cook
 (or an SSH session) can kill another cook's programs, and `kill <id>` on a
@@ -57,7 +57,7 @@ uid in proc_t at cook time; let a cook signal only their own processes, the
 headchef any; refuse kernel tasks to everyone but the headchef. Test with two
 SSH sessions as two cooks.
 
-## 4. Every syscall survives hostile pointers
+## 4. Every syscall survives hostile pointers — SET ASIDE 2026-10-07 (see the note at the bottom)
 
 Two syscalls trusted user pointers too far (open read its path past the first
 checked byte; the fault path's copies). Audit every case in syscall_dispatch
@@ -74,4 +74,18 @@ Carried; the user asked to keep to OS work.
 
 ## Notes left by unattended runs
 
-(none yet)
+- 2026-10-07, open flake: the jobs segment's "> redirection reached the
+  filesystem" (expects WCOUT lines=1 words=3 bytes=15 after `cook echo.elf
+  through a file > P.TXT` and `cook wc.elf < P.TXT`) failed once under the
+  full check's load and passed in 22 runs after it, 18 of them six-wide. Its
+  log was not kept. Normally echo takes 0 ticks and wc reads the 15 bytes at
+  once. The check was NOT loosened; failing segments now always keep their
+  serial log, so the next occurrence brings its evidence.
+- 2026-10-07, item 4: set aside. The audit started and found one thing
+  worth a human decision: user_ok() checks that a buffer lies inside the
+  user address range, not that it is mapped, so a buffer in the unmapped gap
+  between a program's image and its heap would reach the kernel unvalidated.
+  The planned way to test that, a program that calls every syscall with bad
+  arguments, was not built. Decide how this should be tested (or whether to
+  make user_ok also require each page to be mapped or demand-pageable, and
+  rely on the existing tests for regressions) before picking it up.

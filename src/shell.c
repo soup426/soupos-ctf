@@ -1263,10 +1263,25 @@ static void cmd_cook(const char *args) {
 }
 
 /* Resolve a job argument: a pid, or empty for the newest job. */
+/* May the current cook signal this process (kill, stop, resume)? Their own,
+ * or any if they are the headchef (v0.51.0). Until then any cook - or any SSH
+ * session - could kill any other cook's programs. */
+static int may_signal(const proc_t *p) {
+    return users_is_headchef() || p->owner == users_current_uid();
+}
+
+static void not_yours(uint32_t pid) {
+    t_color(VGA_LIGHT_RED, VGA_BLACK);
+    t_printf("  %u is not yours to signal (ask the headchef)\n", pid);
+    t_color(VGA_LIGHT_GREY, VGA_BLACK);
+    klog("[proc] %s may not signal %u\n", users_current_name(), pid);
+}
+
 static proc_t *job_arg(const char *args) {
     while (*args == ' ') args++;
-    if (!*args) return proc_most_recent_on(TERM_KEY);
-    return proc_by_pid((uint32_t)parse_num(args));
+    proc_t *p = *args ? proc_by_pid((uint32_t)parse_num(args)) : proc_most_recent_on(TERM_KEY);
+    if (p && !may_signal(p)) { not_yours(p->pid); return 0; }
+    return p;
 }
 
 /* fg [pid] - put a job back in the foreground: give it the terminal, resume it
@@ -2660,18 +2675,30 @@ static void cmd_kill(const char *args) {
     if (*args == '%') {
         proc_t *last = proc_most_recent_on(TERM_KEY);
         if (!last) { t_puts("kill: no live process\n"); return; }
+        if (!may_signal(last)) { not_yours(last->pid); return; }
         proc_kill(last->pid);
         t_printf("killing process %u (%s)\n", last->pid, last->name);
         return;
     }
 
     int id = parse_num(args);
+    proc_t *target = proc_by_pid((uint32_t)id);
+    if (target && (target->state == PROC_RUNNING || target->state == PROC_STOPPED) && !may_signal(target)) {
+        not_yours((uint32_t)id); return;
+    }
     /* A pid IS a task id, so try the process path first: it flags the program
      * and lets it unwind through its own teardown. Marking the task DEAD
      * instead would leak the whole address space, because the loader would
      * never return to free it. */
     if (proc_kill((uint32_t)id) == 0) {
         t_printf("killing process %d\n", id);
+        return;
+    }
+    /* Not a program: a kernel task (the vault's worker, a service). Only the
+     * headchef may kill one of those. */
+    if (!users_is_headchef()) {
+        t_puts("  only the headchef may kill a kernel task\n");
+        klog("[proc] %s may not kill task %d\n", users_current_name(), id);
         return;
     }
     int r = task_kill((uint32_t)id);

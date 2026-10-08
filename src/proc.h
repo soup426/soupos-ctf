@@ -64,6 +64,7 @@ typedef struct proc {
     wait_queue_t  cont_wq;             /* the process itself parks here      */
     struct task  *task;                /* NULL once the process has exited  */
     void         *term;                /* the terminal it was cooked on (v0.36.0) */
+    uint8_t       owner;               /* uid of the cook who cooked it (v0.51.0) */
 } proc_t;
 
 /* The process the calling task is running, or NULL for a plain kernel task. */

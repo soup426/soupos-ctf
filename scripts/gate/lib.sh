@@ -30,7 +30,10 @@ gate_cleanup() {
     [ -n "$LISTENER_PIDS" ] && kill $LISTENER_PIDS 2>/dev/null
     [ -n "$QEMU_PID" ] && kill "$QEMU_PID" 2>/dev/null
     rm -f "$MON" "$TESTDISK" "$WAV"
-    if [ "${KEEP:-0}" = "1" ]; then echo "  [$GATE_NAME] serial log kept at $LOG"; else rm -f "$LOG"; fi
+    # A failing segment always keeps its log: a rare failure that leaves no
+    # evidence has to wait for its next occurrence to be understood (one did,
+    # 2026-10-07: "> redirection reached the filesystem", once in ~23 runs).
+    if [ "${KEEP:-0}" = "1" ] || [ "${fail:-0}" != "0" ]; then echo "  [$GATE_NAME] serial log kept at $LOG"; else rm -f "$LOG"; fi
 }
 
 gate_init() {

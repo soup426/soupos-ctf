@@ -876,6 +876,9 @@ If you add a builtin, allocate with `str_alloc` and return `mksval_ref`; never
 
 ## Permissions are one rule (v0.48.0)
 
+Processes too (v0.51.0): `proc_t.owner` is set at spawn; `may_signal()` in shell.c
+gates kill/plate/steep; kernel tasks are the headchef's to kill.
+
 `users_may(path, need)` in users.c is THE check, used by the shell's `may()` and
 by the open/unlink/mkdir syscalls. A new syscall that touches a file asks it
 too, the way the matching shell command does. The open check is
