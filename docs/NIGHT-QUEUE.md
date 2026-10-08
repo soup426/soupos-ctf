@@ -1,11 +1,10 @@
 # Night queue
 
-Sixteenth queue. The first fifteen are in `docs/queue-archive-2026-10-0*.md`.
+Seventeenth queue. The first sixteen are in `docs/queue-archive-2026-10-0*.md`.
 Two items wait on a person, with notes in their archives: the seventh's
-syscall-pointer item and the thirteenth's swap-shares item. The fifteenth
-added uniq, wc's flags, tee and cut; this one adds tr, then teaches the
-shell to chain commands on their exit codes, which the tools now give
-honestly.
+syscall-pointer item and the thirteenth's swap-shares item. The sixteenth
+added tr and taught the shell ; && || and $?; this one gives the shell
+quotes and ~, and makes every test wait for what it checks.
 
 ## Standing rules
 
@@ -33,24 +32,28 @@ honestly.
 
 ---
 
-## 1. tr.elf — DONE v0.56.9
+## 1. Quotes in the shell
 
-Translate one set of characters to another, with ranges (a-z) and the
-shorter set padded with its last character as tr does; -d deletes the set;
--s squeezes runs. Compare with the host's tr in the C locale.
+Arguments are split on every space, so `grep.elf "two words"` and
+`tr.elf ' ' '_'` cannot be written. '...' keeps everything literally and
+"..." does too (there is nothing to expand inside but $?); either kind
+groups its contents into one argument with the spaces kept, and the
+quotes are dropped, as sh does. Programs receive their arguments as one
+string today: decide how a quoted space reaches them (and write it down),
+then compare echo, grep and tr results with sh on the same lines.
 
-## 2. ; && and || in the shell — DONE v0.57.0
+## 2. ~ is the cook's home
 
-`a ; b` runs both, `a && b` runs b only if a exited 0, `a || b` only if it
-did not. Left to right, as sh groups them. A builtin's status counts too
-(0, or 1 when it refused). Compare the sequence of what ran with the host
-shell running the same commands.
+`cd ~`, `pour ~/NOTES.TXT`, `cook cat.elf ~/X`: a word that is ~ or starts
+with ~/ means the current cook's home, as sh does. Not inside quotes.
+Test as the headchef (whose home is /) and as a cook.
 
-## 3. $? in the shell — DONE v0.57.1
+## 3. Every test waits for what it checks
 
-The last command's exit status, substituted where `$?` appears in a
-command line. Test it after a program that exits 0, one that exits
-non-zero, one killed, and a builtin that refused.
+rc-test slept 8 s and then read the log, and failed once under the full
+check's load (fixed in 1d5d174). Find every script that sleeps a fixed
+time and then checks something it could have waited for, make each wait
+for its event, and show each change under load (the full check twice).
 
 ## 4. Doom at the framebuffer's own resolution — DEFERRED
 
