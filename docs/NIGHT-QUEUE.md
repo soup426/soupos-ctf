@@ -1,10 +1,9 @@
 # Night queue
 
-Twelfth queue. The first eleven are in `docs/queue-archive-2026-10-0*.md`.
+Thirteenth queue. The first twelve are in `docs/queue-archive-2026-10-0*.md`.
 The seventh's notes still hold the set-aside syscall item for a person to
-decide on. The eleventh gated what a cook may do and closed the pass door's
-hijack; this one looks at the brakes a determined cook could still get
-around.
+decide on. The twelfth put brakes on guessing, process slots and the login
+record; this one looks at the other things the cooks share.
 
 ## Standing rules
 
@@ -32,25 +31,25 @@ around.
 
 ---
 
-## 1. chef is a secret-guessing oracle without brakes — DONE v0.55.2
+## 1. One cook can fill the disk
 
-`chef <command>` asks for the headchef's secret. Logins over the vault and
-the pass now cost time per wrong secret and are recorded; chef may do
-neither. Measure how many guesses a cook gets a minute through it, then give
-it the same pause and a record in /etc/logins.
+A cook may write in their home and anywhere they have write permission, and
+nothing stops them filling the volume. Then the kernel's own writes fail:
+/etc/kitchen (so `secret` and `hire`), /etc/logins, the host key. Prove what
+breaks when a cook fills the disk, then keep a reserve of clusters only the
+headchef (and the kernel's own files) may use, the way ext filesystems keep
+5% for root. Check with fsck and mtools.
 
-## 2. One cook can fill the process table — DONE v0.55.3
+## 2. One cook can fill swap
 
-Nothing limits how many processes one cook runs. Find the table's size,
-prove a cook can fill it so that nobody else (the headchef included) can
-cook anything, then add a per-cook limit (the headchef exempt) and test it.
+Swap is 16 MB, shared. Measure whether one cook's processes can take all of
+it, and what happens to another cook's process that then needs a page. If
+it is real, give swap the same kind of per-cook share as the process table.
 
-## 3. The login record can be flushed — DONE v0.55.4
+## 3. A message of the day
 
-/etc/logins keeps the newest 64 lines, so refusals push real logins out.
-Measure how long a determined guesser needs to flush a login out through
-each door, and decide (and write down why) between keeping more lines,
-keeping successes apart from refusals, or both.
+/etc/motd, if it exists, shown after every login: console, pass and vault.
+The headchef's to write. A small one, after the last two queues.
 
 ## 4. Doom at the framebuffer's own resolution — DEFERRED
 
