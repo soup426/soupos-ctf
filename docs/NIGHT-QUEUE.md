@@ -45,7 +45,7 @@ counted as absent) goes away. Check against what perms and du say.
 Mode, owner and size for each entry, through SYS_STAT, in the columns
 `serve` uses. Check every line against perms for the same names.
 
-## 3. find.elf
+## 3. find.elf — DONE v0.59.2
 
 `find.elf [path] [-name PATTERN] [-type f|d]`: every name under a path,
 one per line, bowls it may not enter skipped. Compare with the host's find
