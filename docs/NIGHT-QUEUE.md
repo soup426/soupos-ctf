@@ -57,7 +57,7 @@ long-name entries that fat_write does for files. Make bowls get long names
 the same way (and their alias), and test with a space and with a name
 longer than 8.3, checked with mtools and fsck.
 
-## 4. seq.elf
+## 4. seq.elf — DONE v0.57.7
 
 `seq LAST`, `seq FIRST LAST`, `seq FIRST STEP LAST`, integers, negatives
 and counting down included. Compare with the host's seq.

@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.57.6
+Current version: v0.57.7
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,16 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.57.7 (2026-10-08)  — seq.elf
+  Eighteenth queue, item 4.
+  - user/seq.c: `seq LAST`, `seq FIRST LAST`, `seq FIRST STEP LAST` with
+    GNU seq's rules for integers: FIRST and STEP default to 1; a run that
+    cannot reach LAST in STEP's direction prints nothing; STEP 0 is an
+    error; -3 is a number, not an option.
+  - scripts/seq-test.sh, in check.sh: ten forms (one, two and three
+    arguments, negatives, counting down, empty runs, seq 0, a pipe into
+    sort.elf -r) compared byte for byte with the host's seq.
 
 v0.57.6 (2026-10-08)  — BOWLS GET LONG NAMES, AND DELETES TAKE THEIRS AWAY
   Eighteenth queue, item 3 (found testing item 1).
