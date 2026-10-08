@@ -66,7 +66,7 @@ input (take reads the pipe, not the keyboard). Compare with bash's
 -n puts the line number before each line, -o prints only the matching part
 (each match on a line of its own). Compare with the host's grep.
 
-## 6. tally -s and -w
+## 6. tally -s and -w — DONE v0.60.36
 
 -s SEP between the numbers instead of a newline, -w pads them to equal
 width with zeros. Compare with the host's seq.

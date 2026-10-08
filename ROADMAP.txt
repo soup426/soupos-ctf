@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.35
+Current version: v0.60.36
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,14 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.36 (2026-10-08)  — TALLY -S AND -W
+  - tally.elf -s SEP puts SEP between the numbers (as written: any length,
+    empty too) and a newline after the last; -w pads them with zeros to the
+    width of FIRST or LAST as typed, as GNU seq measures it: `seq -w 007 9`
+    is three wide, a leading + does not count, the step never does, and a
+    negative is padded after its sign (-09).
+  - seq-test.sh grows from ten forms to twenty-one, all byte for byte.
 
 v0.60.35 (2026-10-08)  — SIFT -N AND -O
   - sift.elf -n puts "N:" before each line (or match); -o prints only the
