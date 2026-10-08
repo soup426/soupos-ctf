@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.22
+Current version: v0.60.23
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,13 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.23 (2026-10-08)  — STACK
+  - stack.elf prints lines last first, as `tac` does: each line keeps its
+    own newline, so a last line without one joins the next line out
+    ("a\nb" gives "ba\n"), as tac prints it.
+  - scripts/stack-test.sh compares ten forms with the host's tac byte for
+    byte, 180 KB among them.
 
 v0.60.22 (2026-10-08)  — FUNCTIONS
   - `name() { cmd ; cmd ; }` on one line defines a function (sixteen per

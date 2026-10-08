@@ -46,7 +46,7 @@ the screen. Compare what lands where with bash running the host tools.
 $1..$9, $# and $@ set for the body and restored after; its status is the
 last command's. Compare with bash.
 
-## 3. stack.elf
+## 3. stack.elf — DONE v0.60.23
 
 Lines in reverse order, as `tac` does (a last line with no newline joins
 the one after it, as tac's output shows). Compare with the host's tac.
@@ -75,6 +75,17 @@ Found with item 2: `up loud | raise.elf`, where up is a function (or
 words; only `cook` lines make pipes. Run the left side with its output
 captured (the $(...) capture terminal is the start) and feed it to the
 program as stdin. Compare with bash.
+
+## 9. music-test judges fixed seconds of the capture
+
+2026-10-08: one full check (the first for v0.60.23) failed music-test with
+"the music and the effects did not coexist"; the rerun passed, and twelve
+runs six at a time passed (with effects 2219-2349 against a bar of 1807).
+The test compares the capture's mean amplitude over fixed windows (1.0-3.5 s
+music, 5.0-6.5 s with effects, 7.5-9.0 s music again); under a full check's
+load the effects can start late and miss theirs. Find the effects' onset in
+the capture (or mark it on the serial log) and measure around that instead.
+The failing run's numbers were not kept: have the test print them on FAIL.
 
 ## 7. Doom at the framebuffer's own resolution — DEFERRED
 
