@@ -15,6 +15,8 @@
 #define SYS_UNLINK 10  /* ebx = path; -> 0, or -1 (missing, a bowl, not yours) */
 #define SYS_MKDIR  11  /* ebx = path; -> 0, or -1                               */
 #define SYS_STAT   12  /* ebx = path, ecx = ustat_t*; -> 0, or -1 (v0.59.0)   */
+#define SYS_ENV    13  /* ebx = buf, ecx = max; -> length of the environment:
+                        * NAME=value lines, as the shell handed them (v0.60.26) */
 
 /* One directory entry for SYS_READDIR (v0.44.0): the long name when the
  * entry has one, else the 8.3 name. Shared by the kernel and ulib. */

@@ -61,7 +61,7 @@ expand.
 `-u` (one of each line the sort calls equal), `-t SEP` and `-k N` (sort by
 field N), with the existing -n and -r. Compare with the host's sort.
 
-## 6. export: programs get an environment
+## 6. export: programs get an environment — DONE v0.60.26 (as `hand`, with labels.elf)
 
 `export NAME` (and `export NAME=value`) marks a variable; every program a
 cook runs gets the marked ones as NAME=value strings, read through a new

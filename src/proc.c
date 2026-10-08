@@ -96,7 +96,7 @@ static void proc_entry(void *arg) {
     proc_exit(p, rc);
 }
 
-int proc_spawn(const char *path, const char *args, int background,
+int proc_spawn(const char *path, const char *args, const char *env, int background,
                vfs_node_t *in, vfs_node_t *out, vfs_node_t *err, int err_as_out,
                uint32_t *out_pid) {
     if (!path || !*path) return -1;
@@ -128,6 +128,10 @@ int proc_spawn(const char *path, const char *args, int background,
     if (args) {
         strncpy(p->args, args, PROC_ARGS_MAX - 1);
         p->args[PROC_ARGS_MAX - 1] = '\0';
+    }
+    if (env) {
+        strncpy(p->env, env, PROC_ENV_MAX - 1);
+        p->env[PROC_ENV_MAX - 1] = '\0';
     }
 
     /* Inherited stdio, bound before the task can run. NULL leaves the

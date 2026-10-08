@@ -76,7 +76,9 @@ typedef struct {
     char    where[20];           /* "console", or the client's address (v0.52.0) */
     char    vname[16][16];       /* shell variables (v0.58.0): NAME=value, $NAME */
     char    vval[16][96];
-    int     nvars;
+    uint8_t vhand[16];           /* handed to programs (`hand`, v0.60.26) */
+    char    vpend[8][16];        /* handed while unset: handed once set    */
+    int     nvars, npend;
     char    parg[9][64];         /* a script's $1..$9 (v0.60.2)            */
     int     npargs;              /* $#                                      */
     uint32_t started, last_input;/* ticks: for `who`                          */
@@ -837,6 +839,7 @@ static void cmd_menu(void) {
         {0, "    follow <file> [..] - follow a recipe (a script); $1..$9, $#, $@ are its args"},
         {0, "    NAME=value, $NAME  - shell variables; discard NAME removes one"},
         {0, "    take NAME...       - take a line from the terminal into variables"},
+        {0, "    hand NAME[=value]  - hand a variable to programs (their getenv)"},
         {0, "    kill <id>          - stop a background task"},
         {0, "    bgclock            - spawn a clock in the top-right corner"},
         {0, "    yieldbg            - bg task logging [bg] to serial (pairs with cook whisk.elf)"},
@@ -1552,6 +1555,8 @@ static void cook_err(const char *msg) {
     t_color(VGA_LIGHT_GREY, VGA_BLACK);
 }
 
+static void build_env(char *out, int max);   /* with hand (v0.60.26) */
+
 /* Open a file a pipeline writes to (> >> 2> 2>>), with the checks SYS_OPEN
  * makes: write on the file if it exists, write on its bowl if it does not
  * (v0.56.0: until then `> /etc/EVIL.TXT` from an ordinary cook made the
@@ -1688,6 +1693,8 @@ static void cmd_cook(const char *args) {
 
     uint32_t pids[PIPE_MAX_STAGES];
     int started = 0;
+    static char env[PROC_ENV_MAX];          /* the same for every stage (v0.60.26) */
+    build_env(env, sizeof(env));
     vfs_node_t *stage_in = fin;
 
     for (int i = 0; i < nst; i++) {
@@ -1703,7 +1710,7 @@ static void cmd_cook(const char *args) {
             }
             out = wr;
         }
-        int rc = proc_spawn(st[i].path, st[i].args, background, stage_in, out,
+        int rc = proc_spawn(st[i].path, st[i].args, env, background, stage_in, out,
                             ferr[i], st[i].err_dup, &pids[i]);
         if (rc < 0) {
             cook_err(rc == PROC_ERR_FULL     ? "Too many orders (try: orders)" :
@@ -2831,6 +2838,7 @@ static void cmd_bowltest(void) {
 static void dispatch(const char *buf);   /* forward decl for chef elevation */
 static void cmd_run(const char *args);  /* defined beside run_rc (v0.57.5) */
 static void cmd_unset(const char *args); /* beside run_line (v0.58.0) */
+static void cmd_hand(const char *args);  /* beside it (v0.60.26) */
 static void cmd_read(const char *args);  /* beside run_line (v0.60.4) */
 
 /* The headchef's commands (v0.55.0). Until then any cook could close the
@@ -2884,7 +2892,9 @@ static void cmd_clockout(void) {
     sh->hist_head = sh->hist_size = 0;
     memset(sh->vname, 0, sizeof(sh->vname));
     memset(sh->vval, 0, sizeof(sh->vval));
-    sh->nvars = 0;
+    memset(sh->vhand, 0, sizeof(sh->vhand));
+    memset(sh->vpend, 0, sizeof(sh->vpend));
+    sh->nvars = sh->npend = 0;
     memset(sh->parg, 0, sizeof(sh->parg));
     sh->npargs = 0;
     memset(sh->fname, 0, sizeof(sh->fname));
@@ -4326,7 +4336,7 @@ static const char *const cmd_names[] = {
     "jot", "ai", "cook", "soup", "hash",
     "beep", "mandelbrot", "vgademo", "uname", "cal",
     "clock", "wipe", "fortune", "bounce", "recipe", "leftovers", "spill",
-    "freeze", "reheat", "ps", "kitchen", "brigade", "logbook", "portions", "follow", "discard", "take", "orders", "plate", "steep", "kill", "scraps", "sample", "skewer", "larder", "whistle", "hatch", "hush", "pass", "vault",
+    "freeze", "reheat", "ps", "kitchen", "brigade", "logbook", "portions", "follow", "discard", "take", "orders", "plate", "steep", "hand", "kill", "scraps", "sample", "skewer", "larder", "whistle", "hatch", "hush", "pass", "vault",
 #ifndef NO_DOOM
     "sizzle", "hum",
 #endif
@@ -4563,6 +4573,7 @@ static void dispatch(const char *buf) {
     else if (str_eq(p, "serve"))       cmd_serve();
     else if (str_eq(p, "follow") || str_startswith(p, "follow ")) cmd_run(p + 6);
     else if (str_startswith(p, "discard ")) cmd_unset(uq_args(p + 8));
+    else if (str_eq(p, "hand") || str_startswith(p, "hand ")) cmd_hand(p + 4 + (p[4] == ' '));
     else if (str_eq(p, "take") || str_startswith(p, "take ")) cmd_read(p + 4);
     else if (str_startswith(p, "pour")) {
         const char *a = p + 4; while (*a == ' ') a++;
@@ -4751,6 +4762,13 @@ static void set_var(const char *name, const char *value) {
         slot = me->nvars++;
         strncpy(me->vname[slot], name, sizeof(me->vname[slot]) - 1);
         me->vname[slot][sizeof(me->vname[slot]) - 1] = '\0';
+        me->vhand[slot] = 0;
+        for (int i = 0; i < me->npend; i++)            /* `hand X` before X was set */
+            if (str_eq(me->vpend[i], name)) {
+                me->vhand[slot] = 1;
+                strcpy(me->vpend[i], me->vpend[--me->npend]);
+                break;
+            }
     }
     strncpy(me->vval[slot], value, sizeof(me->vval[slot]) - 1);
     me->vval[slot][sizeof(me->vval[slot]) - 1] = '\0';
@@ -4800,9 +4818,65 @@ static void cmd_unset(const char *args) {
     for (int i = 0; i < me->nvars; i++)
         if (str_eq(me->vname[i], args)) {
             me->nvars--;
-            if (i != me->nvars) { strcpy(me->vname[i], me->vname[me->nvars]); strcpy(me->vval[i], me->vval[me->nvars]); }
+            if (i != me->nvars) { strcpy(me->vname[i], me->vname[me->nvars]); strcpy(me->vval[i], me->vval[me->nvars]); me->vhand[i] = me->vhand[me->nvars]; }
             return;
         }
+    for (int i = 0; i < me->npend; i++)               /* unset drops the mark, as sh's */
+        if (str_eq(me->vpend[i], args)) { strcpy(me->vpend[i], me->vpend[--me->npend]); return; }
+}
+
+/* hand NAME[=value]... (v0.60.26): sh's export, under a kitchen name. The
+ * variable goes to every program run after, as NAME=value in its
+ * environment (ulib's getenv). A name not yet set is marked and handed once
+ * it is, as sh does. `hand` alone lists what is handed. */
+static void cmd_hand(const char *args) {
+    shell_t *me = cur_shell();
+    me->last_status = 0;
+    if (!*args) {
+        for (int i = 0; i < me->nvars; i++)
+            if (me->vhand[i]) t_printf("  %s=%s\n", me->vname[i], me->vval[i]);
+        return;
+    }
+    const char *a = args;
+    while (*a) {
+        char w[INPUT_MAX];
+        a = first_word(a, w, sizeof(w));
+        if (!w[0]) break;
+        char *eq = strchr(w, '=');
+        if (eq) { *eq = '\0'; }
+        int bad = !w[0] || !((w[0] >= 'A' && w[0] <= 'Z') || (w[0] >= 'a' && w[0] <= 'z') || w[0] == '_') || strlen(w) > 15;
+        for (const char *c = w; !bad && *c; c++)
+            if (!((*c >= 'A' && *c <= 'Z') || (*c >= 'a' && *c <= 'z') || (*c >= '0' && *c <= '9') || *c == '_')) bad = 1;
+        if (bad) { t_printf("  hand: not a name: %s\n", w); me->last_status = 1; continue; }
+        if (eq) set_var(w, eq + 1);
+        int slot = -1;
+        for (int i = 0; i < me->nvars; i++) if (str_eq(me->vname[i], w)) slot = i;
+        if (slot >= 0) { me->vhand[slot] = 1; continue; }
+        int known = 0;
+        for (int i = 0; i < me->npend; i++) if (str_eq(me->vpend[i], w)) known = 1;
+        if (!known) {
+            if (me->npend >= 8) { t_puts("  hand: too many names waiting for a value (8).\n"); me->last_status = 1; continue; }
+            strcpy(me->vpend[me->npend++], w);
+        }
+    }
+}
+
+/* The environment for a program: every handed variable as NAME=value, one
+ * a line, as much as fits. */
+static void build_env(char *out, int max) {
+    shell_t *me = cur_shell();
+    int n = 0;
+    out[0] = '\0';
+    for (int i = 0; i < me->nvars; i++) {
+        if (!me->vhand[i]) continue;
+        int need = (int)strlen(me->vname[i]) + 1 + (int)strlen(me->vval[i]) + 1;
+        if (n + need >= max) break;
+        n += (int)strlen(strcpy(out + n, me->vname[i]));
+        out[n++] = '=';
+        n += (int)strlen(strcpy(out + n, me->vval[i]));
+        out[n++] = '\n';
+        out[n] = '\0';
+    }
 }
 
 /* $(( EXPR )) (v0.60.0): integers, + - * / % and parentheses, unary - and

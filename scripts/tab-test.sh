@@ -20,7 +20,7 @@ T="KEY:tab"
 keys=("headchef" "rosemary" "WAIT:1"
   "TYPE:slu" "$T" "a1"                                   # a builtin, then a space
   "TYPE:cook fli" "$T" "/HELLO.TXT"                     # a program, folded to lowercase
-  "TYPE:cook spoon.elf /HELLO.TXT | lab" "$T" ""       # a program after a |
+  "TYPE:cook spoon.elf /HELLO.TXT | lay" "$T" ""       # a program after a |
   "TYPE:slurp /tabs/pep" "$T" "$T" "TYPE:c" "$T" ""    # the shared part, a listing, then one fit
   "TYPE:slurp /tabs/pa" "$T" "$T" "TYPE:n" "$T" "$T" "" # a listing; a bowl gets a /, then into it
   "TYPE:slurp b2 ; slu" "$T" "c2"                      # a command after ;
@@ -54,7 +54,7 @@ became() {   # became <what it should have become> <how it was typed>
 }
 became "slurp a1"                                  "slu<Tab>a1"
 became "cook flip.elf /HELLO.TXT"                  "cook fli<Tab>"
-became "cook spoon.elf /HELLO.TXT | label.elf "    "| lab<Tab>"
+became "cook spoon.elf /HELLO.TXT | layer.elf "    "| lay<Tab>"
 became "slurp /tabs/peppercorn.txt "               "/tabs/pep<Tab><Tab>c<Tab>"
 became "slurp /tabs/pantry/SALT.TXT "              "/tabs/pa<Tab><Tab>n<Tab><Tab>"
 became "slurp b2 ; slurp c2"                       "; slu<Tab>"

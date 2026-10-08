@@ -28,6 +28,7 @@
 #define PROC_ERR_RESERVED (-5)   /* the rest are kept for the headchef        */
 #define PROC_UFD_MAX    16     /* open files per process, fd >= 3           */
 #define PROC_ARGS_MAX   128    /* command line handed to the program        */
+#define PROC_ENV_MAX    512    /* its environment: NAME=value lines (v0.60.26) */
 #define PROC_NAME_MAX   64     /* program path, for ps/jobs                 */
 #define PROC_PAGE_CAP   1024   /* user pages per process (4 MB)             */
 
@@ -70,6 +71,7 @@ typedef struct proc {
     vfs_node_t   *ufds[PROC_UFD_MAX];
     uint8_t       err_as_out;          /* 2>&1: fd 2 writes go where fd 1 does (v0.60.21) */
     char          args[PROC_ARGS_MAX];
+    char          env[PROC_ENV_MAX];
     wait_queue_t  waiters;             /* the parent blocks here            */
     wait_queue_t  cont_wq;             /* the process itself parks here      */
     struct task  *task;                /* NULL once the process has exited  */
@@ -88,9 +90,10 @@ proc_t  *proc_current(void);
  * leaves that descriptor on the console default. The process owns whatever is
  * passed and closes it when it exits, which is what signals EOF down a pipe,
  * so the caller must not close them or hand the same handle to two
- * processes. `err` binds stderr the same way (v0.60.21); `err_as_out` sends
+ * processes. `env` is the environment, NAME=value lines (v0.60.26).
+ * `err` binds stderr the same way (v0.60.21); `err_as_out` sends
  * stderr wherever stdout goes instead (2>&1), with no second handle. */
-int      proc_spawn(const char *path, const char *args, int background,
+int      proc_spawn(const char *path, const char *args, const char *env, int background,
                     vfs_node_t *in, vfs_node_t *out, vfs_node_t *err, int err_as_out,
                     uint32_t *out_pid);
 

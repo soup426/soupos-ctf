@@ -525,6 +525,17 @@ void syscall_dispatch(registers_t *r) {
             break;
         }
 
+        case SYS_ENV: {                   /* as SYS_ARGS, for the environment (v0.60.26) */
+            char *p = (char *)r->ebx;
+            uint32_t max = r->ecx;
+            if (!pr || !user_ok(r->ebx, max) || max == 0) { r->eax = (uint32_t)-1; break; }
+            uint32_t n = 0;
+            while (n < max - 1 && pr->env[n]) { p[n] = pr->env[n]; n++; }
+            p[n] = '\0';
+            r->eax = n;
+            break;
+        }
+
         case SYS_YIELD:
             /* Hand the CPU to other ready tasks. We trapped through a DPL-3
              * *interrupt* gate, so IF is clear right now; a peer that hlts

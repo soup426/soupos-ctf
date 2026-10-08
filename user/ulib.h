@@ -15,6 +15,7 @@ int  sys_open (const char *path, int mode);
 int  sys_close(int fd);
 void *sys_sbrk(int incr);
 int  sys_args (char *buf, int max);
+int  sys_env  (char *buf, int max);   /* NAME=value lines (v0.60.26) */
 /* The arguments split as sh splits them (v0.57.2): spaces separate them,
  * except inside '...' or "..." where everything is kept and the quotes
  * are dropped. Fills argv with up to `max` pointers into a static buffer;
@@ -36,3 +37,7 @@ void  eprint(const char *s);         /* -> serial (fd 2)  */
 void  print_int(int v);              /* decimal, to screen */
 void  eprint_int(int v);             /* decimal, to serial */
 void *malloc(unsigned n);            /* bump allocator over sbrk */
+
+/* The value of an environment variable the shell handed this program
+ * (`hand NAME`), or 0 if it has none (v0.60.26). */
+const char *getenv(const char *name);

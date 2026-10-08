@@ -43,6 +43,36 @@ int sys_args(char *buf, int max) {
     return ret;
 }
 
+int sys_env(char *buf, int max) {
+    int ret;
+    __asm__ volatile ("int $0x80"
+                      : "=a"(ret) : "a"(SYS_ENV), "b"(buf), "c"(max) : "memory");
+    return ret;
+}
+
+/* The environment is fetched once; each newline becomes a NUL, so a value
+ * found in it is already a string. */
+const char *getenv(const char *name) {
+    static char env[512];
+    static int n = -1;
+    if (n < 0) {
+        n = sys_env(env, sizeof(env));
+        if (n < 0) n = 0;
+        for (int i = 0; i < n; i++) if (env[i] == '\n') env[i] = '\0';
+    }
+    int nl = 0;
+    while (name[nl]) nl++;
+    for (int i = 0; i < n; ) {
+        const char *e = env + i;
+        int k = 0;
+        while (k < nl && e[k] == name[k]) k++;
+        if (k == nl && e[k] == '=') return e + k + 1;
+        while (i < n && env[i]) i++;
+        i++;
+    }
+    return 0;
+}
+
 void sys_yield(void) {
     __asm__ volatile ("int $0x80" : : "a"(SYS_YIELD));
 }

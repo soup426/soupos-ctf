@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.25
+Current version: v0.60.26
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,21 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.26 (2026-10-08)  — PROGRAMS GET AN ENVIRONMENT
+  - `hand NAME`, `hand NAME=value` is sh's export under a kitchen name (the
+    queue said export; its own rule says every new builtin gets one). A
+    handed variable goes to every program run after it, in every stage of
+    a pipeline; a name handed before it is set is handed once it is, and
+    `discard` drops both the variable and the mark, as sh does. `hand`
+    alone lists them.
+  - The kernel keeps each process's environment (512 bytes of NAME=value
+    lines) and a new syscall, SYS_ENV (13), copies it out; ulib's getenv()
+    reads it. labels.elf is env, and printenv given a NAME (status 1 if it
+    was not handed).
+  - scripts/env-test.sh runs eight lines in soupOS and in bash (export,
+    unset, env, printenv) and compares ten files. tab-test's `| lab<Tab>`
+    is `| lay<Tab>` now: labels.elf made "lab" two programs.
 
 v0.60.25 (2026-10-08)  — RACK BY A FIELD, ONCE
   - rack.elf takes -k N[,M] (from the start of field N to the end of field
