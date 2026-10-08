@@ -34,8 +34,8 @@ echo "$D" | grep -q "::/moved one.txt" && ! echo "$D" | grep -q "::/copy of.txt"
     && echo "  ok    decant then relabel, quoted with both kinds" || { echo "  FAIL  decant/relabel"; fail=1; }
 echo "$L" | grep -A2 -F 'perms "/moved one.txt"' | grep -q "owner: headchef" \
     && echo "  ok    perms finds a quoted name" || { echo "  FAIL  perms"; fail=1; }
-# A bowl named with a space cannot be made yet: fat_mkdir writes no long
-# names (queued); quoting itself is tested here with an 8.3 name.
+# Bowls named with spaces work since v0.57.6 (lname-test.sh); quoting
+# itself is tested here with an 8.3 name.
 [ "$(after 'pwd')" = "  /QBOWL" ] && ! echo "$D" | grep -q "::/QBOWL" \
     && echo "  ok    mkbowl, cd and rmbowl take a quoted bowl" || { echo "  FAIL  bowls: pwd [$(after 'pwd')]"; fail=1; }
 ! echo "$D" | grep -q "::/two words.txt" && echo "  ok    strain removes a quoted name" || { echo "  FAIL  strain"; fail=1; }

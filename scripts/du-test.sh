@@ -50,14 +50,23 @@ def clusters_of(c):
     out = []
     while 2 <= c < 0xFFF8: out.append(c); c = nxt(c)
     return out
-def entries(first):
+def entries(first):        # (name, attr, first cluster, size); the long name when it has one
     offs = [(root, rootn)] if first == 0 else [(data + (c-2)*cb, cb//32) for c in clusters_of(first)]
+    parts = {}
     for off, count in offs:
         for i in range(count):
             e = d[off+32*i: off+32*i+32]
             if e[0] == 0: return
-            if e[0] == 0xE5 or e[11] == 0x0F or e[11] & 0x08: continue
+            if e[0] == 0xE5: parts = {}; continue
+            if e[11] == 0x0F:                       # a piece of a long name
+                raw = e[1:11] + e[14:26] + e[28:32]
+                parts[e[0] & 0x1F] = raw.decode('utf-16-le', 'replace')
+                continue
+            if e[11] & 0x08: parts = {}; continue
             name = e[:11].decode('latin1')
+            if parts:
+                name = ''.join(parts[k] for k in sorted(parts)).split('\x00')[0].split('\uffff')[0]
+            parts = {}
             if name.startswith(('.  ', '.. ')): continue
             yield name, e[11], struct.unpack_from('<H', e, 26)[0], struct.unpack_from('<I', e, 28)[0]
 def walk(first):           # (clusters, bytes) under a bowl, not its own
@@ -79,15 +88,15 @@ rc, rb = walk(0)
 say(tot_line and int(tot_line.group(1)) == used == fsck_used == rc,
     f"du / totals {tot_line.group(1) if tot_line else '?'} clusters: the FAT has {used} in use, fsck says {fsck_used}")
 say(tot_line and int(tot_line.group(2)) == rb, f"du / totals {tot_line.group(2) if tot_line else '?'} bytes: the image's files hold {rb}")
-home = next(c for n, a, c, s in entries(0) if n.strip() == "HOME")
-sauc = next(c for n, a, c, s in entries(home) if n.strip() == "SAUCIER")
+home = next(c for n, a, c, s in entries(0) if n.strip() == "home")   # long names since v0.57.6
+sauc = next(c for n, a, c, s in entries(home) if n.strip() == "saucier")
 sc, sb = walk(sauc); sc += chain(sauc)
-m = ([None] + list(re.finditer(r"^\s+(\d+)\s+(\d+)\s+SAUCIER/$", log, re.M)))[-1]
-say(m and (int(m.group(1)), int(m.group(2))) == (sc, sb), f"SAUCIER/ is {m.group(1) if m else '?'} clusters, {m.group(2) if m else '?'} bytes: the image says {sc}, {sb}")
+m = ([None] + list(re.finditer(r"^\s+(\d+)\s+(\d+)\s+saucier/$", log, re.M)))[-1]
+say(m and (int(m.group(1)), int(m.group(2))) == (sc, sb), f"saucier/ is {m.group(1) if m else '?'} clusters, {m.group(2) if m else '?'} bytes: the image says {sc}, {sb}")
 hc, hb = walk(home); hc += chain(home)
 m = ([None] + list(re.finditer(r"^\s+(\d+)\s+(\d+)\s+total for /home$", log, re.M)))[-1]
 say(m and (int(m.group(1)), int(m.group(2))) == (hc, hb), f"/home is {m.group(1) if m else '?'} clusters with its own: the image says {hc}")
-say(re.search(r"SAUCIER/  \(some not yours to read\)", log) is not None, "intern's du marks saucier's closed home instead of counting it")
+say(re.search(r"saucier/  \(some not yours to read\)", log) is not None, "intern's du marks saucier's closed home instead of counting it")
 sys.exit(fail)
 PY
 [ "$fail" = 0 ] || exit 1

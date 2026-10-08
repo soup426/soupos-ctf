@@ -883,6 +883,31 @@ static int dir_alloc_run(uint32_t dir_cl, int count, uint32_t *out_slot) {
     return -1;      /* no run that long; the caller falls back to 8.3 only */
 }
 
+/* Erase the long-name entries that belong to the short entry at (e_lba,
+ * e_idx) in directory dir_cl: the slots just before it that are LFN entries
+ * carrying its checksum (v0.57.6). Until then a delete marked only the short
+ * entry, and fsck found the long name orphaned: "Orphaned long file name
+ * part". Call before the short entry is marked deleted. */
+static int erase_lfn_before(uint32_t dir_cl, uint32_t e_lba, int e_idx) {
+    if (ata_read_sector(e_lba, sec_buf) < 0) return -1;
+    uint8_t sum = lfn_checksum(((dirent_t *)sec_buf)[e_idx].name);
+    uint32_t slot = 0, l; int i;
+    for (;; slot++) {
+        if (slot >= 65536 || dir_slot_at(dir_cl, slot, &l, &i) <= 0) return 0;
+        if (l == e_lba && i == e_idx) break;
+    }
+    while (slot > 0) {
+        slot--;
+        if (dir_slot_at(dir_cl, slot, &l, &i) <= 0) break;
+        if (ata_read_sector(l, sec_buf) < 0) return -1;
+        uint8_t *raw = (uint8_t *)&((dirent_t *)sec_buf)[i];
+        if (raw[11] != FAT_ATTR_LFN || raw[0] == 0xE5 || raw[13] != sum) break;
+        raw[0] = 0xE5;
+        if (ata_write_sector(l, sec_buf) < 0) return -1;
+    }
+    return 0;
+}
+
 /* Write the LFN chain for `name` into the `n` slots before the short entry. */
 static int write_lfn_chain(uint32_t dir_cl, uint32_t first_slot, int n,
                            const char *name, uint8_t sum) {
@@ -1142,8 +1167,15 @@ static int fat_mkdir_impl(const char *path) {
     /* Must not already exist. */
     if (dir_find(parent_cl, leaf, 0, 0, 0) == 1) return -1;
 
+    /* A name 8.3 cannot hold gets an alias and a long-name chain, as a file
+     * does in fat_write (v0.57.6). Until then `mkbowl "/a bowl"` stored the
+     * bowl as A BOWL - a space inside an 8.3 name - and nothing could find
+     * it again. */
     char fname[8], fext[3];
-    parse_83(leaf, fname, fext);
+    int  want_lfn = needs_lfn(leaf);
+    int  lfn_ents = want_lfn ? (((int)strlen(leaf) + 12) / 13) : 0;
+    if (want_lfn) { if (make_alias(parent_cl, leaf, fname, fext) < 0) return -1; }
+    else parse_83(leaf, fname, fext);
 
     /* Allocate and initialise the new directory's first cluster. */
     uint32_t newcl = fat_alloc_cluster();
@@ -1166,13 +1198,28 @@ static int fat_mkdir_impl(const char *path) {
     d[1].cluster_lo = (uint16_t)(parent_cl & 0xFFFF);
     if (ata_write_sector(cluster_to_lba(newcl), sec_buf) < 0) return -1;
 
-    /* Add the directory entry to the parent. */
-    uint32_t slot_lba;
-    int      slot_idx;
-    if (dir_alloc_slot(parent_cl, &slot_lba, &slot_idx) < 0) {
-        fat_free_chain(newcl);
-        fat_flush_cache();
-        return -1;
+    /* Add the directory entry to the parent: after its long-name chain if
+     * it has one, which needs a run of consecutive slots. */
+    uint32_t slot_lba, lfn_slot = 0;
+    int      slot_idx, lfn_count = 0;
+    if (want_lfn && dir_alloc_run(parent_cl, lfn_ents + 1, &lfn_slot) == 0) {
+        lfn_count = lfn_ents;
+        if (dir_slot_at(parent_cl, lfn_slot + (uint32_t)lfn_ents, &slot_lba, &slot_idx) <= 0) {
+            fat_free_chain(newcl); fat_flush_cache(); return -1;
+        }
+    } else {
+        if (want_lfn) parse_83(leaf, fname, fext);     /* no run: an 8.3 name, as fat_write does */
+        if (dir_alloc_slot(parent_cl, &slot_lba, &slot_idx) < 0) {
+            fat_free_chain(newcl);
+            fat_flush_cache();
+            return -1;
+        }
+    }
+    if (lfn_count > 0) {
+        char alias[11];
+        for (int i = 0; i < 8; i++) alias[i] = fname[i];
+        for (int i = 0; i < 3; i++) alias[8 + i] = fext[i];
+        if (write_lfn_chain(parent_cl, lfn_slot, lfn_count, leaf, lfn_checksum(alias)) < 0) return -1;
     }
     if (ata_read_sector(slot_lba, sec_buf) < 0) return -1;
     dirent_t *ent = (dirent_t *)sec_buf + slot_idx;
@@ -1231,6 +1278,7 @@ empty_ok:
     /* Free the bowl's clusters, then drop the parent's entry. */
     if (fat_free_chain(dir_cl) < 0) return -1;
     if (fat_flush_cache() < 0)     return -1;
+    if (erase_lfn_before(parent_cl, e_lba, e_idx) < 0) return -1;   /* its long name too */
     if (ata_read_sector(e_lba, sec_buf) < 0) return -1;
     ((dirent_t *)sec_buf)[e_idx].name[0] = (char)0xE5;
     return ata_write_sector(e_lba, sec_buf);
@@ -1332,6 +1380,7 @@ static int fat_delete_impl(const char *path) {
     uint32_t cl = ((uint32_t)de.cluster_hi << 16) | de.cluster_lo;
     if (cl >= 2 && fat_free_chain(cl) < 0) return -1;
     if (fat_flush_cache() < 0) return -1;
+    if (erase_lfn_before(parent_cl, e_lba, e_idx) < 0) return -1;   /* its long name too */
     if (ata_read_sector(e_lba, sec_buf) < 0) return -1;
     ((dirent_t *)sec_buf)[e_idx].name[0] = (char)0xE5;
     return ata_write_sector(e_lba, sec_buf);

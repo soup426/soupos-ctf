@@ -48,7 +48,7 @@ line through run_line, so ; && || $? ~ and quotes all work, '#' lines are
 comments, and it stops on nothing. Its status is the last line's. Compare
 what a small script leaves behind with sh running the same lines.
 
-## 3. Bowls with long names
+## 3. Bowls with long names — DONE v0.57.6
 
 Found testing item 1: `mkbowl "/a bowl"` says "Bowl ready" and leaves a
 directory entry named `A BOWL` (a space inside an 8.3 name, which 8.3 does

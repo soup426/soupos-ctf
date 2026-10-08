@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.57.5
+Current version: v0.57.6
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,28 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.57.6 (2026-10-08)  — BOWLS GET LONG NAMES, AND DELETES TAKE THEIRS AWAY
+  Eighteenth queue, item 3 (found testing item 1).
+  - fat_mkdir wrote no long names: `mkbowl "/a bowl"` stored the bowl as
+    A BOWL, a space inside an 8.3 name, and cd and rmbowl could not find
+    it. A bowl whose name 8.3 cannot hold now gets an alias and a
+    long-name chain the way fat_write gives a file one (an 8.3-only name
+    if the directory has no run of free slots, as for files).
+  - Found the same way: deleting a long-named file marked only its short
+    entry, and fsck reported "Orphaned long file name part". New
+    erase_lfn_before() clears the LFN entries just before a short entry
+    that carry its checksum; fat_delete and fat_rmdir both call it, so
+    strain, relabel and rmbowl leave no orphans.
+  - scripts/lname-test.sh, in check.sh: a bowl named with a space can be
+    entered and written in; a long-named bowl and file are removed whole;
+    mtools finds a kept long-named bowl and the long-named file inside;
+    fsck is clean. On v0.57.5 three of the four failed.
+  - Lowercase bowls now get long names too (they always needed them: 8.3
+    has no lowercase), so /etc and /home are ETC~1 and HOME~1 with long
+    names "etc" and "home" on disk, and du shows "saucier/" rather than
+    "SAUCIER/". du-test's judge, which walked the image by 8.3 names, now
+    assembles long names as a FAT reader does.
 
 v0.57.5 (2026-10-08)  — run FILE
   Eighteenth queue, item 2.
