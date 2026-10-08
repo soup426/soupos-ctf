@@ -12,6 +12,7 @@
  * fd table, heap break, args and exit code.
  */
 #include "usermode.h"
+#include "swap.h"
 #include "syscall_nr.h"
 #include "isr.h"
 #include "paging.h"
@@ -116,11 +117,28 @@ int usermode_demand_page(uint32_t cr2, uint32_t err) {
     if (!pr) return -1;
     if (err & 1) return -1;                             /* present: a protection fault, real */
     if (cr2 < USER_HEAP || cr2 >= pr->brk) return -1;   /* outside the heap: real */
-    if (map_user_page(pr, cr2 & ~0xFFFu) < 0) {
-        klog("[demand] %s: no page for 0x%x (%u mapped, cap %u)\n",
-             pr->name, cr2, pr->upages, (unsigned)PROC_PAGE_CAP);
+
+    /* On disk already? Then this is a page coming back, not a new one. */
+    int back = swap_in(pr, cr2);
+    if (back == 1) return 0;
+    if (back < 0) {
+        klog("[demand] %s: could not swap 0x%x back in\n", pr->name, cr2);
         return -1;
     }
+
+    /* A new page. At the cap, make room by putting the oldest one on disk;
+     * with no swap, or none left, that is the end of the program. */
+    if (pr->upages >= PROC_PAGE_CAP && swap_out_one(pr) < 0) {
+        klog("[demand] %s: no page for 0x%x (%u mapped, cap %u, swap %u of %u)\n",
+             pr->name, cr2, pr->upages, (unsigned)PROC_PAGE_CAP,
+             swap_slots_used(), swap_slots_total());
+        return -1;
+    }
+    if (map_user_page(pr, cr2 & ~0xFFFu) < 0) {
+        klog("[demand] %s: no frame for 0x%x (%u mapped)\n", pr->name, cr2, pr->upages);
+        return -1;
+    }
+    swap_note_resident(pr, cr2 & ~0xFFFu);
     pr->demand_pages++;
     return 0;
 }

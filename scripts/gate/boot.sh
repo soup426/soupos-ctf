@@ -15,7 +15,8 @@ gate_drive \
     "cook marker.elf A &" "cook marker.elf B &" "WAIT:7" \
     "jobs" "WAIT:1" \
     "cook lazy.elf" "WAIT:3" \
-    "cook lazy.elf greedy" "WAIT:6" \
+    "cook lazy.elf greedy" "WAIT:8" \
+    "cook lazy.elf absurd" "WAIT:5" \
     "cook lazy.elf read" "WAIT:2" \
     "cook crash.elf" "WAIT:2" \
     "cook hello.elf" "WAIT:2" "cook hello.elf" "WAIT:2"
@@ -39,8 +40,15 @@ check "second process ran to completion"    '\[p:B\] step 39'
 # is the fault that was never going to be a heap page, and still kills.
 check "a lazy heap costs only the pages touched" 'LAZY touched 64 of 4096 pages ok'
 check "the kernel counted the pages it faulted in" '\[demand\] /lazy\.elf faulted in 64 pages'
-check "touching past the cap is refused, not ignored" '\[demand\] /lazy\.elf: no page for 0x'
-check "and that program was killed for it" '\[user\] fault exc=14 .* -> program killed'
+# With swap past the volume the greedy run completes: 1024 pages stay, the
+# other 3072 go out and every one comes back holding its value. The absurd
+# run wants more than the cap and the swap together and is killed when the
+# swap is full, and the shell goes on.
+check "the greedy run completes through swap"     'LAZY touched 4096 of 4096 pages ok'
+check "its pages went out and came back"          '\[swap\] /lazy\.elf: [0-9]+ pages out, [0-9]+ back in'
+check "past cap and swap together is refused"     '\[demand\] /lazy\.elf: no page for 0x.*swap 4096 of 4096'
+check "and that program was killed for it"        '\[user\] fault exc=14 .* -> program killed'
+check "swap was found past the volume at boot"    '\[swap\] 4096 pages past the volume'
 check "a wild fault still kills" '/crash\.elf exited with code'
 # The kernel's own first touch, inside read(): a ring-0 page fault that has
 # to be answered the same way, not treated as a panic.

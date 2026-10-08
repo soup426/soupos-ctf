@@ -7,9 +7,12 @@
  * write and hold the value after.
  *
  *   cook lazy.elf           64 pages touched out of 4096 claimed
- *   cook lazy.elf greedy    touches every page: runs into the cap and is
- *                           killed, which is the honest answer, and the
- *                           shell must survive it
+ *   cook lazy.elf greedy    touches every page of the 16 MB: 1024 stay
+ *                           resident and the rest go to swap and come back,
+ *                           so it COMPLETES, slowly
+ *   cook lazy.elf absurd    32 MB, more than the cap and the swap together:
+ *                           killed when the swap is full, which is the
+ *                           honest answer, and the shell must survive it
  *   cook lazy.elf read      has the KERNEL touch the page first: a read()
  *                           into a buffer this program never wrote to, so
  *                           the fault is taken in ring 0 and must be
@@ -23,10 +26,11 @@
 int main(void) {
     char arg[16];
     int n = sys_args(arg, sizeof(arg));
-    int greedy = (n > 0 && arg[0] == 'g');
+    int greedy = (n > 0 && (arg[0] == 'g' || arg[0] == 'a'));
     int kread  = (n > 0 && arg[0] == 'r');
+    int pages  = (n > 0 && arg[0] == 'a') ? 2 * PAGES : PAGES;
 
-    char *base = (char *)sys_sbrk(PAGES * PAGE);
+    char *base = (char *)sys_sbrk(pages * PAGE);
     if (base == (char *)-1 || base == 0) {
         eprint("LAZY sbrk-failed\n");
         return 1;
@@ -48,7 +52,7 @@ int main(void) {
     }
 
     int step = greedy ? 1 : 64, touched = 0;
-    for (int i = 0; i < PAGES; i += step) {
+    for (int i = 0; i < pages; i += step) {
         char *p = base + (long)i * PAGE;
         if (p[0] != 0 || p[PAGE - 1] != 0) {      /* a fresh page reads as zero */
             eprint("LAZY FAIL page not zero at=");
@@ -60,7 +64,7 @@ int main(void) {
         p[PAGE - 1] = (char)~(i & 0x7F);
         touched++;
     }
-    for (int i = 0; i < PAGES; i += step) {
+    for (int i = 0; i < pages; i += step) {
         char *p = base + (long)i * PAGE;
         if (p[0] != (char)(i & 0x7F) || p[PAGE - 1] != (char)~(i & 0x7F)) {
             eprint("LAZY FAIL page lost its value at=");
@@ -72,7 +76,7 @@ int main(void) {
     eprint("LAZY touched ");
     eprint_int(touched);
     eprint(" of ");
-    eprint_int(PAGES);
+    eprint_int(pages);
     eprint(" pages ok\n");
     return 0;
 }

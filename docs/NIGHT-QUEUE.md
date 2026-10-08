@@ -35,7 +35,7 @@ primitive got its vectors before anything was built on it.
 
 ---
 
-## 1. Swap: memory the machine does not have, kept on disk
+## 1. Swap: memory the machine does not have, kept on disk — DONE v0.35.0 (per-process cap; global pressure still fails the map)
 
 v0.33.0 made the heap lazy and kills a process at the page cap. The honest
 next step is to keep going instead of killing.
@@ -104,6 +104,17 @@ klog ring-only, with the serial mirror drained by whoever next logs from task
 context (or a service task), so the serial stream is always whole lines.
 Verify with a soak: a network-heavy run (hatch under load) while a script
 prints, and no torn line in the capture.
+
+## 5b. ATA under KVM: polling costs the hypervisor dearly
+
+Found measuring swap. The same greedy run that takes 3 s under the gate's
+emulated boot takes far longer under KVM: every status poll, every settle
+read and every command byte is a VM exit, and a polled driver issues
+hundreds per sector. String PIO (v0.34.1) only halved it. The fix is the
+classic one: issue the command, block the task on a wait queue, let IRQ 14
+wake it, and halt in between (so the host gets the cpu to finish the I/O).
+Measure before and after with the swap greedy run under KVM and with the
+free-cluster yardstick; both numbers are in the log.
 
 ## 6. The TCP waits burn the cpu
 

@@ -883,6 +883,16 @@ seen in the output (`watch_for_prompt`); change the prompt format and update
 that matcher. A second client gets a plain DISCONNECT(12) from
 `refuse_others()`, which runs at the packet-wait point. No rekeying.
 
+## Swap lives past the FAT volume (v0.35.0)
+
+`swap.c` addresses the sectors between `fat_volume_sectors()` and
+`ata_total_sectors()` by page slot; the Makefile's 48 MB image leaves 16 MB
+there (an old 32 MB disk.img has no swap: `rm disk.img && make disk`).
+`usermode_demand_page` tries `swap_in` first, then evicts with
+`swap_out_one` at `PROC_PAGE_CAP`. Eviction is FIFO over `pr->fifo`; only
+heap pages are ever swapped. `swap_release` runs at process exit. The ATA
+driver's polling makes swap slow under KVM; the gate boots under TCG.
+
 ## The heap is demand-paged (v0.33.0)
 
 `SYS_SBRK` only moves `pr->brk`. `usermode_demand_page()` (called first thing

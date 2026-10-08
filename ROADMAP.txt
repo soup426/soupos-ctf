@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.34.1
+Current version: v0.35.0
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,41 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.35.0 (2026-10-07)  — SWAP: MEMORY THE MACHINE DOES NOT HAVE, KEPT ON DISK
+  Fourth queue, item 1. v0.33.0 killed a process at the page cap; now it
+  keeps going.
+  - THE SWAP AREA IS THE DISK PAST THE VOLUME. The Makefile makes a 48 MB
+    image and formats the first 32 MB; the 16 MB after it, 4096 pages, is
+    addressed by slot (eight sectors each) with no on-disk format at all,
+    found at boot from fat_volume_sectors() and ata_total_sectors(). A
+    disk with nothing past the volume has no swap and behaves as before.
+    (An existing disk.img is the old 32 MB one: `rm disk.img && make
+    disk`.)
+  - Per process: a FIFO of its resident heap pages, oldest mapped first
+    as the victim, and a table from heap page to slot. At the cap, the
+    fault handler writes the oldest page straight from its user address
+    with one eight-sector command, unmaps it, frees the frame, and maps
+    the new one; a fault on a page with a slot maps a frame and reads it
+    back, evicting first if it must. Both happen in the faulting task's
+    context with only the ATA mutex taken, which nothing holds while
+    touching user memory, so the ring-0 case (a syscall copying into a
+    swapped page) is safe too.
+  - PROVEN BY lazy.elf: `greedy` touches all 4096 pages of its 16 MB and
+    completes, with every page holding its value: 7173 pages out, 4096
+    back in (the first pass evicts 3072, the verify pass brings each one
+    back and evicts another). `absurd` claims 32 MB, more than the cap
+    and the swap together, and is killed when the swap is full with
+    "no page for 0x... swap 4096 of 4096". Every exit returns to the same
+    free-page count. Five new checks in the boot segment, and kitchen
+    shows swap in use. The exit line now also carries elapsed ticks.
+  - MEASURED: under the gate's emulated boot the greedy run takes 296
+    ticks, about 11,000 page transfers in three seconds. Under KVM the
+    same run takes far longer, because every port access the driver
+    polls on is a VM exit; that is a finding for the queue (interrupt-
+    driven ATA completion), not a swap matter.
+  - Global pressure, the PMM itself empty, still fails the map; only the
+    per-process cap evicts. The queue says which step that is. Gate 90.
 
 v0.34.1 (2026-10-07)  — ATA: STRING PIO
   Groundwork for swap, measured on the way.

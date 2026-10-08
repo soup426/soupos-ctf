@@ -178,8 +178,10 @@ iso-text:
 
 # Create FAT16 disk image with test files (32 MB, primary master)
 $(DISK):
-	dd if=/dev/zero of=$(DISK) bs=1M count=32 2>/dev/null
-	mkfs.fat -F 16 -n "SOUPOS" $(DISK) >/dev/null
+	# 48 MB, of which the FAT volume takes the first 32 MB (the block count
+	# is in KB). The 16 MB past the volume is swap: see src/swap.c.
+	dd if=/dev/zero of=$(DISK) bs=1M count=48 2>/dev/null
+	mkfs.fat -F 16 -n "SOUPOS" $(DISK) 32768 >/dev/null
 	printf 'Hello from soupOS!\nA warm bowl of kernel soup.\n' \
 	    | mcopy -i $(DISK) - ::HELLO.TXT
 	printf 'soupOS v0.8.0\nA 32-bit hobby OS built in C and NASM.\nFeatures: GDT IDT PMM Paging Heap FAT16 bowls users VFS scheduler preempt ring3 syscalls ELF processes jobs soupyc jot ai\n' \

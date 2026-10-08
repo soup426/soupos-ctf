@@ -15,6 +15,7 @@
 #include "heap.h"
 #include "ata.h"
 #include "fat.h"
+#include "swap.h"
 #include "vfs.h"
 #include "rtl8139.h"
 #include "net.h"
@@ -93,6 +94,7 @@ void kernel_main(uint32_t mb_magic, uint32_t mb_info) {
     else        klog_puts("[boot] ATA: no drive\n");
 
     int fat_ok = ata_ok && (fat_init() == 0);
+    swap_init();                /* what lies past the volume */
     if (fat_ok) klog_puts("[boot] FAT ok\n");
     else if (ata_ok) klog_puts("[boot] FAT: not a FAT16/32 volume\n");
 

@@ -16,6 +16,8 @@
  *     proc_report_finished), never by the process itself.
  */
 #include "proc.h"
+#include "timer.h"
+#include "swap.h"
 #include "usermode.h"
 #include "task.h"
 #include "str.h"
@@ -106,7 +108,8 @@ int proc_spawn(const char *path, const char *args, int background,
     if (!p) { preempt_enable(); return -1; }
 
     memset(p, 0, sizeof(*p));
-    p->state     = PROC_RUNNING;     /* claims the slot                    */
+    p->state     = PROC_RUNNING;
+    p->start_tick = timer_get_ticks();     /* claims the slot                    */
     p->parent_id = task_current() ? task_current()->id : 0;
     p->background = background;
     strncpy(p->name, path, PROC_NAME_MAX - 1);
@@ -161,10 +164,14 @@ void proc_exit(proc_t *p, int exit_code) {
      * The free page count is in the line on purpose: the loader has already
      * torn the address space down by now, so two runs of one program must
      * report the same number. That is the leak test. */
-    klog("[proc %u] %s exited with code %d, %u pages free\n",
-         p->pid, p->name, exit_code, pmm_free_pages());
+    klog("[proc %u] %s exited with code %d, %u pages free, %u ticks\n",
+         p->pid, p->name, exit_code, pmm_free_pages(), timer_get_ticks() - p->start_tick);
     if (p->demand_pages)
         klog("[demand] %s faulted in %u pages on first touch\n", p->name, p->demand_pages);
+    if (p->swaps_out || p->swaps_in)
+        klog("[swap] %s: %u pages out, %u back in\n", p->name, p->swaps_out, p->swaps_in);
+    swap_release(p);
+    p->swaps_out = p->swaps_in = 0;
 
     task_wake(&p->waiters);          /* the parent, if it is waiting */
     preempt_enable();

@@ -27,6 +27,7 @@
 #include "mixer.h"
 #include "remote.h"
 #include "ssh.h"
+#include "swap.h"
 #ifndef NO_DOOM
 #include "music.h"
 #endif
@@ -2462,8 +2463,9 @@ static void kitchen_frame(uint32_t frames) {
     vga_printf("\n  cpu     idle %u%%  busy %u%%        tasks %u alive, %u yours        processes %u of %d\n",
                idle > 100 ? 100 : idle, idle > 100 ? 0 : 100 - idle,
                task_count_alive(), task_count_users(), proc_count_live(), PROC_MAX);
-    vga_printf("  memory  %u of %u KB in pages      heap %u of %u KB\n",
-               pmm_used_kb(), pmm_total_kb(), heap_used_bytes() / 1024, heap_total_bytes() / 1024);
+    vga_printf("  memory  %u of %u KB in pages      heap %u of %u KB      swap %u of %u pages\n",
+               pmm_used_kb(), pmm_total_kb(), heap_used_bytes() / 1024, heap_total_bytes() / 1024,
+               swap_slots_used(), swap_slots_total());
     uint32_t dfree = 0, dtotal = 0, dcl = 0;
     fat_space(&dfree, &dtotal, &dcl);
     vga_printf("  disk    %u of %u KB free\n", (dfree * dcl) / 1024, (dtotal * dcl) / 1024);
