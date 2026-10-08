@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.28
+Current version: v0.60.29
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,18 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.29 (2026-10-08)  — POUR IS CAT
+  - pour read at most 8 KB (then a "truncated" note), dropped every byte
+    outside printable ASCII, and always added a newline, so `pour X | prog`
+    (possible since v0.60.27) was not `cat X | prog`. It now streams the
+    whole file in 4 KB pieces; into a pipe or a $(...) the bytes go exactly
+    as they are. On a terminal it still drops control bytes, so a file
+    cannot send escape sequences to a cook's screen, and it adds a newline
+    only when the file lacks one, so the prompt starts on its own line. A
+    missing file is status 1.
+  - bpipe-test gets three pour cases: exact, 226 KB, and 4 KB of random
+    bytes through mince.elf against hexdump -C.
 
 v0.60.28 (2026-10-08)  — MUSIC-TEST LISTENS FOR THE EFFECTS
   - music-test judged fixed seconds of the capture: music 1.0-3.5 s, with

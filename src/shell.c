@@ -1052,36 +1052,44 @@ static void cmd_serve(void) {
     t_color(VGA_LIGHT_GREY, VGA_BLACK);
 }
 
+/* pour - a file (v0.60.29: cat, as far as anything reading it can tell).
+ * The whole file, in 4 KB pieces (it used to stop at 8 KB with a note).
+ * Into a pipe or a $(...) it goes exactly as it is; on a terminal (the
+ * console, an SSH session) bytes outside printable ASCII, tab, CR and LF
+ * are still dropped, so a file cannot send a cook's terminal escape
+ * sequences, and a file that does not end in a newline gets one there, so
+ * the prompt starts on a line of its own. */
 static void cmd_pour(const char *args) {
     if (!args || !args[0]) {
         t_puts("Usage: pour <filename>\n");
         return;
     }
-    static uint8_t file_buf[8192];
-    uint32_t file_size = 0;
     char path[FAT_PATH_MAX];
     resolve_path(args, path);
     if (!may(path, 'r')) { deny(path); return; }
-    if (fat_read(path, file_buf, sizeof(file_buf), &file_size) < 0) {
+    vfs_node_t *n = (fat_exists(path) && !fat_is_dir(path)) ? vfs_open(path, VFS_RDONLY) : 0;
+    if (!n) {
         t_color(VGA_LIGHT_RED, VGA_BLACK);
         t_printf("  Not found: %s\n", args);
         t_color(VGA_LIGHT_GREY, VGA_BLACK);
+        cur_shell()->last_status = 1;
         return;
     }
-    uint32_t display = file_size < sizeof(file_buf) ? file_size : sizeof(file_buf);
-    for (uint32_t i = 0; i < display; i++) {
-        char c = (char)file_buf[i];
-        if (c == '\n' || c == '\r' || c == '\t' || (c >= 0x20 && c < 0x7F))
-            t_putc(c);
+    term_t *t = cur_shell()->term;
+    int raw = t && t->name && strcmp(t->name, "subst") == 0;
+    static char buf[4096];
+    char last = '\n';
+    int got;
+    while ((got = vfs_read(n, buf, sizeof(buf))) > 0) {
+        for (int i = 0; i < got; i++) {
+            char c = buf[i];
+            if (raw || c == '\n' || c == '\r' || c == '\t' || (c >= 0x20 && c < 0x7F)) t_putc(c);
+        }
+        last = buf[got - 1];
     }
-    if (file_size > sizeof(file_buf)) {
-        t_color(VGA_YELLOW, VGA_BLACK);
-        t_printf("  (truncated - showing %u of %u bytes)\n",
-                   (uint32_t)sizeof(file_buf), file_size);
-        t_color(VGA_LIGHT_GREY, VGA_BLACK);
-    } else {
-        t_putc('\n');
-    }
+    vfs_close(n);
+    if (!raw && last != '\n') t_putc('\n');
+    cur_shell()->last_status = 0;
 }
 
 static void cmd_soup(const char *args) {

@@ -87,7 +87,7 @@ load the effects can start late and miss theirs. Find the effects' onset in
 the capture (or mark it on the serial log) and measure around that instead.
 The failing run's numbers were not kept: have the test print them on FAIL.
 
-## 10. pour as cat
+## 10. pour as cat — DONE v0.60.29
 
 Found with item 8: pour shows at most 8 KB (then a "truncated" note),
 drops bytes outside printable ASCII, and always adds a newline, so
