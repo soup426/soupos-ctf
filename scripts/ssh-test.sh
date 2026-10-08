@@ -36,7 +36,7 @@ boot() {
     PID=$!
     sleep 5
     python3 scripts/qemu_keys.py "$MON" "headchef" "rosemary" "WAIT:1" \
-        "plumbing dhcp" "WAIT:6" "vault 22" "WAIT:2" >/dev/null 2>&1
+        "plumbing dhcp" "WAIT:6" "vault rekey 8" "vault 22" "WAIT:2" >/dev/null 2>&1
 }
 halt() { kill "$PID" 2>/dev/null; wait "$PID" 2>/dev/null; PID=""; sleep 1; }
 
@@ -92,6 +92,17 @@ after=$(grep -cE '/hog\.elf exited with code -137' "$LOG")
 [ "$after" -gt "$before" ] \
     && echo "  ok    hanging up kills the session's background job" \
     || { echo "  FAIL  a hung-up session's job survived ($before -> $after)"; fail=1; }
+# Every session above ran with the vault rekeying itself every 8 packets out.
+# (Output goes in kilobyte CHANNEL_DATA packets, so a whole login is only a
+# dozen packets: a threshold of 60 was never reached, which is how this check
+# first failed.)
+python3 scripts/ssh-login.py "$PORT" rekey \
+    && echo "  ok    a session survives the client rekeying every 2 KB" \
+    || { echo "  FAIL  client-initiated rekey"; fail=1; }
+grep -q "rekeyed (client)" "$LOG" && echo "  ok    the vault accepted a client's rekey" \
+    || { echo "  FAIL  no client rekey in the kernel log"; fail=1; }
+grep -q "rekeyed (server)" "$LOG" && echo "  ok    the vault started rekeys of its own" \
+    || { echo "  FAIL  no server rekey in the kernel log"; fail=1; }
 grep -q "authenticated by key" "$LOG" && echo "  ok    the kernel logged the key login" \
     || { echo "  FAIL  no key login in the kernel log"; fail=1; }
 halt; rm -f "$LOG" "$MON"

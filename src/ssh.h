@@ -32,3 +32,7 @@ uint16_t ssh_port(void);
 
 /* "SHA256:..." of the host key, as `ssh` prints it. Empty until started. */
 const char *ssh_fingerprint(void);
+
+/* Rekey after this many packets out as well as after an hour; 0 means only
+ * the hour. `vault rekey <packets>`, which is for testing it. */
+void ssh_set_rekey_packets(uint32_t n);

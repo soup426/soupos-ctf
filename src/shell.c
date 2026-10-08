@@ -1900,6 +1900,14 @@ static void cmd_vault(const char *args) {
         else               t_puts("  vault closed. Usage: vault <port> | vault off\n");
         return;
     }
+    if (str_startswith(args, "rekey")) {
+        const char *a = args + 5;
+        while (*a == ' ') a++;
+        int n = parse_num(a);
+        ssh_set_rekey_packets(n > 0 ? (uint32_t)n : 0);
+        t_printf("  the vault rekeys every %d packets, and every hour.\n", n > 0 ? n : 0);
+        return;
+    }
     if (str_eq(args, "off")) {
         if (!ssh_running()) { t_puts("  vault is not open.\n"); return; }
         ssh_stop();

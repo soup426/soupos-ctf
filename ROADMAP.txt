@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.37.0
+Current version: v0.38.0
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,28 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.38.0 (2026-10-07)  — SSH REKEYING
+  Fourth queue, item 4. RFC 4253 says rekey after a gigabyte or an hour;
+  the vault never did, and would have carried the first keys forever.
+  - A KEXINIT arriving mid-session is now a rekey: the vault answers with
+    its own (unless it sent one first), runs the curve25519 exchange again
+    under the current keys, and switches at NEWKEYS. The session id stays
+    the first exchange's H for the life of the connection, as the RFC
+    requires; until now do_kex overwrote it every time, which nothing
+    noticed only because it ran once. Sequence numbers carry on.
+  - The vault starts its own after an hour, or after N packets out with
+    `vault rekey N` (for testing). From its KEXINIT to its NEWKEYS no
+    channel data goes out; the session's output waits in the ring.
+  - TESTED BOTH WAYS with the real client: `ssh -o RekeyLimit=2K` makes
+    OpenSSH rekey every two kilobytes and a session runs through several;
+    and every SSH test now runs with the vault rekeying itself every 8
+    packets out, all 22 checks green. The first run of that check failed
+    and the instrumentation said why: output goes in kilobyte CHANNEL_DATA
+    packets, so a whole login is about a dozen packets and a threshold of
+    60 was never reached. Not a bug; the test's number was wrong.
+  - Also fixed: `vault rekey 60` set 0, because parse_num does not skip
+    the space before the number. Gate 91.
 
 v0.37.0 (2026-10-07)  — THE STACK GROWS, AND HAS A GUARD
   Fourth queue, item 3.

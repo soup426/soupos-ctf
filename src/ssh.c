@@ -83,6 +83,11 @@ typedef struct {
     uint32_t win_in_used;           /* bytes we have taken since the last adjust */
     uint8_t  key_c2s[64], key_s2c[64];
     uint8_t  session_id[32];
+    int      have_session_id;       /* set by the first exchange, kept by every rekey */
+    int      kexinit_sent;          /* we have sent KEXINIT and await theirs */
+    uint32_t kex_seq_out;           /* seq_out at the last exchange */
+    uint32_t kex_tick;              /* when the last exchange finished */
+    uint32_t rekeys;
     uint8_t  client_version[256]; uint32_t client_version_len;
     uint8_t  client_kexinit[SSH_MAX_PACKET]; uint32_t client_kexinit_len;
     uint8_t  server_kexinit[512]; uint32_t server_kexinit_len;
@@ -379,7 +384,9 @@ static int do_kex(const uint8_t *init, uint32_t init_len) {
     w_raw(&b, kb.p, kb.len);
     uint8_t H[32];
     sha256(b.p, b.len, H);
-    memcpy(S.session_id, H, 32);           /* first exchange: this IS the id */
+    /* The first exchange's H is the session id for the life of the
+     * connection; a rekey derives new keys from it, never replaces it. */
+    if (!S.have_session_id) { memcpy(S.session_id, H, 32); S.have_session_id = 1; }
 
     uint8_t sig[64];
     ed25519_sign(sig, H, 32, host_seed, host_pk);
@@ -402,7 +409,47 @@ static int do_kex(const uint8_t *init, uint32_t init_len) {
     derive_key(S.key_c2s, kb.p, kb.len, H, 'C');
     derive_key(S.key_s2c, kb.p, kb.len, H, 'D');
     S.crypt = 1;
+    S.kexinit_sent = 0;
+    S.kex_seq_out  = S.seq_out;
+    S.kex_tick     = timer_get_ticks();
     klog("[ssh] keys in: curve25519-sha256 / ssh-ed25519 / chacha20-poly1305\n");
+    return 0;
+}
+
+/* RFC 4253 section 9: either side may start a new exchange at any time, and
+ * a long connection must. The keys change; the session id does not. Called
+ * with the peer's KEXINIT in S.payload. Nothing but kex packets may be sent
+ * from our KEXINIT to our NEWKEYS, which holds because this runs to the end
+ * on the SSH task before the loop flushes channel output again. */
+static int rekey(uint32_t n, const char *who) {
+    if (check_client_kexinit(S.payload, n) < 0) return -1;
+    memcpy(S.client_kexinit, S.payload, n);
+    S.client_kexinit_len = n;
+    if (!S.kexinit_sent) {
+        build_kexinit();
+        if (write_packet(S.server_kexinit, S.server_kexinit_len) < 0) return -1;
+    }
+    int m;
+    do { m = read_packet(); } while (m > 0 && (S.payload[0] == MSG_IGNORE || S.payload[0] == MSG_DEBUG));
+    if (m < 1 || do_kex(S.payload, (uint32_t)m) < 0) { klog("[ssh] rekey failed\n"); return -1; }
+    S.rekeys++;
+    klog("[ssh] rekeyed (%s), %u so far\n", who, S.rekeys);
+    return 0;
+}
+
+/* Our side of it: after an hour, or after rekey_packets packets if that has
+ * been set (the test sets it small; 0 means only the hour). */
+static uint32_t rekey_packets;
+void ssh_set_rekey_packets(uint32_t n) { rekey_packets = n; }
+
+static int maybe_start_rekey(void) {
+    if (S.kexinit_sent) return 0;
+    int due = (timer_get_ticks() - S.kex_tick > 360000u) ||
+              (rekey_packets && S.seq_out - S.kex_seq_out >= rekey_packets);
+    if (!due) return 0;
+    build_kexinit();
+    if (write_packet(S.server_kexinit, S.server_kexinit_len) < 0) return -1;
+    S.kexinit_sent = 1;
     return 0;
 }
 
@@ -656,7 +703,9 @@ static int finish_session(int status) {
 
 static void connection_loop(void) {
     for (;;) {
-        if (flush_output() < 0) return;
+        if (maybe_start_rekey() < 0) return;
+        /* Between our KEXINIT and the new keys, no channel data may go out. */
+        if (!S.kexinit_sent && flush_output() < 0) return;
         int status;
         if (S.shell && !S.close_sent && ohead == otail && shell_session_done(S.shell, &status)) {
             if (finish_session(status) < 0) return;
@@ -668,6 +717,9 @@ static void connection_loop(void) {
         switch (S.payload[0]) {
         case MSG_IGNORE: case MSG_DEBUG: break;
         case MSG_DISCONNECT: return;
+        case MSG_KEXINIT:
+            if (rekey((uint32_t)n, S.kexinit_sent ? "server" : "client") < 0) return;
+            break;
         case MSG_GLOBAL_REQUEST: {
             uint32_t nl; r_str(&r, &nl);
             if (r_u8(&r)) { uint8_t f = MSG_REQUEST_FAILURE; if (write_packet(&f, 1) < 0) return; }

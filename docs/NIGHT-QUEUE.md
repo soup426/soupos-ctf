@@ -86,7 +86,7 @@ with a clear "[user] stack overflow" line, and with demand paging already in
 place the stack can grow down on fault up to a limit instead of being fixed
 at USTACK_PAGES. A test program that recurses until it dies.
 
-## 4. SSH rekeying
+## 4. SSH rekeying — DONE v0.38.0 (both directions, tested with RekeyLimit and `vault rekey 8`)
 
 RFC 4253 says rekey after a gigabyte or an hour; the vault never does, and
 would silently carry on with the same keys forever. Initiate KEXINIT from the

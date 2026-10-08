@@ -12,6 +12,8 @@ insists on a tty for its password prompt.
                                       cd into it, pwd, then clockout must end the session
     ssh-login.py <port> ctrlc         cook hog.elf, Ctrl-C over the wire kills it, shell carries on
     ssh-login.py <port> hangup        cook hog.elf &, then drop the connection with it running
+    ssh-login.py <port> rekey         the CLIENT rekeys every 2 KB (RekeyLimit): menu twice, then
+                                      whoami must still answer through the new keys
 
 Exit status 0 on the expected outcome, 1 otherwise.
 """
@@ -93,6 +95,14 @@ try:
         c.sendline("cook hog.elf &"); c.expect("running, never yields")
         c.close(force=True)
         time.sleep(3)                    # the vault notices, hangs the session up
+    elif mode == "rekey":
+        c = login(nokey + " -o RekeyLimit=2K")
+        c.expect("password:"); c.sendline("rosemary")
+        c.expect("a shell of your own")
+        for _ in range(3):
+            c.sendline("roster"); c.expect("headchef")
+        c.sendline("whoami"); c.expect(r"headchef\s+\(uid 0\)")
+        c.close(force=True)
     else:
         sys.exit(2)
 except (pexpect.EOF, pexpect.TIMEOUT) as e:

@@ -881,7 +881,9 @@ If you add a builtin, allocate with `str_alloc` and return `mksval_ref`; never
 signature. `exec` runs through the shared shell and ends when the prompt is
 seen in the output (`watch_for_prompt`); change the prompt format and update
 that matcher. A second client gets a plain DISCONNECT(12) from
-`refuse_others()`, which runs at the packet-wait point. No rekeying.
+`refuse_others()`, which runs at the packet-wait point. Rekeying (v0.38.0):
+a KEXINIT in `connection_loop` goes to `rekey()`; `maybe_start_rekey()` sends
+ours after an hour or `vault rekey N` packets; `session_id` is set once.
 
 ## Sessions: a terminal and a shell per task (v0.36.0)
 
