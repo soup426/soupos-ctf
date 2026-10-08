@@ -560,8 +560,21 @@ static int b64dec(const char *in, uint32_t n, uint8_t *out, uint32_t cap) {
     return (int)o;
 }
 
-/* Is this exact key blob in /AUTHKEYS? */
-static int key_authorized(const uint8_t *blob, uint32_t blob_len) {
+/* Does /AUTHKEYS let this exact key log in as `user`? (v0.49.0)
+ *
+ * A line is "cook ssh-ed25519 <base64> [comment]": the key opens that cook's
+ * account and no other. Until v0.49.0 lines were bare keys and any of them
+ * opened ANY account, the headchef's included. A bare line - the old form,
+ * and what a .pub file is - is still read, as the headchef's key only: the
+ * safe reading of a file written before keys had names. */
+static int token(const uint8_t *f, uint32_t *a, uint32_t e, uint32_t *b) {
+    while (*a < e && (f[*a] == ' ' || f[*a] == '\t')) (*a)++;
+    *b = *a;
+    while (*b < e && f[*b] != ' ' && f[*b] != '\t' && f[*b] != '\r') (*b)++;
+    return *b > *a;
+}
+
+static int key_authorized(const char *user, const uint8_t *blob, uint32_t blob_len) {
     uint8_t *file = S.authkeys;
     uint32_t got = 0;
     if (fat_read("/AUTHKEYS", file, sizeof(S.authkeys) - 1, &got) < 0 || got == 0) return 0;
@@ -571,16 +584,24 @@ static int key_authorized(const uint8_t *blob, uint32_t blob_len) {
     while (i < got) {
         uint32_t e = i;
         while (e < got && file[e] != '\n') e++;
-        /* second field of the line */
-        uint32_t a = i;
-        while (a < e && file[a] != ' ') a++;
-        while (a < e && file[a] == ' ') a++;
-        uint32_t b = a;
-        while (b < e && file[b] != ' ' && file[b] != '\r') b++;
-        if (b > a) {
-            uint8_t dec[128];
-            int n = b64dec((const char *)file + a, b - a, dec, sizeof(dec));
-            if (n == (int)blob_len && memcmp(dec, blob, blob_len) == 0) return 1;
+        uint32_t a = i, b;
+        const char *owner = 0; uint32_t owner_len = 0;
+        if (token(file, &a, e, &b)) {
+            if (b - a == 11 && memcmp(file + a, "ssh-ed25519", 11) == 0) {
+                owner = "headchef"; owner_len = 8;          /* a bare line */
+            } else {
+                owner = (const char *)file + a; owner_len = b - a;
+                a = b;
+                if (!token(file, &a, e, &b) || b - a != 11 || memcmp(file + a, "ssh-ed25519", 11) != 0) owner = 0;
+            }
+        }
+        if (owner && strlen(user) == owner_len && memcmp(user, owner, owner_len) == 0) {
+            a = b;
+            if (token(file, &a, e, &b)) {
+                uint8_t dec[128];
+                int n = b64dec((const char *)file + a, b - a, dec, sizeof(dec));
+                if (n == (int)blob_len && memcmp(dec, blob, blob_len) == 0) return 1;
+            }
         }
         i = e + 1;
     }
@@ -609,7 +630,7 @@ static int userauth(void) {
              * ("would you take this key?"), with one it is the login. */
             int has_sig = r_u8(&r) != 0;
             uint32_t al, bl; const uint8_t *alg = r_str(&r, &al); const uint8_t *blob = r_str(&r, &bl);
-            if (!r.bad && al == 11 && memcmp(alg, "ssh-ed25519", 11) == 0 && key_authorized(blob, bl)) {
+            if (!r.bad && al == 11 && memcmp(alg, "ssh-ed25519", 11) == 0 && key_authorized(u, blob, bl)) {
                 rbuf_t kb; r_init(&kb, blob, bl);
                 uint32_t kl, pl2; r_str(&kb, &kl); const uint8_t *pk = r_str(&kb, &pl2);
                 if (!has_sig) {

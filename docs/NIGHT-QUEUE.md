@@ -31,7 +31,7 @@ several rules the shell enforces were never enforced anywhere else.
 
 ---
 
-## 1. A key logs in as its own cook
+## 1. A key logs in as its own cook — DONE v0.49.0 (the hole proven on the old kernel first)
 
 /AUTHKEYS lines are bare public keys, and any listed key may log in as any
 cook that exists, the headchef included. Give each line its cook

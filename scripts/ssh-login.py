@@ -57,6 +57,17 @@ try:
         c = login(common + f" -i {key} -o PasswordAuthentication=no -o IdentitiesOnly=yes", "whoami")
         c.expect(r"headchef\s+\(uid 0\)")
         c.expect(pexpect.EOF); c.close()
+    elif mode in ("keyas", "keydeny"):
+        # keyas <keyfile> <cook>: the key opens that cook's account.
+        # keydeny <keyfile> <cook>: it must not.
+        key, cook = sys.argv[3], sys.argv[4]
+        r = subprocess.run(["ssh", "-p", port] + common.split() + ["-i", key, "-o", "PasswordAuthentication=no",
+                            "-o", "IdentitiesOnly=yes", "-o", "BatchMode=yes", f"{cook}@127.0.0.1", "whoami"],
+                           capture_output=True, text=True, timeout=30)
+        opened = r.returncode == 0 and f"{cook}  (uid" in r.stdout
+        if (mode == "keyas") != opened:
+            print(f"ssh-login: {mode} {cook}: rc={r.returncode} out={r.stdout[-80:]!r} err={r.stderr[-120:]!r}", file=sys.stderr)
+            sys.exit(1)
     elif mode == "busy":
         held = []
         for _ in range(4):

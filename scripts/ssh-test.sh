@@ -22,7 +22,11 @@ cp disk.img "$TESTDISK"
 # /AUTHKEYS before the first boot. soupOS never sees the private half.
 KEYDIR=$(mktemp -d /tmp/soupos-sshkey.XXXXXX)
 ssh-keygen -q -t ed25519 -N '' -f "$KEYDIR/id" >/dev/null 2>&1
-mcopy -i "$TESTDISK" "$KEYDIR/id.pub" ::AUTHKEYS
+# A second key, for saucier, in the v0.49.0 form: the cook's name in front.
+# The first stays a bare .pub line, which reads as the headchef's only.
+ssh-keygen -q -t ed25519 -N '' -f "$KEYDIR/sid" >/dev/null 2>&1
+{ cat "$KEYDIR/id.pub"; printf 'saucier '; cat "$KEYDIR/sid.pub"; } > "$KEYDIR/authkeys"
+mcopy -i "$TESTDISK" "$KEYDIR/authkeys" ::AUTHKEYS
 
 boot() {
     LOG=$(mktemp /tmp/soupos-ssh.XXXXXX.log)
@@ -72,6 +76,13 @@ python3 scripts/ssh-login.py "$PORT" exec \
 python3 scripts/ssh-login.py "$PORT" key "$KEYDIR/id" \
     && echo "  ok    an ed25519 key in /AUTHKEYS logs in without a password" \
     || { echo "  FAIL  key login failed"; fail=1; }
+python3 scripts/ssh-login.py "$PORT" keyas "$KEYDIR/sid" saucier \
+    && python3 scripts/ssh-login.py "$PORT" keydeny "$KEYDIR/sid" headchef \
+    && echo "  ok    saucier's key opens saucier's account and not the headchef's" \
+    || { echo "  FAIL  a cook's key and the accounts it opens"; fail=1; }
+python3 scripts/ssh-login.py "$PORT" keydeny "$KEYDIR/id" saucier \
+    && echo "  ok    a bare key is the headchef's only, not everyone's" \
+    || { echo "  FAIL  a bare key opened another cook's account"; fail=1; }
 python3 scripts/ssh-login.py "$PORT" busy \
     && echo "  ok    with four sessions open, a fifth client is told the vault is busy" \
     || { echo "  FAIL  fifth client was not told busy"; fail=1; }

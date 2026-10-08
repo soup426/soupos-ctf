@@ -922,8 +922,8 @@ always has one to land on.
 
 ## SSH keys, exec, busy (v0.34.0)
 
-`/AUTHKEYS` on the disk holds `.pub`-shaped lines; `key_authorized()` in
-`ssh.c` matches the client's blob and `ed25519_verify` checks the request
+`/AUTHKEYS` lines are `cook ssh-ed25519 <b64>` (a bare `.pub` line = headchef only,
+v0.49.0); `key_authorized(user, ...)` in `ssh.c` matches the client's blob for that cook and `ed25519_verify` checks the request
 signature. `exec` runs through the shared shell and ends when the prompt is
 seen in the output (`watch_for_prompt`); change the prompt format and update
 that matcher. A second client gets a plain DISCONNECT(12) from

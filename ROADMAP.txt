@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.48.0
+Current version: v0.49.0
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,21 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.49.0 (2026-10-07)  — A KEY LOGS IN AS ITS OWN COOK
+  Seventh queue, item 1.
+  - /AUTHKEYS lines were bare public keys, and any listed key opened ANY
+    account. Proven before the fix by running the new test against the
+    previous kernel: the headchef's key logged straight into saucier's
+    account, and a key written with a cook's name in front did not work
+    at all.
+  - A line is now "cook ssh-ed25519 <base64> [comment]" and the key opens
+    that cook's account only. A bare line (the old form, and what a .pub
+    file is) still works, as the headchef's key and nobody else's: the
+    safe reading of a file written before keys had names.
+  - ssh-test.sh installs a bare key and a saucier-tagged one: saucier's
+    opens saucier's account and not the headchef's, and the bare key does
+    not open saucier's. Gate 99.
 
 v0.48.0 (2026-10-07)  — PROGRAMS REMOVE FILES AND MAKE BOWLS, BY THE SHELL'S RULES
   Sixth queue, item 4, and a permission gap it uncovered.
