@@ -37,6 +37,8 @@ int  users_add(const char *name, const char *secret);
 int  users_set_secret(const char *name, const char *secret);
 /* Pin every system file's owner and mode (v0.54.2). */
 void users_seal_system(void);
+/* Could every cook read this path? (hatch serves only these, v0.55.0) */
+int  users_public(const char *path);
 int  users_remove(const char *name);
 
 /* The logged-in session. */

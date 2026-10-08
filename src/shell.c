@@ -1808,6 +1808,24 @@ static void cmd_hatch(const char *args) {
          * out with 7 KB of kernel memory after its first 32 KB, and anything
          * of 64 KB or more was cut to its size modulo 65536 by the
          * uint16_t length tcp_send_on takes. */
+        /* Only what every cook may read (v0.55.0). Until then hatch served any
+         * path to anyone on the network, whoever started it: an ordinary
+         * cook's hatch gave out /etc/kitchen and the vault's private host
+         * key. An HTTP client is anonymous, so the test is "public", not
+         * "the cook who opened the hatch may read it". */
+        if (fat_exists(path) && !users_public(path)) {
+            static const char fb[] = "Forbidden.\n";
+            strcpy(head, "HTTP/1.0 403 Forbidden\r\n"
+                         "Content-Type: text/plain\r\n"
+                         "Content-Length: 11\r\n"
+                         "Connection: close\r\n\r\n");
+            tcp_send_on(h, head, (uint16_t)strlen(head));
+            tcp_send_on(h, fb, (uint16_t)(sizeof(fb) - 1));
+            t_printf("  403 %s\n", path);
+            klog("[hatch] refused %s: not public\n", path);
+            tcp_close_on(h);
+            continue;
+        }
         vfs_node_t *f = fat_is_dir(path) ? 0 : vfs_open(path, VFS_RDONLY);
         uint32_t got = f ? vfs_size(f) : 0;
 
@@ -2343,6 +2361,19 @@ static void cmd_bowltest(void) {
 /* ---- kitchen staff: users, access control, elevation ------------------- */
 
 static void dispatch(const char *buf);   /* forward decl for chef elevation */
+
+/* The headchef's commands (v0.55.0). Until then any cook could close the
+ * vault on everyone, open the clear-text pass door, change the vault's
+ * settings, reboot, halt or crash the machine, and run the self-tests that
+ * write the disk as the kernel - from an SSH session too. `chef <command>`
+ * still runs one as the headchef, for a cook who knows the secret. */
+static int headchef_only(const char *what) {
+    if (users_is_headchef()) return 1;
+    t_printf("  Only the headchef may %s.\n", what);
+    klog("[shell] %s may not %s\n", users_current_name(), what);
+    return 0;
+}
+static int has_args(const char *a) { while (*a == ' ') a++; return *a != 0; }
 
 static void cmd_whoami(void) {
     t_printf("  %s  (uid %u)  -  %s\n",
@@ -3909,9 +3940,9 @@ static void dispatch(const char *buf) {
     else if (str_eq(p, "pantry"))     cmd_pantry();
     else if (str_eq(p, "recipe"))     cmd_recipe();
     else if (str_eq(p, "leftovers"))  cmd_leftovers();
-    else if (str_eq(p, "spill"))      cmd_spill();
-    else if (str_eq(p, "freeze"))     cmd_freeze();
-    else if (str_eq(p, "reheat"))     cmd_reheat();
+    else if (str_eq(p, "spill"))      { if (headchef_only("crash the kernel")) cmd_spill(); }
+    else if (str_eq(p, "freeze"))     { if (headchef_only("halt the machine")) cmd_freeze(); }
+    else if (str_eq(p, "reheat"))     { if (headchef_only("reboot the machine")) cmd_reheat(); }
     else if (str_startswith(p, "slurp")) {
         const char *a = p + 5; while (*a == ' ') a++;
         cmd_slurp(a);
@@ -3954,7 +3985,7 @@ static void dispatch(const char *buf) {
         cmd_cook(a);
     }
     else if (str_eq(p, "pwd"))       cmd_pwd();
-    else if (str_eq(p, "bowltest"))  cmd_bowltest();
+    else if (str_eq(p, "bowltest"))  { if (headchef_only("run the disk self-tests")) cmd_bowltest(); }
     else if (str_startswith(p, "mkbowl")) {
         const char *a = p + 6; while (*a == ' ') a++;
         cmd_mkbowl(a);
@@ -3968,7 +3999,7 @@ static void dispatch(const char *buf) {
         cmd_cd(a);
     }
     else if (str_eq(p, "preempttest")) cmd_preempttest();
-    else if (str_eq(p, "fatstress"))  cmd_fatstress();
+    else if (str_eq(p, "fatstress"))  { if (headchef_only("run the disk self-tests")) cmd_fatstress(); }
     else if (str_eq(p, "vgastress"))  cmd_vgastress();
     else if (str_eq(p, "vmtest"))     cmd_vmtest();
     else if (str_eq(p, "whoami"))    cmd_whoami();
@@ -4034,8 +4065,8 @@ static void dispatch(const char *buf) {
     else if (str_startswith(p, "hum"))     cmd_hum(p + 3);
 #endif
     else if (str_startswith(p, "hatch"))   cmd_hatch(p + 5);
-    else if (str_startswith(p, "pass"))    cmd_pass(p + 4);
-    else if (str_startswith(p, "vault"))   cmd_vault(p + 5);
+    else if (str_startswith(p, "pass"))    { if (!has_args(p + 4) || headchef_only("open, close or change the pass")) cmd_pass(p + 4); }
+    else if (str_startswith(p, "vault"))   { if (!has_args(p + 5) || headchef_only("open, close or change the vault")) cmd_vault(p + 5); }
     else if (str_eq(p, "faucet"))      cmd_faucet();
     else if (str_eq(p, "table"))       cmd_table();
     else if (str_startswith(p, "sniff"))    { const char *a = p + 5; cmd_sniff(a); }

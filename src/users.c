@@ -353,6 +353,24 @@ static int mode_allows(const char *path, char need) {
  * refused at /home/saucier still read /home/saucier/RECIPE.TXT by its full
  * path, from the shell and through SYS_OPEN alike. Paths here are absolute
  * (resolved by the shell, or copied in by a syscall). */
+/* May ANYONE read this path - every cook, whoever they are? The read bit
+ * for all cooks on the path itself, and search for all cooks on every bowl
+ * above it, whatever its owner (v0.55.0). For hatch: its HTTP clients are
+ * anonymous, so it serves only what is public, and a headchef's hatch is no
+ * different from a cook's. */
+int users_public(const char *path) {
+    char up[FAT_PATH_MAX];
+    size_t n = strlen(path);
+    if (n >= sizeof(up)) return 0;
+    uint8_t owner, mode;
+    for (size_t i = 1; i < n; i++) {
+        if (path[i] != '/') continue;
+        memcpy(up, path, i); up[i] = '\0';
+        if (fat_stat(up, &owner, &mode) == 0 && !(mode & FAT_PERM_AX)) return 0;
+    }
+    return fat_stat(path, &owner, &mode) == 0 && (mode & FAT_PERM_AR);
+}
+
 int users_may(const char *path, char need) {
     if (users_is_headchef()) return 1;
     char up[FAT_PATH_MAX];

@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.54.2
+Current version: v0.55.0
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,27 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.55.0 (2026-10-08)  — WHAT A COOK MAY NOT DO
+  Eleventh queue, item 1.
+  - hatch, the HTTP file server, checked nothing. Proven on v0.54.2: the
+    ordinary cook ran `hatch 80` and the host fetched /etc/kitchen (every
+    PBKDF2 secret) and /HOSTKEY.ED (the vault's private key) over HTTP,
+    undoing the last two releases. hatch now serves only public files:
+    read for all cooks on the file and search on every bowl above it
+    (users_public), whoever opened it, since an HTTP client is anonymous;
+    anything else gets 403 Forbidden and a log line.
+  - Proven on v0.54.2 too: the cook closed the vault the headchef had
+    opened, changed its settings, and rebooted the machine. vault and pass
+    with arguments, reheat, freeze, spill, fatstress and bowltest are now
+    the headchef's (one gate at dispatch, each refusal logged); a bare
+    `vault` or `pass` still shows the status, and `chef <command>` still
+    runs one as the headchef for a cook who knows the secret.
+  - scripts/privs-test.sh, in check.sh: the cook's hatch answers 403 for
+    the roster and the host key and 200 for a public file; all nine
+    commands refuse the cook, each logged; the vault stays open and the
+    pass shut; the bare status works; chef elevates; the machine never
+    goes down.
 
 v0.54.2 (2026-10-08)  — EVERY SYSTEM FILE HAS A KNOWN OWNER AND MODE
   Tenth queue, item 3.

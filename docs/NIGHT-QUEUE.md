@@ -31,7 +31,7 @@ what a cook may DO, and at the other door into the kitchen.
 
 ---
 
-## 1. Which commands a cook may run
+## 1. Which commands a cook may run — DONE v0.55.0
 
 Only kill, hire, fire and secret have been looked at for who may run them.
 Go through every shell command for actions that belong to the headchef:
