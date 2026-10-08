@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.54.0
+Current version: v0.54.1
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,20 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.54.1 (2026-10-08)  — FIRE REMOVES THE COOK'S SSH KEYS
+  Tenth queue, item 2.
+  - /AUTHKEYS lines name a cook, not a person, and fire left them. Proven
+    on v0.54.0: saucier had a key, was fired, a new saucier was hired, and
+    the old key logged straight into the new account. fire now removes
+    every "saucier ssh-ed25519 ..." line (ssh_forget_keys, beside the
+    parser in ssh.c) and says how many; other cooks' lines and bare
+    (headchef) lines stay.
+  - scripts/secrets-test.sh, in check.sh: real ed25519 keys from
+    ssh-keygen for saucier, cook and a bare line; after fire and rehire
+    the old key is refused, cook's and the headchef's still work, fire
+    reports one key removed, and mtools sees the other two lines kept. On
+    v0.54.0 the same test failed three of its five checks.
 
 v0.54.0 (2026-10-08)  — THE ROSTER IS THE HEADCHEF'S ALONE
   Tenth queue, item 1.

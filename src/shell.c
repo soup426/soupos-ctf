@@ -2503,8 +2503,11 @@ static void cmd_fire(const char *args) {
     }
     if (users_remove(args) != 0) { t_puts("  Could not fire (disk error).\n"); return; }
     int moved = hand_over("/", (uint8_t)uid, 0);
+    int keys  = ssh_forget_keys(args);
     t_printf("  Fired: %s has left the kitchen; %d of their files and bowls are the headchef's now.\n", args, moved);
-    klog("[users] fired %s (uid %d): %d entries handed to the headchef\n", args, uid, moved);
+    if (keys > 0)  t_printf("  %d SSH key%s for %s removed from /AUTHKEYS.\n", keys, keys == 1 ? "" : "s", args);
+    if (keys < 0)  t_printf("  Could not rewrite /AUTHKEYS: remove %s's keys by hand.\n", args);
+    klog("[users] fired %s (uid %d): %d entries handed to the headchef, %d keys removed\n", args, uid, moved, keys);
 }
 
 /* perms <file>            - show owner + rwx

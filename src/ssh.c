@@ -15,6 +15,7 @@
  */
 #include "ssh.h"
 #include "logins.h"
+#include "heap.h"
 #include "tcp.h"
 #include "net.h"
 #include "task.h"
@@ -621,6 +622,38 @@ static int key_authorized(const char *user, const uint8_t *blob, uint32_t blob_l
         i = e + 1;
     }
     return 0;
+}
+
+/* Remove every /AUTHKEYS line that names `cook` (v0.54.1). Called by
+ * `fire`: a line names a cook, not a person, so a cook later hired under the
+ * same name would otherwise log in with the fired one's key. Bare lines (the
+ * headchef's) and other cooks' lines are kept as they are. Returns the
+ * number of lines removed, or -1 if the file could not be rewritten. */
+int ssh_forget_keys(const char *cook) {
+    uint32_t got = 0, cap = 16384;
+    uint8_t *f = kmalloc(cap + 1);
+    if (!f) return -1;
+    if (fat_read("/AUTHKEYS", f, cap, &got) < 0 || got == 0) { kfree(f); return 0; }
+    if (got > cap) got = cap;
+    uint32_t w = 0, i = 0, cl = (uint32_t)strlen(cook);
+    int removed = 0;
+    while (i < got) {
+        uint32_t e = i;
+        while (e < got && f[e] != '\n') e++;
+        uint32_t a = i, b;
+        int named = token(f, &a, e, &b) && b - a == cl && memcmp(f + a, cook, cl) == 0;
+        if (named) {
+            uint32_t a2 = b, b2;                /* only "cook ssh-ed25519 ..." */
+            named = token(f, &a2, e, &b2) && b2 - a2 == 11 && memcmp(f + a2, "ssh-ed25519", 11) == 0;
+        }
+        uint32_t next = e < got ? e + 1 : e;
+        if (named) removed++;
+        else { memmove(f + w, f + i, next - i); w += next - i; }
+        i = next;
+    }
+    int rc = removed ? (fat_write("/AUTHKEYS", f, w) == 0 ? removed : -1) : 0;
+    kfree(f);
+    return rc;
 }
 
 /* ── guessing costs time (v0.50.0) ─────────────────────────────────────────

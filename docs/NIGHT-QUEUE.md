@@ -40,7 +40,7 @@ is the AlphaSOUP-32 hash, and if reading the roster is part of it, that
 build must keep it readable. Prove the read on the old kernel, and check
 that login, `secret` and `hire` still work for a cook who cannot read it.
 
-## 2. fire leaves the cook's SSH keys
+## 2. fire leaves the cook's SSH keys — DONE v0.54.1
 
 /AUTHKEYS lines name a cook. Firing removes the cook but not the lines, so a
 cook later hired under the same name logs in with the fired one's key.

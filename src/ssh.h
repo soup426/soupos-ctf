@@ -37,5 +37,7 @@ const char *ssh_fingerprint(void);
  * the hour. `vault rekey <packets>`, which is for testing it. */
 void ssh_set_rekey_packets(uint32_t n);
 /* End sessions with no client input for `seconds` (0: never, the default). */
+/* Remove a cook's lines from /AUTHKEYS (fire). Lines removed, or -1. */
+int      ssh_forget_keys(const char *cook);
 void     ssh_set_idle(uint32_t seconds);
 uint32_t ssh_idle(void);
