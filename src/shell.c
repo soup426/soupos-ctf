@@ -1556,6 +1556,7 @@ static void cook_err(const char *msg) {
 }
 
 static void build_env(char *out, int max);   /* with hand (v0.60.26) */
+static vfs_node_t *pending_in;   /* stdin for the next cook's first stage (v0.60.27, pipe_into) */
 
 /* Open a file a pipeline writes to (> >> 2> 2>>), with the checks SYS_OPEN
  * makes: write on the file if it exists, write on its bowl if it does not
@@ -1693,6 +1694,7 @@ static void cmd_cook(const char *args) {
 
     uint32_t pids[PIPE_MAX_STAGES];
     int started = 0;
+    if (!fin && pending_in) { fin = pending_in; pending_in = 0; }   /* a builtin's output (v0.60.27) */
     static char env[PROC_ENV_MAX];          /* the same for every stage (v0.60.26) */
     build_env(env, sizeof(env));
     vfs_node_t *stage_in = fin;
@@ -4968,8 +4970,16 @@ static long arith(const char *expr) {
  * the rest become spaces, as sh's word splitting makes them of an unquoted
  * $(...). The status is COMMAND's. A Ctrl-C pressed while it runs is seen
  * when it ends, not during (written down). */
-typedef struct { term_t t; char *buf; int len, cap; } capterm_t;
-static void cap_putc(term_t *t, char c) { capterm_t *k = (capterm_t *)t; if (k->len < k->cap - 1) k->buf[k->len++] = c; }
+typedef struct { term_t t; char *buf; int len, cap, limit; } capterm_t;
+static void cap_putc(term_t *t, char c) {
+    capterm_t *k = (capterm_t *)t;
+    if (k->len >= k->cap - 1 && k->cap < k->limit) {      /* a pipe's capture grows (v0.60.27) */
+        int ncap = k->cap * 2 < k->limit ? k->cap * 2 : k->limit;
+        char *nb = kmalloc((uint32_t)ncap);
+        if (nb) { memcpy(nb, k->buf, (uint32_t)k->len); kfree(k->buf); k->buf = nb; k->cap = ncap; }
+    }
+    if (k->len < k->cap - 1) k->buf[k->len++] = c;
+}
 static void cap_puts(term_t *t, const char *s) { while (*s) cap_putc(t, *s++); }
 static void cap_color(term_t *t, int f, int b) { (void)t; (void)f; (void)b; }
 static void cap_cursor(term_t *t, int r, int c) { (void)t; (void)r; (void)c; }
@@ -4988,7 +4998,7 @@ static int command_subst(const char *cmd, char *out, int max) {
     cap.t.set_cursor = cap_cursor; cap.t.row = cap_zero; cap.t.col = cap_zero; cap.t.cols = cap_cols;
     cap.t.rows = cap_rows; cap.t.clear = cap_clear; cap.t.getc = cap_getc; cap.t.available = cap_zero;
     cap.t.flush_in = cap_flush; cap.t.fg = 0;
-    cap.buf = kmalloc(4096); cap.len = 0; cap.cap = 4096;
+    cap.buf = kmalloc(4096); cap.len = 0; cap.cap = 4096; cap.limit = 4096;
     if (!cap.buf) return 0;
     shell_t *me = cur_shell();
     task_t *tk = task_current();
@@ -5161,10 +5171,98 @@ static int call_function(const char *ex) {
     return 1;
 }
 
+/* A builtin or a function into a program (v0.60.27): `slurp hi | raise.elf`,
+ * `two | stack.elf`. Only `cook` lines made pipes before; anything else
+ * handed `|` and the program's name to the command as words. The left side
+ * runs first with what it prints captured (stdout only, as for $(...); 256 KB
+ * at most), then a kernel task feeds the capture into a pipe while the right
+ * side runs as a cook line with that pipe as its first stage's stdin (a `<`
+ * on the right wins, as in sh). The status is the right side's. The left
+ * side has finished before the right starts, so a left side that never ends
+ * holds the line, which sh would not: written down. */
+static void run_one(const char *seg);
+static int is_kw(const char *t, const char *kw);
+
+typedef struct { vfs_node_t *wr; char *buf; int len; } feeder_t;
+static void feeder_task(void *arg) {
+    feeder_t *f = arg;
+    for (int off = 0; off < f->len; ) {
+        int w = vfs_write(f->wr, f->buf + off, (uint32_t)(f->len - off));
+        if (w <= 0) break;                   /* the reader has gone: stop */
+        off += w;
+    }
+    vfs_close(f->wr);                        /* EOF for the reader */
+    kfree(f->buf);
+    kfree(f);
+    task_exit();
+}
+
+/* The first '|' in seg that is a pipe: outside quotes and $(...), not ||. */
+static const char *pipe_bar(const char *seg) {
+    char q = 0; int dep = 0;
+    for (const char *s = seg; *s; s++) {
+        if (q) { if (*s == q) q = 0; continue; }
+        if (*s == '\'' || *s == '"') { q = *s; continue; }
+        if (s[0] == '$' && s[1] == '(') { dep++; s++; continue; }
+        if (dep && *s == '(') { dep++; continue; }
+        if (dep && *s == ')') { dep--; continue; }
+        if (!dep && *s == '|' && s[1] != '|' && (s == seg || s[-1] != '|')) return s;
+    }
+    return 0;
+}
+
+static void run_line(const char *line);
+static void pipe_into(const char *left, const char *right) {
+    shell_t *me = cur_shell();
+    capterm_t cap;
+    cap.t.name = "subst"; cap.t.puts = cap_puts; cap.t.putc = cap_putc; cap.t.set_color = cap_color;
+    cap.t.set_cursor = cap_cursor; cap.t.row = cap_zero; cap.t.col = cap_zero; cap.t.cols = cap_cols;
+    cap.t.rows = cap_rows; cap.t.clear = cap_clear; cap.t.getc = cap_getc; cap.t.available = cap_zero;
+    cap.t.flush_in = cap_flush; cap.t.fg = 0;
+    cap.buf = kmalloc(4096); cap.len = 0; cap.cap = 4096; cap.limit = 256 * 1024;
+    if (!cap.buf) return;
+    task_t *tk = task_current();
+    term_t *was_sh = me->term, *was_tk = tk->term;
+    cap.t.intr = was_sh ? was_sh->intr : 0;
+    cap.t.ctx = was_tk ? was_tk : &term_vga;   /* stderr goes where it would have */
+    me->term = &cap.t; tk->term = &cap.t;
+    subst_depth++;
+    run_line(left);
+    subst_depth--;
+    me->term = was_sh; tk->term = was_tk;
+
+    vfs_node_t *rd = 0, *wr = 0;
+    feeder_t *f = kmalloc(sizeof(feeder_t));
+    if (!f || vfs_pipe(&rd, &wr) < 0) { if (f) kfree(f); kfree(cap.buf); cook_err("Out of pipes."); return; }
+    f->wr = wr; f->buf = cap.buf; f->len = cap.len;
+    if (!task_spawn("feeder", feeder_task, f)) {
+        vfs_close(wr); vfs_close(rd); kfree(cap.buf); kfree(f); cook_err("Out of memory starting the pipe.");
+        return;
+    }
+    char line[INPUT_MAX];
+    int n = 0;
+    const char *c = "cook ";
+    while (*c && n < INPUT_MAX - 1) line[n++] = *c++;
+    while (*right == ' ') right++;
+    while (*right && n < INPUT_MAX - 1) line[n++] = *right++;
+    line[n] = '\0';
+    pending_in = rd;
+    run_one(line);
+    if (pending_in) { vfs_close(pending_in); pending_in = 0; }   /* not taken: the feeder sees no reader */
+}
+
 /* Run one command: expand it, then it is an assignment or a dispatch. */
 static void run_one(const char *seg) {
     const char *q = seg; while (*q == ' ') q++;
     if (!*q) return;
+    const char *bar = pipe_bar(q);
+    if (bar && !is_kw(q, "cook")) {
+        char left[INPUT_MAX];
+        int ln = (int)(bar - q) < INPUT_MAX - 1 ? (int)(bar - q) : INPUT_MAX - 1;
+        memcpy(left, q, (uint32_t)ln); left[ln] = '\0';
+        pipe_into(left, bar + 1);
+        return;
+    }
     char ex[INPUT_MAX];
     arith_err = 0;
     expand_seg(seg, ex);

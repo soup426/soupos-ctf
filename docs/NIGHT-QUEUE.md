@@ -68,7 +68,7 @@ cook runs gets the marked ones as NAME=value strings, read through a new
 ulib getenv(). A program to list them (a kitchen name). Test that only
 exported ones arrive and that unset removes one.
 
-## 8. A builtin or a function into a pipe
+## 8. A builtin or a function into a pipe — DONE v0.60.27
 
 Found with item 2: `up loud | raise.elf`, where up is a function (or
 `slurp hi | raise.elf`, a builtin), hands `|` and `raise.elf` to it as
@@ -86,6 +86,22 @@ music, 5.0-6.5 s with effects, 7.5-9.0 s music again); under a full check's
 load the effects can start late and miss theirs. Find the effects' onset in
 the capture (or mark it on the serial log) and measure around that instead.
 The failing run's numbers were not kept: have the test print them on FAIL.
+
+## 10. pour as cat
+
+Found with item 8: pour shows at most 8 KB (then a "truncated" note),
+drops bytes outside printable ASCII, and always adds a newline, so
+`pour X | prog` is not `cat X | prog`. Make it read the whole file in
+pieces and write it as it is (CLAUDE.md and the tests that read pour's
+output may lean on the extra newline: check). Add the pour case back to
+bpipe-test.
+
+## 11. Long word lists
+
+Found with item 8: `for i in $(cook tally.elf 6000)` loops 64 times, not
+6000: a command is expanded into INPUT_MAX (256) bytes, so the $(...)'s
+words are cut. sh has no such limit. Expand a for loop's word list (and
+$(...) generally) into something larger, and say so when it is cut.
 
 ## 7. Doom at the framebuffer's own resolution — DEFERRED
 

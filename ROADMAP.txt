@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.26
+Current version: v0.60.27
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,21 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.27 (2026-10-08)  — A BUILTIN INTO A PROGRAM
+  - `slurp hi | raise.elf`, `myfunc | stack.elf`: a command that is not a
+    cook line can now pipe into programs. Only cook lines made pipes before;
+    anything else got `|` and the program's name as words. The left side
+    runs with its stdout captured (as for $(...), up to 256 KB), a kernel
+    task feeds the capture into a pipe, and the right side runs as a cook
+    line with that pipe as its first stage's stdin (a `<` there wins). The
+    status is the right side's. The left side finishes before the right
+    starts, so one that never ends holds the line (sh would stream).
+  - scripts/bpipe-test.sh compares nine lines with bash, 6000 lines from a
+    function and a reader that stops after one among them.
+  - Found on the way, queued: pour is an 8 KB viewer that adds a newline,
+    not cat; and a for loop's words are cut at 256 bytes, so
+    `for i in $(cook tally.elf 6000)` sees only the first 64.
 
 v0.60.26 (2026-10-08)  — PROGRAMS GET AN ENVIRONMENT
   - `hand NAME`, `hand NAME=value` is sh's export under a kitchen name (the
