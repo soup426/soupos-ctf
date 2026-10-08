@@ -1,9 +1,10 @@
 # Night queue
 
-Twenty-eighth queue. The first twenty-seven are in `docs/queue-archive-2026-10-0*.md`.
+Twenty-ninth queue. The first twenty-eight are in `docs/queue-archive-2026-10-0*.md`.
 Items wait on a person in three archives (the seventh, the thirteenth and
-the twenty-fourth). Two limits written down last queue get fixed, the shell
-learns sh's commonest idiom, and two tools get the flags people reach for.
+the twenty-fourth). The shell grows the pieces of sh that scripts reach for
+next: assignments that keep their value, a variable for one command, the
+${...} forms, until, break and continue, and here-strings.
 
 ## Standing rules
 
@@ -34,70 +35,39 @@ learns sh's commonest idiom, and two tools get the flags people reach for.
 
 ---
 
-## 1. 2>&1 > f, in sh's order — DONE v0.60.31
+## 1. w=$v keeps the whole value
 
-v0.60.21 made 2>&1 a flag meaning "wherever stdout ends up", so
-`2>&1 > f` sends stderr to f; sh sends it to the terminal (the duplicate
-is taken before > moves stdout). Keep the order the redirections were
-written in. Compare both orders with bash.
+v="a b" ; w=$v : bash sets w to "a b" (an assignment's value is not split);
+soupOS expands the line to `w=a b`, which is no longer an assignment, and
+runs `b`. Expansions after NAME= at the start of a command must stay one
+value (the $(...) case already wraps itself; do the same for $NAME, $1..).
+Compare with bash.
 
-## 2. cd -, $PWD and $OLDPWD — DONE v0.60.32
+## 2. A=1 cook prog: a variable for one command
 
-`cd -` goes back to the previous bowl and prints it, as sh does; $PWD and
-$OLDPWD expand to the current and previous bowls. Compare with bash.
+`NAME=value cook prog` hands NAME=value to that program only (its
+environment), leaving the shell's NAME as it was; several prefixes may
+come first. try_assign says this is not supported; support it. Compare
+with bash's `NAME=value env | grep NAME` and the shell's value after.
 
-## 3. A builtin's pipe streams — DONE v0.60.33
+## 3. ${VAR:-word}, ${VAR:=word} and ${#VAR}
 
-v0.60.27 runs the left side of `builtin | prog` to the end before the
-right side starts, so a left side that never ends holds the line. Start
-the right side first, feed it as the left side prints, and wait for it as
-cook does. Test with a left side that prints more than a pipe holds and a
-right side that stops early.
+The default when unset or empty, the default that also sets it, and the
+length. Compare with bash.
 
-## 4. A program into a shell loop — DONE v0.60.34
+## 4. until loops
 
-`cook spoon.elf F | while take line ; do slurp got $line ; done`: the right
-side of a pipe is the shell itself, reading the program's output as its
-input (take reads the pipe, not the keyboard). Compare with bash's
-`cat F | while read line; do echo got $line; done`.
+`until COMMANDS ; do ... ; done`, while's opposite. Compare with bash.
 
-## 5. sift -n and -o — DONE v0.60.35
+## 5. break and continue
 
--n puts the line number before each line, -o prints only the matching part
-(each match on a line of its own). Compare with the host's grep.
+In for, while and until, with an optional N for nested loops. Compare
+with bash.
 
-## 6. tally -s and -w — DONE v0.60.36
+## 6. <<< here-strings
 
--s SEP between the numbers instead of a newline, -w pads them to equal
-width with zeros. Compare with the host's seq.
-
-## 8. A whole loop into a pipe — DONE v0.60.37
-
-Found with item 3: `while slurp y ; do x=1 ; done | skim.elf -n 3` takes
-`done | skim.elf ...` for the loop's done, so the pipe is dropped without a
-word and the loop prints to the screen for ever (Ctrl-C stops it). sh pipes
-the whole compound. Pipe for, while, if and case when their closing word
-has `| ...` after it (the feed exec_ranges the compound instead of a line),
-and refuse anything after done/fi/esac that cook would not take. Compare
-`for ... done | rack.elf` and `while ... done | skim.elf -n 3` with bash.
-
-## 9. Word splitting of an unquoted $VAR — DONE v0.60.38 (it was slurp's alone)
-
-Found with item 4: line="a  b" ; `slurp x:$line` prints "x:a  b" where
-bash's `echo x:$line` prints "x:a b": sh splits an unquoted expansion into
-words at blanks, and a builtin that joins its words gets one space between
-them. soupOS keeps the expansion as it is. Decide where splitting belongs
-(expand_seg marks the text from expansions; the builtins that take words
-split there) and compare echo/slurp, for and a program's args with bash.
-
-## 10. Quotes that come out of an expansion are text — DONE v0.60.39
-
-Found with item 9: v="it's" ; `slurp $v` prints "its", and `cook call.elf
-$v` gets an unbalanced quote: expand_seg puts the value into the line as
-it is, and the quote handling after it (uargv, slurp, first_word) reads its
-' and " as quotes. sh never re-reads an expansion's quotes. Mark expanded
-quote characters (or escape them) so only typed quotes group words;
-compare with bash for $v, $(...) and $1 holding quotes.
+`cook rack.elf <<< "c b a"`: the word, with a newline, as the first
+stage's stdin. Compare with bash.
 
 ## 7. Doom at the framebuffer's own resolution — DEFERRED
 
