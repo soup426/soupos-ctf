@@ -78,6 +78,15 @@ typedef struct {
     int      pty_cols, pty_rows;    /* from pty-req, for the terminal */
     term_stream_t term;             /* the channel, as a terminal (v0.36.0) */
     void    *shell;                 /* the session shell on it, once started */
+    /* v0.42.0: what used to be file- or function-static, so connections
+     * cannot trample each other. */
+    task_t  *task;                  /* the worker task serving this slot */
+    int      used;
+    uint8_t  oring[16384];          /* session output -> this worker */
+    volatile uint32_t ohead, otail;
+    uint8_t  kexbuf[2 * SSH_MAX_PACKET + 1024];
+    uint8_t  authkeys[4096];
+    uint8_t  signed_mem[512];
     uint32_t chan_peer;             /* the client's channel number */
     uint32_t win_out;               /* bytes the client will still take */
     uint32_t win_in_used;           /* bytes we have taken since the last adjust */
@@ -96,7 +105,21 @@ typedef struct {
     uint8_t  payload[SSH_MAX_PACKET];
 } ssh_t;
 
-static ssh_t S;
+/* One slot per connection, as many as TCP has (v0.42.0). Each is served by
+ * its own worker task, and S is whichever slot the calling task serves, so
+ * the protocol code below reads exactly as it did when there was one. The
+ * session's own tasks never use S: they reach their slot through the
+ * terminal's write context. */
+#define SSH_MAX_CONN 4              /* of TCP's 8: room left for refusals and other services */
+static ssh_t conn_slots[SSH_MAX_CONN];
+
+static ssh_t *cur_ssh(void) {
+    task_t *me = task_current();
+    for (int i = 0; i < SSH_MAX_CONN; i++)
+        if (conn_slots[i].used && conn_slots[i].task == me) return &conn_slots[i];
+    return &conn_slots[0];          /* not reached: only workers use S */
+}
+#define S (*cur_ssh())
 
 /* ── byte stream ────────────────────────────────────────────────────────── */
 static int read_exact(uint8_t *dst, uint32_t n, uint32_t deadline_ticks) {
@@ -171,16 +194,14 @@ static int namelist_has(const uint8_t *list, uint32_t len, const char *name) {
 /* One session at a time, and a second client should be told so rather than
  * left to time out. Lines before the version string are allowed by RFC 4253
  * and OpenSSH prints them, so the reason reaches the person's terminal. */
-static void refuse_others(void) {
-    int other = tcp_accept(port_in_use, 0);
-    if (other < 0) return;
+static void refuse_busy(int other) {
     /* A line before the version string is only shown by `ssh -v`. What the
      * client prints unprompted is a DISCONNECT, so: our version line, then a
      * plain (pre-key-exchange) DISCONNECT with reason 12, "too many
      * connections", and the words. The client shows "Received disconnect
      * from ...: 12: the vault is busy ...". */
     static const char ver[] = "SSH-2.0-soupOS_0.34\r\n";
-    static const char why[] = "the vault is busy with another session, try again later";
+    static const char why[] = "the vault is busy: every session slot is in use, try again later";
     uint8_t pkt[128]; wbuf_t b; w_init(&b, pkt + 5, sizeof(pkt) - 5);
     w_u8(&b, MSG_DISCONNECT); w_u32(&b, 12); w_cstr(&b, why); w_cstr(&b, "");
     uint32_t len = b.len, pad = 8 - ((5 + len) % 8);
@@ -192,7 +213,7 @@ static void refuse_others(void) {
     tcp_send_on(other, ver, sizeof(ver) - 1);
     tcp_send_on(other, pkt, (uint16_t)(4 + plen));
     tcp_close_on(other);
-    klog("[ssh] refused a second client: busy\n");
+    klog("[ssh] refused a client: all %u sessions busy\n", (unsigned)SSH_MAX_CONN);
 }
 
 /* ── packets ────────────────────────────────────────────────────────────── */
@@ -251,7 +272,6 @@ static int read_packet_wait(uint32_t wait) {
     uint32_t start = timer_get_ticks();
     while (S.hdr_have < 4) {
         if (want_stop) return -1;
-        refuse_others();
         int r = tcp_recv_on(S.h, i + S.hdr_have, (uint16_t)(4 - S.hdr_have), 2);
         if (r < 0) return -1;
         if (r == 0) {
@@ -370,8 +390,8 @@ static int do_kex(const uint8_t *init, uint32_t init_len) {
     x25519(k, eph, q_c);
 
     /* H = HASH(V_C || V_S || I_C || I_S || K_S || Q_C || Q_S || K). */
-    static uint8_t mem[2 * SSH_MAX_PACKET + 1024];
-    wbuf_t b; w_init(&b, mem, sizeof(mem));
+    uint8_t *mem = S.kexbuf;
+    wbuf_t b; w_init(&b, mem, sizeof(S.kexbuf));
     w_str(&b, S.client_version, S.client_version_len);
     w_cstr(&b, VERSION);
     w_str(&b, S.client_kexinit, S.client_kexinit_len);
@@ -391,7 +411,7 @@ static int do_kex(const uint8_t *init, uint32_t init_len) {
     uint8_t sig[64];
     ed25519_sign(sig, H, 32, host_seed, host_pk);
 
-    w_init(&b, mem, sizeof(mem));
+    w_init(&b, mem, sizeof(S.kexbuf));
     w_u8(&b, MSG_KEX_ECDH_REPLY);
     w_str(&b, ks.p, ks.len);
     w_str(&b, q_s, 32);
@@ -473,14 +493,11 @@ static int read_client_version(void) {
 }
 
 /* ── output ring: the session's terminal (its tasks) -> the SSH task ─────── */
-static uint8_t  oring[16384];
-static volatile uint32_t ohead, otail;
-
-static void oring_push(char c) {
-    uint32_t next = (ohead + 1) % sizeof(oring);
-    if (next == otail) return;              /* full: drop, the terminal survives */
-    oring[ohead] = (uint8_t)c;
-    ohead = next;
+static void oring_push(ssh_t *c, char ch) {
+    uint32_t next = (c->ohead + 1) % sizeof(c->oring);
+    if (next == c->otail) return;           /* full: drop, the terminal survives */
+    c->oring[c->ohead] = (uint8_t)ch;
+    c->ohead = next;
 }
 
 /* The session terminal's write: whatever task prints in the session pushes
@@ -488,30 +505,30 @@ static void oring_push(char c) {
  * is what a slow terminal should do to a program, rather than losing output;
  * a writer that cannot wait (interrupts off) or a hung-up channel drops. */
 static void stream_write(const char *z, uint32_t n, void *ctx) {
-    (void)ctx;
+    ssh_t *c = ctx;                         /* the writer is a session task, not the worker */
     for (uint32_t i = 0; i < n; i++) {
         uint32_t start = timer_get_ticks();
-        while (((ohead + 1) % sizeof(oring)) == otail) {
+        while (((c->ohead + 1) % sizeof(c->oring)) == c->otail) {
             uint32_t fl;
             __asm__ volatile ("pushf; pop %0" : "=r"(fl));
-            if (S.term.closed || !(fl & 0x200) || timer_get_ticks() - start > 500) return;
+            if (c->term.closed || !(fl & 0x200) || timer_get_ticks() - start > 500) return;
             task_yield();
-            if (((ohead + 1) % sizeof(oring)) == otail) cpu_halt();
+            if (((c->ohead + 1) % sizeof(c->oring)) == c->otail) cpu_halt();
         }
         preempt_disable();
-        oring_push(z[i]);
+        oring_push(c, z[i]);
         preempt_enable();
     }
 }
 
 static int flush_output(void) {
-    while (ohead != otail && S.win_out > 0) {
+    while (S.ohead != S.otail && S.win_out > 0) {
         uint8_t chunk[1024];
         uint32_t n = 0;
         preempt_disable();
-        while (ohead != otail && n < sizeof(chunk) && n < S.win_out) {
-            chunk[n++] = oring[otail];
-            otail = (otail + 1) % sizeof(oring);
+        while (S.ohead != S.otail && n < sizeof(chunk) && n < S.win_out) {
+            chunk[n++] = S.oring[S.otail];
+            S.otail = (S.otail + 1) % sizeof(S.oring);
         }
         preempt_enable();
         uint8_t mem[1024 + 16]; wbuf_t b; w_init(&b, mem, sizeof(mem));
@@ -545,10 +562,10 @@ static int b64dec(const char *in, uint32_t n, uint8_t *out, uint32_t cap) {
 
 /* Is this exact key blob in /AUTHKEYS? */
 static int key_authorized(const uint8_t *blob, uint32_t blob_len) {
-    static uint8_t file[4096];
+    uint8_t *file = S.authkeys;
     uint32_t got = 0;
-    if (fat_read("/AUTHKEYS", file, sizeof(file) - 1, &got) < 0 || got == 0) return 0;
-    if (got > sizeof(file) - 1) got = sizeof(file) - 1;   /* fat_read fills at most bufsize but reports the FILE's size */
+    if (fat_read("/AUTHKEYS", file, sizeof(S.authkeys) - 1, &got) < 0 || got == 0) return 0;
+    if (got > sizeof(S.authkeys) - 1) got = sizeof(S.authkeys) - 1;   /* fat_read fills at most bufsize but reports the FILE's size */
     file[got] = 0;
     uint32_t i = 0;
     while (i < got) {
@@ -607,7 +624,7 @@ static int userauth(void) {
                 uint32_t xl, sgl; r_str(&sb, &xl); const uint8_t *sig = r_str(&sb, &sgl);
                 if (!r.bad && !kb.bad && !sb.bad && pl2 == 32 && sgl == 64) {
                     /* The signed data: the session id, then the request as sent. */
-                    static uint8_t signed_mem[512]; wbuf_t sd; w_init(&sd, signed_mem, sizeof(signed_mem));
+                    wbuf_t sd; w_init(&sd, S.signed_mem, sizeof(S.signed_mem));
                     w_str(&sd, S.session_id, 32);
                     w_u8(&sd, MSG_USERAUTH_REQUEST);
                     w_str(&sd, user, ul); w_str(&sd, "ssh-connection", 14); w_cstr(&sd, "publickey");
@@ -652,7 +669,7 @@ static int reply_status(uint8_t msg) {
 
 static int start_session(const char *exec_line) {
     if (S.shell) return -1;                          /* one per channel */
-    term_stream_init(&S.term, S.pty_cols, S.pty_rows, stream_write, 0);
+    term_stream_init(&S.term, S.pty_cols, S.pty_rows, stream_write, &S);
     S.shell = shell_session_start(&S.term.t, S.uid, exec_line);
     if (!S.shell) return -1;
     klog("[ssh] %s: a shell of its own for uid %u\n", exec_line ? "exec" : "shell", S.uid);
@@ -708,7 +725,7 @@ static void connection_loop(void) {
         /* Between our KEXINIT and the new keys, no channel data may go out. */
         if (!S.kexinit_sent && flush_output() < 0) return;
         int status;
-        if (S.shell && !S.close_sent && ohead == otail && shell_session_done(S.shell, &status)) {
+        if (S.shell && !S.close_sent && S.ohead == S.otail && shell_session_done(S.shell, &status)) {
             if (finish_session(status) < 0) return;
         }
         int n = read_packet_wait(2);
@@ -773,9 +790,13 @@ static void connection_loop(void) {
 }
 
 static void session(void) {
-    memset(&S, 0, sizeof(S));
+    ssh_t *me = &S;
+    task_t *t = me->task;
+    memset(me, 0, sizeof(*me));
+    me->task = t;
+    me->used = 1;
     S.h = -1;
-    ohead = otail = 0;
+    S.ohead = S.otail = 0;
 }
 
 static void run_session(int h) {
@@ -827,7 +848,7 @@ static void run_session(int h) {
     }
 
     if (userauth() < 0) return;
-    ohead = otail = 0;
+    S.ohead = S.otail = 0;
     connection_loop();
     S.chan_open = 0;
     if (S.shell) {
@@ -848,6 +869,22 @@ static void run_session(int h) {
     klog("[ssh] session over\n");
 }
 
+/* A worker: one connection, start to finish, in its own slot. */
+static void ssh_conn_task(void *arg) {
+    ssh_t *c = arg;
+    task_set_service();
+    int h = c->h;
+    c->task = task_current();               /* from here, S is this slot */
+    klog("[ssh] connection on port %u (slot %d)\n", port_in_use, (int)(c - conn_slots));
+    run_session(h);
+    tcp_close_on(h);
+    klog("[ssh] connection closed\n");
+    preempt_disable();
+    c->used = 0; c->task = 0;
+    preempt_enable();
+    task_exit();
+}
+
 static void ssh_task(void *arg) {
     (void)arg;
     task_set_service();
@@ -856,10 +893,17 @@ static void ssh_task(void *arg) {
         if (tcp_listen(port_in_use) < 0) break;
         int h = tcp_accept(port_in_use, 100);
         if (h < 0) continue;
-        klog("[ssh] connection on port %u\n", port_in_use);
-        run_session(h);
-        tcp_close_on(h);
-        klog("[ssh] connection closed\n");
+        ssh_t *slot = 0;
+        preempt_disable();
+        for (int i = 0; i < SSH_MAX_CONN; i++)
+            if (!conn_slots[i].used) { slot = &conn_slots[i]; slot->used = 1; slot->task = 0; break; }
+        preempt_enable();
+        if (!slot) { refuse_busy(h); continue; }
+        slot->h = h;
+        if (!task_spawn("ssh:conn", ssh_conn_task, slot)) {
+            slot->used = 0;
+            tcp_close_on(h);
+        }
     }
     running = 0;
     tcp_stop_listening(port_in_use);

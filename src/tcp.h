@@ -62,7 +62,7 @@ int         tcp_connect(uint32_t dst_ip, uint16_t dst_port);
  * tcp_stop_listening removes it, and tcp_accept takes the port it is
  * accepting for, so each service only ever collects its own clients. */
 #define TCP_MAX_LISTEN 4
-#define TCP_MAX_CONNS 4
+#define TCP_MAX_CONNS 8
 int         tcp_listen(uint16_t port);
 void        tcp_stop_listening(uint16_t port);
 int         tcp_accept(uint16_t port, uint32_t ticks);

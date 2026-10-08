@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.41.0
+Current version: v0.42.0
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,28 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.42.0 (2026-10-07)  — FOUR SSH SESSIONS AT ONCE
+  Fifth queue, item 2.
+  - Sessions have been separate shells since v0.36.0, but the vault served
+    one connection, because its state was one static struct. Now a table
+    of four slots, each served by its own worker task, and the protocol
+    code's `S` is whichever slot the calling task serves, so 180 uses of
+    it read exactly as before. Everything that was quietly shared moved
+    into the slot: the output ring, the key-exchange hash buffer, the
+    /AUTHKEYS buffer and userauth's signed-data buffer - any of which two
+    concurrent connections would have trampled. The session's own tasks
+    reach their slot through the terminal's write context, never `S`.
+  - The listener accepts, finds a free slot and spawns its worker; a fifth
+    client gets the busy DISCONNECT. That needed TCP headroom: with four
+    sessions holding all four TCP slots, the fifth SYN had nowhere to land
+    and timed out before the vault could refuse it. The table is 8 now.
+  - TESTED: four sessions held while a fifth is refused; and two at once
+    as two cooks (the console hires a saucier first): each sees its own
+    whoami and cwd, and Ctrl-C in one kills its program while the other's
+    keeps printing. The pair test's first two failures were the test (a
+    colour code in a prompt pattern; a relative program path from a
+    directory), found by stepping it with output. Gate 93.
 
 v0.41.0 (2026-10-07)  — FSCK: THE PERMISSION BYTE WAS FAT'S CASE FLAGS
   Fifth queue, item 1. Nothing had ever checked the FAT as a whole.

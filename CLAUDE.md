@@ -889,6 +889,14 @@ or refuse the file. Five callers did not: hatch leaked kernel memory over the
 network with it, and three wrote a NUL past their buffers. For anything that
 may be large, stream with `vfs_open`/`vfs_read` instead, as hatch now does.
 
+## The vault is per connection (v0.42.0)
+
+`conn_slots[SSH_MAX_CONN]` (4), a worker task each; `S` is `*cur_ssh()`, the
+slot of the calling task. Code that runs on a SESSION task (the terminal's
+`stream_write`) must use its ctx pointer, never `S`. Any new buffer in ssh.c
+goes in `ssh_t`, not in a static. TCP has 8 connection slots so a refusal
+always has one to land on.
+
 ## SSH keys, exec, busy (v0.34.0)
 
 `/AUTHKEYS` on the disk holds `.pub`-shaped lines; `key_authorized()` in

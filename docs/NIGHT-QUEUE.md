@@ -42,7 +42,7 @@ soupyc segments, after fullness-test and lines-test, and after a long
 fatstress, and make a clean report part of check.sh. Expect it to find
 something: nothing has ever looked.
 
-## 2. More than one SSH session at once
+## 2. More than one SSH session at once — DONE v0.42.0 (four, a worker each; TCP table 8)
 
 Sessions have been separate shells since v0.36.0, but the vault still serves
 one connection and tells the second it is busy, because its state is one

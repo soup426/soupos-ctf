@@ -36,7 +36,8 @@ boot() {
     PID=$!
     sleep 5
     python3 scripts/qemu_keys.py "$MON" "headchef" "rosemary" "WAIT:1" \
-        "plumbing dhcp" "WAIT:6" "vault rekey 8" "vault 22" "WAIT:2" >/dev/null 2>&1
+        "plumbing dhcp" "WAIT:6" "hire saucier" "WAIT:1" "basil" "WAIT:1" "basil" "WAIT:1" \
+        "vault rekey 8" "vault 22" "WAIT:2" >/dev/null 2>&1
 }
 halt() { kill "$PID" 2>/dev/null; wait "$PID" 2>/dev/null; PID=""; sleep 1; }
 
@@ -72,8 +73,11 @@ python3 scripts/ssh-login.py "$PORT" key "$KEYDIR/id" \
     && echo "  ok    an ed25519 key in /AUTHKEYS logs in without a password" \
     || { echo "  FAIL  key login failed"; fail=1; }
 python3 scripts/ssh-login.py "$PORT" busy \
-    && echo "  ok    a second client is told the vault is busy" \
-    || { echo "  FAIL  second client was not told busy"; fail=1; }
+    && echo "  ok    with four sessions open, a fifth client is told the vault is busy" \
+    || { echo "  FAIL  fifth client was not told busy"; fail=1; }
+python3 scripts/ssh-login.py "$PORT" pair \
+    && echo "  ok    two sessions at once, as two cooks, each with its own cwd, and Ctrl-C in one spares the other" \
+    || { echo "  FAIL  two concurrent sessions"; fail=1; }
 python3 scripts/ssh-login.py "$PORT" execfail \
     && echo "  ok    an unknown command over exec exits 127" \
     || { echo "  FAIL  exec status for an unknown command"; fail=1; }

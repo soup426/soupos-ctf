@@ -6,7 +6,10 @@ insists on a tty for its password prompt.
     ssh-login.py <port> bad           wrong password, expect Permission denied
     ssh-login.py <port> exec          `ssh host whoami` with the password: one command, then exit
     ssh-login.py <port> key <file>    log in with an ed25519 key, no password offered
-    ssh-login.py <port> busy          hold a session open, then a second client must be told "busy"
+    ssh-login.py <port> busy          hold FOUR sessions open, then a fifth client must be told "busy"
+    ssh-login.py <port> pair          two sessions at once as two cooks (headchef, saucier):
+                                      own whoami, own cwd, and Ctrl-C in one leaves the
+                                      other's program running
     ssh-login.py <port> execfail      `ssh host nonsense` must exit 127, as sh would
     ssh-login.py <port> isolate       a session's own cwd and output: hash zebracake, a bowl,
                                       cd into it, pwd, then clockout must end the session
@@ -55,14 +58,34 @@ try:
         c.expect(r"headchef\s+\(uid 0\)")
         c.expect(pexpect.EOF); c.close()
     elif mode == "busy":
-        c = login(nokey)
-        c.expect("password:"); c.sendline("rosemary")
-        c.expect("a shell of your own")
+        held = []
+        for _ in range(4):
+            c = login(nokey)
+            c.expect("password:"); c.sendline("rosemary")
+            c.expect("a shell of your own")
+            held.append(c)
         second = subprocess.run(["ssh", "-p", port] + nokey.split() + ["-o", "ConnectTimeout=10",
                                  "headchef@127.0.0.1"], capture_output=True, text=True, timeout=30)
-        c.close(force=True)
+        for c in held: c.close(force=True)
         if "vault is busy" not in second.stderr:
-            print(f"ssh-login: second client saw: {second.stderr!r}", file=sys.stderr); sys.exit(1)
+            print(f"ssh-login: fifth client saw: {second.stderr!r}", file=sys.stderr); sys.exit(1)
+    elif mode == "pair":
+        import time
+        a = pexpect.spawn(f"ssh -p {port} {nokey} headchef@127.0.0.1", encoding="utf-8", timeout=25)
+        a.expect("password:"); a.sendline("rosemary"); a.expect("a shell of your own")
+        b = pexpect.spawn(f"ssh -p {port} {nokey} saucier@127.0.0.1", encoding="utf-8", timeout=25)
+        b.expect("password:"); b.sendline("basil"); b.expect("a shell of your own")
+        a.sendline("whoami"); a.expect(r"headchef\s+\(uid 0\)")
+        b.sendline("whoami"); b.expect(r"saucier\s+\(uid [1-9]")
+        a.sendline("mkbowl ABOWL"); a.sendline("cd ABOWL")
+        b.sendline("pwd"); b.expect(r"\r\n/\r\n|\s/\s")          # b is still at the root
+        a.sendline("pwd"); a.expect("/ABOWL")
+        # Both run a program; Ctrl-C in a kills a's, b's keeps printing.
+        a.sendline("cook /hog.elf"); a.expect("running, never yields")   # a is in /ABOWL now
+        b.sendline("cook marker.elf B"); b.expect(r"\[p:B\] step")
+        a.sendcontrol("c"); a.expect(r"hog\.elf killed")
+        b.expect(r"\[p:B\] step (1[0-9]|[2-9][0-9])")                 # b's program carries on
+        a.close(force=True); b.close(force=True)
     elif mode == "execfail":
         c = login(nokey, "nonsensecmd")
         c.expect("password:"); c.sendline("rosemary")
