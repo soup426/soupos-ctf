@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.4
+Current version: v0.60.5
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,20 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.5 (2026-10-08)  — ~/profile AT LOGIN
+  Twenty-third queue, item 3.
+  - If the cook's home holds a file named profile (the headchef's: /profile),
+    it is run as `run` runs a script - through run_line, with the cook's
+    permissions and a fresh Ctrl-C mark - after the welcome and the
+    message of the day at every interactive login: console, pass, vault;
+    not `ssh host cmd`. Variables it sets stay for the session; an error in
+    it is said and the login goes on.
+  - scripts/profile-test.sh, in check.sh: a cook writes ~/profile (X=7, a
+    line appended to a file, an unknown command); it runs at the next
+    console login and at an interactive SSH login but not for `ssh host
+    whoami` (two lines); $X is 7 after login; the unknown command is said
+    and the login carries on.
 
 v0.60.4 (2026-10-08)  — read
   Twenty-third queue, item 2.

@@ -372,6 +372,25 @@ static void show_motd(void) {
     t_color(VGA_LIGHT_GREY, VGA_BLACK);
 }
 
+/* ~/profile (v0.60.5): if the cook's home holds a file named profile, it is
+ * run - as `run` runs a script, with the cook's permissions - after every
+ * interactive login (console, pass, vault; not `ssh host cmd`). Its
+ * variables stay for the session; an error in it is said and the login
+ * goes on. The headchef's home is /, so theirs is /profile. */
+static void run_line(const char *line);
+static void run_profile(void) {
+    char path[FAT_PATH_MAX];
+    shell_t *me = cur_shell();
+    if (me->uid == 0) strcpy(path, "/profile");
+    else { strcpy(path, "/home/"); strncpy(path + 6, users_name_of(me->uid), sizeof(path) - 15); path[sizeof(path) - 9] = '\0'; strcat(path, "/profile"); }
+    if (!fat_exists(path) || fat_is_dir(path)) return;
+    char line[FAT_PATH_MAX + 8];
+    strcpy(line, "run \"");
+    strcat(line, path);
+    strcat(line, "\"");
+    run_line(line);
+}
+
 static void do_login(void) {
     char name[USER_NAME_MAX];
     char secret[64];
@@ -406,6 +425,7 @@ static void do_login(void) {
                        users_is_headchef() ? " (headchef -- run of the kitchen)" : "");
             t_color(VGA_LIGHT_GREY, VGA_BLACK);
             show_motd();
+            run_profile();
             return;
         }
         t_color(VGA_LIGHT_RED, VGA_BLACK);
@@ -5191,6 +5211,7 @@ static void session_task(void *arg) {
                  users_current_name());
         t_color(VGA_LIGHT_GREY, VGA_BLACK);
         show_motd();
+        run_profile();
         prompt();
         shell_loop(input, saved, &pos, &len, &hb);
     }

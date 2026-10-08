@@ -46,7 +46,7 @@ does; not inside '...'. Nested is not needed. Compare with sh, e.g.
 variable; at end of input the status is 1. Test from a script that asks
 and the console that answers.
 
-## 3. ~/profile at login
+## 3. ~/profile at login — DONE v0.60.5
 
 If the cook's home holds a file named profile, it is run (as `run` would)
 at each interactive login - console, pass, vault, not `ssh host cmd` -
