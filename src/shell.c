@@ -5149,14 +5149,36 @@ static int command_subst(const char *cmd, char *out, int max) {
 static int put_lit(char *ex, int *k, int max, char c, int in_dq) {
     char one[4] = { c, 0, 0, 0 };
     const char *rep = one;
-    if (in_dq) { if (c == '"') rep = "\"'\"'\""; }
+    int keep_blanks = in_dq == 2;          /* an assignment's value (v0.60.40) */
+    if (in_dq == 1) { if (c == '"') rep = "\"'\"'\""; }
     else if (c == '\'') rep = "\"'\"";
     else if (c == '"') rep = "'\"'";
-    else if (c == '|' || c == '<' || c == '>' || c == '&') { one[0] = '\''; one[1] = c; one[2] = '\''; }
+    else if (c == '|' || c == '<' || c == '>' || c == '&' || (keep_blanks && (c == ' ' || c == '\t'))) {
+        one[0] = '\''; one[1] = c; one[2] = '\'';
+    }
     int n = (int)strlen(rep);
     if (*k + n >= max - 1) return 0;
     memcpy(ex + *k, rep, (uint32_t)n);
     *k += n;
+    return 1;
+}
+
+/* Is ex[0..k) the start of an assignment's value: NAME= first in the
+ * command, and no blank outside quotes since? Then an expansion here must
+ * stay one value, blanks and all, as sh does not split an assignment
+ * (v0.60.40: `w=$v` with v="a b" became `w=a b`, not an assignment). */
+static int in_assign_value(const char *ex, int k) {
+    int a = 0;
+    while (a < k && ex[a] == ' ') a++;
+    if (a >= k || !(ex[a] == '_' || (ex[a] >= 'A' && ex[a] <= 'Z') || (ex[a] >= 'a' && ex[a] <= 'z'))) return 0;
+    while (a < k && (ex[a] == '_' || (ex[a] >= 'A' && ex[a] <= 'Z') || (ex[a] >= 'a' && ex[a] <= 'z') || (ex[a] >= '0' && ex[a] <= '9'))) a++;
+    if (a >= k || ex[a] != '=') return 0;
+    char q = 0;
+    for (a++; a < k; a++) {
+        if (q) { if (ex[a] == q) q = 0; }
+        else if (ex[a] == '\'' || ex[a] == '"') q = ex[a];
+        else if (ex[a] == ' ' || ex[a] == '\t') return 0;
+    }
     return 1;
 }
 
@@ -5221,6 +5243,7 @@ static int expand_into(const char *seg, char *ex, int max) {
                 while (a < k && (ex[a] == '_' || (ex[a] >= 'A' && ex[a] <= 'Z') || (ex[a] >= 'a' && ex[a] <= 'z') || (ex[a] >= '0' && ex[a] <= '9'))) a++;
                 assign = (a == k - 1 && ex[a] == '=');
             }
+            if (!assign && sq != '"' && in_assign_value(ex, k)) assign = 1;   /* w=x$(...) too (v0.60.40) */
             if (assign && k < max - 1) ex[k++] = '"';
             char *out = kmalloc((uint32_t)max);
             if (out) {
@@ -5248,7 +5271,8 @@ static int expand_into(const char *seg, char *ex, int max) {
                     for (const char *v = me->parg[a]; *v; v++) if (!put_lit(ex, &k, max, *v, sq == '"')) { cut = 1; break; }
                 }
             } else if (c - '1' < me->npargs) {
-                for (const char *v = me->parg[c - '1']; *v; v++) if (!put_lit(ex, &k, max, *v, sq == '"')) { cut = 1; break; }
+                int mode = sq == '"' ? 1 : in_assign_value(ex, k) ? 2 : 0;
+                for (const char *v = me->parg[c - '1']; *v; v++) if (!put_lit(ex, &k, max, *v, mode)) { cut = 1; break; }
             }
             i++;
             continue;
@@ -5267,8 +5291,9 @@ static int expand_into(const char *seg, char *ex, int max) {
             shell_t *me = cur_shell();
             for (int v = 0; v < me->nvars; v++)
                 if (str_eq(me->vname[v], name)) {
+                    int mode = sq == '"' ? 1 : in_assign_value(ex, k) ? 2 : 0;
                     for (const char *val = me->vval[v]; *val; val++)
-                        if (!put_lit(ex, &k, max, *val, sq == '"')) { cut = 1; break; }
+                        if (!put_lit(ex, &k, max, *val, mode)) { cut = 1; break; }
                     break;
                 }
             i = j - 1;

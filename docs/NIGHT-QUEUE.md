@@ -35,7 +35,7 @@ ${...} forms, until, break and continue, and here-strings.
 
 ---
 
-## 1. w=$v keeps the whole value
+## 1. w=$v keeps the whole value — DONE v0.60.40
 
 v="a b" ; w=$v : bash sets w to "a b" (an assignment's value is not split);
 soupOS expands the line to `w=a b`, which is no longer an assignment, and

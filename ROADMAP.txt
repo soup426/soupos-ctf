@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.39
+Current version: v0.60.40
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,16 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.40 (2026-10-08)  — W=$V KEEPS THE WHOLE VALUE
+  - v="a b" ; w=$v expanded to `w=a b`, no longer an assignment: v0.60.39
+    said "No soup for you: 'w=a b'" and left w empty. sh does not split an
+    assignment's value. While the first word is still NAME=... (no blank
+    outside quotes since the =), the blanks an expansion brings go in as
+    text too (put_lit's mode 2), for $NAME, $1..$9 and $(...) anywhere in
+    the value (w=x$v, w=$v$v, w=pre-$v-post).
+  - scripts/assign-test.sh compares nine lines with bash, plain words still
+    splitting among them.
 
 v0.60.39 (2026-10-08)  — WHAT AN EXPANSION GIVES IS TEXT
   - expand_seg put a value into the line as it was, and everything that
