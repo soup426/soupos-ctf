@@ -579,7 +579,7 @@ void syscall_dispatch(registers_t *r) {
         case SYS_STAT: {
             /* What a path is (v0.59.0): size, bowl or not, owner, mode. The
              * cook needs search on the bowls above it, not read on it, as
-             * with stat - so test.elf -f sees a file it may not read. */
+             * with stat - so taste.elf -f sees a file it may not read. */
             char path[FAT_PATH_MAX];
             if (copy_user_path(r->ebx, path) < 0) { r->eax = (uint32_t)-1; break; }
             if (!user_ok(r->ecx, sizeof(ustat_t))) { r->eax = (uint32_t)-1; break; }

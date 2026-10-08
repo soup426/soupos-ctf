@@ -1,13 +1,13 @@
-/* wc.c - count lines, words and bytes, in the host's format (v0.56.6).
+/* weigh.c - count lines, words and bytes, in the host's format (v0.56.6).
  *
- *   cook wc.elf RECIPE.TXT            " 25  50 191 RECIPE.TXT"
- *   cook wc.elf -l RECIPE.TXT         "25 RECIPE.TXT"
- *   cook echo.elf hello | wc.elf -w   "1"
+ *   cook weigh.elf RECIPE.TXT            " 25  50 191 RECIPE.TXT"
+ *   cook weigh.elf -l RECIPE.TXT         "25 RECIPE.TXT"
+ *   cook call.elf hello | weigh.elf -w   "1"
  *
  * GNU wc's format, measured on the host: one count is printed bare; more
  * than one are each right-aligned to the width of the byte count, one
  * space apart; a file argument's name follows. One difference: GNU uses a
- * width of 7 when its input is a pipe, and wc.elf cannot tell a pipe from
+ * width of 7 when its input is a pipe, and weigh.elf cannot tell a pipe from
  * a redirected file (there is no fstat), so it always uses the file rule.
  *
  * Also emits the counts to serial as a WCOUT marker, so the headless smoke
@@ -32,7 +32,7 @@ int main(void) {
             if      (*f == 'l') want_l = 1;
             else if (*f == 'w') want_w = 1;
             else if (*f == 'c') want_c = 1;
-            else { print("usage: wc.elf [-l] [-w] [-c] [file]\n"); return 2; }
+            else { print("usage: weigh.elf [-l] [-w] [-c] [file]\n"); return 2; }
         }
     if (!want_l && !want_w && !want_c) want_l = want_w = want_c = 1;
     const char *name = 0;
@@ -40,7 +40,7 @@ int main(void) {
     if (t < nt) {
         name = tok[t];
         fd = sys_open(name, O_READ);
-        if (fd < 0) { print("wc: cannot open "); print(name); print("\n"); return 1; }
+        if (fd < 0) { print("weigh: cannot open "); print(name); print("\n"); return 1; }
     }
 
     char buf[256];

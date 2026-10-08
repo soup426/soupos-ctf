@@ -13,7 +13,7 @@ qemu-system-i386 -accel kvm -cpu host -drive "file=$WORK/disk.img,format=raw,if=
     -serial "file:$WORK/serial.log" -monitor "unix:$WORK/mon.sock,server,nowait" >/dev/null 2>&1 &
 PID=$!
 python3 scripts/qemu_keys.py "$WORK/mon.sock" "headchef" "rosemary" "WAIT:1" \
-    "cook echo.elf hi > \"/my file.txt\"" "WAIT:2" \
+    "cook call.elf hi > \"/my file.txt\"" "WAIT:2" \
     "pour \"/my file.txt\"" "WAIT:1" \
     "stir \"/two words.txt\" \"some  text\"" "WAIT:1" \
     "decant \"/my file.txt\" \"/copy of.txt\"" "WAIT:1" \

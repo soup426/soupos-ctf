@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# find-test.sh - find.elf against the host's find, both sorted (v0.59.2).
+# find-test.sh - forage.elf against the host's find, both sorted (v0.59.2).
 set -uo pipefail
 cd "$(dirname "$0")/.."
 fail=0
@@ -19,8 +19,8 @@ CASES=(
   "5#/T/sub -name 'c*'#T/sub -name 'c*'"
 )
 keys=("headchef" "rosemary" "WAIT:1" "hire saucier" "WAIT:1" "basil" "WAIT:1" "basil" "WAIT:2")
-for c in "${CASES[@]}"; do IFS='#' read -r n soup host <<< "$c"; keys+=("cook find.elf $soup > /F$n.OUT" "WAIT:2"); done
-keys+=("clockout" "WAIT:1" "cook" "soup" "WAIT:2" "cook find.elf /home > ~/FH.OUT ; cook echo.elf \$? > ~/FHS.OUT" "WAIT:2")
+for c in "${CASES[@]}"; do IFS='#' read -r n soup host <<< "$c"; keys+=("cook forage.elf $soup > /F$n.OUT" "WAIT:2"); done
+keys+=("clockout" "WAIT:1" "cook" "soup" "WAIT:2" "cook forage.elf /home > ~/FH.OUT ; cook call.elf \$? > ~/FHS.OUT" "WAIT:2")
 qemu-system-i386 -accel kvm -cpu host -drive "file=$WORK/disk.img,format=raw,if=ide,index=0" \
     -cdrom soupOS.iso -boot d -m 128M -no-reboot -no-shutdown -display none \
     -serial "file:$WORK/serial.log" -monitor "unix:$WORK/mon.sock,server,nowait" >/dev/null 2>&1 &
@@ -36,10 +36,10 @@ for c in "${CASES[@]}"; do
     [ "$got" = "$want" ] || { echo "        find $soup:"; diff <(echo "$want") <(echo "$got") | head -4 | sed 's/^/          /'; bad=1; }
 done
 [ "$bad" = 0 ] && echo "  ok    all ${#CASES[@]} forms list what the host's find lists (sorted): the tree, -name, -type d, -type f, a sub-bowl" \
-    || { echo "  FAIL  find.elf differs from the host's find"; fail=1; }
+    || { echo "  FAIL  forage.elf differs from the host's find"; fail=1; }
 FH=$(val /home/cook/FH.OUT)
 echo "$FH" | grep -qx "/home/saucier" && echo "$FH" | grep -qx "/home/cook" && [ "$(val /home/cook/FHS.OUT | tr -d '\n')" = "1" ] \
-    && tr -d '\r' < "$WORK/serial.log" | grep -q "find: cannot list /home/saucier" \
+    && tr -d '\r' < "$WORK/serial.log" | grep -q "forage: cannot list /home/saucier" \
     && echo "  ok    for the cook, a closed home is listed but not entered: reported, exit 1, the rest carries on" \
     || { echo "  FAIL  find /home as the cook: [$(echo "$FH" | tr '\n' ' ')] status $(val /home/cook/FHS.OUT)"; fail=1; }
 exit $fail

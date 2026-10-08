@@ -21,7 +21,8 @@ machine holds up under long use.
    never a bare `wait` (QEMU is a child too).
 6. **Reproduce under load**: six-wide soaks for anything timing-shaped.
 7. **Crypto gets published vectors from an independent implementation.**
-8. **Kitchen names** for new shell commands.
+8. **Kitchen names** for every new command, builtins and programs alike
+   (sift.elf, not grep.elf); compare with the host tool under its real name.
 9. **Gitea only.** Never GitHub, never the `cdctf-release` branch.
 10. **`make clean` leaves disk.img alone**: `rm disk.img && make disk` after
     changing anything the Makefile embeds.

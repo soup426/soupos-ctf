@@ -1,9 +1,9 @@
-/* sort.c - lines in order (v0.56.3).
+/* rack.c - lines in order (v0.56.3).
  *
- *   cook sort.elf NAMES.TXT          byte order, like LC_ALL=C sort
- *   cook sort.elf -r NAMES.TXT       reversed
- *   cook sort.elf -n NUMS.TXT        by the number at the start of the line
- *   cook cat.elf X | sort.elf -n -r  a pipe stage
+ *   cook rack.elf NAMES.TXT          byte order, like LC_ALL=C sort
+ *   cook rack.elf -r NAMES.TXT       reversed
+ *   cook rack.elf -n NUMS.TXT        by the number at the start of the line
+ *   cook spoon.elf X | rack.elf -n -r  a pipe stage
  *
  * The rules are GNU sort's in the C locale: bytes compare unsigned and a
  * prefix sorts first; -n reads leading blanks, an optional '-', digits and
@@ -84,19 +84,19 @@ int main(void) {
         for (char *f = tok[t] + 1; *f; f++) {
             if      (*f == 'r') reverse = 1;
             else if (*f == 'n') numeric = 1;
-            else { print("usage: sort.elf [-r] [-n] [file]\n"); return 2; }
+            else { print("usage: rack.elf [-r] [-n] [file]\n"); return 2; }
         }
     int fd = FD_STDIN;
     if (t < nt) {
         fd = sys_open(tok[t], O_READ);
-        if (fd < 0) { print("sort: cannot open "); print(tok[t]); print("\n"); return 2; }
+        if (fd < 0) { print("rack: cannot open "); print(tok[t]); print("\n"); return 2; }
     }
     int cap = 4096, len = 0, got;
     char *all = malloc((unsigned)cap);
     for (;;) {
         if (len == cap) {
             char *bigger = malloc((unsigned)(cap * 2));
-            if (!bigger) { print("sort: out of memory\n"); return 2; }
+            if (!bigger) { print("rack: out of memory\n"); return 2; }
             for (int i = 0; i < len; i++) bigger[i] = all[i];
             all = bigger; cap *= 2;
         }
@@ -110,7 +110,7 @@ int main(void) {
     if (len && all[len - 1] != '\n') nl++;
     line_t *v = malloc((unsigned)(nl ? nl : 1) * sizeof(line_t));
     line_t *tmp = malloc((unsigned)(nl ? nl : 1) * sizeof(line_t));
-    if (!v || !tmp) { print("sort: out of memory\n"); return 2; }
+    if (!v || !tmp) { print("rack: out of memory\n"); return 2; }
     int k = 0, s = 0;
     for (int i = 0; i < len; i++)
         if (all[i] == '\n') { v[k].s = all + s; v[k].n = i - s; k++; s = i + 1; }

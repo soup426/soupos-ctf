@@ -4,9 +4,9 @@
 # Each case is a command line whose parts leave marker files when they run.
 # The same line runs in the host's sh, with (exit 42) standing in for
 # hello.elf (which exits 42), (exit 127) for an unknown command, and the
-# same echo > file for echo.elf. The marker files left must be the same.
-# (Case 8's host wc reads a file: GNU wc pads a pipe to 7, wc.elf cannot
-# tell a pipe from a file; see wc.c.)
+# same echo > file for call.elf. The marker files left must be the same.
+# (Case 8's host wc reads a file: GNU wc pads a pipe to 7, weigh.elf cannot
+# tell a pipe from a file; see weigh.c.)
 set -uo pipefail
 cd "$(dirname "$0")/.."
 fail=0
@@ -17,22 +17,22 @@ trap cleanup EXIT
 cp disk.img "$WORK/disk.img"
 # soupOS line # host sh line (files are written as /Cn*.TXT in both)
 CASES=(
-  "cook echo.elf a > /C1A.TXT ; cook echo.elf b > /C1B.TXT#echo a > C1A.TXT ; echo b > C1B.TXT"
-  "cook echo.elf a > /C2A.TXT && cook echo.elf b > /C2B.TXT#echo a > C2A.TXT && echo b > C2B.TXT"
-  "cook hello.elf && cook echo.elf b > /C3B.TXT#(exit 42) && echo b > C3B.TXT"
-  "cook hello.elf || cook echo.elf b > /C4B.TXT#(exit 42) || echo b > C4B.TXT"
-  "cook echo.elf a > /C5A.TXT || cook echo.elf b > /C5B.TXT#echo a > C5A.TXT || echo b > C5B.TXT"
-  "cook hello.elf && cook echo.elf b > /C6B.TXT || cook echo.elf c > /C6C.TXT#(exit 42) && echo b > C6B.TXT || echo c > C6C.TXT"
-  "nosuchthing && cook echo.elf b > /C7B.TXT ; cook echo.elf c > /C7C.TXT#(exit 127) && echo b > C7B.TXT ; echo c > C7C.TXT"
-  "cook echo.elf x y | wc.elf > /C8A.TXT && cook echo.elf ok > /C8B.TXT#echo x y > t8 && wc < t8 > C8A.TXT && echo ok > C8B.TXT"
-  "cook hello.elf ; cook hello.elf || cook echo.elf a > /C9A.TXT && cook echo.elf b > /C9B.TXT#(exit 42) ; (exit 42) || echo a > C9A.TXT && echo b > C9B.TXT"
+  "cook call.elf a > /C1A.TXT ; cook call.elf b > /C1B.TXT#echo a > C1A.TXT ; echo b > C1B.TXT"
+  "cook call.elf a > /C2A.TXT && cook call.elf b > /C2B.TXT#echo a > C2A.TXT && echo b > C2B.TXT"
+  "cook hello.elf && cook call.elf b > /C3B.TXT#(exit 42) && echo b > C3B.TXT"
+  "cook hello.elf || cook call.elf b > /C4B.TXT#(exit 42) || echo b > C4B.TXT"
+  "cook call.elf a > /C5A.TXT || cook call.elf b > /C5B.TXT#echo a > C5A.TXT || echo b > C5B.TXT"
+  "cook hello.elf && cook call.elf b > /C6B.TXT || cook call.elf c > /C6C.TXT#(exit 42) && echo b > C6B.TXT || echo c > C6C.TXT"
+  "nosuchthing && cook call.elf b > /C7B.TXT ; cook call.elf c > /C7C.TXT#(exit 127) && echo b > C7B.TXT ; echo c > C7C.TXT"
+  "cook call.elf x y | weigh.elf > /C8A.TXT && cook call.elf ok > /C8B.TXT#echo x y > t8 && wc < t8 > C8A.TXT && echo ok > C8B.TXT"
+  "cook hello.elf ; cook hello.elf || cook call.elf a > /C9A.TXT && cook call.elf b > /C9B.TXT#(exit 42) ; (exit 42) || echo a > C9A.TXT && echo b > C9B.TXT"
 )
 keys=("headchef" "rosemary" "WAIT:1")
 for c in "${CASES[@]}"; do keys+=("${c%%#*}" "WAIT:3"); done
 # The ordinary cook: a refused builtin is a failure (status 1).
 keys+=("clockout" "WAIT:1" "cook" "soup" "WAIT:2"
-       "reheat && cook echo.elf b > /home/cook/D1.TXT" "WAIT:2"
-       "pour /etc/kitchen || cook echo.elf r > /home/cook/D2.TXT" "WAIT:2")
+       "reheat && cook call.elf b > /home/cook/D1.TXT" "WAIT:2"
+       "pour /etc/kitchen || cook call.elf r > /home/cook/D2.TXT" "WAIT:2")
 qemu-system-i386 -accel kvm -cpu host -drive "file=$WORK/disk.img,format=raw,if=ide,index=0" \
     -cdrom soupOS.iso -boot d -m 128M -no-reboot -no-shutdown -display none \
     -serial "file:$WORK/serial.log" -monitor "unix:$WORK/mon.sock,server,nowait" >/dev/null 2>&1 &

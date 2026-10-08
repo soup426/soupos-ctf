@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# headtail-test.sh - head.elf and tail.elf against the host's (v0.56.2).
+# headtail-test.sh - skim.elf and dregs.elf against the host's (v0.56.2).
 set -uo pipefail
 cd "$(dirname "$0")/.."
 fail=0
@@ -15,19 +15,19 @@ seq 1 2000 | sed 's/$/ of the big one/' > "$WORK/BIG.TXT"         # past tail's 
 for f in F1 F2 F3 BIG; do mcopy -i "$WORK/disk.img" "$WORK/$f.TXT" "::/$f.TXT"; done
 # name # soupOS command # host command  (# because the commands contain |)
 CASES=(
-  "1#head.elf /F1.TXT#head F1.TXT"
-  "2#head.elf -n 3 /F1.TXT#head -n 3 F1.TXT"
-  "3#head.elf -n 5 /F2.TXT#head -n 5 F2.TXT"
-  "4#head.elf /F3.TXT#head F3.TXT"
-  "5#tail.elf /F1.TXT#tail F1.TXT"
-  "6#tail.elf -n 3 /F1.TXT#tail -n 3 F1.TXT"
-  "7#tail.elf -n 2 /F2.TXT#tail -n 2 F2.TXT"
-  "8#tail.elf -n 5 /F2.TXT#tail -n 5 F2.TXT"
-  "9#tail.elf -n 0 /F1.TXT#tail -n 0 F1.TXT"
-  "10#tail.elf -n 7 /BIG.TXT#tail -n 7 BIG.TXT"
-  "11#cat.elf /F1.TXT | head.elf -n 4#head -n 4 F1.TXT"
-  "12#cat.elf /BIG.TXT | tail.elf -n 3#tail -n 3 BIG.TXT"
-  "13#head.elf -n 1500 /BIG.TXT | tail.elf -n 2#head -n 1500 BIG.TXT | tail -n 2"
+  "1#skim.elf /F1.TXT#head F1.TXT"
+  "2#skim.elf -n 3 /F1.TXT#head -n 3 F1.TXT"
+  "3#skim.elf -n 5 /F2.TXT#head -n 5 F2.TXT"
+  "4#skim.elf /F3.TXT#head F3.TXT"
+  "5#dregs.elf /F1.TXT#tail F1.TXT"
+  "6#dregs.elf -n 3 /F1.TXT#tail -n 3 F1.TXT"
+  "7#dregs.elf -n 2 /F2.TXT#tail -n 2 F2.TXT"
+  "8#dregs.elf -n 5 /F2.TXT#tail -n 5 F2.TXT"
+  "9#dregs.elf -n 0 /F1.TXT#tail -n 0 F1.TXT"
+  "10#dregs.elf -n 7 /BIG.TXT#tail -n 7 BIG.TXT"
+  "11#spoon.elf /F1.TXT | skim.elf -n 4#head -n 4 F1.TXT"
+  "12#spoon.elf /BIG.TXT | dregs.elf -n 3#tail -n 3 BIG.TXT"
+  "13#skim.elf -n 1500 /BIG.TXT | dregs.elf -n 2#head -n 1500 BIG.TXT | tail -n 2"
 )
 keys=("headchef" "rosemary" "WAIT:1")
 for c in "${CASES[@]}"; do IFS='#' read -r n soup host <<< "$c"; keys+=("cook $soup > /H$n.TXT" "WAIT:2"); done

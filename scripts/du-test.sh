@@ -25,8 +25,8 @@ python3 scripts/qemu_keys.py "$WORK/mon.sock" "headchef" "rosemary" "WAIT:1" \
     "hire saucier" "WAIT:1" "basil" "WAIT:1" "basil" "WAIT:2" "hire intern" "WAIT:1" "mint" "WAIT:1" "mint" "WAIT:2" \
     "stir /home/saucier/NOTES.TXT a few words of notes" "WAIT:1" "mkbowl /home/saucier/deep" "WAIT:1" \
     "stir /home/saucier/deep/A.TXT aaaa" "WAIT:1" "clockout" "WAIT:1" \
-    "intern" "mint" "WAIT:2" "du /home" "WAIT:2" "clockout" "WAIT:1" \
-    "headchef" "rosemary" "WAIT:2" "du /" "WAIT:3" "du /home" "WAIT:2" >/dev/null 2>&1 || { echo "  FAIL  could not drive QEMU"; fail=1; }
+    "intern" "mint" "WAIT:2" "portions /home" "WAIT:2" "clockout" "WAIT:1" \
+    "headchef" "rosemary" "WAIT:2" "portions /" "WAIT:3" "portions /home" "WAIT:2" >/dev/null 2>&1 || { echo "  FAIL  could not drive QEMU"; fail=1; }
 # The headchef's du runs last: every login appends to /etc/logins, so a
 # login after it would make the image newer than what du measured.
 sleep 1

@@ -1,8 +1,8 @@
-/* ls.c - list a directory from ring 3, through SYS_READDIR (v0.44.0).
+/* peek.c - list a directory from ring 3, through SYS_READDIR (v0.44.0).
  *
- *   cook ls.elf             the cwd's root (/)
- *   cook ls.elf /etc        any directory
- *   cook ls.elf -l /etc     with mode, owner and size, through SYS_STAT
+ *   cook peek.elf             the cwd's root (/)
+ *   cook peek.elf /etc        any directory
+ *   cook peek.elf -l /etc     with mode, owner and size, through SYS_STAT
  *                           (v0.59.1), in the columns `serve` uses
  *
  * One line per entry on stdout, "name  size" or "name/" for a directory, and

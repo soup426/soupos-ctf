@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # redirect-test.sh - > keeps big output, and says when it cannot (v0.56.4).
 #
-# Proven on v0.56.3 while measuring sort.elf: a 3 MB result redirected with
+# Proven on v0.56.3 while measuring rack.elf: a 3 MB result redirected with
 # `>` left exactly 2097152 bytes, and 5 and 7 MB results left empty files,
 # every time with exit code 0. The redirect kept the whole file in one
 # block of the 8 MB kernel heap, and when that stopped growing nobody heard.
@@ -25,17 +25,17 @@ qemu-system-i386 -accel kvm -cpu host -drive "file=$WORK/disk.img,format=raw,if=
     -cdrom soupOS.iso -boot d -m 128M -no-reboot -no-shutdown -display none \
     -serial "file:$WORK/serial.log" -monitor "unix:$WORK/mon.sock,server,nowait" >/dev/null 2>&1 &
 PID=$!
-python3 scripts/qemu_keys.py "$WORK/mon.sock" "headchef" "rosemary" "WAIT:1" "cook cat.elf /B.TXT > /C.TXT" >/dev/null 2>&1 || { echo "  FAIL  could not drive QEMU"; fail=1; }
-for i in $(seq 1 120); do [ "$(grep -acE '^\[proc [0-9]+\] /cat.elf exited' "$WORK/serial.log")" -ge 1 ] && break; sleep 1; done
-python3 scripts/qemu_keys.py "$WORK/mon.sock" "cook cat.elf /B.TXT > /D.TXT" >/dev/null 2>&1
-for i in $(seq 1 120); do [ "$(grep -acE '^\[proc [0-9]+\] /cat.elf exited' "$WORK/serial.log")" -ge 2 ] && break; sleep 1; done
+python3 scripts/qemu_keys.py "$WORK/mon.sock" "headchef" "rosemary" "WAIT:1" "cook spoon.elf /B.TXT > /C.TXT" >/dev/null 2>&1 || { echo "  FAIL  could not drive QEMU"; fail=1; }
+for i in $(seq 1 120); do [ "$(grep -acE '^\[proc [0-9]+\] /spoon.elf exited' "$WORK/serial.log")" -ge 1 ] && break; sleep 1; done
+python3 scripts/qemu_keys.py "$WORK/mon.sock" "cook spoon.elf /B.TXT > /D.TXT" >/dev/null 2>&1
+for i in $(seq 1 120); do [ "$(grep -acE '^\[proc [0-9]+\] /spoon.elf exited' "$WORK/serial.log")" -ge 2 ] && break; sleep 1; done
 sleep 1; kill "$PID" 2>/dev/null; wait "$PID" 2>/dev/null; PID=""
 mcopy -n -i "$WORK/disk.img" ::/C.TXT "$WORK/C.TXT" 2>/dev/null
 cmp -s "$WORK/B.TXT" "$WORK/C.TXT" \
     && echo "  ok    a 5 MB output through > reaches the disk whole (cmp)" || { echo "  FAIL  the 5 MB copy: $(wc -c < "$WORK/C.TXT" 2>/dev/null) bytes"; fail=1; }
 L=$(tr -d '\r' < "$WORK/serial.log")
 echo "$L" | grep -q "the output to /D.TXT did not reach the disk whole" \
-    && echo "$L" | grep -qE "^\[proc [0-9]+\] /cat.elf exited with code 1" \
+    && echo "$L" | grep -qE "^\[proc [0-9]+\] /spoon.elf exited with code 1" \
     && echo "$L" | grep -q "^\[vfs\] /D.TXT: the write to disk failed" \
     && echo "  ok    one that does not fit is reported on the terminal and in the log, and exits 1" \
     || { echo "  FAIL  the failed output was not reported"; fail=1; }

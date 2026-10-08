@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.5
+Current version: v0.60.6
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,26 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.6 (2026-10-08)  — KITCHEN NAMES FOR THE NEW COMMANDS
+  - The commands added since v0.52.0 had taken Unix names, against the
+    queues' own rule; the user asked for kitchen names. Builtins: who is
+    brigade, last is logbook, du is portions, run is follow (a recipe is
+    followed), unset is discard, read is take (an order is taken).
+    Programs: grep.elf is sift, head skim, tail dregs, sort rack, uniq
+    cull, tee divvy, cut slice, tr swap, seq tally, test taste, find
+    forage, cmp pair - each .elf, and their messages start with the new
+    name (pair's "pair: EOF on ..." where cmp says "cmp:").
+  - The Unix-named programs that were there before are renamed too, as
+    the user asked next: cat.elf is spoon, echo call, wc weigh, ls peek,
+    rm toss, mkdir newbowl. Their stderr markers (WCOUT, LS, LSL, RM,
+    MKDIR) keep their names, since the gate and tests read them. The test
+    and demo programs (hello, hog, spin, crash, lazy, deep, hotcold,
+    marker, memtest, systest, unhex, upper) keep theirs.
+  - Unchanged: sh's own syntax (for, if, while, do, done, then, else, fi,
+    $?, $((...))). The tests still compare each tool with the host's
+    grep, sort, cmp, wc and the rest under their real names; only the
+    soupOS side is renamed. ~/profile is now started with follow.
 
 v0.60.5 (2026-10-08)  — ~/profile AT LOGIN
   Twenty-third queue, item 3.

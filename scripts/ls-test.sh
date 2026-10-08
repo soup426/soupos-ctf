@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Does a ring-3 program list a directory the way something else reads it?
 #
-# ls.elf walks the root through SYS_READDIR and logs one "LS <d|f> <size>
+# peek.elf walks the root through SYS_READDIR and logs one "LS <d|f> <size>
 # <name>" line per entry. Afterwards mtools lists the same image, and the two
 # must agree on every name (the long one where there is one), size and type.
 # soupOS's own `serve` would only prove soupOS agrees with itself.
@@ -24,7 +24,7 @@ qemu-system-i386 -accel kvm -cpu host \
 PID=$!
 sleep 4
 python3 scripts/qemu_keys.py "$MON" "headchef" "rosemary" "WAIT:1" \
-    "cook ls.elf /" "WAIT:2" "cook ls.elf /nowhere" "WAIT:1" >/dev/null 2>&1
+    "cook peek.elf /" "WAIT:2" "cook peek.elf /nowhere" "WAIT:1" >/dev/null 2>&1
 kill "$PID" 2>/dev/null; wait "$PID" 2>/dev/null; PID=""
 
 python3 - "$LOG" "$TESTDISK" <<'PY'
@@ -44,14 +44,14 @@ for line in subprocess.run(["mdir", "-i", img, "::/"], capture_output=True, text
 fail = 0
 end = re.search(r"LS end (\d+) entries", open(log, errors="replace").read())
 if end and int(end.group(1)) == len(ours) == len(theirs):
-    print(f"  ok    ls.elf and mtools both see {len(ours)} entries")
+    print(f"  ok    peek.elf and mtools both see {len(ours)} entries")
 else:
-    print(f"  FAIL  entry counts differ: ls.elf {len(ours)} (said {end.group(1) if end else '?'}), mtools {len(theirs)}"); fail = 1
+    print(f"  FAIL  entry counts differ: peek.elf {len(ours)} (said {end.group(1) if end else '?'}), mtools {len(theirs)}"); fail = 1
 diff = {k for k in set(ours) | set(theirs) if ours.get(k) != theirs.get(k)}
 if not diff:
     print("  ok    every name, size and type agrees, long names included")
 else:
-    for k in sorted(diff)[:6]: print(f"  FAIL  {k!r}: ls.elf {ours.get(k)} mtools {theirs.get(k)}")
+    for k in sorted(diff)[:6]: print(f"  FAIL  {k!r}: peek.elf {ours.get(k)} mtools {theirs.get(k)}")
     fail = 1
 if "LS error: no such directory" in open(log, errors="replace").read():
     print("  ok    a missing directory is an error, not an empty listing")

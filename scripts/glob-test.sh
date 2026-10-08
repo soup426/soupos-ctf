@@ -18,8 +18,8 @@ CASES=(
   "1#*.txt" "2#?.txt" "3#a*" "4#*" "5#*.none" "6#\"*.txt\"" "7#*.TXT"
 )
 keys=("headchef" "rosemary" "WAIT:1" "cd /G" "WAIT:1")
-for c in "${CASES[@]}"; do IFS='#' read -r n words <<< "$c"; keys+=("cook echo.elf $words > /O$n.OUT" "WAIT:2"); done
-keys+=("cook echo.elf /G/*.dat > /O8.OUT" "WAIT:2" "cook echo.elf /MANY/* > /O9.OUT ; cook echo.elf \$? > /O9S.OUT" "WAIT:3")
+for c in "${CASES[@]}"; do IFS='#' read -r n words <<< "$c"; keys+=("cook call.elf $words > /O$n.OUT" "WAIT:2"); done
+keys+=("cook call.elf /G/*.dat > /O8.OUT" "WAIT:2" "cook call.elf /MANY/* > /O9.OUT ; cook call.elf \$? > /O9S.OUT" "WAIT:3")
 qemu-system-i386 -accel kvm -cpu host -drive "file=$WORK/disk.img,format=raw,if=ide,index=0" \
     -cdrom soupOS.iso -boot d -m 128M -no-reboot -no-shutdown -display none \
     -serial "file:$WORK/serial.log" -monitor "unix:$WORK/mon.sock,server,nowait" >/dev/null 2>&1 &

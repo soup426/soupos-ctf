@@ -63,7 +63,7 @@ static void copy_name(char *dst, const char *src) {
  *
  * Both also give up when the running process has a kill pending, so a program
  * parked on a pipe nobody will ever write to stays killable. Without that,
- * `cook cat.elf` with no input would be an unkillable process.
+ * `cook spoon.elf` with no input would be an unkillable process.
  */
 #define PIPE_CAP  4096
 

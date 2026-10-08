@@ -12,11 +12,11 @@ gate_drive \
     "cook marker.elf Z" "WAIT:1" "KEY:ctrl-z" "WAIT:3" \
     "orders" "WAIT:1" "steep" "WAIT:3" \
     "cook marker.elf K" "WAIT:1" "KEY:ctrl-z" "WAIT:1" "kill %" "WAIT:2" \
-    "cook echo.elf hello pipes | wc.elf" "WAIT:3" \
-    "cook echo.elf pipes are plumbing | upper.elf | wc.elf" "WAIT:4" \
-    "cook echo.elf through a file > P.TXT" "WAIT:2" \
-    "cook wc.elf < P.TXT" "WAIT:3" \
-    "cook hog.elf | wc.elf &" "WAIT:2" "kill %" "WAIT:2" "kill %" "WAIT:2" \
+    "cook call.elf hello pipes | weigh.elf" "WAIT:3" \
+    "cook call.elf pipes are plumbing | upper.elf | weigh.elf" "WAIT:4" \
+    "cook call.elf through a file > P.TXT" "WAIT:2" \
+    "cook weigh.elf < P.TXT" "WAIT:3" \
+    "cook hog.elf | weigh.elf &" "WAIT:2" "kill %" "WAIT:2" "kill %" "WAIT:2" \
     "cook memtest.elf A | memtest.elf B | memtest.elf C" "WAIT:14"
 
 check "kill reached a non-cooperating program via the IRQ path" 'killed \(irq\)'
@@ -77,13 +77,13 @@ check "three-stage pipeline works"           'WCOUT lines=1 words=3 bytes=19'
 check "the middle stage ran and exited"      '/upper\.elf exited with code 0'
 check "> redirection reached the filesystem" 'WCOUT lines=1 words=3 bytes=15'
 # A reader parked on a pipe nobody will write to must still be killable.
-if grep -qE '/wc\.elf' "$LOG" && [ "$(grep -cE '\[proc [0-9]+\] killed' "$LOG")" -ge 3 ]; then
+if grep -qE '/weigh\.elf' "$LOG" && [ "$(grep -cE '\[proc [0-9]+\] killed' "$LOG")" -ge 3 ]; then
     echo "  ok    a process parked on an empty pipe can be killed"
 else echo "  FAIL  a process blocked on a pipe survived kill"; fail=1; fi
-# `kill %` on a backgrounded pipeline: the flag lands on wc.elf, blocked in a
+# `kill %` on a backgrounded pipeline: the flag lands on weigh.elf, blocked in a
 # pipe read; it must be woken to die, or it stays the newest process and the
 # second kill hits it again while hog.elf runs on at 90%.
-check "killing a reader blocked on a pipe works" '/wc.elf exited with code -137'
+check "killing a reader blocked on a pipe works" '/weigh.elf exited with code -137'
 check "the second kill then reaches the hog" 'killing process [0-9]+ \(/hog.elf\)'
 
 # ── Concurrent allocation ──

@@ -67,7 +67,7 @@ say(c.expect([r"headchef\s+\(uid 0\)", pexpect.EOF, pexpect.TIMEOUT], timeout=10
     "a session that keeps typing outlives the limit (12 s)")
 c.sendline("clockout"); c.close(force=True)
 time.sleep(1)
-keys("who", "WAIT:2")
+keys("brigade", "WAIT:2")
 sys.exit(fail)
 PY
 grep -q "\[ssh\] headchef idle for 5 s: session ended" "$LOG" \

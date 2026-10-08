@@ -21,7 +21,7 @@ gate_drive \
     "cook crash.elf" "WAIT:2" \
     "cook deep.elf" "WAIT:3" \
     "cook hotcold.elf" "WAIT:3" \
-    "cook ls.elf /" "WAIT:2" \
+    "cook peek.elf /" "WAIT:2" \
     "cook deep.elf forever" "WAIT:3" \
     "cook hello.elf" "WAIT:2" "cook hello.elf" "WAIT:2" \
     "cook lazy.elf hold &" "WAIT:2" "ps" "WAIT:5"

@@ -1,9 +1,9 @@
-/* find.c - every name under a path (v0.59.2).
+/* forage.c - every name under a path (v0.59.2).
  *
- *   cook find.elf /home                     everything under /home
- *   cook find.elf / -name '*.TXT'           by name (quote the pattern,
+ *   cook forage.elf /home                     everything under /home
+ *   cook forage.elf / -name '*.TXT'           by name (quote the pattern,
  *                                           or the shell globs it first)
- *   cook find.elf /etc -type f              files only (d: bowls only)
+ *   cook forage.elf /etc -type f              files only (d: bowls only)
  *
  * The starting path first, then everything under it, one per line, as
  * find prints. -name matches the last component with * and ?; -type f|d.
@@ -46,7 +46,7 @@ static void walk(const char *dir, int depth) {
         if (e.is_dir) walk(child, depth + 1);
         i++;
     }
-    if (r < 0) { eprint("find: cannot list "); eprint(dir); eprint("\n"); status = 1; }
+    if (r < 0) { eprint("forage: cannot list "); eprint(dir); eprint("\n"); status = 1; }
 }
 
 int main(void) {
@@ -57,10 +57,10 @@ int main(void) {
     for (; a < argc; a++) {
         if (argv[a][0] == '-' && argv[a][1] == 'n' && a + 1 < argc) pat = argv[++a];
         else if (argv[a][0] == '-' && argv[a][1] == 't' && a + 1 < argc && (argv[a + 1][0] == 'f' || argv[a + 1][0] == 'd')) want_type = argv[++a][0];
-        else { print("usage: find.elf [path] [-name PATTERN] [-type f|d]\n"); return 1; }
+        else { print("usage: forage.elf [path] [-name PATTERN] [-type f|d]\n"); return 1; }
     }
     ustat_t st;
-    if (sys_stat(start, &st) < 0) { eprint("find: no such path\n"); return 1; }
+    if (sys_stat(start, &st) < 0) { eprint("forage: no such path\n"); return 1; }
     show(start, (int)st.is_dir);
     if (st.is_dir) walk(start, 0);
     return status;

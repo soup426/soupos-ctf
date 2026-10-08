@@ -1,9 +1,9 @@
-/* tr.c - translate, delete or squeeze characters (v0.56.9).
+/* swap.c - translate, delete or squeeze characters (v0.56.9).
  *
- *   cook cat.elf X | tr.elf a-z A-Z          upper case
- *   cook cat.elf X | tr.elf -d 0-9           digits gone
- *   cook cat.elf X | tr.elf -s a-z           runs of a letter squeezed to one
- *   cook cat.elf X | tr.elf -s abc xyz       translate, then squeeze xyz
+ *   cook spoon.elf X | swap.elf a-z A-Z          upper case
+ *   cook spoon.elf X | swap.elf -d 0-9           digits gone
+ *   cook spoon.elf X | swap.elf -s a-z           runs of a letter squeezed to one
+ *   cook spoon.elf X | swap.elf -s abc xyz       translate, then squeeze xyz
  *
  * GNU tr's rules in the C locale: sets take ranges (a-z) and the escapes
  * \n \t \; a '-' at either end of a set is itself; when translating, the
@@ -45,18 +45,18 @@ int main(void) {
         for (char *f = tok[t] + 1; *f; f++) {
             if (*f == 'd') del = 1;
             else if (*f == 's') squeeze = 1;
-            else { print("usage: tr.elf [-d] [-s] SET1 [SET2]\n"); return 1; }
+            else { print("usage: swap.elf [-d] [-s] SET1 [SET2]\n"); return 1; }
         }
     int nsets = nt - t;
     unsigned char s1[512], s2[512];
     int n1 = 0, n2 = 0;
-    if (nsets < 1 || nsets > 2) { print("usage: tr.elf [-d] [-s] SET1 [SET2]\n"); return 1; }
+    if (nsets < 1 || nsets > 2) { print("usage: swap.elf [-d] [-s] SET1 [SET2]\n"); return 1; }
     n1 = expand(tok[t], s1);
     if (nsets == 2) n2 = expand(tok[t + 1], s2);
-    if (n1 < 0 || n2 < 0) { print("tr: a range runs backwards\n"); return 1; }
+    if (n1 < 0 || n2 < 0) { print("swap: a range runs backwards\n"); return 1; }
     int translate = !del && nsets == 2;
-    if (!del && !squeeze && nsets != 2) { print("tr: two sets are needed to translate\n"); return 1; }
-    if (translate && n2 == 0) { print("tr: the second set is empty\n"); return 1; }
+    if (!del && !squeeze && nsets != 2) { print("swap: two sets are needed to translate\n"); return 1; }
+    if (translate && n2 == 0) { print("swap: the second set is empty\n"); return 1; }
 
     unsigned char map[256], in_del[256], in_sq[256];
     for (int i = 0; i < 256; i++) { map[i] = (unsigned char)i; in_del[i] = in_sq[i] = 0; }

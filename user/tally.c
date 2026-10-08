@@ -1,9 +1,9 @@
-/* seq.c - numbers in a row (v0.57.7).
+/* tally.c - numbers in a row (v0.57.7).
  *
- *   cook seq.elf 5            1 to 5
- *   cook seq.elf 3 7          3 to 7
- *   cook seq.elf 10 -3 1      10, 7, 4, 1
- *   cook seq.elf 3 | sort.elf -r
+ *   cook tally.elf 5            1 to 5
+ *   cook tally.elf 3 7          3 to 7
+ *   cook tally.elf 10 -3 1      10, 7, 4, 1
+ *   cook tally.elf 3 | rack.elf -r
  *
  * GNU seq's rules for integers: FIRST and STEP default to 1; a run that
  * cannot reach LAST in STEP's direction prints nothing (seq 5 1); STEP 0
@@ -39,8 +39,8 @@ int main(void) {
     else if (argc == 2) bad = parse(argv[0], &first) | parse(argv[1], &last);
     else if (argc == 3) bad = parse(argv[0], &first) | parse(argv[1], &step) | parse(argv[2], &last);
     else                bad = -1;
-    if (bad) { print("usage: seq.elf [FIRST [STEP]] LAST  (integers)\n"); return 1; }
-    if (step == 0) { print("seq: the step must not be 0\n"); return 1; }
+    if (bad) { print("usage: tally.elf [FIRST [STEP]] LAST  (integers)\n"); return 1; }
+    if (step == 0) { print("tally: the step must not be 0\n"); return 1; }
     if (step > 0) for (long v = first; v <= last; v += step) put_long(v);
     else          for (long v = first; v >= last; v += step) put_long(v);
     return 0;

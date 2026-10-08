@@ -20,7 +20,7 @@ gate_drive \
     "jot CLIP.TXT" "WAIT:2" "TYPE:abc def" \
     "KEY:home" "KEY:ctrl-b" "KEY:end" "KEY:ctrl-c" "KEY:ctrl-v" \
     "KEY:ctrl-s" "WAIT:1" "KEY:esc" "WAIT:1" \
-    "cook wc.elf < CLIP.TXT" "WAIT:3" \
+    "cook weigh.elf < CLIP.TXT" "WAIT:3" \
     "TYPE:scraps" "KEY:ctrl-u" "KEY:ctrl-v" "KEY:ret" "WAIT:2" \
     "kitchen" "WAIT:3" "KEY:esc" "WAIT:1"
 check "in-kernel self-test passes" '\[sample\] [0-9]+ tests, 0 failed'

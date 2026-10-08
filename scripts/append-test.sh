@@ -3,7 +3,7 @@
 #
 # `>>` was not a token: the tokenizer split it into two `>`, so the second
 # became the output file's name. And `>` to a NEW file never checked the
-# bowl: proven on v0.55.6, the ordinary cook's `cook echo.elf evil >
+# bowl: proven on v0.55.6, the ordinary cook's `cook call.elf evil >
 # /etc/EVIL.TXT` made the file in a bowl closed to cooks.
 set -uo pipefail
 cd "$(dirname "$0")/.."
@@ -18,11 +18,11 @@ qemu-system-i386 -accel kvm -cpu host -drive "file=$WORK/disk.img,format=raw,if=
     -serial "file:$WORK/serial.log" -monitor "unix:$WORK/mon.sock,server,nowait" >/dev/null 2>&1 &
 PID=$!
 python3 scripts/qemu_keys.py "$WORK/mon.sock" "headchef" "rosemary" "WAIT:1" \
-    "cook echo.elf one > /A.TXT" "WAIT:1" "cook echo.elf two >> /A.TXT" "WAIT:1" "cook echo.elf three >> /A.TXT" "WAIT:1" \
-    "cook echo.elf fresh >> /B.TXT" "WAIT:1" "cook echo.elf one two three | wc.elf >> /A.TXT" "WAIT:2" \
+    "cook call.elf one > /A.TXT" "WAIT:1" "cook call.elf two >> /A.TXT" "WAIT:1" "cook call.elf three >> /A.TXT" "WAIT:1" \
+    "cook call.elf fresh >> /B.TXT" "WAIT:1" "cook call.elf one two three | weigh.elf >> /A.TXT" "WAIT:2" \
     "clockout" "WAIT:1" "cook" "soup" "WAIT:2" \
-    "cook echo.elf evil > /etc/EVIL.TXT" "WAIT:1" "cook echo.elf evil >> /etc/EVIL2.TXT" "WAIT:1" \
-    "cook echo.elf mine >> /home/cook/M.TXT" "WAIT:1" "cook echo.elf again >> /home/cook/M.TXT" "WAIT:1" >/dev/null 2>&1 \
+    "cook call.elf evil > /etc/EVIL.TXT" "WAIT:1" "cook call.elf evil >> /etc/EVIL2.TXT" "WAIT:1" \
+    "cook call.elf mine >> /home/cook/M.TXT" "WAIT:1" "cook call.elf again >> /home/cook/M.TXT" "WAIT:1" >/dev/null 2>&1 \
     || { echo "  FAIL  could not drive QEMU"; fail=1; }
 kill "$PID" 2>/dev/null; wait "$PID" 2>/dev/null; PID=""
 # The host shell, the same commands.
@@ -30,7 +30,7 @@ kill "$PID" 2>/dev/null; wait "$PID" 2>/dev/null; PID=""
 mtype -i "$WORK/disk.img" ::/A.TXT > "$WORK/got.txt" 2>/dev/null
 head -3 "$WORK/got.txt" | cmp -s - "$WORK/want.txt" \
     && echo "  ok    > then two >> give the same bytes as the host shell" || { echo "  FAIL  /A.TXT:"; cat -A "$WORK/got.txt" | sed 's/^/        /'; fail=1; }
-# wc.elf prints the host's format since v0.56.6.
+# weigh.elf prints the host's format since v0.56.6.
 [ "$(sed -n 4p "$WORK/got.txt")" = " 1  3 14" ] \
     && echo "  ok    a pipeline's output appends too" || { echo "  FAIL  pipeline >>"; fail=1; }
 [ "$(mtype -i "$WORK/disk.img" ::/B.TXT 2>/dev/null)" = "fresh" ] \

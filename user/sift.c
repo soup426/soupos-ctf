@@ -1,8 +1,8 @@
-/* grep.c - lines that contain a fixed string (v0.56.1).
+/* sift.c - lines that contain a fixed string (v0.56.1).
  *
- *   cook grep.elf soup RECIPE.TXT            lines containing "soup"
- *   cook cat.elf X | grep.elf -v soup        lines that do not
- *   cook grep.elf -c -i soup RECIPE.TXT      how many, ignoring case
+ *   cook sift.elf soup RECIPE.TXT            lines containing "soup"
+ *   cook spoon.elf X | sift.elf -v soup        lines that do not
+ *   cook sift.elf -c -i soup RECIPE.TXT      how many, ignoring case
  *
  * The pattern is a fixed string, compared byte for byte (ASCII letters
  * folded with -i), like `grep -F`. Lines of any length are matched whole:
@@ -46,16 +46,16 @@ int main(void) {
             if      (*f == 'v') invert = 1;
             else if (*f == 'c') count_only = 1;
             else if (*f == 'i') nocase = 1;
-            else { print("grep: unknown flag -"); char c[2] = { *f, 0 }; print(c); print("\n"); return 2; }
+            else { print("sift: unknown flag -"); char c[2] = { *f, 0 }; print(c); print("\n"); return 2; }
         }
     }
-    if (t >= nt) { print("usage: grep.elf [-v] [-c] [-i] word [file]\n"); return 2; }
+    if (t >= nt) { print("usage: sift.elf [-v] [-c] [-i] word [file]\n"); return 2; }
     const char *pat = tok[t++];
     int pn = strlen_(pat);
     int fd = FD_STDIN;
     if (t < nt) {
         fd = sys_open(tok[t], O_READ);
-        if (fd < 0) { print("grep: cannot open "); print(tok[t]); print("\n"); return 2; }
+        if (fd < 0) { print("sift: cannot open "); print(tok[t]); print("\n"); return 2; }
     }
 
     int selected = 0;

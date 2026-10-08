@@ -56,7 +56,7 @@ stop
 
 # ── second boot, the same disk ──
 start "$WORK/two.log"
-keys "headchef" "rosemary" "WAIT:2" "last" "WAIT:2"
+keys "headchef" "rosemary" "WAIT:2" "logbook" "WAIT:2"
 stop
 L=$(tr -d '\r' < "$WORK/two.log" | grep -E '^  [0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}  (ok|refused) ' )
 want='ok +headchef +console

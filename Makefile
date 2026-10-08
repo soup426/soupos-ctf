@@ -105,9 +105,9 @@ OBJS    = $(OBJ_C) $(OBJ_ASM)
 # Each links the user runtime (user/ulib.c) which provides _start + syscalls.
 UCFLAGS  = -m32 -ffreestanding -fno-pie -no-pie -fno-stack-protector \
            -nostdlib -Isrc -mgeneral-regs-only -O2
-USER_ELFS = user/hello.elf user/cat.elf user/echo.elf user/systest.elf user/spin.elf \
+USER_ELFS = user/hello.elf user/spoon.elf user/call.elf user/systest.elf user/spin.elf \
             user/crash.elf user/unhex.elf user/marker.elf user/hog.elf \
-            user/upper.elf user/wc.elf user/memtest.elf user/lazy.elf user/deep.elf user/hotcold.elf user/ls.elf user/rm.elf user/mkdir.elf user/grep.elf user/head.elf user/tail.elf user/sort.elf user/uniq.elf user/tee.elf user/cut.elf user/tr.elf user/seq.elf user/test.elf user/find.elf user/cmp.elf
+            user/upper.elf user/weigh.elf user/memtest.elf user/lazy.elf user/deep.elf user/hotcold.elf user/peek.elf user/toss.elf user/newbowl.elf user/sift.elf user/skim.elf user/dregs.elf user/rack.elf user/cull.elf user/divvy.elf user/slice.elf user/swap.elf user/tally.elf user/taste.elf user/forage.elf user/pair.elf
 
 .PHONY: all clean distclean run run-ai run-console run-tcp iso disk user
 
@@ -245,8 +245,8 @@ $(DISK):
 	    | mcopy -i $(DISK) - ::INCLUDE.SC
 	$(MAKE) user
 	mcopy -i $(DISK) -o user/hello.elf   ::HELLO.ELF
-	mcopy -i $(DISK) -o user/cat.elf     ::CAT.ELF
-	mcopy -i $(DISK) -o user/echo.elf    ::ECHO.ELF
+	mcopy -i $(DISK) -o user/spoon.elf     ::SPOON.ELF
+	mcopy -i $(DISK) -o user/call.elf    ::CALL.ELF
 	mcopy -i $(DISK) -o user/systest.elf ::SYSTEST.ELF
 	mcopy -i $(DISK) -o user/spin.elf    ::SPIN.ELF
 	mcopy -i $(DISK) -o user/crash.elf   ::CRASH.ELF
@@ -254,26 +254,26 @@ $(DISK):
 	mcopy -i $(DISK) -o user/marker.elf  ::MARKER.ELF
 	mcopy -i $(DISK) -o user/hog.elf     ::HOG.ELF
 	mcopy -i $(DISK) -o user/upper.elf   ::UPPER.ELF
-	mcopy -i $(DISK) -o user/wc.elf      ::WC.ELF
+	mcopy -i $(DISK) -o user/weigh.elf      ::WEIGH.ELF
 	mcopy -i $(DISK) -o user/memtest.elf ::MEMTEST.ELF
 	mcopy -i $(DISK) -o user/lazy.elf    ::LAZY.ELF
 	mcopy -i $(DISK) -o user/deep.elf    ::DEEP.ELF
 	mcopy -i $(DISK) -o user/hotcold.elf ::HOTCOLD.ELF
-	mcopy -i $(DISK) -o user/ls.elf      ::LS.ELF
-	mcopy -i $(DISK) -o user/rm.elf      ::RM.ELF
-	mcopy -i $(DISK) -o user/mkdir.elf   ::MKDIR.ELF
-	mcopy -i $(DISK) -o user/grep.elf    ::GREP.ELF
-	mcopy -i $(DISK) -o user/head.elf    ::HEAD.ELF
-	mcopy -i $(DISK) -o user/tail.elf    ::TAIL.ELF
-	mcopy -i $(DISK) -o user/sort.elf    ::SORT.ELF
-	mcopy -i $(DISK) -o user/uniq.elf    ::UNIQ.ELF
-	mcopy -i $(DISK) -o user/tee.elf     ::TEE.ELF
-	mcopy -i $(DISK) -o user/cut.elf     ::CUT.ELF
-	mcopy -i $(DISK) -o user/tr.elf      ::TR.ELF
-	mcopy -i $(DISK) -o user/seq.elf     ::SEQ.ELF
-	mcopy -i $(DISK) -o user/test.elf    ::TEST.ELF
-	mcopy -i $(DISK) -o user/find.elf    ::FIND.ELF
-	mcopy -i $(DISK) -o user/cmp.elf     ::CMP.ELF
+	mcopy -i $(DISK) -o user/peek.elf      ::PEEK.ELF
+	mcopy -i $(DISK) -o user/toss.elf      ::TOSS.ELF
+	mcopy -i $(DISK) -o user/newbowl.elf   ::NEWBOWL.ELF
+	mcopy -i $(DISK) -o user/sift.elf    ::SIFT.ELF
+	mcopy -i $(DISK) -o user/skim.elf    ::SKIM.ELF
+	mcopy -i $(DISK) -o user/dregs.elf    ::DREGS.ELF
+	mcopy -i $(DISK) -o user/rack.elf    ::RACK.ELF
+	mcopy -i $(DISK) -o user/cull.elf    ::CULL.ELF
+	mcopy -i $(DISK) -o user/divvy.elf     ::DIVVY.ELF
+	mcopy -i $(DISK) -o user/slice.elf     ::SLICE.ELF
+	mcopy -i $(DISK) -o user/swap.elf      ::SWAP.ELF
+	mcopy -i $(DISK) -o user/tally.elf     ::TALLY.ELF
+	mcopy -i $(DISK) -o user/taste.elf    ::TASTE.ELF
+	mcopy -i $(DISK) -o user/forage.elf    ::FORAGE.ELF
+	mcopy -i $(DISK) -o user/pair.elf     ::PAIR.ELF
 	@if [ -f DOOM1.WAD ]; then \
 	    echo "  Copying DOOM1.WAD to disk image..."; \
 	    mcopy -i $(DISK) DOOM1.WAD ::DOOM1.WAD; \

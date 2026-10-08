@@ -10,18 +10,18 @@ trap cleanup EXIT
 cp disk.img "$WORK/disk.img"
 cat > "$WORK/A.TXT" <<'SCRIPT'
 A=7 ; B=3
-cook echo.elf $((1+2)) $((A*B)) $(($A/B)) $((A%B)) $((-A+B)) $((2*(3+4))) $((A>B)) $((A<B)) $((A==7)) $((A!=7)) $((A<=7)) $((B>=4)) $((10-2-3)) $((100/7/2)) $((-7/2)) $((-7%2)) $((UNSET+1)) > /A1.TXT
-N=0 ; N=$((N+1)) ; N=$((N+1)) ; cook echo.elf $N > /A2.TXT
-cook echo.elf $((1/0)) > /A3.TXT ; cook echo.elf $? > /A4.TXT
+cook call.elf $((1+2)) $((A*B)) $(($A/B)) $((A%B)) $((-A+B)) $((2*(3+4))) $((A>B)) $((A<B)) $((A==7)) $((A!=7)) $((A<=7)) $((B>=4)) $((10-2-3)) $((100/7/2)) $((-7/2)) $((-7%2)) $((UNSET+1)) > /A1.TXT
+N=0 ; N=$((N+1)) ; N=$((N+1)) ; cook call.elf $N > /A2.TXT
+cook call.elf $((1/0)) > /A3.TXT ; cook call.elf $? > /A4.TXT
 SCRIPT
 mcopy -i "$WORK/disk.img" "$WORK/A.TXT" ::/A.TXT
 qemu-system-i386 -accel kvm -cpu host -drive "file=$WORK/disk.img,format=raw,if=ide,index=0" \
     -cdrom soupOS.iso -boot d -m 128M -no-reboot -no-shutdown -display none \
     -serial "file:$WORK/serial.log" -monitor "unix:$WORK/mon.sock,server,nowait" >/dev/null 2>&1 &
 PID=$!
-python3 scripts/qemu_keys.py "$WORK/mon.sock" "headchef" "rosemary" "WAIT:1" "run /A.TXT" "WAIT:5" >/dev/null 2>&1 || { echo "  FAIL  could not drive QEMU"; fail=1; }
+python3 scripts/qemu_keys.py "$WORK/mon.sock" "headchef" "rosemary" "WAIT:1" "follow /A.TXT" "WAIT:5" >/dev/null 2>&1 || { echo "  FAIL  could not drive QEMU"; fail=1; }
 kill "$PID" 2>/dev/null; wait "$PID" 2>/dev/null; PID=""
-mkdir -p "$WORK/host"; ( cd "$WORK/host" && head -3 "$WORK/A.TXT" | sed -e 's|cook echo.elf|echo|g' -e 's| /A| A|g' > a.sh && sh a.sh ) >/dev/null 2>&1
+mkdir -p "$WORK/host"; ( cd "$WORK/host" && head -3 "$WORK/A.TXT" | sed -e 's|cook call.elf|echo|g' -e 's| /A| A|g' > a.sh && sh a.sh ) >/dev/null 2>&1
 val() { mcopy -n -i "$WORK/disk.img" "::$1" - 2>/dev/null; }
 [ "$(val /A1.TXT)" = "$(cat "$WORK/host/A1.TXT")" ] && echo "  ok    17 expressions give sh's values: [$(val /A1.TXT)]" \
     || { echo "  FAIL  expressions: [$(val /A1.TXT)]  sh [$(cat "$WORK/host/A1.TXT")]"; fail=1; }

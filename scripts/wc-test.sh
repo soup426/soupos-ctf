@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# wc-test.sh - wc.elf against the host's wc, flag by flag (v0.56.6).
+# wc-test.sh - weigh.elf against the host's wc, flag by flag (v0.56.6).
 #
 # Files are named relative to the cwd (/), so soupOS and the host print the
-# same name. Pipes are not compared: GNU wc pads to 7 for a pipe and wc.elf
+# same name. Pipes are not compared: GNU wc pads to 7 for a pipe and weigh.elf
 # cannot tell a pipe from a file, so it always uses the file rule.
 set -uo pipefail
 cd "$(dirname "$0")/.."
@@ -19,19 +19,19 @@ seq 1 20000 > "$WORK/BIG.TXT"
 printf 'tabs\there\r\nand\fform feeds\vtoo\n' > "$WORK/WS.TXT"
 for f in F1 F2 F3 BIG WS; do mcopy -i "$WORK/disk.img" "$WORK/$f.TXT" "::/$f.TXT"; done
 CASES=(
-  "1#wc.elf F1.TXT#wc F1.TXT"
-  "2#wc.elf -l F1.TXT#wc -l F1.TXT"
-  "3#wc.elf -w F1.TXT#wc -w F1.TXT"
-  "4#wc.elf -c F1.TXT#wc -c F1.TXT"
-  "5#wc.elf -l -w F1.TXT#wc -l -w F1.TXT"
-  "6#wc.elf -l -c F1.TXT#wc -l -c F1.TXT"
-  "7#wc.elf -w -c F1.TXT#wc -w -c F1.TXT"
-  "8#wc.elf F2.TXT#wc F2.TXT"
-  "9#wc.elf F3.TXT#wc F3.TXT"
-  "10#wc.elf BIG.TXT#wc BIG.TXT"
-  "11#wc.elf < F1.TXT#wc < F1.TXT"
-  "12#wc.elf -l < BIG.TXT#wc -l < BIG.TXT"
-  "13#wc.elf WS.TXT#wc WS.TXT"
+  "1#weigh.elf F1.TXT#wc F1.TXT"
+  "2#weigh.elf -l F1.TXT#wc -l F1.TXT"
+  "3#weigh.elf -w F1.TXT#wc -w F1.TXT"
+  "4#weigh.elf -c F1.TXT#wc -c F1.TXT"
+  "5#weigh.elf -l -w F1.TXT#wc -l -w F1.TXT"
+  "6#weigh.elf -l -c F1.TXT#wc -l -c F1.TXT"
+  "7#weigh.elf -w -c F1.TXT#wc -w -c F1.TXT"
+  "8#weigh.elf F2.TXT#wc F2.TXT"
+  "9#weigh.elf F3.TXT#wc F3.TXT"
+  "10#weigh.elf BIG.TXT#wc BIG.TXT"
+  "11#weigh.elf < F1.TXT#wc < F1.TXT"
+  "12#weigh.elf -l < BIG.TXT#wc -l < BIG.TXT"
+  "13#weigh.elf WS.TXT#wc WS.TXT"
 )
 keys=("headchef" "rosemary" "WAIT:1")
 for c in "${CASES[@]}"; do IFS='#' read -r n soup host <<< "$c"; keys+=("cook $soup > /W$n.OUT" "WAIT:2"); done
@@ -50,5 +50,5 @@ for c in "${CASES[@]}"; do
         echo "        differs: $soup  got [$(cat "$WORK/got$n")]  host [$(cat "$WORK/want$n")]"; bad=1; fi
 done
 [ "$bad" = 0 ] && echo "  ok    all ${#CASES[@]} forms match the host's wc (each flag and pair, no final newline, empty, 20000 lines, stdin, odd whitespace)" \
-    || { echo "  FAIL  wc.elf differs from the host's wc"; fail=1; }
+    || { echo "  FAIL  weigh.elf differs from the host's wc"; fail=1; }
 exit $fail

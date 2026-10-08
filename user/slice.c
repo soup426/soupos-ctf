@@ -1,8 +1,8 @@
-/* cut.c - fields of each line (v0.56.8).
+/* slice.c - fields of each line (v0.56.8).
  *
- *   cook cut.elf -d : -f 1 PASSWD.TXT         the first field of each line
- *   cook cut.elf -d , -f 2,4- DATA.CSV        field 2, then 4 to the end
- *   cook cat.elf X | cut.elf -f 3             tab-separated, a pipe stage
+ *   cook slice.elf -d : -f 1 PASSWD.TXT         the first field of each line
+ *   cook slice.elf -d , -f 2,4- DATA.CSV        field 2, then 4 to the end
+ *   cook spoon.elf X | slice.elf -f 3             tab-separated, a pipe stage
  *
  * GNU cut's rules for -f: the delimiter is one character (a tab unless
  * -d says otherwise); the list takes N, N-M, N- and -M separated by
@@ -77,21 +77,21 @@ int main(void) {
     while (t < nt && tok[t][0] == '-' && tok[t][1]) {
         char o = tok[t][1];
         const char *val = tok[t][2] ? tok[t] + 2 : (t + 1 < nt ? tok[t + 1] : 0);
-        if ((o != 'd' && o != 'f') || !val) { print("usage: cut.elf [-d C] -f LIST [file]\n"); return 2; }
+        if ((o != 'd' && o != 'f') || !val) { print("usage: slice.elf [-d C] -f LIST [file]\n"); return 2; }
         if (o == 'd') {
-            if (val[0] == 0 || val[1] != 0) { print("cut: the delimiter must be one character\n"); return 2; }
+            if (val[0] == 0 || val[1] != 0) { print("slice: the delimiter must be one character\n"); return 2; }
             delim = val[0];
         } else {
-            if (parse_list(val) < 0) { print("cut: bad field list\n"); return 2; }
+            if (parse_list(val) < 0) { print("slice: bad field list\n"); return 2; }
             have_list = 1;
         }
         t += tok[t][2] ? 1 : 2;
     }
-    if (!have_list) { print("usage: cut.elf [-d C] -f LIST [file]\n"); return 2; }
+    if (!have_list) { print("usage: slice.elf [-d C] -f LIST [file]\n"); return 2; }
     int fd = FD_STDIN;
     if (t < nt) {
         fd = sys_open(tok[t], O_READ);
-        if (fd < 0) { print("cut: cannot open "); print(tok[t]); print("\n"); return 1; }
+        if (fd < 0) { print("slice: cannot open "); print(tok[t]); print("\n"); return 1; }
     }
     char buf[512];
     int got, partial = 0;

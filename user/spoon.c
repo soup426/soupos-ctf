@@ -1,8 +1,8 @@
-/* cat.c - copy a file, or stdin, to stdout.
+/* spoon.c - copy a file, or stdin, to stdout.
  *
- *   cook cat.elf README.TXT      copy a file
- *   cook cat.elf < README.TXT    same thing through the shell's redirection
- *   cook echo.elf hi | cat.elf   a filter, because with no argument it reads
+ *   cook spoon.elf README.TXT      copy a file
+ *   cook spoon.elf < README.TXT    same thing through the shell's redirection
+ *   cook call.elf hi | spoon.elf   a filter, because with no argument it reads
  *                                stdin like every other cat
  */
 #include "ulib.h"
@@ -25,7 +25,7 @@ int main(void) {
     }
 
     int fd = sys_open(path, O_READ);
-    if (fd < 0) { print("cat: cannot open "); print(path); print("\n"); return 1; }
+    if (fd < 0) { print("spoon: cannot open "); print(path); print("\n"); return 1; }
     copy_fd(fd);
     sys_close(fd);
     return 0;

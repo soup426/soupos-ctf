@@ -1,8 +1,8 @@
-/* head.c - the first lines of a file or stdin (v0.56.2).
+/* skim.c - the first lines of a file or stdin (v0.56.2).
  *
- *   cook head.elf RECIPE.TXT         the first 10 lines
- *   cook head.elf -n 3 RECIPE.TXT    the first 3
- *   cook cat.elf X | head.elf -n 1   a pipe stage
+ *   cook skim.elf RECIPE.TXT         the first 10 lines
+ *   cook skim.elf -n 3 RECIPE.TXT    the first 3
+ *   cook spoon.elf X | skim.elf -n 1   a pipe stage
  *
  * Bytes are copied as they are: a last line with no newline comes out
  * with none, as GNU head does. It stops reading once it has N lines.
@@ -21,13 +21,13 @@ int main(void) {
     int nt = uargv(tok, 4);        /* sh's splitting, quotes kept together (v0.57.2) */
     int want = 10, t = 0;
     if (t < nt && tok[t][0] == '-' && tok[t][1] == 'n' && !tok[t][2]) {
-        if (t + 1 >= nt || to_int(tok[t + 1], &want) < 0) { print("usage: head.elf [-n N] [file]\n"); return 2; }
+        if (t + 1 >= nt || to_int(tok[t + 1], &want) < 0) { print("usage: skim.elf [-n N] [file]\n"); return 2; }
         t += 2;
     }
     int fd = FD_STDIN;
     if (t < nt) {
         fd = sys_open(tok[t], O_READ);
-        if (fd < 0) { print("head: cannot open "); print(tok[t]); print("\n"); return 1; }
+        if (fd < 0) { print("skim: cannot open "); print(tok[t]); print("\n"); return 1; }
     }
     char buf[512];
     int got, lines = 0;

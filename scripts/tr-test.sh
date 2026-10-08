@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tr-test.sh - tr.elf against the host's tr (v0.56.9).
+# tr-test.sh - swap.elf against the host's tr (v0.56.9).
 set -uo pipefail
 cd "$(dirname "$0")/.."
 fail=0
@@ -24,7 +24,7 @@ CASES=(
   "10#-s .#-s ."
 )
 keys=("headchef" "rosemary" "WAIT:1")
-for c in "${CASES[@]}"; do IFS='#' read -r n soup host <<< "$c"; keys+=("cook tr.elf $soup < /I.TXT > /R$n.OUT" "WAIT:2"); done
+for c in "${CASES[@]}"; do IFS='#' read -r n soup host <<< "$c"; keys+=("cook swap.elf $soup < /I.TXT > /R$n.OUT" "WAIT:2"); done
 qemu-system-i386 -accel kvm -cpu host -drive "file=$WORK/disk.img,format=raw,if=ide,index=0" \
     -cdrom soupOS.iso -boot d -m 128M -no-reboot -no-shutdown -display none \
     -serial "file:$WORK/serial.log" -monitor "unix:$WORK/mon.sock,server,nowait" >/dev/null 2>&1 &
@@ -36,8 +36,8 @@ for c in "${CASES[@]}"; do
     IFS='#' read -r n soup host <<< "$c"
     mcopy -n -i "$WORK/disk.img" "::/R$n.OUT" "$WORK/got$n" 2>/dev/null || : > "$WORK/got$n"
     ( cd "$WORK" && LC_ALL=C bash -c "tr $host < I.TXT" ) > "$WORK/want$n"
-    if ! cmp -s "$WORK/got$n" "$WORK/want$n"; then echo "        differs: tr.elf $soup"; diff "$WORK/want$n" "$WORK/got$n" | head -4 | sed 's/^/          /'; bad=1; fi
+    if ! cmp -s "$WORK/got$n" "$WORK/want$n"; then echo "        differs: swap.elf $soup"; diff "$WORK/want$n" "$WORK/got$n" | head -4 | sed 's/^/          /'; bad=1; fi
 done
 [ "$bad" = 0 ] && echo "  ok    all ${#CASES[@]} forms match the host's tr (translate, -d, -s, -d -s, padding, a repeat, a literal -, ranges)" \
-    || { echo "  FAIL  tr.elf differs from the host's tr"; fail=1; }
+    || { echo "  FAIL  swap.elf differs from the host's tr"; fail=1; }
 exit $fail

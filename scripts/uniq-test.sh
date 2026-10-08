@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# uniq-test.sh - uniq.elf against the host's uniq (v0.56.5).
+# uniq-test.sh - cull.elf against the host's uniq (v0.56.5).
 set -uo pipefail
 cd "$(dirname "$0")/.."
 fail=0
@@ -15,14 +15,14 @@ printf 'only one, no newline' > "$WORK/U2.TXT"
 : > "$WORK/U3.TXT"
 for f in U1 U2 U3; do mcopy -i "$WORK/disk.img" "$WORK/$f.TXT" "::/$f.TXT"; done
 CASES=(
-  "1#uniq.elf /U1.TXT#uniq U1.TXT"
-  "2#uniq.elf -c /U1.TXT#uniq -c U1.TXT"
-  "3#uniq.elf -d /U1.TXT#uniq -d U1.TXT"
-  "4#uniq.elf -c -d /U1.TXT#uniq -c -d U1.TXT"
-  "5#sort.elf /U1.TXT | uniq.elf -c#sort U1.TXT | uniq -c"
-  "6#uniq.elf /U2.TXT#uniq U2.TXT"
-  "7#uniq.elf /U3.TXT#uniq U3.TXT"
-  "8#cat.elf /U1.TXT | uniq.elf#uniq U1.TXT"
+  "1#cull.elf /U1.TXT#uniq U1.TXT"
+  "2#cull.elf -c /U1.TXT#uniq -c U1.TXT"
+  "3#cull.elf -d /U1.TXT#uniq -d U1.TXT"
+  "4#cull.elf -c -d /U1.TXT#uniq -c -d U1.TXT"
+  "5#rack.elf /U1.TXT | cull.elf -c#sort U1.TXT | uniq -c"
+  "6#cull.elf /U2.TXT#uniq U2.TXT"
+  "7#cull.elf /U3.TXT#uniq U3.TXT"
+  "8#spoon.elf /U1.TXT | cull.elf#uniq U1.TXT"
 )
 keys=("headchef" "rosemary" "WAIT:1")
 for c in "${CASES[@]}"; do IFS='#' read -r n soup host <<< "$c"; keys+=("cook $soup > /Q$n.TXT" "WAIT:2"); done

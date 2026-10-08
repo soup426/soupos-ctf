@@ -1,8 +1,8 @@
-/* test.c - evaluate a condition; exit 0 if true, 1 if false (v0.58.1).
+/* taste.c - evaluate a condition; exit 0 if true, 1 if false (v0.58.1).
  *
- *   cook test.elf -f /RECIPE.TXT && pour /RECIPE.TXT
- *   cook test.elf $N -gt 3 || cook echo.elf small
- *   cook test.elf ! -d /home/x && mkbowl /home/x
+ *   cook taste.elf -f /RECIPE.TXT && pour /RECIPE.TXT
+ *   cook taste.elf $N -gt 3 || cook call.elf small
+ *   cook taste.elf ! -d /home/x && mkbowl /home/x
  *
  * As test does: one argument is true if it is not empty; ! in front
  * negates; -e -f -d FILE; -z -n STRING; S1 = S2, S1 != S2; and -eq -ne -lt
@@ -60,6 +60,6 @@ int main(void) {
     char *argv[8];
     int argc = uargv(argv, 8);
     int r = eval(argv, argc);
-    if (r < 0) { eprint("test: usage error\n"); return 2; }
+    if (r < 0) { eprint("taste: usage error\n"); return 2; }
     return r ? 0 : 1;
 }

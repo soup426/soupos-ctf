@@ -1,8 +1,8 @@
-/* uniq.c - adjacent duplicate lines folded into one (v0.56.5).
+/* cull.c - adjacent duplicate lines folded into one (v0.56.5).
  *
- *   cook sort.elf X | uniq.elf        each distinct line once
- *   cook uniq.elf -c X                with how many times, as "%7d line"
- *   cook uniq.elf -d X                only the lines that repeat
+ *   cook rack.elf X | cull.elf        each distinct line once
+ *   cook cull.elf -c X                with how many times, as "%7d line"
+ *   cook cull.elf -d X                only the lines that repeat
  *
  * Only ADJACENT lines are compared, as uniq does (sort first for all
  * duplicates). A last line with no newline is still a line, printed with
@@ -48,12 +48,12 @@ int main(void) {
         for (char *f = tok[t] + 1; *f; f++) {
             if      (*f == 'c') counts = 1;
             else if (*f == 'd') dups_only = 1;
-            else { print("usage: uniq.elf [-c] [-d] [file]\n"); return 2; }
+            else { print("usage: cull.elf [-c] [-d] [file]\n"); return 2; }
         }
     int fd = FD_STDIN;
     if (t < nt) {
         fd = sys_open(tok[t], O_READ);
-        if (fd < 0) { print("uniq: cannot open "); print(tok[t]); print("\n"); return 1; }
+        if (fd < 0) { print("cull: cannot open "); print(tok[t]); print("\n"); return 1; }
     }
     buf_t prev = {0, 0, 0}, cur = {0, 0, 0};
     int have_prev = 0, count = 0, got, partial = 0;

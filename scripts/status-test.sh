@@ -19,13 +19,13 @@ qemu-system-i386 -accel kvm -cpu host -drive "file=$WORK/disk.img,format=raw,if=
     -serial "file:$WORK/serial.log" -monitor "unix:$WORK/mon.sock,server,nowait" >/dev/null 2>&1 &
 PID=$!
 python3 scripts/qemu_keys.py "$WORK/mon.sock" "headchef" "rosemary" "WAIT:1" \
-    "cook echo.elf hi > /T0.TXT ; cook echo.elf \$? > /S1.TXT" "WAIT:2" \
-    "cook hello.elf ; cook echo.elf \$? > /S2.TXT" "WAIT:2" \
-    "cook crash.elf ; cook echo.elf \$? > /S3.TXT" "WAIT:3" \
-    "nosuchthing ; cook echo.elf \$? > /S4.TXT" "WAIT:2" \
-    "cook hello.elf || cook echo.elf \$? \$? > /S5.TXT" "WAIT:2" \
-    "cook hog.elf" "WAIT:2" "KEY:ctrl-c" "WAIT:2" "cook echo.elf \$? > /S6.TXT" "WAIT:2" \
-    "clockout" "WAIT:1" "cook" "soup" "WAIT:2" "reheat ; cook echo.elf \$? > /home/cook/S7.TXT" "WAIT:2" >/dev/null 2>&1 \
+    "cook call.elf hi > /T0.TXT ; cook call.elf \$? > /S1.TXT" "WAIT:2" \
+    "cook hello.elf ; cook call.elf \$? > /S2.TXT" "WAIT:2" \
+    "cook crash.elf ; cook call.elf \$? > /S3.TXT" "WAIT:3" \
+    "nosuchthing ; cook call.elf \$? > /S4.TXT" "WAIT:2" \
+    "cook hello.elf || cook call.elf \$? \$? > /S5.TXT" "WAIT:2" \
+    "cook hog.elf" "WAIT:2" "KEY:ctrl-c" "WAIT:2" "cook call.elf \$? > /S6.TXT" "WAIT:2" \
+    "clockout" "WAIT:1" "cook" "soup" "WAIT:2" "reheat ; cook call.elf \$? > /home/cook/S7.TXT" "WAIT:2" >/dev/null 2>&1 \
     || { echo "  FAIL  could not drive QEMU"; fail=1; }
 kill "$PID" 2>/dev/null; wait "$PID" 2>/dev/null; PID=""
 val() { mcopy -n -i "$WORK/disk.img" "::$1" - 2>/dev/null | tr -d '\r\n'; }

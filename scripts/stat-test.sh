@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # stat-test.sh - SYS_STAT: reaching a path needs search on the bowls above
-# it, not read on the path (v0.59.0). Seen through test.elf, which uses it.
+# it, not read on the path (v0.59.0). Seen through taste.elf, which uses it.
 set -uo pipefail
 cd "$(dirname "$0")/.."
 fail=0
@@ -16,11 +16,11 @@ PID=$!
 python3 scripts/qemu_keys.py "$WORK/mon.sock" "headchef" "rosemary" "WAIT:1" \
     "hire saucier" "WAIT:1" "basil" "WAIT:1" "basil" "WAIT:2" "clockout" "WAIT:1" \
     "saucier" "basil" "WAIT:2" "stir ~/R.TXT secret recipe" "WAIT:1" "clockout" "WAIT:1" \
-    "headchef" "rosemary" "WAIT:2" "cook test.elf -f /home/saucier/R.TXT ; cook echo.elf \$? > /S3.OUT" "WAIT:2" "clockout" "WAIT:1" \
+    "headchef" "rosemary" "WAIT:2" "cook taste.elf -f /home/saucier/R.TXT ; cook call.elf \$? > /S3.OUT" "WAIT:2" "clockout" "WAIT:1" \
     "cook" "soup" "WAIT:2" \
-    "cook test.elf -f /etc/kitchen ; cook echo.elf \$? > ~/S1.OUT" "WAIT:2" \
-    "cook test.elf -e /home/saucier/R.TXT ; cook echo.elf \$? > ~/S2.OUT" "WAIT:2" \
-    "cook test.elf -d /home/saucier ; cook echo.elf \$? > ~/S4.OUT" "WAIT:2" >/dev/null 2>&1 \
+    "cook taste.elf -f /etc/kitchen ; cook call.elf \$? > ~/S1.OUT" "WAIT:2" \
+    "cook taste.elf -e /home/saucier/R.TXT ; cook call.elf \$? > ~/S2.OUT" "WAIT:2" \
+    "cook taste.elf -d /home/saucier ; cook call.elf \$? > ~/S4.OUT" "WAIT:2" >/dev/null 2>&1 \
     || { echo "  FAIL  could not drive QEMU"; fail=1; }
 kill "$PID" 2>/dev/null; wait "$PID" 2>/dev/null; PID=""
 val() { mcopy -n -i "$WORK/disk.img" "::$1" - 2>/dev/null | tr -d '\n'; }

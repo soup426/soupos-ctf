@@ -70,7 +70,7 @@ mcopy -o -i "$WORK/sys.img" "$WORK/rc" ::/etc/rc
 mcopy -o -i "$WORK/sys.img" "$WORK/AUTHKEYS" ::/AUTHKEYS
 two "$WORK/sys.img" "$WORK/sys1.log" "headchef" "rosemary" "WAIT:2" \
     "hire saucier" "WAIT:1" "basil" "WAIT:1" "basil" "WAIT:2" "clockout" "WAIT:1" \
-    "saucier" "basil" "WAIT:2" "pour /HOSTKEY.ED" "WAIT:1" "cook cat.elf /HOSTKEY.ED" "WAIT:2" \
+    "saucier" "basil" "WAIT:2" "pour /HOSTKEY.ED" "WAIT:1" "cook spoon.elf /HOSTKEY.ED" "WAIT:2" \
     "stir /etc/rc vault off" "WAIT:1" "clockout" "WAIT:1" \
     "headchef" "rosemary" "WAIT:2" "perms /etc/rc rwxrwx" "WAIT:1"
 two "$WORK/sys.img" "$WORK/sys2.log" "headchef" "rosemary" "WAIT:2" \
@@ -78,7 +78,7 @@ two "$WORK/sys.img" "$WORK/sys2.log" "headchef" "rosemary" "WAIT:2" \
     "perms /HOSTKEY.ED" "WAIT:1" "perms /etc/kitchen" "WAIT:1"
 tr -d '\r' < "$WORK/sys1.log" > "$WORK/s1"; tr -d '\r' < "$WORK/sys2.log" > "$WORK/s2"
 grep -q "^\[rc\] vault 22" "$WORK/s1" && grep -q "Permission denied: /HOSTKEY.ED" "$WORK/s1" \
-    && grep -q "/cat.elf: open /HOSTKEY.ED for reading refused" "$WORK/s1" \
+    && grep -q "/spoon.elf: open /HOSTKEY.ED for reading refused" "$WORK/s1" \
     && echo "  ok    a cook cannot read the vault's private host key, from the shell or a program" \
     || { echo "  FAIL  the host key was readable (or the vault never opened)"; fail=1; }
 grep -q "Permission denied: /etc" "$WORK/s1" \

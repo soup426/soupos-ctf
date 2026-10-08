@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# seq-test.sh - seq.elf against the host's seq (v0.57.7).
+# seq-test.sh - tally.elf against the host's seq (v0.57.7).
 set -uo pipefail
 cd "$(dirname "$0")/.."
 fail=0
@@ -9,16 +9,16 @@ cleanup() { [ -n "$PID" ] && kill "$PID" 2>/dev/null; if [ "$fail" != 0 ]; then 
 trap cleanup EXIT
 cp disk.img "$WORK/disk.img"
 CASES=(
-  "1#seq.elf 5#seq 5"
-  "2#seq.elf 3 7#seq 3 7"
-  "3#seq.elf 10 -3 1#seq 10 -3 1"
-  "4#seq.elf 5 1#seq 5 1"
-  "5#seq.elf -3 3#seq -3 3"
-  "6#seq.elf -2 2 6#seq -2 2 6"
-  "7#seq.elf 0#seq 0"
-  "8#seq.elf 1 1#seq 1 1"
-  "9#seq.elf 7 -1 7#seq 7 -1 7"
-  "10#seq.elf 12 | sort.elf -r#seq 12 | LC_ALL=C sort -r"
+  "1#tally.elf 5#seq 5"
+  "2#tally.elf 3 7#seq 3 7"
+  "3#tally.elf 10 -3 1#seq 10 -3 1"
+  "4#tally.elf 5 1#seq 5 1"
+  "5#tally.elf -3 3#seq -3 3"
+  "6#tally.elf -2 2 6#seq -2 2 6"
+  "7#tally.elf 0#seq 0"
+  "8#tally.elf 1 1#seq 1 1"
+  "9#tally.elf 7 -1 7#seq 7 -1 7"
+  "10#tally.elf 12 | rack.elf -r#seq 12 | LC_ALL=C sort -r"
 )
 keys=("headchef" "rosemary" "WAIT:1")
 for c in "${CASES[@]}"; do IFS='#' read -r n soup host <<< "$c"; keys+=("cook $soup > /N$n.OUT" "WAIT:2"); done
@@ -36,5 +36,5 @@ for c in "${CASES[@]}"; do
     cmp -s "$WORK/got$n" "$WORK/want$n" || { echo "        differs: $soup  got [$(tr '\n' ' ' < "$WORK/got$n")]  host [$(tr '\n' ' ' < "$WORK/want$n")]"; bad=1; }
 done
 [ "$bad" = 0 ] && echo "  ok    all ${#CASES[@]} forms match the host's seq (one, two, three arguments, negatives, counting down, empty runs, a pipe)" \
-    || { echo "  FAIL  seq.elf differs from the host's seq"; fail=1; }
+    || { echo "  FAIL  tally.elf differs from the host's seq"; fail=1; }
 exit $fail

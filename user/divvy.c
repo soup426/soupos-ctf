@@ -1,8 +1,8 @@
-/* tee.c - stdin to stdout and to files (v0.56.7).
+/* divvy.c - stdin to stdout and to files (v0.56.7).
  *
- *   cook echo.elf soup | tee.elf LOG.TXT         to the screen and LOG.TXT
- *   cook echo.elf more | tee.elf -a LOG.TXT      appended
- *   cook cat.elf X | tee.elf A.TXT B.TXT | wc.elf
+ *   cook call.elf soup | divvy.elf LOG.TXT         to the screen and LOG.TXT
+ *   cook call.elf more | divvy.elf -a LOG.TXT      appended
+ *   cook spoon.elf X | divvy.elf A.TXT B.TXT | weigh.elf
  *
  * The files are opened through SYS_OPEN, so the cook's permissions apply as
  * to any write. A file that cannot be opened is reported and the rest carry
@@ -18,14 +18,14 @@ int main(void) {
     for (; t < nt && tok[t][0] == '-' && tok[t][1]; t++)
         for (char *f = tok[t] + 1; *f; f++) {
             if (*f == 'a') append = 1;
-            else { print("usage: tee.elf [-a] [file...]\n"); return 2; }
+            else { print("usage: divvy.elf [-a] [file...]\n"); return 2; }
         }
     int fds[6], nf = 0;
     for (; t < nt && nf < 6; t++) {
         int fd = sys_open(tok[t], append ? O_APPEND : O_WRITE);
         /* The complaint goes to stderr only, as GNU tee's does: stdout
          * must stay exactly the data, since it is usually a pipe or file. */
-        if (fd < 0) { eprint("tee: cannot open "); eprint(tok[t]); eprint("\n"); status = 1; continue; }
+        if (fd < 0) { eprint("divvy: cannot open "); eprint(tok[t]); eprint("\n"); status = 1; continue; }
         fds[nf++] = fd;
     }
     char buf[512];

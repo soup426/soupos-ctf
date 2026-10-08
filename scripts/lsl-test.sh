@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# lsl-test.sh - ls.elf -l against serve and mtools (v0.59.1).
+# lsl-test.sh - peek.elf -l against serve and mtools (v0.59.1).
 set -uo pipefail
 cd "$(dirname "$0")/.."
 fail=0
@@ -14,10 +14,10 @@ qemu-system-i386 -accel kvm -cpu host -drive "file=$WORK/disk.img,format=raw,if=
 PID=$!
 python3 scripts/qemu_keys.py "$WORK/mon.sock" "headchef" "rosemary" "WAIT:1" \
     "hire saucier" "WAIT:1" "basil" "WAIT:1" "basil" "WAIT:2" \
-    "slurp ==/" "WAIT:1" "cd /" "WAIT:1" "serve" "WAIT:2" "cook ls.elf -l /" "WAIT:3" \
-    "slurp ==/etc" "WAIT:1" "cd /etc" "WAIT:1" "serve" "WAIT:1" "cook ls.elf -l /etc" "WAIT:2" \
-    "slurp ==/home" "WAIT:1" "cd /home" "WAIT:1" "serve" "WAIT:1" "cook ls.elf -l /home" "WAIT:2" \
-    "cd /" "WAIT:1" "clockout" "WAIT:1" "cook" "soup" "WAIT:2" "slurp ==cook" "WAIT:1" "cook ls.elf -l /etc" "WAIT:2" >/dev/null 2>&1 \
+    "slurp ==/" "WAIT:1" "cd /" "WAIT:1" "serve" "WAIT:2" "cook peek.elf -l /" "WAIT:3" \
+    "slurp ==/etc" "WAIT:1" "cd /etc" "WAIT:1" "serve" "WAIT:1" "cook peek.elf -l /etc" "WAIT:2" \
+    "slurp ==/home" "WAIT:1" "cd /home" "WAIT:1" "serve" "WAIT:1" "cook peek.elf -l /home" "WAIT:2" \
+    "cd /" "WAIT:1" "clockout" "WAIT:1" "cook" "soup" "WAIT:2" "slurp ==cook" "WAIT:1" "cook peek.elf -l /etc" "WAIT:2" >/dev/null 2>&1 \
     || { echo "  FAIL  could not drive QEMU"; fail=1; }
 kill "$PID" 2>/dev/null; wait "$PID" 2>/dev/null; PID=""
 tr -d '\r' < "$WORK/serial.log" > "$WORK/log"
@@ -37,9 +37,9 @@ for d in ["/", "/etc", "/home"]:
               for m in re.finditer(r"^LSL ([rwx?-]{6}) (\S+) (-?\d+) (.+)$", sec, re.M))
     lsl = {t for t in lsl if len(t[2]) <= 30}            # serve cuts names past 30
     if serve and serve == lsl:
-        print(f"  ok    ls.elf -l {d} agrees with serve on every entry's mode, owner, name and size ({len(lsl)})")
+        print(f"  ok    peek.elf -l {d} agrees with serve on every entry's mode, owner, name and size ({len(lsl)})")
     else:
-        print(f"  FAIL  ls.elf -l {d} vs serve: only serve {sorted(serve - lsl)[:3]} only ls {sorted(lsl - serve)[:3]}"); fail = 1
+        print(f"  FAIL  peek.elf -l {d} vs serve: only serve {sorted(serve - lsl)[:3]} only ls {sorted(lsl - serve)[:3]}"); fail = 1
 cook = sections.get("cook", "")
 if re.search(r"^LSL rw---- headchef 349 kitchen$|^LSL rw---- headchef \d+ kitchen$", cook, re.M):
     print("  ok    for the cook, ls -l shows /etc/kitchen (stat needs no read on it)")

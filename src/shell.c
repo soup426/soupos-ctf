@@ -385,7 +385,7 @@ static void run_profile(void) {
     else { strcpy(path, "/home/"); strncpy(path + 6, users_name_of(me->uid), sizeof(path) - 15); path[sizeof(path) - 9] = '\0'; strcat(path, "/profile"); }
     if (!fat_exists(path) || fat_is_dir(path)) return;
     char line[FAT_PATH_MAX + 8];
-    strcpy(line, "run \"");
+    strcpy(line, "follow \"");
     strcat(line, path);
     strcat(line, "\"");
     run_line(line);
@@ -671,12 +671,12 @@ static void cmd_menu(void) {
         {0, "    reheat             - reboot"},
         {0, "    ps                 - list running tasks"},
         {0, "    kitchen            - the whole room, live, until a key"},
-        {0, "    who                - every shell: its cook, where, up, idle"},
-        {0, "    last               - who clocked in, and who was refused, newest first"},
-        {0, "    du [bowl]          - clusters and bytes under each entry, and the total"},
-        {0, "    run <file> [args]  - run a script; its $1..$9, $#, $@ are the args"},
-        {0, "    NAME=value, $NAME  - shell variables; unset NAME removes one"},
-        {0, "    read NAME...       - a line from the terminal into variables"},
+        {0, "    brigade            - every shell: its cook, where, up, idle"},
+        {0, "    logbook            - who clocked in, and who was refused, newest first"},
+        {0, "    portions [bowl]    - clusters and bytes under each entry, and the total"},
+        {0, "    follow <file> [..] - follow a recipe (a script); $1..$9, $#, $@ are its args"},
+        {0, "    NAME=value, $NAME  - shell variables; discard NAME removes one"},
+        {0, "    take NAME...       - take a line from the terminal into variables"},
         {0, "    kill <id>          - stop a background task"},
         {0, "    bgclock            - spawn a clock in the top-right corner"},
         {0, "    yieldbg            - bg task logging [bg] to serial (pairs with cook spin.elf)"},
@@ -1219,8 +1219,8 @@ static void cmd_ai(const char *args) {
 
 /* ── Pipelines ────────────────────────────────────────────────────────────
  *
- *   cook echo.elf hello | upper.elf | wc.elf
- *   cook cat.elf < README.TXT > COPY.TXT
+ *   cook call.elf hello | upper.elf | weigh.elf
+ *   cook spoon.elf < README.TXT > COPY.TXT
  *   cook marker.elf A &
  *
  * Each stage is a process of its own (that is all a pipeline is here), wired
@@ -4096,7 +4096,7 @@ static const char *const cmd_names[] = {
     "jot", "ai", "cook", "soup", "hash",
     "beep", "mandelbrot", "vgademo", "uname", "cal",
     "clock", "wipe", "fortune", "bounce", "recipe", "leftovers", "spill",
-    "freeze", "reheat", "ps", "kitchen", "who", "last", "du", "run", "unset", "read", "orders", "plate", "steep", "kill", "scraps", "sample", "skewer", "larder", "whistle", "hatch", "hush", "pass", "vault",
+    "freeze", "reheat", "ps", "kitchen", "brigade", "logbook", "portions", "follow", "discard", "take", "orders", "plate", "steep", "kill", "scraps", "sample", "skewer", "larder", "whistle", "hatch", "hush", "pass", "vault",
 #ifndef NO_DOOM
     "sizzle", "hum",
 #endif
@@ -4238,9 +4238,9 @@ static void dispatch(const char *buf) {
         cmd_season(a);
     }
     else if (str_eq(p, "serve"))       cmd_serve();
-    else if (str_eq(p, "run") || str_startswith(p, "run ")) cmd_run(p + 3);
-    else if (str_startswith(p, "unset ")) cmd_unset(uq_args(p + 6));
-    else if (str_eq(p, "read") || str_startswith(p, "read ")) cmd_read(p + 4);
+    else if (str_eq(p, "follow") || str_startswith(p, "follow ")) cmd_run(p + 6);
+    else if (str_startswith(p, "discard ")) cmd_unset(uq_args(p + 8));
+    else if (str_eq(p, "take") || str_startswith(p, "take ")) cmd_read(p + 4);
     else if (str_startswith(p, "pour")) {
         const char *a = p + 4; while (*a == ' ') a++;
         cmd_pour(uq_args(a));
@@ -4338,9 +4338,9 @@ static void dispatch(const char *buf) {
 #endif
     else if (str_eq(p, "cat"))       cmd_cat();  /* hidden */
     else if (str_eq(p, "ps"))          cmd_ps();
-    else if (str_eq(p, "who"))         cmd_who();
-    else if (str_eq(p, "last"))        cmd_last();
-    else if (str_eq(p, "du") || str_startswith(p, "du ")) cmd_du(uq_args(p + 2));
+    else if (str_eq(p, "brigade"))     cmd_who();
+    else if (str_eq(p, "logbook"))     cmd_last();
+    else if (str_eq(p, "portions") || str_startswith(p, "portions ")) cmd_du(uq_args(p + 8));
     else if (str_eq(p, "kitchen"))     cmd_kitchen();
     else if (str_eq(p, "orders"))      cmd_orders();
     else if (str_eq(p, "scraps"))      cmd_scraps();
@@ -4442,7 +4442,7 @@ static void cmd_read(const char *args) {
     char names[8][16]; int nn = 0;
     const char *a = args;
     while (*a && nn < 8) { a = first_word(a, names[nn], 16); if (names[nn][0]) nn++; }
-    if (!nn) { t_puts("Usage: read NAME...\n"); cur_shell()->last_status = 2; return; }
+    if (!nn) { t_puts("Usage: take NAME...\n"); cur_shell()->last_status = 2; return; }
     char line[INPUT_MAX];
     int len = 0, eof = 0;
     for (;;) {
@@ -4978,13 +4978,13 @@ static void cmd_run(const char *args) {
      * script's $1..$9; quotes group them, as everywhere. */
     char file[FAT_PATH_MAX];
     const char *rest = first_word(args, file, sizeof(file));
-    if (!file[0]) { t_puts("Usage: run <file> [args...]\n"); cur_shell()->last_status = 2; return; }
+    if (!file[0]) { t_puts("Usage: follow <file> [args...]\n"); cur_shell()->last_status = 2; return; }
     char path[FAT_PATH_MAX];
     resolve_path(file, path);
     if (!fat_exists(path) || fat_is_dir(path)) { cook_err("No such script."); return; }
     if (!may(path, 'r')) { deny(path); return; }
     if (depth >= 8) {
-        t_puts("  run: scripts nested eight deep; not going further.\n");
+        t_puts("  follow: recipes nested eight deep; not going further.\n");
         klog("[run] %s: nested eight deep, stopped\n", path);
         cur_shell()->last_status = 1;
         return;

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# sort-test.sh - sort.elf against the host's LC_ALL=C sort (v0.56.3).
+# sort-test.sh - rack.elf against the host's LC_ALL=C sort (v0.56.3).
 set -uo pipefail
 cd "$(dirname "$0")/.."
 fail=0
@@ -16,11 +16,11 @@ printf 'pear\nApple\napple\nbanana\n\nban\nbanana\nZebra\n\xc3\xa9clair\n~tilde\
 printf '10\n9\n-3\n  7\n2.5\n2.50\n-0\n0\nabc\n100\n-10.5\n007\n7\nzzz\n3.14159\n' > "$WORK/N.TXT"
 for f in W N; do mcopy -i "$WORK/disk.img" "$WORK/$f.TXT" "::/$f.TXT"; done
 CASES=(
-  "1#sort.elf /W.TXT#sort W.TXT"
-  "2#sort.elf -r /W.TXT#sort -r W.TXT"
-  "3#sort.elf -n /N.TXT#sort -n N.TXT"
-  "4#sort.elf -n -r /N.TXT#sort -n -r N.TXT"
-  "5#cat.elf /W.TXT | sort.elf#sort W.TXT"
+  "1#rack.elf /W.TXT#sort W.TXT"
+  "2#rack.elf -r /W.TXT#sort -r W.TXT"
+  "3#rack.elf -n /N.TXT#sort -n N.TXT"
+  "4#rack.elf -n -r /N.TXT#sort -n -r N.TXT"
+  "5#spoon.elf /W.TXT | rack.elf#sort W.TXT"
 )
 keys=("headchef" "rosemary" "WAIT:1")
 for c in "${CASES[@]}"; do IFS='#' read -r n soup host <<< "$c"; keys+=("cook $soup > /S$n.TXT" "WAIT:2"); done

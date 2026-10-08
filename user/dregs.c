@@ -1,7 +1,7 @@
-/* tail.c - the last lines of a file or stdin (v0.56.2).
+/* dregs.c - the last lines of a file or stdin (v0.56.2).
  *
- *   cook tail.elf RECIPE.TXT         the last 10 lines
- *   cook tail.elf -n 3 RECIPE.TXT    the last 3
+ *   cook dregs.elf RECIPE.TXT         the last 10 lines
+ *   cook dregs.elf -n 3 RECIPE.TXT    the last 3
  *
  * The whole input is read into memory (a pipe cannot be read backwards),
  * then the last N lines are found from the end. A last line with no
@@ -21,13 +21,13 @@ int main(void) {
     int nt = uargv(tok, 4);        /* sh's splitting, quotes kept together (v0.57.2) */
     int want = 10, t = 0;
     if (t < nt && tok[t][0] == '-' && tok[t][1] == 'n' && !tok[t][2]) {
-        if (t + 1 >= nt || to_int(tok[t + 1], &want) < 0) { print("usage: tail.elf [-n N] [file]\n"); return 2; }
+        if (t + 1 >= nt || to_int(tok[t + 1], &want) < 0) { print("usage: dregs.elf [-n N] [file]\n"); return 2; }
         t += 2;
     }
     int fd = FD_STDIN;
     if (t < nt) {
         fd = sys_open(tok[t], O_READ);
-        if (fd < 0) { print("tail: cannot open "); print(tok[t]); print("\n"); return 1; }
+        if (fd < 0) { print("dregs: cannot open "); print(tok[t]); print("\n"); return 1; }
     }
     /* Read it all: grow by doubling (the bump allocator keeps the old). */
     int cap = 4096, len = 0, got;

@@ -26,7 +26,7 @@ python3 scripts/qemu_keys.py "$WORK/mon.sock" "headchef" "rosemary" "WAIT:1" \
     "strain \"/a bowl/inside file.txt\"" "WAIT:1" "cd /" "WAIT:1" "rmbowl \"/a bowl\"" "WAIT:1" \
     "mkbowl \"/kept long bowl name\"" "WAIT:1" "stir \"/kept long bowl name/a long file inside.txt\" kept" "WAIT:1" \
     "stir \"/a rather long recipe name.txt\" hello" "WAIT:1" "strain \"/a rather long recipe name.txt\"" "WAIT:1" \
-    "cook ls.elf / > /LS.OUT" "WAIT:2" >/dev/null 2>&1 \
+    "cook peek.elf / > /LS.OUT" "WAIT:2" >/dev/null 2>&1 \
     || { echo "  FAIL  could not drive QEMU"; fail=1; }
 kill "$PID" 2>/dev/null; wait "$PID" 2>/dev/null; PID=""
 L=$(tr -d '\r' < "$WORK/serial.log")

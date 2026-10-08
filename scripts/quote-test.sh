@@ -12,14 +12,14 @@ printf 'a pot of soup\nno pot here\na  pot with two spaces\n' > "$WORK/G.TXT"
 mcopy -i "$WORK/disk.img" "$WORK/G.TXT" ::/G.TXT
 # soupOS line (output to /Qn.TXT) # sh line (output to Qn.TXT, files relative)
 CASES=(
-  "1#cook echo.elf \"two  words\" here > /Q1.TXT#echo \"two  words\" here > Q1.TXT"
-  "2#cook echo.elf 'single  quoted' > /Q2.TXT#echo 'single  quoted' > Q2.TXT"
-  "3#cook grep.elf \"a pot\" /G.TXT > /Q3.TXT#grep -F \"a pot\" G.TXT > Q3.TXT"
-  "4#cook tr.elf ' ' _ < /G.TXT > /Q4.TXT#tr ' ' _ < G.TXT > Q4.TXT"
-  "5#cook echo.elf \"a|b\" 'c;d' \"e&&f\" > /Q5.TXT#echo \"a|b\" 'c;d' \"e&&f\" > Q5.TXT"
-  "6#cook echo.elf '\$?' \"\$?\" > /Q6.TXT#echo '\$?' \"\$?\" > Q6.TXT"
-  "7#cook echo.elf hi > \"/my file.txt\"#echo hi > \"my file.txt\""
-  "8#cook cat.elf \"/my file.txt\" > /Q8.TXT#cat \"my file.txt\" > Q8.TXT"
+  "1#cook call.elf \"two  words\" here > /Q1.TXT#echo \"two  words\" here > Q1.TXT"
+  "2#cook call.elf 'single  quoted' > /Q2.TXT#echo 'single  quoted' > Q2.TXT"
+  "3#cook sift.elf \"a pot\" /G.TXT > /Q3.TXT#grep -F \"a pot\" G.TXT > Q3.TXT"
+  "4#cook swap.elf ' ' _ < /G.TXT > /Q4.TXT#tr ' ' _ < G.TXT > Q4.TXT"
+  "5#cook call.elf \"a|b\" 'c;d' \"e&&f\" > /Q5.TXT#echo \"a|b\" 'c;d' \"e&&f\" > Q5.TXT"
+  "6#cook call.elf '\$?' \"\$?\" > /Q6.TXT#echo '\$?' \"\$?\" > Q6.TXT"
+  "7#cook call.elf hi > \"/my file.txt\"#echo hi > \"my file.txt\""
+  "8#cook spoon.elf \"/my file.txt\" > /Q8.TXT#cat \"my file.txt\" > Q8.TXT"
 )
 keys=("headchef" "rosemary" "WAIT:1")
 for c in "${CASES[@]}"; do IFS='#' read -r n soup host <<< "$c"; keys+=("$soup" "WAIT:2"); done

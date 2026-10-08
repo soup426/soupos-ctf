@@ -15,8 +15,8 @@ qemu-system-i386 -accel kvm -cpu host -drive "file=$WORK/disk.img,format=raw,if=
     -serial "file:$WORK/serial.log" -monitor "unix:$WORK/mon.sock,server,nowait" >/dev/null 2>&1 &
 PID=$!
 python3 scripts/qemu_keys.py "$WORK/mon.sock" "headchef" "rosemary" "WAIT:1" "vault 22" "WAIT:2" "clockout" "WAIT:1" \
-    "cook" "soup" "WAIT:2" "stir ~/profile \"X=7 ; cook echo.elf ran >> ~/P1.TXT ; nosuchthing\"" "WAIT:1" "clockout" "WAIT:1" \
-    "cook" "soup" "WAIT:3" "cook echo.elf x=\$X > ~/P2.TXT" "WAIT:2" "whoami" "WAIT:1" >/dev/null 2>&1 \
+    "cook" "soup" "WAIT:2" "stir ~/profile \"X=7 ; cook call.elf ran >> ~/P1.TXT ; nosuchthing\"" "WAIT:1" "clockout" "WAIT:1" \
+    "cook" "soup" "WAIT:3" "cook call.elf x=\$X > ~/P2.TXT" "WAIT:2" "whoami" "WAIT:1" >/dev/null 2>&1 \
     || { echo "  FAIL  could not drive QEMU"; fail=1; }
 python3 - "$PORT" <<'PY' || fail=1
 import pexpect, sys

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# testcmd-test.sh - test.elf's exit codes against the host's test (v0.58.1).
+# testcmd-test.sh - taste.elf's exit codes against the host's test (v0.58.1).
 set -uo pipefail
 cd "$(dirname "$0")/.."
 fail=0
@@ -17,7 +17,7 @@ CASES=(
   "! -f /E.TXT" "! -e /NOPE" "x" "3 -lt x"
 )
 keys=("headchef" "rosemary" "WAIT:1")
-i=0; for c in "${CASES[@]}"; do i=$((i+1)); keys+=("cook test.elf $c ; cook echo.elf \$? > /T$i.OUT" "WAIT:1"); done
+i=0; for c in "${CASES[@]}"; do i=$((i+1)); keys+=("cook taste.elf $c ; cook call.elf \$? > /T$i.OUT" "WAIT:1"); done
 qemu-system-i386 -accel kvm -cpu host -drive "file=$WORK/disk.img,format=raw,if=ide,index=0" \
     -cdrom soupOS.iso -boot d -m 128M -no-reboot -no-shutdown -display none \
     -serial "file:$WORK/serial.log" -monitor "unix:$WORK/mon.sock,server,nowait" >/dev/null 2>&1 &
@@ -33,5 +33,5 @@ for c in "${CASES[@]}"; do
     [ "$got" = "$want" ] || { echo "        test $c: got $got, host $want"; bad=1; }
 done
 [ "$bad" = 0 ] && echo "  ok    all ${#CASES[@]} cases exit as the host's test does (-e -f -d, -z -n, = !=, the integer tests, !, one argument, a bad integer)" \
-    || { echo "  FAIL  test.elf differs from the host's test"; fail=1; }
+    || { echo "  FAIL  taste.elf differs from the host's test"; fail=1; }
 exit $fail
