@@ -648,6 +648,7 @@ static void cmd_menu(void) {
         {0, "    who                - every shell: its cook, where, up, idle"},
         {0, "    last               - who clocked in, and who was refused, newest first"},
         {0, "    du [bowl]          - clusters and bytes under each entry, and the total"},
+        {0, "    run <file>         - run a file of command lines (a script)"},
         {0, "    kill <id>          - stop a background task"},
         {0, "    bgclock            - spawn a clock in the top-right corner"},
         {0, "    yieldbg            - bg task logging [bg] to serial (pairs with cook spin.elf)"},
@@ -2505,6 +2506,7 @@ static void cmd_bowltest(void) {
 /* ---- kitchen staff: users, access control, elevation ------------------- */
 
 static void dispatch(const char *buf);   /* forward decl for chef elevation */
+static void cmd_run(const char *args);  /* defined beside run_rc (v0.57.5) */
 
 /* The headchef's commands (v0.55.0). Until then any cook could close the
  * vault on everyone, open the clear-text pass door, change the vault's
@@ -3979,7 +3981,7 @@ static const char *const cmd_names[] = {
     "jot", "ai", "cook", "soup", "hash",
     "beep", "mandelbrot", "vgademo", "uname", "cal",
     "clock", "wipe", "fortune", "bounce", "recipe", "leftovers", "spill",
-    "freeze", "reheat", "ps", "kitchen", "who", "last", "du", "orders", "plate", "steep", "kill", "scraps", "sample", "skewer", "larder", "whistle", "hatch", "hush", "pass", "vault",
+    "freeze", "reheat", "ps", "kitchen", "who", "last", "du", "run", "orders", "plate", "steep", "kill", "scraps", "sample", "skewer", "larder", "whistle", "hatch", "hush", "pass", "vault",
 #ifndef NO_DOOM
     "sizzle", "hum",
 #endif
@@ -4121,6 +4123,7 @@ static void dispatch(const char *buf) {
         cmd_season(a);
     }
     else if (str_eq(p, "serve"))       cmd_serve();
+    else if (str_eq(p, "run") || str_startswith(p, "run ")) cmd_run(uq_args(p + 3));
     else if (str_startswith(p, "pour")) {
         const char *a = p + 4; while (*a == ' ') a++;
         cmd_pour(uq_args(a));
@@ -4333,6 +4336,50 @@ static void run_line(const char *line) {
 /* ---- main shell loop ---- */
 
 static void shell_loop(char *input, char *saved, int *pos_p, int *len_p, int *hb_p);
+
+/* run FILE - a file of command lines, run as the cook who runs it (v0.57.5).
+ * Each line goes through run_line, so ; && || $? ~ and quotes all work; a
+ * line starting with '#' is a comment; nothing stops it but the end or a
+ * clockout; its status is the last line's. The cook must be able to read
+ * the file. A script may run another, eight deep at most, so one that runs
+ * itself stops rather than running the kernel stack out. */
+static void run_line(const char *line);
+static void cmd_run(const char *args) {
+    static int depth;
+    if (!*args) { t_puts("Usage: run <file>\n"); cur_shell()->last_status = 2; return; }
+    char path[FAT_PATH_MAX];
+    resolve_path(args, path);
+    if (!fat_exists(path) || fat_is_dir(path)) { cook_err("No such script."); return; }
+    if (!may(path, 'r')) { deny(path); return; }
+    if (depth >= 8) {
+        t_puts("  run: scripts nested eight deep; not going further.\n");
+        klog("[run] %s: nested eight deep, stopped\n", path);
+        cur_shell()->last_status = 1;
+        return;
+    }
+    char *text = kmalloc(8193);
+    if (!text) return;
+    uint32_t size = 0;
+    if (fat_read(path, (uint8_t *)text, 8192, &size) < 0) { kfree(text); cook_err("Cannot read the script."); return; }
+    if (size > 8192) size = 8192;                    /* fat_read reports the file's size */
+    text[size] = '\0';
+    depth++;
+    cur_shell()->last_status = 0;
+    uint32_t i = 0;
+    while (i < size && !cur_shell()->exiting) {
+        uint32_t e = i;
+        while (e < size && text[e] != '\n' && text[e] != '\r') e++;
+        char line[INPUT_MAX];
+        uint32_t n = e - i < INPUT_MAX - 1 ? e - i : INPUT_MAX - 1;
+        memcpy(line, text + i, n); line[n] = '\0';
+        const char *l = line;
+        while (*l == ' ') l++;
+        if (*l && *l != '#') run_line(l);
+        i = e + 1;
+    }
+    depth--;
+    kfree(text);
+}
 
 /* /etc/rc: shell commands, one a line, run as headchef at boot before the
  * login prompt (v0.47.0) - so a machine can come up with `vault 22` already

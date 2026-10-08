@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.57.4
+Current version: v0.57.5
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,21 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.57.5 (2026-10-08)  — run FILE
+  Eighteenth queue, item 2.
+  - `run FILE` runs a file of command lines as the cook who runs it: each
+    line through run_line, so ; && || $? ~ and quotes work; '#' lines are
+    comments; nothing stops it but the end or a clockout; its status is
+    the last line's. The cook must be able to read the file. Scripts may
+    run scripts, eight deep at most, so one that runs itself stops with a
+    message instead of running the kernel stack out.
+  - scripts/run-test.sh, in check.sh: a script with a comment, && ||,
+    quotes, ~ and $? leaves the same files with the same contents as sh
+    running the same lines (status 42 after); a cook's script runs as the
+    cook (~ is their home, /etc stays closed, status 1); a script the cook
+    may not read is refused; a script that runs itself stops eight deep
+    and the shell carries on.
 
 v0.57.4 (2026-10-08)  — BUILTINS TAKE QUOTED ARGUMENTS
   Eighteenth queue, item 1.

@@ -41,7 +41,7 @@ Find every builtin that takes a path or text, give them the same splitting
 (one shared helper), and test the ones that take paths on a file whose
 name has a space.
 
-## 2. run FILE
+## 2. run FILE — DONE v0.57.5
 
 A builtin that runs a file of command lines as the cook who runs it: each
 line through run_line, so ; && || $? ~ and quotes all work, '#' lines are
