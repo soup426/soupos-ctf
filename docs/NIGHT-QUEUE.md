@@ -40,7 +40,7 @@ someone else, and see who owns the file. Then decide between never reusing a
 uid and handing a fired cook's files to the headchef, and write down why.
 Also find the real upper bound on uids, given how the owner is stored on disk.
 
-## 2. A closed bowl closes what is inside it
+## 2. A closed bowl closes what is inside it — DONE v0.53.1
 
 Found while proving item 1: a cook refused at `cd /home/saucier` (rwx---) can
 still `pour /home/saucier/RECIPE.TXT`, because commands and syscalls check

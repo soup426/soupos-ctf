@@ -568,6 +568,14 @@ void syscall_dispatch(registers_t *r) {
             char path[FAT_PATH_MAX];
             if (copy_user_path(r->ebx, path) < 0) { r->eax = (uint32_t)-1; break; }
             if (!user_ok(r->edx, sizeof(udirent_t))) { r->eax = (uint32_t)-1; break; }
+#ifdef NO_CHALLENGE
+            /* Listing a bowl needs read on it, and search on the bowls above
+             * (v0.53.1); a closed home was listable by any program. */
+            if (!users_may(path[0] ? path : "/", 'r')) {
+                klog("[user] %s: readdir %s refused\n", pr ? pr->name : "?", path);
+                r->eax = (uint32_t)-1; break;
+            }
+#endif
             fat_entry_t *list = kmalloc(FAT_LS_MAX * sizeof(fat_entry_t));
             if (!list) { r->eax = (uint32_t)-1; break; }
             int n = fat_ls(path[0] ? path : "/", list, FAT_LS_MAX);

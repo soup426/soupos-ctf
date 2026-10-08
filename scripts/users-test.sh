@@ -136,4 +136,23 @@ grep -q "but no home: /home/saucier is not theirs" "$WORK/fire.log" \
     && echo "  ok    a rehired name does not inherit the old home" || { echo "  FAIL  rehire took over the old home"; fail=1; }
 [ "$(fsck.fat -n "$WORK/fire.img" 2>&1 | wc -l)" -le 2 ] \
     && echo "  ok    fsck is clean after the hand-over" || { echo "  FAIL  fsck after fire"; fsck.fat -n "$WORK/fire.img"; fail=1; }
+# ── a closed bowl closes what is inside it (v0.53.1) ──
+# Proven on v0.53.0: intern, refused at `cd /home/saucier`, read the file
+# inside by its full path with pour and with cat.elf, and listed the bowl
+# with ls.elf.
+cp disk.img "$WORK/bowl.img"
+boot "$WORK/bowl.img" "$WORK/bowl.log" "headchef" "rosemary" "WAIT:1" \
+    "hire saucier" "WAIT:1" "basil" "WAIT:1" "basil" "WAIT:2" "hire intern" "WAIT:1" "mint" "WAIT:1" "mint" "WAIT:2" "clockout" "WAIT:1" \
+    "saucier" "basil" "WAIT:2" "stir /home/saucier/RECIPE.TXT the secret sauce" "WAIT:1" "clockout" "WAIT:1" \
+    "intern" "mint" "WAIT:2" "pour /home/saucier/RECIPE.TXT" "WAIT:1" "cook cat.elf /home/saucier/RECIPE.TXT" "WAIT:2" \
+    "cook ls.elf /home/saucier" "WAIT:2" "cook ls.elf /home/intern" "WAIT:2" "clockout" "WAIT:1" \
+    "saucier" "basil" "WAIT:2" "pour /home/saucier/RECIPE.TXT" "WAIT:1"
+grep -q "Permission denied: /home/saucier/RECIPE.TXT" "$WORK/bowl.log" \
+    && echo "  ok    the shell will not read a file inside another cook's home" || { echo "  FAIL  pour read through a closed bowl"; fail=1; }
+grep -q "/cat.elf: open /home/saucier/RECIPE.TXT for reading refused" "$WORK/bowl.log" \
+    && echo "  ok    nor will SYS_OPEN" || { echo "  FAIL  cat.elf read through a closed bowl"; fail=1; }
+grep -q "/ls.elf: readdir /home/saucier refused" "$WORK/bowl.log" && ! grep -q "LS f 17 RECIPE.TXT" "$WORK/bowl.log" \
+    && echo "  ok    and SYS_READDIR will not list it" || { echo "  FAIL  ls.elf listed a closed bowl"; fail=1; }
+[ "$(grep -c "^the secret sauce" "$WORK/bowl.log")" = "1" ] && ! grep -q "readdir /home/intern refused" "$WORK/bowl.log" \
+    && echo "  ok    the owner still reads it, and a cook still lists their own home" || { echo "  FAIL  the owner was locked out too"; fail=1; }
 exit $fail

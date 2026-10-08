@@ -295,8 +295,8 @@ uint8_t     users_current_uid(void)        { return eff_uid(); }
 const char *users_current_name(void)       { return users_name_of(eff_uid()); }
 int         users_is_headchef(void)        { return eff_uid() == 0; }
 
-int users_may(const char *path, char need) {
-    if (users_is_headchef()) return 1;
+/* One entry's own mode against what the current cook needs. */
+static int mode_allows(const char *path, char need) {
     uint8_t owner, mode;
     if (fat_stat(path, &owner, &mode) < 0) return 1;     /* no such path */
     uint8_t bits;
@@ -307,6 +307,24 @@ int users_may(const char *path, char need) {
         bits = (need == 'r') ? FAT_PERM_AR :
                (need == 'w') ? FAT_PERM_AW : FAT_PERM_AX;
     return (mode & bits) ? 1 : 0;
+}
+
+/* `need` on the path itself, AND search (x) on every bowl above it
+ * (v0.53.1). Without the second half a closed bowl closed only `cd`: a cook
+ * refused at /home/saucier still read /home/saucier/RECIPE.TXT by its full
+ * path, from the shell and through SYS_OPEN alike. Paths here are absolute
+ * (resolved by the shell, or copied in by a syscall). */
+int users_may(const char *path, char need) {
+    if (users_is_headchef()) return 1;
+    char up[FAT_PATH_MAX];
+    size_t n = strlen(path);
+    if (n >= sizeof(up)) return 0;
+    for (size_t i = 1; i < n; i++) {
+        if (path[i] != '/') continue;
+        memcpy(up, path, i); up[i] = '\0';               /* "/home", "/home/saucier", ... */
+        if (!mode_allows(up, 'x')) return 0;
+    }
+    return mode_allows(path, need);
 }
 
 int users_set_secret(const char *name, const char *secret) {
