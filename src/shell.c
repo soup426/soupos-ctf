@@ -664,6 +664,40 @@ static void cmd_menu(void) {
     t_color(VGA_LIGHT_GREY, VGA_BLACK);
 }
 
+
+/* Quotes for builtins (v0.57.4), with the rules programs get from uargv:
+ * outside '...' and "..." a space ends a word; inside them everything is
+ * kept and the quotes are dropped. */
+/* One word: skip spaces, read a word (quotes dropped) into out; returns
+ * where the rest of the line starts. */
+static const char *first_word(const char *s, char *out, int max) {
+    while (*s == ' ') s++;
+    int n = 0; char q = 0;
+    while (*s && (q || *s != ' ')) {
+        if (q) { if (*s == q) q = 0; else if (n < max - 1) out[n++] = *s; }
+        else if (*s == '\'' || *s == '"') q = *s;
+        else if (n < max - 1) out[n++] = *s;
+        s++;
+    }
+    out[n] = '\0';
+    while (*s == ' ') s++;
+    return s;
+}
+/* The whole rest of the line, quotes dropped and spaces kept, for the
+ * builtins that take one path or a text (pour "my file", slurp 'a  b'). */
+static const char *uq_args(const char *raw) {
+    static char out[INPUT_MAX];
+    int n = 0; char q = 0;
+    while (*raw == ' ') raw++;
+    for (; *raw && n < INPUT_MAX - 1; raw++) {
+        if (q) { if (*raw == q) q = 0; else out[n++] = *raw; }
+        else if (*raw == '\'' || *raw == '"') q = *raw;
+        else out[n++] = *raw;
+    }
+    while (n > 0 && out[n - 1] == ' ' && !q) n--;
+    out[n] = '\0';
+    return out;
+}
 static void cmd_slurp(const char *args) {
     t_puts(args);
     t_putc('\n');
@@ -905,14 +939,10 @@ static void cmd_stir(const char *args) {
         t_puts("Usage: stir <file> <content>\n");
         return;
     }
-    /* Split "filename rest of line" */
-    const char *p = args;
-    while (*p && *p != ' ') p++;
-    int flen = (int)(p - args);
+    /* Split "filename rest of line"; either may be quoted (v0.57.4). */
     char arg_name[FAT_PATH_MAX];
-    if (flen >= FAT_PATH_MAX) flen = FAT_PATH_MAX - 1;
-    memcpy(arg_name, args, (uint32_t)flen);
-    arg_name[flen] = '\0';
+    const char *p = first_word(args, arg_name, FAT_PATH_MAX);
+    p = uq_args(p);
     while (*p == ' ') p++;
 
     char path[FAT_PATH_MAX];
@@ -970,14 +1000,8 @@ static uint8_t copy_buf[COPY_BUF_MAX];
 
 /* Split "a b" (leading/space-separated) into two tokens. 0 if both present. */
 static int split_two(const char *args, char *first, char *second) {
-    while (*args == ' ') args++;
-    int i = 0;
-    while (*args && *args != ' ' && i < FAT_PATH_MAX - 1) first[i++] = *args++;
-    first[i] = '\0';
-    while (*args == ' ') args++;
-    i = 0;
-    while (*args && *args != ' ' && i < FAT_PATH_MAX - 1) second[i++] = *args++;
-    second[i] = '\0';
+    args = first_word(args, first, FAT_PATH_MAX);       /* quotes allowed (v0.57.4) */
+    first_word(args, second, FAT_PATH_MAX);
     return (first[0] && second[0]) ? 0 : -1;
 }
 
@@ -2673,11 +2697,7 @@ static void cmd_perms(const char *args) {
     if (!*args) { t_puts("Usage: perms <file> [rwxrwx]\n"); return; }
 
     char arg_name[FAT_PATH_MAX];
-    int i = 0;
-    while (args[i] && args[i] != ' ' && i < FAT_PATH_MAX - 1) { arg_name[i] = args[i]; i++; }
-    arg_name[i] = '\0';
-    const char *spec = args + i;
-    while (*spec == ' ') spec++;
+    const char *spec = first_word(args, arg_name, FAT_PATH_MAX);   /* quotes allowed (v0.57.4) */
 
     char path[FAT_PATH_MAX];
     resolve_path(arg_name, path);
@@ -4094,7 +4114,7 @@ static void dispatch(const char *buf) {
     else if (str_eq(p, "reheat"))     { if (headchef_only("reboot the machine")) cmd_reheat(); }
     else if (str_startswith(p, "slurp")) {
         const char *a = p + 5; while (*a == ' ') a++;
-        cmd_slurp(a);
+        cmd_slurp(uq_args(a));
     }
     else if (str_startswith(p, "season")) {
         const char *a = p + 6; while (*a == ' ') a++;
@@ -4103,7 +4123,7 @@ static void dispatch(const char *buf) {
     else if (str_eq(p, "serve"))       cmd_serve();
     else if (str_startswith(p, "pour")) {
         const char *a = p + 4; while (*a == ' ') a++;
-        cmd_pour(a);
+        cmd_pour(uq_args(a));
     }
     else if (str_startswith(p, "stir")) {
         const char *a = p + 4; while (*a == ' ') a++;
@@ -4111,7 +4131,7 @@ static void dispatch(const char *buf) {
     }
     else if (str_startswith(p, "strain")) {
         const char *a = p + 6; while (*a == ' ') a++;
-        cmd_strain(a);
+        cmd_strain(uq_args(a));
     }
     else if (str_startswith(p, "decant")) {
         const char *a = p + 6; while (*a == ' ') a++;
@@ -4123,7 +4143,7 @@ static void dispatch(const char *buf) {
     }
     else if (str_startswith(p, "jot")) {
         const char *a = p + 3; while (*a == ' ') a++;
-        cmd_jot(a);
+        cmd_jot(uq_args(a));
     }
     else if (str_startswith(p, "ai")) {
         const char *a = p + 2; while (*a == ' ') a++;
@@ -4137,15 +4157,15 @@ static void dispatch(const char *buf) {
     else if (str_eq(p, "bowltest"))  { if (headchef_only("run the disk self-tests")) cmd_bowltest(); }
     else if (str_startswith(p, "mkbowl")) {
         const char *a = p + 6; while (*a == ' ') a++;
-        cmd_mkbowl(a);
+        cmd_mkbowl(uq_args(a));
     }
     else if (str_startswith(p, "rmbowl")) {
         const char *a = p + 6; while (*a == ' ') a++;
-        cmd_rmbowl(a);
+        cmd_rmbowl(uq_args(a));
     }
     else if (str_startswith(p, "cd")) {
         const char *a = p + 2; while (*a == ' ') a++;
-        cmd_cd(a);
+        cmd_cd(uq_args(a));
     }
     else if (str_eq(p, "preempttest")) cmd_preempttest();
     else if (str_eq(p, "fatstress"))  { if (headchef_only("run the disk self-tests")) cmd_fatstress(); }
@@ -4176,7 +4196,7 @@ static void dispatch(const char *buf) {
     }
     else if (str_startswith(p, "hash")) {
         const char *a = p + 4; while (*a == ' ') a++;
-        cmd_hash(a);
+        cmd_hash(uq_args(a));
     }
     else if (str_startswith(p, "beep")) {
         const char *a = p + 4; while (*a == ' ') a++;
@@ -4200,7 +4220,7 @@ static void dispatch(const char *buf) {
     else if (str_eq(p, "ps"))          cmd_ps();
     else if (str_eq(p, "who"))         cmd_who();
     else if (str_eq(p, "last"))        cmd_last();
-    else if (str_eq(p, "du") || str_startswith(p, "du ")) cmd_du(p + 2);
+    else if (str_eq(p, "du") || str_startswith(p, "du ")) cmd_du(uq_args(p + 2));
     else if (str_eq(p, "kitchen"))     cmd_kitchen();
     else if (str_eq(p, "orders"))      cmd_orders();
     else if (str_eq(p, "scraps"))      cmd_scraps();

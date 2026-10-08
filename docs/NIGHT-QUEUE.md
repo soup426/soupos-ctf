@@ -33,7 +33,7 @@ a file.
 
 ---
 
-## 1. Builtins take quoted arguments
+## 1. Builtins take quoted arguments — DONE v0.57.4
 
 Programs have understood quotes since v0.57.2; builtins still take their
 raw text, so `pour "my file.txt"` looks for a name with quotes in it.
@@ -48,12 +48,21 @@ line through run_line, so ; && || $? ~ and quotes all work, '#' lines are
 comments, and it stops on nothing. Its status is the last line's. Compare
 what a small script leaves behind with sh running the same lines.
 
-## 3. seq.elf
+## 3. Bowls with long names
+
+Found testing item 1: `mkbowl "/a bowl"` says "Bowl ready" and leaves a
+directory entry named `A BOWL` (a space inside an 8.3 name, which 8.3 does
+not allow); cd and rmbowl then cannot find it. fat_mkdir never writes the
+long-name entries that fat_write does for files. Make bowls get long names
+the same way (and their alias), and test with a space and with a name
+longer than 8.3, checked with mtools and fsck.
+
+## 4. seq.elf
 
 `seq LAST`, `seq FIRST LAST`, `seq FIRST STEP LAST`, integers, negatives
 and counting down included. Compare with the host's seq.
 
-## 4. Doom at the framebuffer's own resolution — DEFERRED
+## 5. Doom at the framebuffer's own resolution — DEFERRED
 
 Carried; the user asked to keep to OS work.
 

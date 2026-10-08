@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.57.3
+Current version: v0.57.4
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,23 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.57.4 (2026-10-08)  — BUILTINS TAKE QUOTED ARGUMENTS
+  Eighteenth queue, item 1.
+  - Builtins took their raw text, so `pour "my file.txt"` looked for a name
+    with quotes in it. Two helpers with uargv's rules: first_word() reads
+    one word (quotes dropped), used by split_two (decant, relabel), perms
+    and stir; uq_args() unquotes the rest of the line for the builtins
+    that take one path or a text: cd, pour, strain, jot, mkbowl, rmbowl,
+    du, slurp, hash.
+  - Found by the test, and queued as item 3: `mkbowl "/a bowl"` reports
+    success but fat_mkdir writes no long names, so the bowl is stored as
+    `A BOWL` (a space inside an 8.3 name) and cd and rmbowl cannot find
+    it. Quoting itself is tested here with an 8.3 bowl name.
+  - scripts/bquote-test.sh, in check.sh: pour, stir (a quoted name and
+    quoted text with two spaces), decant then relabel (both kinds of
+    quote), perms, strain on names with spaces; mkbowl, cd and rmbowl on a
+    quoted bowl; slurp keeps its quoted spaces.
 
 v0.57.3 (2026-10-08)  — ~ IS THE COOK'S HOME
   Seventeenth queue, item 2.
