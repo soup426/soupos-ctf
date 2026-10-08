@@ -78,7 +78,7 @@ change on this list, so it is staged:
   the terminal of the shell that cooked it), which is what makes `exec`
   honest: a real exit status and no echoed prompt.
 
-## 3. A guard page under the user stack, and lazy stack growth
+## 3. A guard page under the user stack, and lazy stack growth — DONE v0.37.0
 
 The stack is mapped eagerly at exec and overflow walks silently into
 whatever is below. One unmapped page below the stack turns that into a kill

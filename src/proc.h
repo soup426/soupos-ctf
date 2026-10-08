@@ -47,6 +47,7 @@ typedef struct proc {
     uint32_t      brk;                 /* user heap break (sbrk)            */
     uint32_t      upages;              /* user pages mapped, vs PROC_PAGE_CAP */
     uint32_t      demand_pages;        /* heap pages faulted in on first touch */
+    uint32_t      stack_pages;         /* stack pages grown on demand (v0.37.0) */
     uint32_t      start_tick;          /* when it was spawned, for the exit line */
     uint16_t     *swap_slot;           /* heap page -> swap slot + 1, or 0 (swap.c) */
     uint16_t     *fifo;                /* resident heap pages, oldest first    */

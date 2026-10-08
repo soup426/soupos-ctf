@@ -169,6 +169,9 @@ void proc_exit(proc_t *p, int exit_code) {
          p->pid, p->name, exit_code, pmm_free_pages(), timer_get_ticks() - p->start_tick);
     if (p->demand_pages)
         klog("[demand] %s faulted in %u pages on first touch\n", p->name, p->demand_pages);
+    if (p->stack_pages)
+        klog("[stack] %s grew its stack by %u pages\n", p->name, p->stack_pages);
+    p->stack_pages = 0;
     if (p->swaps_out || p->swaps_in)
         klog("[swap] %s: %u pages out, %u back in\n", p->name, p->swaps_out, p->swaps_in);
     swap_release(p);

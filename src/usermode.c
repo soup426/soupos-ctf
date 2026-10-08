@@ -40,7 +40,9 @@
 #define USER_HI       0xC8000000u
 #define USER_HEAP     0xC4000000u
 #define USTACK_TOP    0xC8000000u    /* top of the user stack            */
-#define USTACK_PAGES  4              /* 16 KB stack                      */
+#define USTACK_PAGES  4              /* mapped at exec; the rest on demand */
+#define USTACK_MAX    (1024u * 1024u) /* the stack may grow to 1 MB...  */
+#define USTACK_GUARD  (USTACK_TOP - USTACK_MAX)  /* ...and this page is never mapped */
 #define MAX_ELF       (256 * 1024)   /* largest program we'll load       */
 
 /* ---- ELF32 ---- */
@@ -117,6 +119,19 @@ int usermode_demand_page(uint32_t cr2, uint32_t err) {
     proc_t *pr = proc_current();
     if (!pr) return -1;
     if (err & 1) return -1;                             /* present: a protection fault, real */
+    /* The stack grows down on demand to 1 MB. Its lowest page is the guard:
+     * never mapped, so running off the end is a clean kill with its own
+     * name instead of a silent walk into the heap below. */
+    if (cr2 >= USTACK_GUARD && cr2 < USTACK_GUARD + 4096) {
+        klog("[user] %s: stack overflow at 0x%x (guard page)\n", pr->name, cr2);
+        return -1;
+    }
+    if (cr2 > USTACK_GUARD && cr2 < USTACK_TOP) {
+        if (pr->upages >= PROC_PAGE_CAP && swap_out_one(pr) < 0) return -1;
+        if (map_user_page(pr, cr2 & ~0xFFFu) < 0) return -1;
+        pr->stack_pages++;
+        return 0;
+    }
     if (cr2 < USER_HEAP || cr2 >= pr->brk) return -1;   /* outside the heap: real */
 
     /* On disk already? Then this is a page coming back, not a new one. */
@@ -238,6 +253,8 @@ int usermode_run(proc_t *pr) {
     paging_switch(pdir);
 
     pr->upages = 0;
+    pr->demand_pages = 0;     /* a reused slot must not carry the last program's counts */
+    pr->stack_pages  = 0;
     pr->brk    = USER_HEAP;
     /* From 3 up only: 0-2 may hold the stdin/stdout the spawner bound (a pipe
      * end or a redirected file), and clearing them here would quietly undo
@@ -423,7 +440,7 @@ void syscall_dispatch(registers_t *r) {
                 r->eax = old; break;
             }
             uint32_t newbrk = old + (uint32_t)incr;
-            if (newbrk > USTACK_TOP - (uint32_t)USTACK_PAGES * 4096) {
+            if (newbrk > USTACK_GUARD) {
                 r->eax = (uint32_t)-1; break;   /* would hit the stack */
             }
             /* The break moves; no page is mapped until it is touched. A

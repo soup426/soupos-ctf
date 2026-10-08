@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.36.0
+Current version: v0.37.0
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,25 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.37.0 (2026-10-07)  — THE STACK GROWS, AND HAS A GUARD
+  Fourth queue, item 3.
+  - The user stack was 16 KB mapped at exec, and running past it walked
+    silently into whatever was below. It is now a 1 MB region: the top
+    four pages are mapped at exec as before, the rest come on demand
+    through the same fault path as the heap (a not-present fault inside
+    the region maps a page and retries, evicting a heap page to swap
+    first if the process is at its cap), and the lowest page is a guard
+    that is never mapped. A fault there is logged as "[user] <prog>:
+    stack overflow at 0x..." and the program is killed; the shell goes on.
+    The heap's break may now rise only to the guard.
+  - deep.elf proves both: 600 levels of recursion with a written
+    kilobyte each, every frame checked on the way back up (600 KB, nearly
+    forty times the old stack), and `deep.elf forever`, which hits the
+    guard. The exit line reports "[stack] grew its stack by N pages".
+  - Found on the way: a process's demand-page count was never reset, so
+    a reused process slot carried the last program's count into its exit
+    line. Both counters are now reset at exec. Gate 91.
 
 v0.36.0 (2026-10-07)  — A SHELL OF ITS OWN FOR EVERY SSH SESSION
   Fourth queue, item 2, stage (c), the last. Until now an SSH login drove

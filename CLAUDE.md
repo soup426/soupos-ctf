@@ -925,6 +925,9 @@ driver's polling makes swap slow under KVM; the gate boots under TCG.
 
 ## The heap is demand-paged (v0.33.0)
 
+Since v0.37.0 the user stack is too: `USTACK_MAX` (1 MB) with four pages
+mapped at exec, the rest on demand, and `USTACK_GUARD` never mapped.
+
 `SYS_SBRK` only moves `pr->brk`. `usermode_demand_page()` (called first thing
 in `isr_handler` for vector 14, **before** the ring-3 kill and the ring-0
 panic) maps a zeroed page for a not-present fault inside `[USER_HEAP, brk)`,

@@ -19,6 +19,8 @@ gate_drive \
     "cook lazy.elf absurd" "WAIT:5" \
     "cook lazy.elf read" "WAIT:2" \
     "cook crash.elf" "WAIT:2" \
+    "cook deep.elf" "WAIT:3" \
+    "cook deep.elf forever" "WAIT:3" \
     "cook hello.elf" "WAIT:2" "cook hello.elf" "WAIT:2"
 
 check "boot reaches the scheduler"   '\[boot\] scheduler ok'
@@ -50,6 +52,11 @@ check "past cap and swap together is refused"     '\[demand\] /lazy\.elf: no pag
 check "and that program was killed for it"        '\[user\] fault exc=14 .* -> program killed'
 check "swap was found past the volume at boot"    '\[swap\] 4096 pages past the volume'
 check "a wild fault still kills" '/crash\.elf exited with code'
+# The stack grows on demand to 1 MB, far past the 16 KB it used to be, and
+# its guard page turns running off the end into a named kill.
+check "a deep stack grows on demand"        'DEEP reached 600 levels ok'
+check "the kernel counted the stack growth" '\[stack\] /deep\.elf grew its stack by [0-9]+ pages'
+check "running off the stack hits the guard" '\[user\] /deep\.elf: stack overflow at 0x'
 # The kernel's own first touch, inside read(): a ring-0 page fault that has
 # to be answered the same way, not treated as a panic.
 check "a syscall can fault in an untouched page" 'LAZY kernel wrote [0-9]+ bytes into an untouched page ok'
