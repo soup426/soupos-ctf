@@ -51,7 +51,7 @@ promptly), and run /etc/rc.sc - a soupyc script, if present - as headchef
 after it. A test boots an image whose rc.sc opens the vault and logs in over
 SSH with nothing typed at the console.
 
-## 3. Files get real timestamps
+## 3. Files get real timestamps — DONE v0.47.1
 
 Everything soupOS creates is dated 1980 (mdir shows it), because the write
 time and date fields are left zero. Stamp them from the RTC on create and on

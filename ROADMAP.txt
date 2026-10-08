@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.47.0
+Current version: v0.47.1
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,18 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.47.1 (2026-10-07)  — FILES ARE DATED
+  Sixth queue, item 3.
+  - Every file and bowl soupOS made was dated 1980-00-00 0:00: the write
+    time and date fields were left zero. They are now stamped from the
+    RTC on every create and overwrite (write time, write date, access
+    date), and the creation date is set once and kept across overwrites.
+    The creation TIME stays as it is: its low byte holds the mode.
+  - Checked against the host: mdir shows a file soupOS just wrote dated to
+    the minute of the host's UTC clock (QEMU's RTC runs in UTC), and fsck
+    stays clean. fsck-test now asserts KEEP.TXT is dated within three
+    minutes of the host's UTC time. Gate 99.
 
 v0.47.0 (2026-10-07)  — THE MACHINE COMES UP READY
   Sixth queue, item 2, half of which was already true.

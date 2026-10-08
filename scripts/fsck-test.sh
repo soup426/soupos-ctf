@@ -59,4 +59,17 @@ fi
 mtype -i "$TESTDISK" ::KEEP.TXT 2>/dev/null | grep -q "this one stays" \
     && echo "  ok    a file soupOS wrote reads back through mtools" \
     || { echo "  FAIL  mtools could not read KEEP.TXT"; fail=1; }
+# Timestamps (v0.47.1): a file soupOS just wrote is dated now, not 1980.
+# QEMU's RTC is UTC, so compare with the host's UTC clock.
+python3 - "$TESTDISK" <<'PY' && echo "  ok    a file soupOS wrote is dated now (RTC, UTC)" || { echo "  FAIL  KEEP.TXT's timestamp is not now"; fail=1; }
+import datetime, re, subprocess, sys
+out = subprocess.run(["mdir", "-i", sys.argv[1], "::/KEEP.TXT"], capture_output=True, text=True).stdout
+m = re.search(r"KEEP\s+TXT\s+\d+\s+(\d{4})-(\d\d)-(\d\d)\s+(\d+):(\d\d)", out)
+if not m: print("        no date in:", out.strip().splitlines()[-3:] if out else out); sys.exit(1)
+y, mo, d, h, mi = map(int, m.groups())
+stamped = datetime.datetime(y, mo, d, h, mi, tzinfo=datetime.timezone.utc)
+gap = abs((datetime.datetime.now(datetime.timezone.utc) - stamped).total_seconds())
+print(f"        stamped {stamped:%Y-%m-%d %H:%M} UTC, {gap:.0f} s from now")
+sys.exit(0 if gap < 180 else 1)
+PY
 exit $fail

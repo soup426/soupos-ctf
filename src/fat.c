@@ -1,4 +1,5 @@
 #include "fat.h"
+#include "rtc.h"
 #include "users.h"
 #include "timer.h"
 #include "klog.h"
@@ -130,6 +131,29 @@ static int meta_get(const dirent_t *de, uint8_t *mode, uint8_t *owner) {
         return 1;
     }
     return 0;                                            /* another tool's file */
+}
+
+/* FAT's date and time encodings, from the RTC (v0.47.1). Until then every
+ * file soupOS made was dated 1980-00-00 0:00, because these were left zero.
+ * time: hours<<11 | minutes<<5 | seconds/2;  date: (year-1980)<<9 | month<<5 | day */
+static void now_fat(uint16_t *date, uint16_t *time) {
+    rtc_time_t t;
+    rtc_read(&t);
+    uint16_t y = t.year >= 1980 ? (uint16_t)(t.year - 1980) : 0;
+    *date = (uint16_t)((y << 9) | ((t.month & 15) << 5) | (t.day & 31));
+    *time = (uint16_t)(((t.hour & 31) << 11) | ((t.minute & 63) << 5) | ((t.second / 2) & 31));
+}
+
+/* A write stamps the write time and the access date; a creation also sets
+ * the creation date. The creation TIME's low byte holds the mode (meta_put),
+ * so only its date is set here. */
+static void stamp(dirent_t *de, int created, uint16_t keep_crt_date) {
+    uint16_t d, t;
+    now_fat(&d, &t);
+    de->wrt_date = d;
+    de->wrt_time = t;
+    de->acc_date = d;
+    de->crt_date = created ? d : keep_crt_date;
 }
 
 static void meta_put(dirent_t *de, uint8_t mode, uint8_t owner) {
@@ -1019,6 +1043,7 @@ static int fat_write_impl(const char *path, const uint8_t *buf, uint32_t size) {
     memcpy(ent->ext,  fext,  3);
     ent->attr           = FAT_ATTR_ARCHIVE;
     meta_put(ent, ent_mode, ent_owner);        /* soupOS owner and mode   */
+    stamp(ent, !exists, exists ? existing.crt_date : 0);
     ent->cluster_lo     = (uint16_t)(first_cluster & 0xFFFF);
     ent->file_size      = size;
     /* Past this point the entry references the chain, so a failure here must
@@ -1118,6 +1143,7 @@ static int fat_mkdir_impl(const char *path) {
     memcpy(ent->ext,  fext,  3);
     ent->attr           = FAT_ATTR_DIR;
     meta_put(ent, FAT_PERM_DEFAULT, creator_now());   /* soupOS owner and mode */
+    stamp(ent, 1, 0);
     ent->cluster_lo     = (uint16_t)(newcl & 0xFFFF);
     ent->file_size      = 0;
     return ata_write_sector(slot_lba, sec_buf);
