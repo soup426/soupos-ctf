@@ -333,6 +333,19 @@ vfs_node_t *vfs_open(const char *path, int flags) {
         /* Write mode: buffer is created on first write; an empty file is
          * still produced if the handle is closed with nothing written. */
         n->ops = &mem_file_ops;
+        /* Append (v0.56.0): start the buffer with what the file holds, so
+         * the whole-file write on close keeps it. */
+        if ((flags & VFS_APPEND) && fat_exists(p) && !fat_is_dir(p)) {
+            int fd = fat_fopen(p);
+            uint32_t sz = fd >= 0 ? fat_fsize(fd) : 0;
+            if (fd >= 0) fat_fclose(fd);
+            if (sz) {
+                uint32_t got = 0;
+                if (mem_ensure(n, sz) < 0 || fat_read(p, n->buf, sz, &got) < 0) { n->used = 0; return 0; }
+                if (got > sz) got = sz;               /* fat_read reports the file's size */
+                n->size = n->pos = got;
+            }
+        }
         return n;
     }
 

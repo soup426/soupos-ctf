@@ -32,7 +32,7 @@ make pipes worth having. Each is checked against the same tool on the host.
 
 ---
 
-## 1. >> appends
+## 1. >> appends — DONE v0.56.0
 
 `cook echo.elf x > F` overwrites; nothing appends. Add `>>` to the shell's
 redirection (the cook's write permission rules as for `>`), and check the

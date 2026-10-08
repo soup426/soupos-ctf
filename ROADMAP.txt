@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.55.6
+Current version: v0.56.0
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,21 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.56.0 (2026-10-08)  — >> APPENDS, AND REDIRECTION ASKS THE BOWL
+  Fourteenth queue, item 1.
+  - `>>` appends: VFS_APPEND starts the write buffer with what the file
+    holds (the whole-file write on close keeps it), and makes the file if
+    it is not there. The tokenizer had always split `>>` into two `>`, so
+    the second became the output file's NAME; it is one token now.
+  - Found on the way: `>` to a NEW file never checked the bowl. Proven on
+    v0.55.6: the ordinary cook's `cook echo.elf evil > /etc/EVIL.TXT` made
+    the file in a bowl closed to cooks. A new file now needs write on its
+    bowl, as SYS_OPEN has always asked; > and >> alike.
+  - scripts/append-test.sh, in check.sh: `>` then two `>>` give the same
+    bytes as the host shell's (cmp); a pipeline's output appends; >> makes
+    a missing file; a cook appends in their own home; neither > nor >>
+    makes a file in /etc for a cook; fsck is clean.
 
 v0.55.6 (2026-10-08)  — A MESSAGE OF THE DAY
   Thirteenth queue, item 3 (item 2, swap shares, is set aside; see the

@@ -1190,6 +1190,11 @@ static int shell_token(const char **sp, char *out, int max) {
     while (*s == ' ' || *s == '\t') s++;
     if (!*s) { *sp = s; return 0; }
 
+    if (s[0] == '>' && s[1] == '>') {             /* append (v0.56.0) */
+        out[0] = '>'; out[1] = '>'; out[2] = '\0';
+        *sp = s + 2;
+        return 1;
+    }
     if (*s == '<' || *s == '>' || *s == '|' || *s == '&') {
         out[0] = *s++; out[1] = '\0';
         *sp = s;
@@ -1228,12 +1233,18 @@ static void cmd_cook(const char *args) {
     stage_t st[PIPE_MAX_STAGES];
     char infile[FAT_PATH_MAX];  infile[0]  = '\0';
     char outfile[FAT_PATH_MAX]; outfile[0] = '\0';
+    int  append = 0;                               /* >> (v0.56.0) */
     int  nst = 1, background = 0;
     st[0].prog[0] = st[0].args[0] = '\0';
 
     char tok[FAT_PATH_MAX];
     const char *sp = args;
     while (shell_token(&sp, tok, sizeof(tok))) {
+        if (str_eq(tok, ">>")) {
+            if (!shell_token(&sp, outfile, sizeof(outfile))) { cook_err("No file after >>."); return; }
+            append = 1;
+            continue;
+        }
         if (!tok[1] && (tok[0] == '|' || tok[0] == '<' || tok[0] == '>' || tok[0] == '&')) {
             switch (tok[0]) {
             case '|':
@@ -1297,7 +1308,18 @@ static void cmd_cook(const char *args) {
         char path[FAT_PATH_MAX];
         resolve_path(outfile, path);
         if (fat_exists(path) && !may(path, 'w')) { deny(path); if (fin) vfs_close(fin); return; }
-        fout = vfs_open(path, VFS_WRONLY | VFS_CREATE);
+        /* A new file needs write on its bowl, as SYS_OPEN has always asked
+         * (v0.56.0). Until then `> /etc/EVIL.TXT` from an ordinary cook made
+         * the file in a bowl closed to cooks. */
+        if (!fat_exists(path)) {
+            char parent[FAT_PATH_MAX];
+            strcpy(parent, path);
+            char *slash = parent + strlen(parent);
+            while (slash > parent && *slash != '/') slash--;
+            if (slash == parent) strcpy(parent, "/"); else *slash = '\0';
+            if (!may(parent, 'w')) { deny(parent); if (fin) vfs_close(fin); return; }
+        }
+        fout = vfs_open(path, VFS_WRONLY | (append ? VFS_APPEND : VFS_CREATE));
         if (!fout) { cook_err("Cannot write the output file."); if (fin) vfs_close(fin); return; }
     }
 

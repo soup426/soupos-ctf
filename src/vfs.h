@@ -21,6 +21,7 @@
 #define VFS_WRONLY  0x02
 #define VFS_RDWR    0x03
 #define VFS_CREATE  0x04        /* create/truncate a FAT file on open   */
+#define VFS_APPEND  0x08        /* write after what the file holds (>>, v0.56.0) */
 
 /* seek whence - values match FAT_SEEK_* on purpose. */
 #define VFS_SEEK_SET 0
