@@ -1,11 +1,10 @@
 # Night queue
 
-Nineteenth queue. The first eighteen are in `docs/queue-archive-2026-10-0*.md`.
+Twentieth queue. The first nineteen are in `docs/queue-archive-2026-10-0*.md`.
 Two items wait on a person, with notes in their archives: the seventh's
-syscall-pointer item and the thirteenth's swap-shares item. The eighteenth
-gave builtins quotes, added run FILE and seq, and fixed long-named bowls
-and orphaned long names; this one gives scripts variables, a test command
-to branch on, and globs.
+syscall-pointer item and the thirteenth's swap-shares item. The nineteenth
+gave the shell variables and globs and added test.elf; this one gives
+programs a stat call, which test.elf has had to do without.
 
 ## Standing rules
 
@@ -33,26 +32,24 @@ to branch on, and globs.
 
 ---
 
-## 1. Shell variables — DONE v0.58.0
+## 1. SYS_STAT
 
-`NAME=value` sets a variable for this shell (quotes allowed in the value);
-`$NAME` and `${NAME}` are replaced where a word may hold them, not inside
-'...'; an unset name is empty; `unset NAME` removes one. Each shell
-(console, each session) has its own. Compare a script's results with sh.
+Programs can open and list but not ask about a path. Add a stat call:
+size, bowl or not, owner, mode, for a path the cook may reach (search on
+the bowls above it; reading the file itself is not needed, as with stat).
+test.elf then uses it, and its written-down difference (an unreadable file
+counted as absent) goes away. Check against what perms and du say.
 
-## 2. test.elf — DONE v0.58.1
+## 2. ls.elf -l
 
-`test.elf` with -e -f -d FILE, -z -n STRING, S1 = S2, S1 != S2, and
--eq -ne -lt -le -gt -ge on integers, and ! in front: exit 0 when true, 1
-when false, 2 for a usage error, as test does. Compare exit codes with the
-host's test over the same cases.
+Mode, owner and size for each entry, through SYS_STAT, in the columns
+`serve` uses. Check every line against perms for the same names.
 
-## 3. Globs — DONE v0.58.3 (with v0.58.2: lowercase 8.3 names)
+## 3. find.elf
 
-* and ? in a program's argument are matched against the names in the
-bowl the word names (or the cwd), sorted as sh sorts them in the C locale;
-a word that matches nothing is passed as it is, as sh does; not inside
-quotes. Compare the expanded argument lists with sh over the same files.
+`find.elf [path] [-name PATTERN] [-type f|d]`: every name under a path,
+one per line, bowls it may not enter skipped. Compare with the host's find
+over the same tree, both sorted (FAT and ext4 list in different orders).
 
 ## 4. Doom at the framebuffer's own resolution — DEFERRED
 
