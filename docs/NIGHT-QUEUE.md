@@ -37,7 +37,7 @@ two more tools and makes the prompt finish words for you.
 Each line reversed, character by character, as rev does; a last line with
 no newline keeps none. Compare with the host's rev.
 
-## 2. label.elf
+## 2. label.elf — DONE v0.60.9
 
 Lines numbered as `nl -ba` numbers them (every line, empty ones included,
 the number right-aligned in six columns and a tab). Compare with the host.
@@ -48,6 +48,16 @@ Tab after part of the first word finishes it to a command name when only
 one fits (a builtin, or a program on the disk); after a later word it
 finishes a path in its bowl. More than one fit: complete the part they
 share, and a second Tab lists them. Test by typing.
+
+## 5. dregs keeps only the lines it will print
+
+Measured 2026-10-08: `cook tally.elf 1000000 | label.elf | dregs.elf -n 1`
+(about 8 MB through the pipe) fills swap ("[swap] full: 4096 pages") and
+dregs dies ("could not swap ... back in"). It reads the whole input and its
+doubling buffer leaves every old copy behind in the bump allocator. Keep
+only the last N lines (a ring of line starts over a bounded buffer, or
+reading a regular file from its end) so any size works; compare with the
+host's tail at that size.
 
 ## 4. Doom at the framebuffer's own resolution — DEFERRED
 

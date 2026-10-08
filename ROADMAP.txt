@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.8
+Current version: v0.60.9
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,21 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.9 (2026-10-08)  — LABEL
+  - label.elf numbers every line as `nl -ba` does: the number right-aligned
+    in six columns, then a tab, empty lines included, and a newline added to
+    a last line that has none. It streams in 4 KB pieces, so a million lines
+    go through a pipe in constant memory. nl's logical-page delimiter lines
+    are not special.
+  - scripts/label-test.sh compares ten forms with the host's nl -ba byte for
+    byte, up to seven-digit numbers.
+  - qemu_keys.py has UNTIL:<text>, which waits for <text> in the serial log
+    after the last line typed; label-test waits for each prompt that way
+    instead of guessing how long a million lines take.
+  - Found on the way: dregs.elf keeps its whole input in memory, so 8 MB of
+    piped lines fills swap and it dies. Queued as the twenty-fifth queue's
+    item 5.
 
 v0.60.8 (2026-10-08)  — FLIP
   - flip.elf turns every line backwards, byte by byte, as rev does under

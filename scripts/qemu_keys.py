@@ -75,9 +75,29 @@ if not os.environ.get('QEMU_KEYS_NOWAIT'):
             sys.exit('the login banner never appeared in ' + path)
         time.sleep(0.3)
 
+# UNTIL:<text> waits (up to 120 s) for <text> to reach the serial log after
+# the last line typed, for a command whose running time a fixed WAIT can only
+# guess (v0.60.9). It needs the log, so it is an error without one.
+log_path = serial_log()
+typed_at = 0
+def log_size():
+    try: return os.path.getsize(log_path)
+    except OSError: return 0
+
 for item in SCRIPT:
     if item.startswith('WAIT:'):
         time.sleep(float(item[5:]))
+        continue
+    if item.startswith('UNTIL:'):
+        if not log_path: sys.exit('UNTIL needs a -serial file: log')
+        want, end = item[6:].encode(), time.time() + 120
+        while time.time() < end:
+            with open(log_path, 'rb') as f:
+                f.seek(typed_at)
+                if want in f.read(): break
+            time.sleep(0.1)
+        else:
+            sys.exit('never saw %r in %s' % (item[6:], log_path))
         continue
     # KEY:<qemu keyname> sends one raw sendkey, for keys the typing map has no
     # character for (KEY:ctrl-c, KEY:esc, ...).
@@ -98,6 +118,7 @@ for item in SCRIPT:
         cmd(item[4:])
         time.sleep(0.5)
         continue
+    if log_path: typed_at = log_size()
     for ch in item:
         for k in keys_for(ch):
             cmd('sendkey ' + k)
