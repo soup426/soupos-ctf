@@ -896,7 +896,21 @@ static int fat_write_impl(const char *path, const uint8_t *buf, uint32_t size) {
     int  want_lfn = needs_lfn(leaf);
     int  lfn_ents = want_lfn ? (((int)strlen(leaf) + 12) / 13) : 0;
 
-    if (want_lfn) {
+    /* Overwriting keeps the file's own short name. Until v0.46.0 the alias
+     * was made first, and the existing file's alias (~1) made ~1 look taken,
+     * so an overwrite renamed the short entry to ~2 while its long-name
+     * entries kept ~1's checksum: the long name was orphaned, mtools could no
+     * longer find the file by it, and fsck reported a wrong checksum. Found by
+     * users-test reading /etc/kitchen back after `hire` rewrote it. */
+    dirent_t existing;
+    uint32_t ex_lba;
+    int      ex_idx;
+    int      exists = (dir_find(parent_cl, leaf, &existing, &ex_lba, &ex_idx) == 1);
+    if (exists) {
+        memcpy(fname, existing.name, 8);
+        memcpy(fext,  existing.ext,  3);
+        want_lfn = 0;                      /* its chain is already there and matches */
+    } else if (want_lfn) {
         if (make_alias(parent_cl, leaf, fname, fext) < 0) return -1;
     } else {
         parse_83(leaf, fname, fext);
@@ -914,7 +928,8 @@ static int fat_write_impl(const char *path, const uint8_t *buf, uint32_t size) {
     dirent_t de;
     uint32_t e_lba;
     int      e_idx;
-    if (dir_find(parent_cl, leaf, &de, &e_lba, &e_idx) == 1) {
+    if (exists) {
+        de = existing; e_lba = ex_lba; e_idx = ex_idx;
         if (de.attr & FAT_ATTR_DIR) return -1;     /* can't overwrite a bowl */
         uint32_t old = ((uint32_t)de.cluster_hi << 16) | de.cluster_lo;
         if (old >= 2 && fat_free_chain(old) < 0) return -1;

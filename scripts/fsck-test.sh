@@ -10,7 +10,10 @@
 # flags (fixed v0.41.0).
 #
 # The workload touches every write path: login (writes /etc/kitchen), a cook
-# hired (rewrites it), scripts that write, read back and delete files with
+# hired with both secret prompts answered (REWRITES a long-named file - the
+# path that orphaned long names until v0.46.0; an unanswered prompt once
+# swallowed the next commands and hid it), LONGWR.SC run twice (the second
+# run overwrites long-named files), scripts that write, read back and delete files with
 # long and short names, a bowl made, filled, emptied and removed, a
 # permission change, and fatstress's two concurrent writers.
 set -uo pipefail
@@ -37,8 +40,8 @@ qemu-system-i386 -accel kvm -cpu host \
 PID=$!
 sleep 4
 python3 scripts/qemu_keys.py "$MON" "headchef" "rosemary" "WAIT:1" \
-    "hire saucier" "WAIT:1" \
-    "soup LINES.SC" "WAIT:3" "soup LONGWR.SC" "WAIT:5" "soup LONGSTR.SC" "WAIT:4" \
+    "hire saucier" "WAIT:1" "basil" "WAIT:1" "basil" "WAIT:1" \
+    "soup LINES.SC" "WAIT:3" "soup LONGWR.SC" "WAIT:5" "soup LONGWR.SC" "WAIT:5" "soup LONGSTR.SC" "WAIT:4" \
     "mkbowl TBOWL" "WAIT:1" "stir TBOWL/A.TXT soup" "WAIT:1" "perms TBOWL/A.TXT rw----" "WAIT:1" \
     "strain TBOWL/A.TXT" "WAIT:1" "rmbowl TBOWL" "WAIT:1" \
     "stir KEEP.TXT this one stays" "WAIT:1" "perms KEEP.TXT rw-r--" "WAIT:1" \
