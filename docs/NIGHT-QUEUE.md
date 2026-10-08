@@ -46,7 +46,7 @@ did not. Left to right, as sh groups them. A builtin's status counts too
 (0, or 1 when it refused). Compare the sequence of what ran with the host
 shell running the same commands.
 
-## 3. $? in the shell
+## 3. $? in the shell — DONE v0.57.1
 
 The last command's exit status, substituted where `$?` appears in a
 command line. Test it after a program that exits 0, one that exits

@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.57.0
+Current version: v0.57.1
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,21 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.57.1 (2026-10-08)  — $? IN THE SHELL
+  Sixteenth queue, item 3.
+  - `$?` is replaced by the last status when its part of the line runs, as
+    in sh: in `a || echo $?` it is a's.
+  - Found while writing it: a program killed by a fault had status
+    code & 0xFF of its -(128+exception) exit code, 114 for a page fault,
+    which meant nothing. A negative code now gives -code, sh's 128+n: 137
+    for a kill (as before), 142 for a page fault. One difference from sh,
+    written down: Ctrl-C gives 137 (every kill is the same kill), where sh
+    says 130 for SIGINT.
+  - scripts/status-test.sh, in check.sh: $? after an exit 0 (0), after
+    hello.elf (42), after crash.elf's fault (142), after an unknown command
+    (127), twice in one part after || (42 42), after Ctrl-C (137), and
+    after a builtin the cook may not run (1). qemu_keys can now type '$'.
 
 v0.57.0 (2026-10-08)  — ; && AND || IN THE SHELL
   Sixteenth queue, item 2.

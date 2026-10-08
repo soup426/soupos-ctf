@@ -1405,7 +1405,10 @@ static void cmd_cook(const char *args) {
 
     /* The shell's own status, for `ssh host cmd`: the program's code, 126
      * for something that would not run, 128+9 for a kill, as sh does. */
-    cur_shell()->last_status = (code == PROC_EXIT_KILLED) ? 137 : (code == -1) ? 126 : (code & 0xFF);
+    /* A kill is -(128+9) and a fault -(128+exception), so -code is sh's
+     * 128+n either way: 137 for a kill, 142 for a page fault (v0.57.1; a
+     * fault used to come out as code & 0xFF, 114, which meant nothing). */
+    cur_shell()->last_status = (code == -1) ? 126 : (code < 0) ? ((-code) & 0xFF) : (code & 0xFF);
     if (code == PROC_EXIT_KILLED) {
         t_color(VGA_YELLOW, VGA_BLACK);
         t_printf("  [%s killed]\n", st[nst - 1].path);
@@ -4243,7 +4246,22 @@ static void run_line(const char *line) {
         int status = cur_shell()->last_status;
         int run = (op == ';') || (op == 'A' && status == 0) || (op == 'O' && status != 0);
         const char *q = seg; while (*q == ' ') q++;
-        if (run && *q) dispatch(seg);
+        if (run && *q) {
+            /* $? is the status when THIS part runs (v0.57.1), as in sh:
+             * in `a || echo $?` it is a's. */
+            char ex[INPUT_MAX];
+            int  k = 0;
+            for (int i = 0; seg[i] && k < INPUT_MAX - 1; i++) {
+                if (seg[i] == '$' && seg[i + 1] == '?') {
+                    char d[12]; int nd = 0; unsigned v = (unsigned)cur_shell()->last_status;
+                    do { d[nd++] = (char)('0' + v % 10); v /= 10; } while (v);
+                    while (nd && k < INPUT_MAX - 1) ex[k++] = d[--nd];
+                    i++;
+                } else ex[k++] = seg[i];
+            }
+            ex[k] = '\0';
+            dispatch(ex);
+        }
         if (cur_shell()->exiting || !next_op) break;
         op = next_op;
     }
