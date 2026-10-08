@@ -69,7 +69,9 @@ typedef struct proc {
     uint32_t      swapped;             /* pages on disk right now (v0.45.0) */
     uint32_t      esp0;                /* ring-0 stack while in ring 3      */
     vfs_node_t   *ufds[PROC_UFD_MAX];
-    uint8_t       err_as_out;          /* 2>&1: fd 2 writes go where fd 1 does (v0.60.21) */
+    uint8_t       err_as_out;          /* 2>&1: 1 fd 2 writes go where fd 1 does (v0.60.21);
+                                        * 2 to the terminal's stdout, fd 1 being
+                                        * a file named after the 2>&1 (v0.60.31) */
     char          args[PROC_ARGS_MAX];
     char          env[PROC_ENV_MAX];
     wait_queue_t  waiters;             /* the parent blocks here            */
@@ -92,7 +94,8 @@ proc_t  *proc_current(void);
  * so the caller must not close them or hand the same handle to two
  * processes. `env` is the environment, NAME=value lines (v0.60.26).
  * `err` binds stderr the same way (v0.60.21); `err_as_out` sends
- * stderr wherever stdout goes instead (2>&1), with no second handle. */
+ * stderr wherever stdout goes instead (2>&1), with no second handle; 2 sends
+ * it to the terminal's own stdout (2>&1 > f). */
 int      proc_spawn(const char *path, const char *args, const char *env, int background,
                     vfs_node_t *in, vfs_node_t *out, vfs_node_t *err, int err_as_out,
                     uint32_t *out_pid);

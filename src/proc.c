@@ -139,7 +139,7 @@ int proc_spawn(const char *path, const char *args, const char *env, int backgrou
     p->ufds[0] = in;
     p->ufds[1] = out;
     p->ufds[2] = err;
-    p->err_as_out = (uint8_t)(err_as_out != 0);
+    p->err_as_out = (uint8_t)err_as_out;
 
     task_t *t = task_spawn(basename_of(p->name), proc_entry, p);
     if (!t) {

@@ -391,10 +391,11 @@ void syscall_dispatch(registers_t *r) {
             const char *p = (const char *)r->ecx;
             if (!user_ok(r->ecx, len)) { r->eax = (uint32_t)-1; break; }
             if (fd == FD_STDERR && pr && pr->err_as_out) fd = FD_STDOUT;   /* 2>&1 */
+            int to_term = (pr && pr->err_as_out == 2 && r->ebx == FD_STDERR);   /* 2>&1 > f */
             /* A binding wins over the console default, which is what makes
              * `> file` and `| next` work at all. Nothing binds 0-2 for a
              * program run normally, so normal runs are unaffected. */
-            if (pr && fd < PROC_UFD_MAX && pr->ufds[fd]) {
+            if (!to_term && pr && fd < PROC_UFD_MAX && pr->ufds[fd]) {
                 int w = vfs_write(pr->ufds[fd], p, len);
                 r->eax = (uint32_t)(w < 0 ? -1 : w);
             } else if (fd == FD_STDOUT) {

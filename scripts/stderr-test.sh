@@ -27,8 +27,10 @@ LINES=(
   'cook pair.elf A.TXT B.TXT 2> E7.TXT ; cook call.elf $? > S7.TXT'
   'cook call.elf a2> W8.TXT'
   'cook pair.elf A.TXT C.TXT 2>&1 > O9.TXT'
+  'cook pair.elf A.TXT B.TXT 2>&1 > O10.TXT'
+  'x=$(cook pair.elf A.TXT B.TXT 2>&1 > O11.TXT) ; cook call.elf "$x" > X11.TXT'
 )
-FILES="E1 O2 E3 O4 E4 O5 E6 O6 E7 S7 W8 O9"
+FILES="E1 O2 E3 O4 E4 O5 E6 O6 E7 S7 W8 O9 O10 O11 X11"
 keys=("headchef" "rosemary" "WAIT:1")
 for l in "${LINES[@]}"; do keys+=("$l" "UNTIL:@soupOS:"); done
 keys+=("cook pair.elf A.TXT B.TXT" "UNTIL:@soupOS:")
@@ -39,7 +41,7 @@ PID=$!
 python3 scripts/qemu_keys.py "$WORK/mon.sock" "${keys[@]}" >/dev/null 2>&1 || { echo "  FAIL  could not drive QEMU"; fail=1; }
 kill "$PID" 2>/dev/null; wait "$PID" 2>/dev/null; PID=""
 ( cd "$WORK/host" && export LC_ALL=C && for l in "${LINES[@]}"; do
-    b=${l#cook }; b=${b//pair.elf/cmp}; b=${b//raise.elf/tr a-z A-Z}; b=${b//skim.elf/head}
+    b=${l#cook }; b=${b//cook pair.elf/cmp}; b=${b//pair.elf/cmp}; b=${b//raise.elf/tr a-z A-Z}; b=${b//skim.elf/head}
     b=${b//; cook call.elf/; echo}; b=${b//call.elf/echo}
     bash -c "$b" > ../host.out 2>&1      # not /dev/null: GNU cmp goes silent when stdout is
   done )
@@ -49,7 +51,7 @@ for f in $FILES; do
     sed 's/^cmp:/pair:/; s/^CMP:/PAIR:/' "$WORK/host/$f.TXT" > "$WORK/want.$f"
     cmp -s "$WORK/got.$f" "$WORK/want.$f" || { echo "        $f.TXT differs: got '$(cat "$WORK/got.$f")', bash '$(cat "$WORK/want.$f")'"; bad=1; }
 done
-[ "$bad" = 0 ] && echo "  ok    all ${#LINES[@]} lines write what bash writes ($(echo $FILES | wc -w) files: 2>, 2>>, > f 2>&1, 2>&1 into a pipe, 2> on a pipe's first stage, an empty 2> file, the status, a2> as a word)" \
+[ "$bad" = 0 ] && echo "  ok    all ${#LINES[@]} lines write what bash writes ($(echo $FILES | wc -w) files: 2>, 2>>, > f 2>&1, 2>&1 into a pipe, 2> on a pipe's first stage, an empty 2> file, the status, a2> as a word, 2>&1 > f in sh's order)" \
     || { echo "  FAIL  2> differs from bash"; fail=1; }
 tr -d '\r' < "$WORK/serial.log" | tail -n 8 | grep -F "pair: EOF on 'B.TXT' after byte 2, line 1" >/dev/null \
     && echo "  ok    without 2> the complaint still goes to the console" \

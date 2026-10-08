@@ -34,7 +34,7 @@ learns sh's commonest idiom, and two tools get the flags people reach for.
 
 ---
 
-## 1. 2>&1 > f, in sh's order
+## 1. 2>&1 > f, in sh's order — DONE v0.60.31
 
 v0.60.21 made 2>&1 a flag meaning "wherever stdout ends up", so
 `2>&1 > f` sends stderr to f; sh sends it to the terminal (the duplicate

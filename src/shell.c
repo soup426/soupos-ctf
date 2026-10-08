@@ -1407,6 +1407,7 @@ typedef struct {
     char args[PROC_ARGS_MAX];
     char err[FAT_PATH_MAX];       /* 2> file, or ""      (v0.60.21) */
     uint8_t err_append, err_dup;  /* 2>>, 2>&1           */
+    uint8_t dup_before_out;       /* 2>&1 came before the > (v0.60.31) */
 } stage_t;
 
 /* Next whitespace-delimited token, advancing *sp. The shell metacharacters
@@ -1600,7 +1601,7 @@ static void cmd_cook(const char *args) {
     int  append = 0;                               /* >> (v0.56.0) */
     int  nst = 1, background = 0;
     st[0].prog[0] = st[0].args[0] = st[0].err[0] = '\0';
-    st[0].err_append = st[0].err_dup = 0;
+    st[0].err_append = st[0].err_dup = st[0].dup_before_out = 0;
 
     char tok[FAT_PATH_MAX];
     const char *sp = args;
@@ -1614,7 +1615,13 @@ static void cmd_cook(const char *args) {
             cs->err_dup = 0;
             continue;
         }
-        if (str_eq(tok, "2>&1")) { st[nst - 1].err_dup = 1; st[nst - 1].err[0] = '\0'; continue; }
+        if (str_eq(tok, "2>&1")) {
+            /* sh takes the copy where stdout points now: before a > it is
+             * the terminal (or the pipe, if a | follows), after it the file. */
+            st[nst - 1].err_dup = 1; st[nst - 1].err[0] = '\0';
+            st[nst - 1].dup_before_out = (outfile[0] == '\0');
+            continue;
+        }
         if (str_eq(tok, ">>")) {
             if (!shell_token(&sp, outfile, sizeof(outfile))) { cook_err("No file after >>."); return; }
             unquote(outfile);
@@ -1629,7 +1636,7 @@ static void cmd_cook(const char *args) {
                     cook_err("Too many pipeline stages (max 4)."); return;
                 }
                 st[nst].prog[0] = st[nst].args[0] = st[nst].err[0] = '\0';
-                st[nst].err_append = st[nst].err_dup = 0;
+                st[nst].err_append = st[nst].err_dup = st[nst].dup_before_out = 0;
                 nst++;
                 break;
             case '<':
@@ -1720,8 +1727,12 @@ static void cmd_cook(const char *args) {
             }
             out = wr;
         }
+        /* 2>&1 > f on the last stage: stderr to the terminal stdout had
+         * before the > (2), not to f (1). */
+        int dup = st[i].err_dup;
+        if (dup && i + 1 == nst && fout && st[i].dup_before_out) dup = 2;
         int rc = proc_spawn(st[i].path, st[i].args, env, background, stage_in, out,
-                            ferr[i], st[i].err_dup, &pids[i]);
+                            ferr[i], dup, &pids[i]);
         if (rc < 0) {
             cook_err(rc == PROC_ERR_FULL     ? "Too many orders (try: orders)" :
                      rc == PROC_ERR_COOK_CAP ? "You already have 4 orders cooking (try: orders, kill)" :

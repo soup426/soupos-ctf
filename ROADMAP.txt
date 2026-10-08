@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.30
+Current version: v0.60.31
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,16 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.31 (2026-10-08)  — 2>&1 > F IN SH'S ORDER
+  - v0.60.21's 2>&1 meant "wherever stdout ends up", so `2>&1 > f` sent
+    stderr to f. sh takes the copy where stdout points when it reads the
+    2>&1: before the > that is the terminal (or the pipe, when a | follows),
+    after it the file. cook now notes which came first; 2>&1 before a > on
+    the last stage sends stderr to the terminal's own stdout (err_as_out 2),
+    so `x=$(cook pair.elf A B 2>&1 > f)` catches the message in x and f
+    stays empty, as in bash.
+  - stderr-test grows to twelve lines and fifteen files.
 
 v0.60.30 (2026-10-08)  — LONG WORD LISTS, AND NOTHING RUN CUT SHORT
   - `for i in $(cook tally.elf 6000)` ran 64 times: every command was
@@ -126,8 +136,7 @@ v0.60.21 (2026-10-08)  — 2>
     starts.
   - 2>&1 sends stderr wherever stdout ends up, the pipe or the > file or
     the screen: a flag on the process, not a second handle, so nothing is
-    closed twice. `2>&1 > f` therefore means what `> f 2>&1` means; sh
-    would leave stderr on the terminal there.
+    closed twice. (`2>&1 > f` meant what `> f 2>&1` means until v0.60.31.)
   - scripts/stderr-test.sh runs ten lines with pair.elf (cmp) and compares
     twelve files with bash's. The host side cannot send cmp's stdout to
     /dev/null: GNU cmp goes silent, its EOF message included, when it does.
