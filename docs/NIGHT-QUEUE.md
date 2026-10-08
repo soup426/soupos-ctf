@@ -43,7 +43,7 @@ runs `b`. Expansions after NAME= at the start of a command must stay one
 value (the $(...) case already wraps itself; do the same for $NAME, $1..).
 Compare with bash.
 
-## 2. A=1 cook prog: a variable for one command
+## 2. A=1 cook prog: a variable for one command — DONE v0.60.41
 
 `NAME=value cook prog` hands NAME=value to that program only (its
 environment), leaving the shell's NAME as it was; several prefixes may

@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.40
+Current version: v0.60.41
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,17 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.41 (2026-10-08)  — A=1 CMD: A VARIABLE FOR ONE COMMAND
+  - `NAME=value [NAME=value...] CMD`, as sh: each is set and handed to
+    programs for CMD alone (a builtin or a function sees it too), then put
+    back as it was: unset, or its old value and whether it was handed.
+    `A=1 B=2` with no command sets both (only one at a time before).
+    try_assign's note "not supported: written down, not pretended" is
+    retired.
+  - scripts/prefix-test.sh compares eight lines with bash: a program, the
+    value put back, two at once, a builtin, a function, over a handed one,
+    a quoted value.
 
 v0.60.40 (2026-10-08)  — W=$V KEEPS THE WHOLE VALUE
   - v="a b" ; w=$v expanded to `w=a b`, no longer an assignment: v0.60.39

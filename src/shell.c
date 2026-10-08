@@ -4823,7 +4823,7 @@ static void dispatch(const char *buf) {
 /* NAME=value as the whole of a command (v0.58.0): sets a variable in this
  * shell; the value is unquoted (A="two  words" keeps both spaces). Returns
  * 1 if the text was an assignment. `A=1 cmd` (a variable for one command)
- * is not supported: written down, not pretended. */
+ * is prefix_assigns' (v0.60.41). */
 static void unquote(char *w);
 static void set_var(const char *name, const char *value);
 static int try_assign(const char *text) {
@@ -5498,6 +5498,76 @@ static void start_into(const char *left) {
     if (!task_spawn("loopfeed", loopfeed_task, f)) { vfs_close(wr); kfree(cap.buf); kfree(f); }
 }
 
+/* NAME=value NAME=value... CMD (v0.60.41), as sh: with no CMD they are all
+ * set; with one, each is set and handed to programs for CMD alone, then
+ * put back as it was (unset, or its old value and whether it was handed).
+ * 0 if ex does not start with two words of which the first is NAME=value
+ * (try_assign has the single NAME=value). */
+static void set_var(const char *name, const char *value);
+static void cmd_unset(const char *args);
+static void unquote(char *w);
+static int call_function(const char *ex);
+static void dispatch(const char *buf);
+typedef struct { char name[16]; char val[96]; char old[96]; int had, handed; } pre_t;
+static int prefix_assigns(const char *ex) {
+    const char *t = ex;
+    while (*t == ' ') t++;
+    pre_t *as = 0;
+    int n = 0;
+    for (;;) {
+        const char *w = t;
+        int nl = 0;
+        if (!(w[0] == '_' || (w[0] >= 'A' && w[0] <= 'Z') || (w[0] >= 'a' && w[0] <= 'z'))) break;
+        while (w[nl] == '_' || (w[nl] >= 'A' && w[nl] <= 'Z') || (w[nl] >= 'a' && w[nl] <= 'z') || (w[nl] >= '0' && w[nl] <= '9')) nl++;
+        if (w[nl] != '=' || nl > 15) break;
+        const char *v = w + nl + 1;
+        char q = 0;
+        const char *e = v;
+        while (*e && (q || *e != ' ')) { if (q) { if (*e == q) q = 0; } else if (*e == '\'' || *e == '"') q = *e; e++; }
+        if (q) break;
+        if (n == 0 && !*e) return 0;             /* one NAME=value alone: try_assign's */
+        if (!as) { as = kmalloc(sizeof(pre_t) * 8); if (!as) return 0; }
+        if (n == 8) break;
+        memcpy(as[n].name, w, (uint32_t)nl); as[n].name[nl] = '\0';
+        int vl = (int)(e - v) < 95 ? (int)(e - v) : 95;
+        memcpy(as[n].val, v, (uint32_t)vl); as[n].val[vl] = '\0';
+        unquote(as[n].val);
+        n++;
+        t = e;
+        while (*t == ' ') t++;
+        if (!*t) break;
+    }
+    if (n == 0) { if (as) kfree(as); return 0; }
+    shell_t *me = cur_shell();
+    if (!*t) {                                   /* A=1 B=2: plain assignments */
+        for (int i = 0; i < n; i++) set_var(as[i].name, as[i].val);
+        kfree(as);
+        return 1;
+    }
+    for (int i = 0; i < n; i++) {                /* for CMD alone */
+        int slot = -1;
+        for (int v = 0; v < me->nvars; v++) if (str_eq(me->vname[v], as[i].name)) slot = v;
+        as[i].had = slot >= 0;
+        as[i].handed = slot >= 0 && me->vhand[slot];
+        if (slot >= 0) strcpy(as[i].old, me->vval[slot]);
+        set_var(as[i].name, as[i].val);
+        for (int v = 0; v < me->nvars; v++) if (str_eq(me->vname[v], as[i].name)) me->vhand[v] = 1;
+    }
+    char cmd[INPUT_MAX];
+    strncpy(cmd, t, sizeof(cmd) - 1); cmd[sizeof(cmd) - 1] = '\0';
+    me->last_status = 0;
+    if (!call_function(cmd)) dispatch(cmd);
+    int st = me->last_status;
+    for (int i = n - 1; i >= 0; i--) {           /* back as it was */
+        if (!as[i].had) { cmd_unset(as[i].name); continue; }
+        set_var(as[i].name, as[i].old);
+        for (int v = 0; v < me->nvars; v++) if (str_eq(me->vname[v], as[i].name)) me->vhand[v] = (uint8_t)as[i].handed;
+    }
+    me->last_status = st;
+    kfree(as);
+    return 1;
+}
+
 /* Run one command: expand it, then it is an assignment or a dispatch. */
 static void run_one(const char *seg) {
     const char *q = seg; while (*q == ' ') q++;
@@ -5523,6 +5593,7 @@ static void run_one(const char *seg) {
         cur_shell()->last_status = 1;
         return;
     }
+    if (prefix_assigns(ex)) return;
     if (try_assign(ex)) return;
     if (call_function(ex)) return;
     dispatch(ex);
