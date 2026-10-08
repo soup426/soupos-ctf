@@ -69,6 +69,21 @@ fi
 # NOTE: wait for the curl PIDs specifically. A bare `wait` also waits for the
 # QEMU process started above, which never exits, so the test hangs - the
 # fetches themselves finish in milliseconds.
+#
+# The overlap is made certain, not hoped for. Until v0.43.0 the three curls
+# were simply started together, and under the full check's load they
+# sometimes connected far enough apart that each finished before the next
+# arrived - all in slot 0, a failure of the test rather than the kernel
+# (2 of 4 repeat runs used 2 slots, 2 used 3). Now a silent client is
+# connected first and held: hatch sits waiting on its request, so the three
+# fetches MUST each land in another slot to be served at all.
+python3 -c "
+import socket, sys, time
+s = socket.create_connection(('127.0.0.1', int(sys.argv[1])), timeout=5)
+time.sleep(1.5)
+s.close()" "$PORT" >/dev/null 2>&1 &
+holder=$!
+sleep 0.3
 par_ok=1
 par_pids=""
 for f in HELLO.TXT:47 RECIPE.TXT:75 SECRET.TXT:31; do
@@ -78,14 +93,15 @@ for f in HELLO.TXT:47 RECIPE.TXT:75 SECRET.TXT:31; do
     par_pids="$par_pids $!"
 done
 for pid in $par_pids; do wait "$pid"; done
+wait "$holder"
 if [ -s "$LOG.par" ]; then
     echo "  FAIL  parallel fetches came back wrong: $(cat "$LOG.par" | tr '\n' ' ')"
     par_ok=0; fail=1
 fi
 rm -f "$LOG.par"
 slots=$(grep -oE "slot [0-9]+" "$LOG" | sort -u | wc -l)
-if [ "$par_ok" = "1" ] && [ "$slots" -ge 2 ]; then
-    echo "  ok    three clients served at once, across $slots connection slots"
+if [ "$par_ok" = "1" ] && [ "$slots" -ge 3 ]; then
+    echo "  ok    three clients served while a fourth held hatch, across $slots connection slots"
 elif [ "$par_ok" = "1" ]; then
     echo "  FAIL  three fetches worked but all reused one slot: not concurrent"
     fail=1
