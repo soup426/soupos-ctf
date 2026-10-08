@@ -1,10 +1,11 @@
 # Night queue
 
-Seventeenth queue. The first sixteen are in `docs/queue-archive-2026-10-0*.md`.
+Eighteenth queue. The first seventeen are in `docs/queue-archive-2026-10-0*.md`.
 Two items wait on a person, with notes in their archives: the seventh's
-syscall-pointer item and the thirteenth's swap-shares item. The sixteenth
-added tr and taught the shell ; && || and $?; this one gives the shell
-quotes and ~, and makes every test wait for what it checks.
+syscall-pointer item and the thirteenth's swap-shares item. The seventeenth
+gave the shell quotes and ~ and made the tests hold up under load; this one
+closes the gap quotes left in the builtins and lets a cook keep commands in
+a file.
 
 ## Standing rules
 
@@ -32,28 +33,25 @@ quotes and ~, and makes every test wait for what it checks.
 
 ---
 
-## 1. Quotes in the shell — DONE v0.57.2
+## 1. Builtins take quoted arguments
 
-Arguments are split on every space, so `grep.elf "two words"` and
-`tr.elf ' ' '_'` cannot be written. '...' keeps everything literally and
-"..." does too (there is nothing to expand inside but $?); either kind
-groups its contents into one argument with the spaces kept, and the
-quotes are dropped, as sh does. Programs receive their arguments as one
-string today: decide how a quoted space reaches them (and write it down),
-then compare echo, grep and tr results with sh on the same lines.
+Programs have understood quotes since v0.57.2; builtins still take their
+raw text, so `pour "my file.txt"` looks for a name with quotes in it.
+Find every builtin that takes a path or text, give them the same splitting
+(one shared helper), and test the ones that take paths on a file whose
+name has a space.
 
-## 2. ~ is the cook's home — DONE v0.57.3
+## 2. run FILE
 
-`cd ~`, `pour ~/NOTES.TXT`, `cook cat.elf ~/X`: a word that is ~ or starts
-with ~/ means the current cook's home, as sh does. Not inside quotes.
-Test as the headchef (whose home is /) and as a cook.
+A builtin that runs a file of command lines as the cook who runs it: each
+line through run_line, so ; && || $? ~ and quotes all work, '#' lines are
+comments, and it stops on nothing. Its status is the last line's. Compare
+what a small script leaves behind with sh running the same lines.
 
-## 3. Every test waits for what it checks — DONE (scripts only)
+## 3. seq.elf
 
-rc-test slept 8 s and then read the log, and failed once under the full
-check's load (fixed in 1d5d174). Find every script that sleeps a fixed
-time and then checks something it could have waited for, make each wait
-for its event, and show each change under load (the full check twice).
+`seq LAST`, `seq FIRST LAST`, `seq FIRST STEP LAST`, integers, negatives
+and counting down included. Compare with the host's seq.
 
 ## 4. Doom at the framebuffer's own resolution — DEFERRED
 
