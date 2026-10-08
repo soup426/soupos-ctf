@@ -276,6 +276,7 @@ static int may(const char *path, char need) { return users_may(path, need); }
 
 /* Print the standard "access denied" line. */
 static void deny(const char *path) {
+    cur_shell()->last_status = 1;           /* a refusal is a failure (v0.57.0) */
     t_color(VGA_LIGHT_RED, VGA_BLACK);
     t_printf("  Permission denied: %s\n", path);
     t_puts("  (ask the headchef, or retry with: chef <command>)\n");
@@ -1218,6 +1219,7 @@ static void stage_add_arg(stage_t *st, const char *tok) {
 }
 
 static void cook_err(const char *msg) {
+    cur_shell()->last_status = 1;           /* nothing ran: a failure (v0.57.0) */
     t_color(VGA_LIGHT_RED, VGA_BLACK);
     t_printf("  %s\n", msg);
     t_color(VGA_LIGHT_GREY, VGA_BLACK);
@@ -2462,6 +2464,7 @@ static void dispatch(const char *buf);   /* forward decl for chef elevation */
  * still runs one as the headchef, for a cook who knows the secret. */
 static int headchef_only(const char *what) {
     if (users_is_headchef()) return 1;
+    cur_shell()->last_status = 1;
     t_printf("  Only the headchef may %s.\n", what);
     klog("[shell] %s may not %s\n", users_current_name(), what);
     return 0;
@@ -4216,6 +4219,36 @@ static void dispatch(const char *buf) {
     }
 }
 
+/* A command line may be several commands joined by ; && and || (v0.57.0):
+ * `a ; b` runs both, `a && b` runs b only if a's status was 0, `a || b`
+ * only if it was not; left to right, as sh groups them, so `a && b || c`
+ * runs c when either a or b failed. A single & (background) and a single
+ * | (pipe) belong to their command and are not split on. The status of a
+ * skipped command is not taken: the last one that ran stands. */
+static void run_line(const char *line) {
+    char seg[INPUT_MAX];
+    int  op = ';';                 /* how this segment joins the one before */
+    const char *s = line;
+    for (;;) {
+        int n = 0, next_op = 0;
+        while (*s) {
+            if (s[0] == ';')                 { next_op = ';'; s += 1; break; }
+            if (s[0] == '&' && s[1] == '&')  { next_op = 'A'; s += 2; break; }
+            if (s[0] == '|' && s[1] == '|')  { next_op = 'O'; s += 2; break; }
+            if (n < INPUT_MAX - 1) seg[n++] = *s;
+            s++;
+        }
+        while (n > 0 && seg[n - 1] == ' ') n--;   /* "reheat " is not "reheat" */
+        seg[n] = '\0';
+        int status = cur_shell()->last_status;
+        int run = (op == ';') || (op == 'A' && status == 0) || (op == 'O' && status != 0);
+        const char *q = seg; while (*q == ' ') q++;
+        if (run && *q) dispatch(seg);
+        if (cur_shell()->exiting || !next_op) break;
+        op = next_op;
+    }
+}
+
 /* ---- main shell loop ---- */
 
 static void shell_loop(char *input, char *saved, int *pos_p, int *len_p, int *hb_p);
@@ -4254,7 +4287,7 @@ static void run_rc(void) {
         while (*l == ' ') l++;
         if (*l && *l != '#') {
             klog("[rc] %s\n", l);
-            dispatch(l);
+            run_line(l);
         }
         i = e + 1;
     }
@@ -4303,7 +4336,7 @@ static void shell_loop(char *input, char *saved, int *pos_p, int *len_p, int *hb
             t_putc('\n');
             input[len] = '\0';
             hist_push(input);
-            dispatch(input);
+            run_line(input);
             if (cur_shell()->exiting) break;
             pos = len = hist_browse = 0;
             input[0] = saved[0] = '\0';
@@ -4395,7 +4428,7 @@ static void session_task(void *arg) {
 
     if (sh->exec_line[0]) {
         /* One command, no prompt and no echo: what `ssh host cmd` means. */
-        dispatch(sh->exec_line);
+        run_line(sh->exec_line);
     } else {
         char input[INPUT_MAX], saved[INPUT_MAX];
         int  pos = 0, len = 0, hb = 0;

@@ -39,7 +39,7 @@ Translate one set of characters to another, with ranges (a-z) and the
 shorter set padded with its last character as tr does; -d deletes the set;
 -s squeezes runs. Compare with the host's tr in the C locale.
 
-## 2. ; && and || in the shell
+## 2. ; && and || in the shell — DONE v0.57.0
 
 `a ; b` runs both, `a && b` runs b only if a exited 0, `a || b` only if it
 did not. Left to right, as sh groups them. A builtin's status counts too

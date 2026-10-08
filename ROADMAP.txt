@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.56.9
+Current version: v0.57.0
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,25 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.57.0 (2026-10-08)  — ; && AND || IN THE SHELL
+  Sixteenth queue, item 2.
+  - run_line splits a command line on ; && and || (a single & or | stays
+    with its command) and runs the parts left to right, as sh groups
+    them: `a ; b` both, `a && b` b only after a 0, `a || b` b only after
+    a failure; a skipped command leaves the last status standing. The
+    console, `ssh host cmd` and /etc/rc all go through it.
+  - A builtin's refusal is now a failure: deny(), cook_err() and the
+    headchef's gate set the status to 1 (an unknown command was already
+    127, a program its exit code, a kill 137).
+  - Found by the test: each part kept the space before the operator, so
+    `reheat ` was an unknown command and `pour /etc/kitchen ` looked for a
+    file with a space in its name. Parts are trimmed.
+  - scripts/chain-test.sh, in check.sh: nine chains (; && || alone and
+    mixed, an unknown command, a pipe inside a chain) leave the same
+    marker files as the host's sh running the same lines with (exit 42)
+    for hello.elf; for the ordinary cook a refused builtin makes && skip
+    and || run. qemu_keys can now type ';'.
 
 v0.56.9 (2026-10-08)  — tr.elf
   Sixteenth queue, item 1.
