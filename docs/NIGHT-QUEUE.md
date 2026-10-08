@@ -1,10 +1,10 @@
 # Night queue
 
-Twentieth queue. The first nineteen are in `docs/queue-archive-2026-10-0*.md`.
+Twenty-first queue. The first twenty are in `docs/queue-archive-2026-10-0*.md`.
 Two items wait on a person, with notes in their archives: the seventh's
-syscall-pointer item and the thirteenth's swap-shares item. The nineteenth
-gave the shell variables and globs and added test.elf; this one gives
-programs a stat call, which test.elf has had to do without.
+syscall-pointer item and the thirteenth's swap-shares item. The twentieth
+gave programs SYS_STAT and added ls -l and find; this one gives scripts
+control flow, now that they have variables, test.elf and globs.
 
 ## Standing rules
 
@@ -32,24 +32,24 @@ programs a stat call, which test.elf has had to do without.
 
 ---
 
-## 1. SYS_STAT — DONE v0.59.0
+## 1. for loops
 
-Programs can open and list but not ask about a path. Add a stat call:
-size, bowl or not, owner, mode, for a path the cook may reach (search on
-the bowls above it; reading the file itself is not needed, as with stat).
-test.elf then uses it, and its written-down difference (an unreadable file
-counted as absent) goes away. Check against what perms and du say.
+`for NAME in WORDS ; do COMMANDS ; done` on one line (and in a script): the
+words expanded first (globs, $vars), NAME set to each in turn, COMMANDS run
+through run_line each time; the loop's status is the last command's.
+Compare what a loop leaves behind with sh running the same line.
 
-## 2. ls.elf -l — DONE v0.59.1
+## 2. if blocks
 
-Mode, owner and size for each entry, through SYS_STAT, in the columns
-`serve` uses. Check every line against perms for the same names.
+`if COMMANDS ; then COMMANDS ; [else COMMANDS ;] fi` on one line: the
+branch by the exit status of the condition's last command, as sh does.
+Nested inside for, and for inside if. Compare with sh.
 
-## 3. find.elf — DONE v0.59.2
+## 3. cmp.elf
 
-`find.elf [path] [-name PATTERN] [-type f|d]`: every name under a path,
-one per line, bowls it may not enter skipped. Compare with the host's find
-over the same tree, both sorted (FAT and ext4 list in different orders).
+`cmp.elf F1 F2`: exit 0 when the same, 1 with "F1 F2 differ: byte N, line
+M" when not, "cmp: EOF on F1" when one is a prefix of the other, 2 on a
+missing file, as GNU cmp does. Compare messages and codes with the host.
 
 ## 4. Doom at the framebuffer's own resolution — DEFERRED
 
