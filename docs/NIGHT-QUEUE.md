@@ -51,7 +51,7 @@ last command's. Compare with bash.
 Lines in reverse order, as `tac` does (a last line with no newline joins
 the one after it, as tac's output shows). Compare with the host's tac.
 
-## 4. spread.elf
+## 4. spread.elf — DONE v0.60.24
 
 Tabs to spaces, as `expand` does (-t N, default 8). Compare with the host's
 expand.
