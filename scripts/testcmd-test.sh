@@ -17,7 +17,7 @@ CASES=(
   "! -f /E.TXT" "! -e /NOPE" "x" "3 -lt x"
 )
 keys=("headchef" "rosemary" "WAIT:1")
-i=0; for c in "${CASES[@]}"; do i=$((i+1)); keys+=("cook test.elf $c ; cook echo.elf \$? > /T$i.OUT" "WAIT:2"); done
+i=0; for c in "${CASES[@]}"; do i=$((i+1)); keys+=("cook test.elf $c ; cook echo.elf \$? > /T$i.OUT" "WAIT:1"); done
 qemu-system-i386 -accel kvm -cpu host -drive "file=$WORK/disk.img,format=raw,if=ide,index=0" \
     -cdrom soupOS.iso -boot d -m 128M -no-reboot -no-shutdown -display none \
     -serial "file:$WORK/serial.log" -monitor "unix:$WORK/mon.sock,server,nowait" >/dev/null 2>&1 &

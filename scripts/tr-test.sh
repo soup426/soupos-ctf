@@ -20,7 +20,7 @@ CASES=(
   "6#abc x#abc x"
   "7#aa xy#aa xy"
   "8#a-c- xyz#a-c- xyz"
-  "9#0-9 *#0-9 '*'"
+  "9#0-9 '*'#0-9 '*'"   # quoted: since v0.58.3 an unquoted * is a glob, as in sh
   "10#-s .#-s ."
 )
 keys=("headchef" "rosemary" "WAIT:1")

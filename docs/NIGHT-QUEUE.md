@@ -47,7 +47,7 @@ to branch on, and globs.
 when false, 2 for a usage error, as test does. Compare exit codes with the
 host's test over the same cases.
 
-## 3. Globs
+## 3. Globs — DONE v0.58.3 (with v0.58.2: lowercase 8.3 names)
 
 * and ? in a program's argument are matched against the names in the
 bowl the word names (or the cwd), sorted as sh sorts them in the C locale;

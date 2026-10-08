@@ -1258,12 +1258,82 @@ static void unquote(char *w) {
     *o = '\0';
 }
 
-static void stage_add_arg(stage_t *st, const char *tok) {
-    int len = (int)strlen(st->args);
-    if (len && len < PROC_ARGS_MAX - 1) st->args[len++] = ' ';
-    int i = 0;
-    while (tok[i] && len < PROC_ARGS_MAX - 1) st->args[len++] = tok[i++];
-    st->args[len] = '\0';
+/* Globs (v0.58.2). */
+static int glob_match(const char *pat, const char *name) {
+    if (*pat == '\0') return *name == '\0';
+    if (*pat == '*') {
+        for (const char *n = name; ; n++) {
+            if (glob_match(pat + 1, n)) return 1;
+            if (!*n) return 0;
+        }
+    }
+    if (!*name) return 0;
+    if (*pat == '?' || *pat == *name) return glob_match(pat + 1, name + 1);
+    return 0;
+}
+static int byte_cmp(const char *a, const char *b) {
+    while (*a && *a == *b) { a++; b++; }
+    return (unsigned char)*a - (unsigned char)*b;
+}
+
+/* Append one argument; 0, or -1 if it does not fit in PROC_ARGS_MAX
+ * (v0.58.2: the arguments are no longer cut short silently). */
+static int stage_add_arg(stage_t *st, const char *tok) {
+    int len = (int)strlen(st->args), tl = (int)strlen(tok);
+    if (len + (len ? 1 : 0) + tl > PROC_ARGS_MAX - 1) return -1;
+    if (len) st->args[len++] = ' ';
+    memcpy(st->args + len, tok, (uint32_t)tl + 1);
+    return 0;
+}
+
+/* A program argument with an unquoted * or ? (and no quotes at all) is
+ * matched against the names in the bowl it names, or the cwd: only its last
+ * component may hold the pattern. Matches are sorted by byte, as sh sorts
+ * in the C locale, and a leading * or ? does not match a name that starts
+ * with '.'. No match: the word goes as it is, as sh does. -1 if the
+ * arguments no longer fit. */
+static int stage_add_word(stage_t *st, const char *tok) {
+    int globby = 0, quoted = 0;
+    for (const char *c = tok; *c; c++) {
+        if (*c == '*' || *c == '?') globby = 1;
+        if (*c == '\'' || *c == '"') quoted = 1;
+    }
+    if (!globby || quoted) return stage_add_arg(st, tok);
+    char dirpart[FAT_PATH_MAX], pat[FAT_PATH_MAX];
+    const char *slash = 0;
+    for (const char *c = tok; *c; c++) if (*c == '/') slash = c;
+    if (slash) {
+        int dl = (int)(slash - tok) + 1;
+        if (dl >= FAT_PATH_MAX) return stage_add_arg(st, tok);
+        memcpy(dirpart, tok, (uint32_t)dl); dirpart[dl] = '\0';
+        strncpy(pat, slash + 1, sizeof(pat) - 1); pat[sizeof(pat) - 1] = '\0';
+    } else { dirpart[0] = '\0'; strncpy(pat, tok, sizeof(pat) - 1); pat[sizeof(pat) - 1] = '\0'; }
+    for (const char *c = dirpart; *c; c++) if (*c == '*' || *c == '?') return stage_add_arg(st, tok);
+    char dir[FAT_PATH_MAX];
+    if (dirpart[0]) resolve_path(dirpart, dir); else strcpy(dir, cur_shell()->cwd);
+    if (!fat_is_dir(dir) || !may(dir, 'r')) return stage_add_arg(st, tok);
+    fat_entry_t *e = kmalloc(sizeof(fat_entry_t) * FAT_LS_MAX);
+    if (!e) return stage_add_arg(st, tok);
+    int n = fat_ls(dir, e, FAT_LS_MAX);
+    const char *hit[FAT_LS_MAX]; int nh = 0;
+    for (int i = 0; i < n; i++) {
+        const char *nm = fat_display_name(&e[i]);
+        if (nm[0] == '.' && pat[0] != '.') continue;
+        if (glob_match(pat, nm)) hit[nh++] = nm;
+    }
+    for (int i = 1; i < nh; i++)                         /* insertion sort, by byte */
+        for (int j = i; j > 0 && byte_cmp(hit[j - 1], hit[j]) > 0; j--) { const char *t = hit[j]; hit[j] = hit[j - 1]; hit[j - 1] = t; }
+    int rc = 0;
+    if (!nh) rc = stage_add_arg(st, tok);
+    for (int i = 0; i < nh && rc == 0; i++) {
+        char w[FAT_PATH_MAX];
+        int dl = (int)strlen(dirpart);
+        if (dl + (int)strlen(hit[i]) >= FAT_PATH_MAX) continue;
+        strcpy(w, dirpart); strcpy(w + dl, hit[i]);
+        rc = stage_add_arg(st, w);
+    }
+    kfree(e);
+    return rc;
 }
 
 static void cook_err(const char *msg) {
@@ -1323,7 +1393,7 @@ static void cmd_cook(const char *args) {
             continue;
         }
         if (!st[nst - 1].prog[0]) { strncpy(st[nst - 1].prog, tok, FAT_PATH_MAX - 1); unquote(st[nst - 1].prog); }
-        else                      stage_add_arg(&st[nst - 1], tok);
+        else if (stage_add_word(&st[nst - 1], tok) < 0) { cook_err("The arguments are too long (128 bytes at most)."); return; }
     }
     if (!st[nst - 1].prog[0]) { cook_err("Nothing after the |."); return; }
 

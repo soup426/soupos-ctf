@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.58.1
+Current version: v0.58.3
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,31 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.58.3 (2026-10-08)  — GLOBS
+  Nineteenth queue, item 3.
+  - A program argument with an unquoted * or ? is matched against the
+    names in the bowl it names (or the cwd); only its last component may
+    hold the pattern. Matches are sorted by byte, as sh sorts in the C
+    locale; a leading * or ? does not match a name starting with '.'; no
+    match passes the word as it is, as sh does. A word with any quote in
+    it is not expanded (sh would expand its unquoted parts; written down).
+  - Arguments that no longer fit in 128 bytes are refused with "The
+    arguments are too long" and status 1; stage_add_arg used to cut them
+    short silently.
+  - scripts/glob-test.sh, in check.sh: *.txt, ?.txt, a*, *, a pattern with
+    no match, a quoted pattern, *.TXT and /G/*.dat give what sh gives over
+    the same names; thirty long names under /MANY/* are refused, status 1.
+    testcmd-test's per-case wait is 1 s (it was the check's longest test).
+
+v0.58.2 (2026-10-08)  — LOWERCASE 8.3 NAMES FROM OTHER TOOLS
+  Found by glob-test.
+  - Linux and mtools write a lowercase name that fits 8.3 (a.txt) as A.TXT
+    with case flags in byte 12 (bit 3: base lowercase, bit 4: extension
+    lowercase) and no long name. soupOS ignored the flags and showed
+    A.TXT. fill_entry now applies them, except when byte 12 carries
+    FAT_PERM_MARK (soupOS's own mode before v0.41.0).
+  - lname-test.sh: an mtools-copied lc.txt is listed by ls.elf as lc.txt.
 
 v0.58.1 (2026-10-08)  — test.elf
   Nineteenth queue, item 2.
