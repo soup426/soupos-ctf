@@ -46,7 +46,7 @@ that login, `secret` and `hire` still work for a cook who cannot read it.
 cook later hired under the same name logs in with the fired one's key.
 Prove it, then remove a fired cook's lines (and say how many).
 
-## 3. Every system file has a known owner and mode
+## 3. Every system file has a known owner and mode — DONE v0.54.2
 
 /etc/kitchen, /etc/logins, /etc/rc, /AUTHKEYS, the host key, /home: list
 every file the kernel writes or trusts, pin each one's owner and mode, set

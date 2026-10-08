@@ -652,6 +652,7 @@ int ssh_forget_keys(const char *cook) {
         i = next;
     }
     int rc = removed ? (fat_write("/AUTHKEYS", f, w) == 0 ? removed : -1) : 0;
+    if (removed) users_seal_system();
     kfree(f);
     return rc;
 }
@@ -1101,6 +1102,7 @@ static int load_or_make_hostkey(void) {
     if (fat_read(HOSTKEY_PATH, host_seed, 32, &got) < 0 || got != 32) {
         random_bytes(host_seed, 32);
         if (fat_write(HOSTKEY_PATH, host_seed, 32) < 0) return -1;
+        users_seal_system();             /* the private key: rw----, headchef (v0.54.2) */
         klog("[ssh] new host key written to %s\n", HOSTKEY_PATH);
     }
     ed25519_public_key(host_pk, host_seed);

@@ -122,6 +122,29 @@ static void seal_roster(void) {
 #endif
 }
 
+/* Every system file the kernel writes or trusts, pinned to the headchef
+ * with a known mode (v0.54.2), applied at boot and by the code that writes
+ * each one. Before, each got whatever mode its writer's defaults gave: the
+ * vault's private host key was rwxr-x, readable by every cook. /etc/rc is
+ * NOT here on purpose: it runs as the headchef, so resetting its mode would
+ * bless whatever a cook might have written into it; run_rc refuses an
+ * unsafe one instead. Paths that do not exist are left alone. */
+void users_seal_system(void) {
+    static const struct { const char *path; uint8_t mode; } pins[] = {
+        { "/etc",        FAT_PERM_OR | FAT_PERM_OW | FAT_PERM_OX | FAT_PERM_AR | FAT_PERM_AX },
+        { "/home",       FAT_PERM_OR | FAT_PERM_OW | FAT_PERM_OX | FAT_PERM_AR | FAT_PERM_AX },
+        { "/etc/logins", FAT_PERM_OR | FAT_PERM_OW | FAT_PERM_AR },
+        { "/AUTHKEYS",   FAT_PERM_OR | FAT_PERM_OW | FAT_PERM_AR },
+        { "/HOSTKEY.ED", FAT_PERM_OR | FAT_PERM_OW },
+    };
+    for (unsigned i = 0; i < sizeof(pins) / sizeof(pins[0]); i++)
+        if (fat_exists(pins[i].path)) {
+            fat_chown(pins[i].path, 0);
+            fat_chmod(pins[i].path, FAT_PERM_MARK | pins[i].mode);
+        }
+    seal_roster();
+}
+
 static int users_save(void) {
     static char buf[USERS_MAX * (USER_NAME_MAX + 128)];
     uint32_t len = 0;
@@ -227,7 +250,7 @@ void users_init(void) {
         n_users = 2;
         users_save();
     }
-    seal_roster();               /* a disk from before v0.54.0 is closed at boot */
+    users_seal_system();         /* an older disk is closed at boot */
 }
 
 int         users_count(void)        { return n_users; }

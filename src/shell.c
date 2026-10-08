@@ -4077,6 +4077,17 @@ static void run_rc(void) {
     static char rc[2048];
     uint32_t size = 0;
     if (fat_read("/etc/rc", (uint8_t *)rc, sizeof(rc) - 1, &size) < 0 || size == 0) return;
+    /* It runs as the headchef, so it must be the headchef's and closed to
+     * the other cooks, or it is not run (v0.54.2), the way sshd's
+     * StrictModes refuses a key file others can write. A file copied in by
+     * another tool carries no soupOS metadata and reads as the headchef's,
+     * rwxr-x, so it passes. */
+    uint8_t rc_owner, rc_mode;
+    if (fat_stat("/etc/rc", &rc_owner, &rc_mode) == 0 && (rc_owner != 0 || (rc_mode & FAT_PERM_AW))) {
+        klog("[rc] /etc/rc not run: owned by uid %u, mode 0x%x - only the headchef may write it\n", rc_owner, rc_mode);
+        t_puts("  /etc/rc was not run: a cook other than the headchef can write it.\n");
+        return;
+    }
     if (size > sizeof(rc) - 1) size = sizeof(rc) - 1;     /* fat_read reports the file's size */
     rc[size] = '\0';
     set_session_uid(0);

@@ -35,6 +35,8 @@ const char *users_name_of(uint8_t uid);       /* "?" if unknown     */
 int  users_add(const char *name, const char *secret);
 /* Give a cook a new secret (a fresh salt, in the build's kind). 0, or -1. */
 int  users_set_secret(const char *name, const char *secret);
+/* Pin every system file's owner and mode (v0.54.2). */
+void users_seal_system(void);
 int  users_remove(const char *name);
 
 /* The logged-in session. */

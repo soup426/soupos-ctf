@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.54.1
+Current version: v0.54.2
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,28 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.54.2 (2026-10-08)  — EVERY SYSTEM FILE HAS A KNOWN OWNER AND MODE
+  Tenth queue, item 3.
+  - /HOSTKEY.ED, the vault's private host key, was rwxr-x. Proven on
+    v0.54.1: an ordinary cook read its 32 bytes, and the public key
+    derived from them on the host was the one the vault served, so a cook
+    could impersonate the server.
+  - users_seal_system pins every system file the kernel writes or trusts
+    to the headchef: /etc and /home rwxr-x, /etc/logins and /AUTHKEYS
+    rw-r--, /HOSTKEY.ED rw----, /etc/kitchen rw---- (ordinary build;
+    CHALLENGE keeps stage 2's readable roster). Applied at boot and by the
+    code that writes each file (host key creation, fire's AUTHKEYS
+    rewrite).
+  - /etc/rc is deliberately not pinned: it runs as the headchef, so
+    resetting its mode would bless whatever a cook had written. Instead
+    run_rc refuses an /etc/rc that is not the headchef's or that other
+    cooks can write, like sshd's StrictModes. Defence in depth: /etc is
+    already closed to cooks, and the test confirms a cook cannot write it.
+  - secrets-test.sh: a cook cannot read the host key from the shell or a
+    program, cannot write /etc/rc, an /etc/rc made writable by cooks is
+    not run at the next boot, and every system file shows its pinned owner
+    and mode after a session of use. On v0.54.1 three of these failed.
 
 v0.54.1 (2026-10-08)  — FIRE REMOVES THE COOK'S SSH KEYS
   Tenth queue, item 2.
