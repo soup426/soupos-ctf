@@ -71,7 +71,7 @@ input (take reads the pipe, not the keyboard). Compare with bash's
 -s SEP between the numbers instead of a newline, -w pads them to equal
 width with zeros. Compare with the host's seq.
 
-## 8. A whole loop into a pipe
+## 8. A whole loop into a pipe — DONE v0.60.37
 
 Found with item 3: `while slurp y ; do x=1 ; done | skim.elf -n 3` takes
 `done | skim.elf ...` for the loop's done, so the pipe is dropped without a

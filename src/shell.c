@@ -5321,6 +5321,8 @@ static const char *pipe_bar(const char *seg) {
 
 static unsigned intr_mark;               /* see interrupted(), below */
 static const char *feed_left;            /* what pending_feed runs */
+static void (*feed_fn)(void *);          /* ... or this, for a whole loop (v0.60.37) */
+static void *feed_ctx;
 static vfs_node_t *feed_wr;
 
 static void feed_now(void) {
@@ -5341,7 +5343,8 @@ static void feed_now(void) {
     unsigned mark = intr_mark;
     intr_mark = pt->t.intr;                    /* a dead reader is the Ctrl-C it watches for */
     subst_depth++;
-    run_line(feed_left);
+    if (feed_fn) { void (*fn)(void *) = feed_fn; feed_fn = 0; fn(feed_ctx); }
+    else run_line(feed_left);
     subst_depth--;
     intr_mark = mark;
     me->term = was_sh; tk->term = was_tk;
@@ -5366,6 +5369,7 @@ static void pipe_into(const char *left, const char *right) {
     run_one(line);
     if (pending_feed) {                         /* cook never started it: no left side */
         pending_feed = 0;
+        feed_fn = 0;
         vfs_close(wr);
     }
     if (pending_in) { vfs_close(pending_in); pending_in = 0; }
@@ -5465,7 +5469,8 @@ static void run_one(const char *seg) {
  * loop in turn. `case W in P) ... ;; esac` (v0.60.19) splits further: the
  * header, each arm's pattern and a ;; are segments of their own. */
 #define LSEG_MAX 64
-typedef struct { const char *text; int op; int into; } lseg_t;  /* op: ';' 'A' 'O'; into: | the next (v0.60.34) */
+typedef struct { const char *text; int op; int into; const char *out; int junk; } lseg_t;
+/* op: ';' 'A' 'O'; into: | the next (v0.60.34); out: `done | PROG`, PROG (v0.60.37) */
 
 static int is_kw(const char *t, const char *kw) {
     int n = (int)strlen(kw);
@@ -5626,7 +5631,25 @@ static int split_segs(char *buf, lseg_t *sg, int max) {
                 goto again;
             }
         }
-        if (*t && n < max) { sg[n].text = t; sg[n].op = op; n++; }
+        if (*t && n < max) {
+            sg[n].text = t; sg[n].op = op;
+            /* done | PROG, fi | PROG, esac | PROG (v0.60.37): the compound's
+             * output goes to PROG. The word stands alone; PROG is noted. */
+            static const char *const closers[] = { "done", "fi", "esac" };
+            for (int k = 0; k < 3; k++) {
+                int kl = (int)strlen(closers[k]);
+                if (strncmp(t, closers[k], (uint32_t)kl) == 0 && t[kl] == ' ') {
+                    char *r = t + kl; while (*r == ' ') r++;
+                    if (r[0] == '|' && r[1] != '|') {
+                        t[kl] = '\0';
+                        r++; while (*r == ' ') r++;
+                        sg[n].out = r;
+                    } else if (*r) sg[n].junk = 1;      /* done > F, done foo: said, not ignored */
+                    break;
+                }
+            }
+            n++;
+        }
         if (dsemi && n < max) { sg[n].text = DSEMI; sg[n].op = ';'; n++; arm_next = 1; }
         if (!next_op) break;
         op = next_op;
@@ -5682,6 +5705,22 @@ static int match_done(lseg_t *sg, int from, int to) {      /* for and while shar
     return -1;
 }
 
+/* A compound fed into a pipe (v0.60.37): run its segments once more, from
+ * inside the feed, with its first segment's && or || already decided. */
+typedef struct { lseg_t *sg; int from, to, depth; } range_ctx_t;
+static lseg_t *feeding_seg;
+static void exec_range(lseg_t *sg, int from, int to, int depth);
+static void range_feed(void *arg) {
+    range_ctx_t *r = arg;
+    lseg_t *was = feeding_seg;
+    int op = r->sg[r->from].op;
+    feeding_seg = &r->sg[r->from];
+    r->sg[r->from].op = ';';
+    exec_range(r->sg, r->from, r->to, r->depth + 1);
+    r->sg[r->from].op = op;
+    feeding_seg = was;
+}
+
 static void exec_range(lseg_t *sg, int from, int to, int depth) {
     if (depth > 8) { t_puts("  Nested eight deep; not going further.\n"); cur_shell()->last_status = 1; return; }
     int i = from;
@@ -5689,6 +5728,31 @@ static void exec_range(lseg_t *sg, int from, int to, int depth) {
         if (interrupted()) { cur_shell()->last_status = 130; return; }
         int status = cur_shell()->last_status, op = sg[i].op;
         int run = (op == ';') || (op == 'A' && status == 0) || (op == 'O' && status != 0);
+        {
+            /* for/while/if/case ... done | PROG (v0.60.37): PROG starts, then
+             * the whole compound runs feeding it, as `builtin | prog` does.
+             * Not again for the compound the feed itself is running. */
+            const char *c = sg[i].text;
+            int loopish = is_kw(c, "for") || is_kw(c, "while");
+            if (run && &sg[i] != feeding_seg && (loopish || is_kw(c, "if") || is_kw(c, "case"))) {
+                int e = loopish ? match_done(sg, i, to)
+                      : is_kw(c, "if") ? match_end(sg, i, to, "if", "fi")
+                      : match_end(sg, i, to, "case", "esac");
+                if (e >= 0 && sg[e].junk) {
+                    t_printf("  Only `| program` may follow done, fi or esac (here: %s).\n", sg[e].text);
+                    cur_shell()->last_status = 2;
+                    return;
+                }
+                if (e >= 0 && sg[e].out) {
+                    range_ctx_t rc = { sg, i, e + 1, depth };
+                    feed_fn = range_feed; feed_ctx = &rc;
+                    pipe_into(0, sg[e].out);
+                    feed_fn = 0;
+                    i = e + 1;
+                    continue;
+                }
+            }
+        }
         if (sg[i].into && i + 1 < to) {
             /* X | while/for/if/case ... (v0.60.34): the compound after this
              * segment reads X's output through take. Find where it ends. */

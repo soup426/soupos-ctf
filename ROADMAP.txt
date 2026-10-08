@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.36
+Current version: v0.60.37
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,19 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.37 (2026-10-08)  — A WHOLE LOOP INTO A PROGRAM
+  - `for/while ... done | PROG`, `if ... fi | PROG`, `case ... esac | PROG`:
+    the whole compound's output goes to PROG, as in sh. Before, `done |
+    PROG` was taken for a plain done and the pipe dropped without a word
+    (`while slurp y ; ... done | skim.elf -n 3` printed to the screen for
+    ever). split_segs notes PROG on the closing word; exec_range starts PROG
+    and runs the compound as the feed (v0.60.33's streaming), so an endless
+    loop stops when PROG has what it wants. It nests: a loop piped inside a
+    piped loop, and `prog | while take ... done | prog`.
+  - Anything else after done, fi or esac (`done > F`) is refused with a
+    message rather than ignored.
+  - scripts/pipeloop-test.sh compares eight lines with bash.
 
 v0.60.36 (2026-10-08)  — TALLY -S AND -W
   - tally.elf -s SEP puts SEP between the numbers (as written: any length,
