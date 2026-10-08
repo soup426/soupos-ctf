@@ -33,7 +33,7 @@ against the host's own.
 
 ---
 
-## 1. uniq.elf
+## 1. uniq.elf — DONE v0.56.5
 
 Adjacent duplicate lines folded, with -c (counts, in the host's format) and
 -d (only the repeated ones). Compare with the host's uniq over the same

@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.56.4
+Current version: v0.56.5
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,18 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.56.5 (2026-10-08)  — uniq.elf
+  Fifteenth queue, item 1.
+  - user/uniq.c: adjacent duplicate lines folded into one, with -c (counts
+    in GNU's "%7d " format) and -d (only lines that repeat); streams, with
+    two growing line buffers; a last line with no newline is a line and
+    is printed with one.
+  - scripts/uniq-test.sh, in check.sh: adjacent and non-adjacent repeats,
+    repeated empty lines, a last line with no newline equal to the one
+    before, a single unterminated line and an empty file; eight forms,
+    sort.elf | uniq.elf -c among them, each compared byte for byte with the
+    host's uniq.
 
 v0.56.4 (2026-10-08)  — > KEEPS BIG OUTPUT, AND SAYS WHEN IT CANNOT
   Fourteenth queue, item 5 (found measuring sort.elf).

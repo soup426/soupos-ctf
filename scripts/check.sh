@@ -64,7 +64,7 @@ run "gate"                      ./scripts/smoke-test.sh
 if [ "$MODE" = "full" ]; then
     for t in ssh-test pass-test hatch-test console-test fat-longname-test \
              random-test x25519-test sound-test mixer-test music-test \
-             framebuffer-test fullness-test lines-test fsck-test ls-test users-test rc-test fsops-test guess-test owner-test cooks-test bowls-test last-test idle-test du-test secrets-test privs-test reserve-test motd-test append-test grep-test headtail-test sort-test redirect-test; do
+             framebuffer-test fullness-test lines-test fsck-test ls-test users-test rc-test fsops-test guess-test owner-test cooks-test bowls-test last-test idle-test du-test secrets-test privs-test reserve-test motd-test append-test grep-test headtail-test sort-test redirect-test uniq-test; do
         run "$t" "./scripts/$t.sh"
     done
     # challenge-test rebuilds as CHALLENGE=1, so it gets a tree of its own too.
