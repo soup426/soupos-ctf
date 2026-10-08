@@ -31,7 +31,7 @@ looks at what that leaves loose.
 
 ---
 
-## 1. A fired cook's files go to the next hire
+## 1. A fired cook's files go to the next hire — DONE v0.53.0
 
 `hire` takes the smallest free uid, and `fire` frees it. Files record their
 owner as a uid, so the next cook hired is likely to own everything the fired
@@ -40,25 +40,33 @@ someone else, and see who owns the file. Then decide between never reusing a
 uid and handing a fired cook's files to the headchef, and write down why.
 Also find the real upper bound on uids, given how the owner is stored on disk.
 
-## 2. last
+## 2. A closed bowl closes what is inside it
+
+Found while proving item 1: a cook refused at `cd /home/saucier` (rwx---) can
+still `pour /home/saucier/RECIPE.TXT`, because commands and syscalls check
+the file's own mode and never the bowls above it. Homes are only closed to
+`cd`. Require search (x) on every bowl along a path, in users_may so the
+shell and the syscalls agree, and prove it on the old kernel first.
+
+## 3. last
 
 Logins leave only klog lines, which do not survive a reboot. Record each
 login and each refused one (cook, console or address, time) in a file that
 does, and add `last` to show them, newest first. Check the record survives a
 reboot and that mtools can read it.
 
-## 3. Idle sessions end
+## 4. Idle sessions end
 
 An SSH session left open holds one of four slots forever. End sessions with
 no input for a set time (a setting in /etc/rc, off by default on the
 console), say why to the client, and log it. Test with a short timeout.
 
-## 4. du
+## 5. du
 
 Homes make it worth knowing what takes the space. `du [bowl]`: the bytes and
 clusters under each entry, with a total, checked against mtools.
 
-## 5. Doom at the framebuffer's own resolution — DEFERRED
+## 6. Doom at the framebuffer's own resolution — DEFERRED
 
 Carried; the user asked to keep to OS work.
 

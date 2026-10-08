@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.52.3
+Current version: v0.53.0
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,25 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.53.0 (2026-10-08)  — FIRING HANDS A COOK'S FILES TO THE HEADCHEF
+  Ninth queue, item 1.
+  - hire takes the smallest free uid and fire frees it, and files record
+    their owner as a uid. Proven on v0.52.3: saucier wrote a file and was
+    fired, intern was hired with the same uid 2, and owned saucier's file
+    and walked into saucier's closed home.
+  - uids cannot simply stop being reused: the owner is stored on disk as
+    200 + uid in one byte, so only 0-55 exist. Instead `fire` walks the
+    disk and hands everything the cook owned to the headchef, and refuses
+    while the cook still has a shell or a live process, which carry the
+    uid as surely as a file. A cook later hired under the same name does
+    not inherit the old home (it is the headchef's) and starts at /.
+  - users-test.sh: fire refuses a cook with a process running; firing
+    hands over the home and the file; the next hire gets the uid but not
+    the files; a rehired name has no home; fsck is clean.
+  - Found on the way, queued as item 2: a closed bowl does not close what
+    is inside it. intern, refused at `cd /home/saucier`, could still `pour`
+    the file by its full path.
 
 v0.52.3 (2026-10-08)  — OWNERS IN ps, kitchen AND orders
   Eighth queue, item 4.

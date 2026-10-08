@@ -115,4 +115,25 @@ grep -q "hello from ring 3" "$WORK/home.log" \
     && echo "  ok    programs are still found from a home (the root is searched too)" || { echo "  FAIL  hello.elf not found from a home"; fail=1; }
 mdir -i "$WORK/home.img" ::/home 2>/dev/null | grep -qi "saucier" && [ "$(fsck.fat -n "$WORK/home.img" 2>&1 | wc -l)" -le 2 ] \
     && echo "  ok    mtools sees the homes and fsck is clean" || { echo "  FAIL  /home on disk or fsck"; fail=1; }
+# ── fire hands a cook's files to the headchef (v0.53.0) ──
+# uids are reused (the owner byte holds 0-55), so before this the next hire
+# owned everything a fired cook left, closed home included.
+cp disk.img "$WORK/fire.img"
+boot "$WORK/fire.img" "$WORK/fire.log" "headchef" "rosemary" "WAIT:1" \
+    "hire saucier" "WAIT:1" "basil" "WAIT:1" "basil" "WAIT:2" "clockout" "WAIT:1" \
+    "saucier" "basil" "WAIT:2" "stir /home/saucier/RECIPE.TXT the secret sauce" "WAIT:1" "cook hog.elf &" "WAIT:2" "clockout" "WAIT:1" \
+    "headchef" "rosemary" "WAIT:2" "fire saucier" "WAIT:1" "kill %" "WAIT:2" "fire saucier" "WAIT:2" \
+    "hire intern" "WAIT:1" "mint" "WAIT:1" "mint" "WAIT:2" "perms /home/saucier/RECIPE.TXT" "WAIT:1" \
+    "hire saucier" "WAIT:1" "thyme" "WAIT:1" "thyme" "WAIT:2" "clockout" "WAIT:1" \
+    "intern" "mint" "WAIT:2" "whoami" "WAIT:1" "cd /home/saucier" "WAIT:1"
+grep -q "saucier is still at work (0 shells, 1 process)" "$WORK/fire.log" \
+    && echo "  ok    fire refuses a cook with a process still running" || { echo "  FAIL  fire did not refuse a cook at work"; fail=1; }
+grep -q "fired saucier (uid [0-9]*): 2 entries handed to the headchef" "$WORK/fire.log" \
+    && echo "  ok    firing hands the cook's home and file to the headchef" || { echo "  FAIL  hand-over"; grep "fired" "$WORK/fire.log"; fail=1; }
+grep -q "owner: headchef" "$WORK/fire.log" && grep -q "intern  (uid 2)" "$WORK/fire.log" && grep -q "Permission denied: /home/saucier" "$WORK/fire.log" \
+    && echo "  ok    the next hire gets the uid but not the files" || { echo "  FAIL  the reused uid still reaches the old files"; fail=1; }
+grep -q "but no home: /home/saucier is not theirs" "$WORK/fire.log" \
+    && echo "  ok    a rehired name does not inherit the old home" || { echo "  FAIL  rehire took over the old home"; fail=1; }
+[ "$(fsck.fat -n "$WORK/fire.img" 2>&1 | wc -l)" -le 2 ] \
+    && echo "  ok    fsck is clean after the hand-over" || { echo "  FAIL  fsck after fire"; fsck.fat -n "$WORK/fire.img"; fail=1; }
 exit $fail

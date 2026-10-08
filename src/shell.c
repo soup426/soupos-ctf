@@ -303,6 +303,14 @@ static void ensure_home(uint8_t uid, char *cwd_out) {
         fat_chmod(home, FAT_PERM_OR | FAT_PERM_OW | FAT_PERM_OX);      /* rwx--- */
         klog("[users] made %s for %s\n", home, name);
     }
+    uint8_t owner, mode;
+    if (fat_is_dir(home) && fat_stat(home, &owner, &mode) == 0 && owner != uid) {
+        /* A fired cook's home, handed to the headchef: not this cook's to
+         * inherit just because the name matches (v0.53.0). */
+        klog("[users] %s belongs to uid %u, not %s; starting at /\n", home, owner, name);
+        strcpy(cwd_out, "/");
+        return;
+    }
     strcpy(cwd_out, fat_is_dir(home) ? home : "/");
 }
 
@@ -2317,10 +2325,50 @@ static void cmd_hire(const char *args) {
     if (users_add(name, secret) == 0) {
         char home[FAT_PATH_MAX];
         ensure_home((uint8_t)users_uid_of(name), home);
-        t_printf("  Hired: %s now has a place in the kitchen, and a home at %s.\n", name, home);
+        if (str_eq(home, "/"))
+            t_printf("  Hired: %s now has a place in the kitchen, but no home: /home/%s is not theirs.\n", name, name);
+        else
+            t_printf("  Hired: %s now has a place in the kitchen, and a home at %s.\n", name, home);
     }
     else
         t_puts("  Could not hire (name taken, roster full, or disk error).\n");
+}
+
+/* Hand everything `uid` owns under `dir` to the headchef (v0.53.0). uids
+ * are reused - the owner byte holds only 0-55, so they must be - and a file
+ * left owned by a fired cook's uid belongs to whoever is hired next. One
+ * directory listing on the heap per level, since the shell's stack would not
+ * hold many. Returns the number of entries handed over. */
+static int hand_over(const char *dir, uint8_t uid, int depth) {
+    if (depth > 16) return 0;
+    fat_entry_t *e = kmalloc(sizeof(fat_entry_t) * FAT_LS_MAX);
+    if (!e) return 0;
+    int n = fat_ls(dir, e, FAT_LS_MAX), moved = 0;
+    for (int i = 0; i < n; i++) {
+        char path[FAT_PATH_MAX];
+        const char *nm = fat_display_name(&e[i]);
+        size_t dl = strlen(dir);
+        if (dl + 1 + strlen(nm) + 1 > sizeof(path)) continue;
+        strcpy(path, dir);
+        if (dl > 1) path[dl++] = '/';
+        strcpy(path + dl, nm);
+        uint8_t owner, mode;
+        if (fat_stat(path, &owner, &mode) == 0 && owner == uid && fat_chown(path, 0) == 0) moved++;
+        if (e[i].attr & FAT_ATTR_DIR) moved += hand_over(path, uid, depth + 1);
+    }
+    kfree(e);
+    return moved;
+}
+
+/* How many shells and processes a cook still has: a live one carries the
+ * uid, and would pass to the next hire as surely as a file. */
+static void still_at_work(uint8_t uid, int *nshells, int *nprocs) {
+    *nshells = *nprocs = 0;
+    preempt_disable();
+    for (int i = 0; i < 8; i++) if (shells[i] && shells[i]->uid == uid) (*nshells)++;
+    preempt_enable();
+    int idx = 0; proc_t *p;
+    while ((p = proc_next(&idx)) != 0) if (p->owner == uid && p->state != PROC_ZOMBIE) (*nprocs)++;
 }
 
 static void cmd_fire(const char *args) {
@@ -2334,8 +2382,19 @@ static void cmd_fire(const char *args) {
         t_puts("  The headchef cannot be fired.\n");
         return;
     }
-    if (users_remove(args) == 0) t_printf("  Fired: %s has left the kitchen.\n", args);
-    else                         t_puts("  No such cook (or disk error).\n");
+    int uid = users_uid_of(args);
+    if (uid < 0) { t_puts("  No such cook.\n"); return; }
+    int nsh, npr;
+    still_at_work((uint8_t)uid, &nsh, &npr);
+    if (nsh || npr) {
+        t_printf("  %s is still at work (%d shell%s, %d process%s): clock them out first.\n",
+                 args, nsh, nsh == 1 ? "" : "s", npr, npr == 1 ? "" : "es");
+        return;
+    }
+    if (users_remove(args) != 0) { t_puts("  Could not fire (disk error).\n"); return; }
+    int moved = hand_over("/", (uint8_t)uid, 0);
+    t_printf("  Fired: %s has left the kitchen; %d of their files and bowls are the headchef's now.\n", args, moved);
+    klog("[users] fired %s (uid %d): %d entries handed to the headchef\n", args, uid, moved);
 }
 
 /* perms <file>            - show owner + rwx
