@@ -24,7 +24,7 @@ static void v_flush(term_t *t)                           { (void)t; keyboard_flu
 
 term_t term_vga = {
     "console", v_puts, v_putc, v_color, v_cursor, v_row, v_col, v_cols, v_rows,
-    v_clear, v_getc, v_avail, v_flush, 0, 0
+    v_clear, v_getc, v_avail, v_flush, 0, 0, 0
 };
 
 term_t *term_current(void) {
@@ -195,6 +195,7 @@ static void stream_key(int key, void *ctx) {
      * as the keyboard IRQ arranges for the console; with none, they go to
      * the shell, which uses Ctrl-C to cancel the line. proc_kill rather than
      * the flag alone, because the program may be blocked and needs waking. */
+    if (key == 0x03) s->t.intr++;             /* for shell loops (v0.60.1) */
     if ((key == 0x03 || key == 0x1A) && s->t.fg) {
         proc_t *fg = s->t.fg;
         if (key == 0x03) proc_kill(fg->pid);

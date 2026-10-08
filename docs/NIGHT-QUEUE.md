@@ -38,7 +38,7 @@ $(( EXPR )) with integers: + - * / % and parentheses, unary -, the
 comparisons < <= > >= == != (1 or 0), $NAME and bare NAME for variables,
 division by zero an error. Compare with sh over a table of expressions.
 
-## 2. while loops, and Ctrl-C stops a loop
+## 2. while loops, and Ctrl-C stops a loop — DONE v0.60.1
 
 `while COMMANDS ; do COMMANDS ; done`, as sh does. A shell loop runs no
 program between some commands, so Ctrl-C must also be noticed by the loop

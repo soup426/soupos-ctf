@@ -4624,11 +4624,11 @@ static int split_segs(char *buf, lseg_t *sg, int max) {
         /* do X / then X / else X / if X: the keyword, then X on its own -
          * repeatedly, since X may start with a keyword too (`do if ...`,
          * `then for ...`, `else if ...`). */
-        static const char *const kws[] = { "do", "then", "else", "if" };
+        static const char *const kws[] = { "do", "then", "else", "if", "while" };
         int again = 1;
         while (again && n < max - 1) {
             again = 0;
-            for (int k = 0; k < 4; k++) {
+            for (int k = 0; k < 5; k++) {
                 int kl = (int)strlen(kws[k]);
                 if (strncmp(t, kws[k], (uint32_t)kl) == 0 && t[kl] == ' ') {
                     t[kl] = '\0';
@@ -4670,14 +4670,35 @@ static void wl_add(void *ctx, const char *raw) {
     wl->used += len + 1;
 }
 
+/* Ctrl-C and shell loops (v0.60.1). The outermost run_line notes the
+ * terminal's Ctrl-C count; a loop, and a script, stop between commands once
+ * it has moved: the rest of the line is dropped and the status is 130, as
+ * sh gives for SIGINT. A program running at the press is killed as before. */
+static unsigned intr_mark;
+static int run_depth;
+static int interrupted(void) {
+    term_t *t = cur_shell()->term;
+    if (!t || t->intr == intr_mark) return 0;
+    return 1;
+}
+static int match_done(lseg_t *sg, int from, int to) {      /* for and while share done */
+    int depth = 0;
+    for (int i = from; i < to; i++) {
+        if (is_kw(sg[i].text, "for") || is_kw(sg[i].text, "while")) depth++;
+        else if (is_kw(sg[i].text, "done") && --depth == 0) return i;
+    }
+    return -1;
+}
+
 static void exec_range(lseg_t *sg, int from, int to, int depth) {
     if (depth > 8) { t_puts("  Nested eight deep; not going further.\n"); cur_shell()->last_status = 1; return; }
     int i = from;
     while (i < to && !cur_shell()->exiting) {
+        if (interrupted()) { cur_shell()->last_status = 130; return; }
         int status = cur_shell()->last_status, op = sg[i].op;
         int run = (op == ';') || (op == 'A' && status == 0) || (op == 'O' && status != 0);
         if (is_kw(sg[i].text, "for")) {
-            int d = match_end(sg, i, to, "for", "done");
+            int d = match_done(sg, i, to);
             if (d < 0 || i + 1 >= d || !is_kw(sg[i + 1].text, "do")) {
                 t_puts("  for: expected `for NAME in WORDS ; do ... ; done`.\n");
                 cur_shell()->last_status = 2; return;
@@ -4704,11 +4725,38 @@ static void exec_range(lseg_t *sg, int from, int to, int depth) {
                     if (k) glob_expand(raw, wl_add, wl);
                 }
                 cur_shell()->last_status = 0;
-                for (int w = 0; w < wl->n && !cur_shell()->exiting; w++) {
+                for (int w = 0; w < wl->n && !cur_shell()->exiting && !interrupted(); w++) {
                     set_var(name, wl->list[w]);
                     exec_range(sg, i + 2, d, depth + 1);
                 }
+                if (interrupted()) { kfree(wl); cur_shell()->last_status = 130; return; }
                 kfree(wl);
+            }
+            i = d + 1;
+            continue;
+        }
+        if (is_kw(sg[i].text, "while")) {
+            /* while COMMANDS ; do COMMANDS ; done (v0.60.1): the condition is
+             * the commands between while and do; the status is the body's
+             * last, or 0 if the body never ran, as sh does. */
+            int d = match_done(sg, i, to), dd = -1, dep = 0;
+            for (int j = i; d >= 0 && j < d; j++) {
+                if (is_kw(sg[j].text, "for") || is_kw(sg[j].text, "while")) dep++;
+                else if (is_kw(sg[j].text, "done")) dep--;
+                else if (dep == 1 && is_kw(sg[j].text, "do")) { dd = j; break; }
+            }
+            if (d < 0 || dd < 0) { t_puts("  while: expected `while ... ; do ... ; done`.\n"); cur_shell()->last_status = 2; return; }
+            if (run) {
+                int body_status = 0;
+                for (;;) {
+                    if (interrupted() || cur_shell()->exiting) break;
+                    exec_range(sg, i + 1, dd, depth + 1);
+                    if (interrupted() || cur_shell()->last_status != 0) break;
+                    exec_range(sg, dd + 1, d, depth + 1);
+                    body_status = cur_shell()->last_status;
+                }
+                if (interrupted()) { cur_shell()->last_status = 130; return; }
+                cur_shell()->last_status = body_status;
             }
             i = d + 1;
             continue;
@@ -4743,7 +4791,9 @@ static void run_line(const char *line) {
     if (!buf || !sg) { if (buf) kfree(buf); if (sg) kfree(sg); return; }
     strncpy(buf, line, INPUT_MAX * 2 - 1); buf[INPUT_MAX * 2 - 1] = '\0';
     int n = split_segs(buf, sg, LSEG_MAX);
+    if (run_depth++ == 0 && cur_shell()->term) intr_mark = cur_shell()->term->intr;
     exec_range(sg, 0, n, 0);
+    run_depth--;
     kfree(sg); kfree(buf);
 }
 
@@ -4789,6 +4839,7 @@ static void cmd_run(const char *args) {
         const char *l = line;
         while (*l == ' ') l++;
         if (*l && *l != '#') run_line(l);
+        if (interrupted()) { cur_shell()->last_status = 130; break; }   /* Ctrl-C ends a script (v0.60.1) */
         i = e + 1;
     }
     depth--;

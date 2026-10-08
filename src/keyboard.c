@@ -1,4 +1,5 @@
 #include "keyboard.h"
+#include "term.h"
 #include "random.h"
 #include "isr.h"
 #include "task.h"
@@ -140,6 +141,7 @@ static void keyboard_irq_handler(registers_t *regs) {
          * the IRQ. Flag the program and swallow the key. With no foreground
          * program it falls through to the shell, which uses 0x03 to cancel the
          * input line. */
+        if (c == 0x03) term_vga.intr++;          /* for shell loops (v0.60.1) */
         if (c == 0x03 || c == 0x1A) {
             proc_t *fg = proc_foreground();
             if (fg) {

@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.0
+Current version: v0.60.1
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,24 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.1 (2026-10-08)  — while LOOPS, AND Ctrl-C STOPS A SHELL LOOP
+  Twenty-second queue, item 2.
+  - `while COMMANDS ; do COMMANDS ; done`: the condition is the commands
+    between while and do; the status is the body's last, or 0 if the body
+    never ran, as sh does. for and while share one match for done, so
+    either nests in the other; `while X` splits like `if X`.
+  - A shell loop runs no program between some commands, so Ctrl-C had
+    nothing to kill there. Each terminal now counts Ctrl-C presses (term_t
+    intr: the console's from the keyboard IRQ, a session's from its stream
+    input); the outermost run_line notes the count, and loops, scripts
+    (run) and the line's remaining commands stop once it has moved, status
+    130 as sh gives for SIGINT. A program running at the press is still
+    killed as before.
+  - scripts/while-test.sh, in check.sh: a counting loop with $((...)), a
+    loop that never runs and for inside while leave what sh leaves, with
+    the same status after; Ctrl-C stops an endless `while cook test.elf 1
+    = 1` and the next line runs with $? 130.
 
 v0.60.0 (2026-10-08)  — ARITHMETIC
   Twenty-second queue, item 1.

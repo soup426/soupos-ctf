@@ -34,6 +34,9 @@ struct term {
                            * where Ctrl-C and Ctrl-Z go, and who stdin belongs
                            * to. The console keeps using proc_foreground() too,
                            * for the keyboard IRQ. (v0.36.0) */
+    volatile unsigned intr;   /* Ctrl-C presses, counted (v0.60.1): a shell loop
+                               * runs no program between some of its commands,
+                               * so it watches this to know it was asked to stop */
 };
 
 extern term_t term_vga;          /* the local console: VGA/framebuffer + PS/2 */
