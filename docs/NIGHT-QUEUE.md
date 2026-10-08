@@ -95,7 +95,22 @@ current keys, switch at NEWKEYS. The real client does this on its own too,
 so the server must also ACCEPT a client-initiated rekey. Test: a session
 that stays up through a forced rekey (`ssh -o RekeyLimit=` on the client).
 
-## 5. klog from interrupt context
+## 5. klog from interrupt context — CLOSED 2026-10-07: no live trigger, measured; now an invariant
+
+Audit: no interrupt handler in the tree logs. The NIC's receive path into
+TCP, the mouse, the timer and the keyboard IRQ are all silent; the one
+IRQ-reachable klog (an ARP drop) cannot fire for a host that has just sent us
+a packet. To find out whether the race would matter if one did, a copy of
+the tree was given an unprotected klog in the keyboard IRQ (on every Ctrl-C
+and Ctrl-Z kill) and soaked six-wide: 192 such lines, 0 torn. The structural
+reason: a ring-3 program's stderr line is written inside the int 0x80 gate,
+with interrupts off, so an IRQ can only land between whole lines. What is
+left is a task-context klog with interrupts on against an IRQ that logs, and
+nothing logs from an IRQ. So no mechanism was built; instead "interrupt
+handlers do not klog" is written down in CLAUDE.md and the preemption audit,
+and the [kbd] line was not added to the real tree, since it would create the
+very risk.
+
 
 The task-vs-task half of the klog race is fixed (v0.31.0). An interrupt
 handler's klog still lands inside a task's line. The fix is to make IRQ-side

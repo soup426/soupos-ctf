@@ -953,6 +953,9 @@ image and fails on a "missing" file.
 - Every wait loop halts through `cpu_halt()`, never a bare `hlt`: the timer
   charges a halted tick to idle (`task_idle_last()`), which is what makes
   `ps`/`kitchen` CPU% true. A new `hlt` anywhere else makes its caller look busy.
+- **Interrupt handlers do not klog** (audited and soaked 2026-10-07: none do, and the
+  queue-item-5 note says why that is what keeps serial lines whole). Log from the task
+  the IRQ wakes instead.
 - `klog()`/`klog_puts()` hold preempt_disable for the whole line. That is what
   fixed the "flaky" job-control check: it was the kernel's "continued" line
   torn by the resumed process's output. An IRQ handler's klog can still tear a

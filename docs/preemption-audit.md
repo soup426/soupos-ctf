@@ -73,6 +73,12 @@ respectively, both from the v0.7.x work. `vga.c` serialises text output.
 
 ### Known and deliberately left
 
+**IRQ handlers and klog** — 2026-10-07: no interrupt handler logs, and that
+is now a rule (CLAUDE.md). An unprotected klog added to the keyboard IRQ in a
+copy of the tree and soaked six-wide tore 0 of 192 lines: ring-3 stderr is
+written with interrupts off inside the syscall gate, so the only exposure is
+a task-context klog with interrupts on, against an IRQ that logs.
+
 **`klog.c`** — FIXED for task-vs-task 2026-10-07 in v0.31.0: `klog()` and
 `klog_puts()` now hold preempt_disable for the whole line, after the "cosmetic"
 interleaving below turned out to be the gate's flaky job-control check (the
