@@ -1,11 +1,9 @@
 # Night queue
 
-Fifth queue. The first four are in `docs/queue-archive-2026-10-07*.md`. The
-fourth's notes are the ones to read first: twice there the queue's own
-diagnosis was wrong (the TCP waits did not burn the cpu; ATA under KVM was
-PIO itself, not polling) and only measuring found it, and the worst bug of
-the day (hatch leaking kernel memory) was found by setting up a measurement,
-not by looking for it.
+Sixth queue. The first five are in `docs/queue-archive-2026-10-07*.md`. Read
+the fifth's notes first: its first item found a real bug the moment anything
+looked (the permission byte was FAT's case flags), and its swap item is the
+example of modelling a policy on the host before trusting a kernel number.
 
 ## Standing rules
 
@@ -31,71 +29,45 @@ not by looking for it.
 
 ---
 
-## 1. The disk passes fsck after everything that writes to it — DONE v0.41.0 (it did not: the permission byte was FAT's case flags)
+## 1. Passwords that survive the network
 
-Every filesystem test so far checks that soupOS reads back what it wrote, and
-fat-longname-test has mtools read names. Nothing checks the FAT as a whole:
-lost clusters, cross-linked chains, a directory entry whose size disagrees
-with its chain, the two FAT copies disagreeing. `fsck.fat -n` on the host
-does exactly that. Run it on the disk image after the gate's fat, vga and
-soupyc segments, after fullness-test and lines-test, and after a long
-fatstress, and make a clean report part of check.sh. Expect it to find
-something: nothing has ever looked.
+users.c stores each cook's secret as an unsalted 32-bit AlphaSOUP hash, and
+any preimage logs in. In the CHALLENGE=1 build that is deliberate - it is the
+whole of challenge stage 2 - and must stay byte for byte. In the ordinary
+build it now sits behind `vault`, where a password crosses the network. Use
+salted PBKDF2-HMAC-SHA256 there (HMAC-SHA256 has been verified since
+v0.23.0): a random 16-byte salt from the entropy pool, a few thousand
+iterations, stored in /etc/kitchen in a new line format the old one can be
+told from. Verify PBKDF2 against Python's hashlib.pbkdf2_hmac before using
+it. Old entries still log in and are rewritten in the new format on the
+first successful login; time one login and keep it well under a second.
 
-## 2. More than one SSH session at once — DONE v0.42.0 (four, a worker each; TCP table 8)
+## 2. The machine comes up ready
 
-Sessions have been separate shells since v0.36.0, but the vault still serves
-one connection and tells the second it is busy, because its state is one
-static struct. Make the connection state per connection (a task each, up to
-four, the TCP table's size), keep the busy DISCONNECT for the fifth, and test
-two sessions side by side: separate cwds, separate users, Ctrl-C in one not
-touching the other, both surviving a rekey.
+A fresh boot has no address until someone types `plumbing dhcp`, and nothing
+is listening until someone types `vault 22`. Do DHCP at boot when a NIC is
+present (with a short timeout, so a machine with no network still boots
+promptly), and run /etc/rc.sc - a soupyc script, if present - as headchef
+after it. A test boots an image whose rc.sc opens the vault and logs in over
+SSH with nothing typed at the console.
 
-## 3. Global memory pressure, and a better victim than FIFO — DONE v0.43.0 (pressure unreachable by arithmetic; approximate LRU, 3x fewer page-ins)
+## 3. Files get real timestamps
 
-Swap evicts only at the per-process cap; when the PMM itself runs out, the
-map simply fails. Evict from the faulting process when the PMM is empty too,
-and replace FIFO with the clock algorithm over the accessed bit, so a page in
-use stays. Measure with a working-set program: a hot set that fits plus a
-cold sweep, counting page-ins of the hot set under FIFO and under clock.
+Everything soupOS creates is dated 1980 (mdir shows it), because the write
+time and date fields are left zero. Stamp them from the RTC on create and on
+every write, in the standard write-time/date fields (bytes 22-25; 13-14 now
+hold the owner and mode). Check with mdir that a file written now is dated
+now, and that fsck stays clean.
 
-## 4. Interrupt-driven DMA completion — CLOSED 2026-10-07 by measurement: polling costs ~4 port reads a request
+## 4. Programs can remove files and make directories
 
-Measured with TSC counters around the completion loop (instrumentation
-reverted). A DMA request completes in 47-136 thousand cycles, about 20-60 us,
-after about four polls of the bus-master status: the polling itself is a
-handful of port reads. During fatstress the waits total 57 M cycles in a 30 s
-run, 0.07%. During the swap greedy run they are about 24% of the run - but
-inside the page-fault handler with interrupts off, where nothing else could
-use the cpu unless the fault path learned to sleep, and the only gain would
-be letting a second runnable process use 50 us gaps. Not built; if a
-workload ever has two processes swapping at once, this is the number to beat.
-Original item follows.
+Ring-3 programs can create and read files and now list directories, but not
+remove anything or make a directory. SYS_UNLINK and SYS_MKDIR, and rm.elf and
+mkdir.elf on the disk, with mtools and fsck as the judges.
 
+## 5. Doom at the framebuffer's own resolution — DEFERRED
 
-v0.39.0 made disk I/O DMA, which removed the per-word cost. Completion is
-still polled: a few port reads per request, and a task waiting on the disk
-holds the cpu. With bus-master DMA the drive's IRQ 14 says "done"; block on it.
-Measure idle% during the swap greedy run and during fatstress before and after.
-The fault path runs with interrupts off, so this is also the place to decide,
-with a measurement, whether swap I/O should turn them on.
-
-## 5. Programs can read directories — DONE v0.44.0 (SYS_READDIR, ls.elf, agrees with mtools)
-
-Ring-3 programs can open, read and write files but cannot list a directory,
-so `ls` can only ever be a shell builtin. A `SYS_READDIR` returning one entry
-per call (name, size, is-dir), and `ls.elf` that uses it, with the output
-compared against the shell's own listing of the same directory.
-
-## 6. Memory per process, where you can see it — DONE v0.45.0
-
-`ps` and `kitchen` show cpu but not memory. Show each process's resident
-pages, its swapped-out pages and its stack growth, all of which the kernel
-already counts. Check it against lazy.elf, whose numbers are known.
-
-## 7. Doom at the framebuffer's own resolution — DEFERRED
-
-Carried from the third and fourth queues; the user asked to keep to OS work.
+Carried; the user asked to keep to OS work.
 
 ---
 
