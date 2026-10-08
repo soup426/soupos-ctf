@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.56.8
+Current version: v0.56.9
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,18 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.56.9 (2026-10-08)  — tr.elf
+  Sixteenth queue, item 1.
+  - user/tr.c: translate, -d delete, -s squeeze, with GNU tr's rules in
+    the C locale: ranges (a-z) and the escapes \n \t \\; a '-' at either
+    end of a set is itself; the second set padded with its last character;
+    a character named twice takes its later mapping; -s squeezes runs of
+    the last set named; -d -s deletes the first and squeezes the second.
+    A backwards range is refused, as tr refuses it.
+  - scripts/tr-test.sh, in check.sh: one input with mixed case, digits,
+    runs, punctuation, spaces and a tab; ten forms compared byte for byte
+    with the host's tr.
 
 v0.56.8 (2026-10-08)  — cut.elf
   Fifteenth queue, item 4.

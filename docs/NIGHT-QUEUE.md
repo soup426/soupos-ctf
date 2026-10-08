@@ -33,7 +33,7 @@ honestly.
 
 ---
 
-## 1. tr.elf
+## 1. tr.elf — DONE v0.56.9
 
 Translate one set of characters to another, with ranges (a-z) and the
 shorter set padded with its last character as tr does; -d deletes the set;
