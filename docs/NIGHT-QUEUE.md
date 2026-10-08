@@ -32,14 +32,14 @@ control flow, now that they have variables, test.elf and globs.
 
 ---
 
-## 1. for loops
+## 1. for loops — DONE v0.59.3
 
 `for NAME in WORDS ; do COMMANDS ; done` on one line (and in a script): the
 words expanded first (globs, $vars), NAME set to each in turn, COMMANDS run
 through run_line each time; the loop's status is the last command's.
 Compare what a loop leaves behind with sh running the same line.
 
-## 2. if blocks
+## 2. if blocks — DONE v0.59.3
 
 `if COMMANDS ; then COMMANDS ; [else COMMANDS ;] fi` on one line: the
 branch by the exit status of the condition's last command, as sh does.

@@ -1292,28 +1292,31 @@ static int stage_add_arg(stage_t *st, const char *tok) {
  * in the C locale, and a leading * or ? does not match a name that starts
  * with '.'. No match: the word goes as it is, as sh does. -1 if the
  * arguments no longer fit. */
-static int stage_add_word(stage_t *st, const char *tok) {
+/* Expand a word's globs, calling emit for each result (v0.58.3; a callback
+ * since v0.59.3 so `for` uses it too). A word with no unquoted * or ?, or
+ * with any quote in it, is emitted exactly as written. */
+static void glob_expand(const char *tok, void (*emit)(void *, const char *), void *ctx) {
     int globby = 0, quoted = 0;
     for (const char *c = tok; *c; c++) {
         if (*c == '*' || *c == '?') globby = 1;
         if (*c == '\'' || *c == '"') quoted = 1;
     }
-    if (!globby || quoted) return stage_add_arg(st, tok);
+    if (!globby || quoted) { emit(ctx, tok); return; }
     char dirpart[FAT_PATH_MAX], pat[FAT_PATH_MAX];
     const char *slash = 0;
     for (const char *c = tok; *c; c++) if (*c == '/') slash = c;
     if (slash) {
         int dl = (int)(slash - tok) + 1;
-        if (dl >= FAT_PATH_MAX) return stage_add_arg(st, tok);
+        if (dl >= FAT_PATH_MAX) { emit(ctx, tok); return; }
         memcpy(dirpart, tok, (uint32_t)dl); dirpart[dl] = '\0';
         strncpy(pat, slash + 1, sizeof(pat) - 1); pat[sizeof(pat) - 1] = '\0';
     } else { dirpart[0] = '\0'; strncpy(pat, tok, sizeof(pat) - 1); pat[sizeof(pat) - 1] = '\0'; }
-    for (const char *c = dirpart; *c; c++) if (*c == '*' || *c == '?') return stage_add_arg(st, tok);
+    for (const char *c = dirpart; *c; c++) if (*c == '*' || *c == '?') { emit(ctx, tok); return; }
     char dir[FAT_PATH_MAX];
     if (dirpart[0]) resolve_path(dirpart, dir); else strcpy(dir, cur_shell()->cwd);
-    if (!fat_is_dir(dir) || !may(dir, 'r')) return stage_add_arg(st, tok);
+    if (!fat_is_dir(dir) || !may(dir, 'r')) { emit(ctx, tok); return; }
     fat_entry_t *e = kmalloc(sizeof(fat_entry_t) * FAT_LS_MAX);
-    if (!e) return stage_add_arg(st, tok);
+    if (!e) { emit(ctx, tok); return; }
     int n = fat_ls(dir, e, FAT_LS_MAX);
     const char *hit[FAT_LS_MAX]; int nh = 0;
     for (int i = 0; i < n; i++) {
@@ -1323,17 +1326,29 @@ static int stage_add_word(stage_t *st, const char *tok) {
     }
     for (int i = 1; i < nh; i++)                         /* insertion sort, by byte */
         for (int j = i; j > 0 && byte_cmp(hit[j - 1], hit[j]) > 0; j--) { const char *t = hit[j]; hit[j] = hit[j - 1]; hit[j - 1] = t; }
-    int rc = 0;
-    if (!nh) rc = stage_add_arg(st, tok);
-    for (int i = 0; i < nh && rc == 0; i++) {
+    if (!nh) emit(ctx, tok);
+    for (int i = 0; i < nh; i++) {
         char w[FAT_PATH_MAX];
         int dl = (int)strlen(dirpart);
         if (dl + (int)strlen(hit[i]) >= FAT_PATH_MAX) continue;
         strcpy(w, dirpart); strcpy(w + dl, hit[i]);
-        rc = stage_add_arg(st, w);
+        emit(ctx, w);
     }
     kfree(e);
-    return rc;
+}
+
+typedef struct { stage_t *st; int failed; } stage_ctx_t;
+static void stage_emit(void *ctx, const char *w) {
+    stage_ctx_t *c = (stage_ctx_t *)ctx;
+    if (!c->failed && stage_add_arg(c->st, w) < 0) c->failed = 1;
+}
+
+/* A program argument, its globs expanded (v0.58.3). -1 if the arguments no
+ * longer fit. */
+static int stage_add_word(stage_t *st, const char *tok) {
+    stage_ctx_t c = { st, 0 };
+    glob_expand(tok, stage_emit, &c);
+    return c.failed ? -1 : 0;
 }
 
 static void cook_err(const char *msg) {
@@ -4354,6 +4369,7 @@ static void dispatch(const char *buf) {
  * 1 if the text was an assignment. `A=1 cmd` (a variable for one command)
  * is not supported: written down, not pretended. */
 static void unquote(char *w);
+static void set_var(const char *name, const char *value);
 static int try_assign(const char *text) {
     const char *t = text;
     while (*t == ' ') t++;
@@ -4371,19 +4387,25 @@ static int try_assign(const char *text) {
     }
     value[k] = '\0';
     unquote(value);
-    shell_t *me = cur_shell();
     char name[16]; memcpy(name, t, (uint32_t)n); name[n] = '\0';
+    set_var(name, value);
+    return 1;
+}
+
+/* Set a shell variable (assignment, and each turn of a for loop). */
+static void set_var(const char *name, const char *value) {
+    shell_t *me = cur_shell();
     int slot = -1;
     for (int i = 0; i < me->nvars; i++) if (str_eq(me->vname[i], name)) slot = i;
     if (slot < 0) {
-        if (me->nvars >= 16) { t_puts("  Too many variables (16).\n"); me->last_status = 1; return 1; }
+        if (me->nvars >= 16) { t_puts("  Too many variables (16).\n"); me->last_status = 1; return; }
         slot = me->nvars++;
-        strcpy(me->vname[slot], name);
+        strncpy(me->vname[slot], name, sizeof(me->vname[slot]) - 1);
+        me->vname[slot][sizeof(me->vname[slot]) - 1] = '\0';
     }
     strncpy(me->vval[slot], value, sizeof(me->vval[slot]) - 1);
     me->vval[slot][sizeof(me->vval[slot]) - 1] = '\0';
     me->last_status = 0;
-    return 1;
 }
 
 /* unset NAME (v0.58.0). */
@@ -4397,84 +4419,227 @@ static void cmd_unset(const char *args) {
         }
 }
 
-static void run_line(const char *line) {
-    char seg[INPUT_MAX];
-    int  op = ';';                 /* how this segment joins the one before */
-    const char *s = line;
-    for (;;) {
-        int n = 0, next_op = 0;
-        char inq = 0;                    /* inside quotes: no splitting */
+/* Expand one command's text: ~, $NAME / ${NAME} and $?, quotes left in
+ * for the parts that follow (v0.57.1-v0.58.0; one function since v0.59.3). */
+static void expand_seg(const char *seg, char *ex) {
+    int  k = 0;
+    char sq = 0;                     /* inside '...', $? is left alone */
+    /* ~ is the cook's home (v0.57.3): a word that is ~ or starts
+     * with ~/, unquoted, at the start of a word (after a space, or
+     * right after < >). The headchef's home is /, and ~/X gives /X
+     * (sh would give //X). */
+    char home[FAT_PATH_MAX];
+    if (cur_shell()->uid == 0) strcpy(home, "/");
+    else { strcpy(home, "/home/"); strncpy(home + 6, users_name_of(cur_shell()->uid), sizeof(home) - 7); home[sizeof(home) - 1] = '\0'; }
+    for (int i = 0; seg[i] && k < INPUT_MAX - 1; i++) {
+        if (seg[i] == '\'' && sq != '"') sq = sq ? 0 : '\'';
+        else if (seg[i] == '"' && sq != '\'') sq = sq ? 0 : '"';
+        char prev = i ? seg[i - 1] : ' ';
+        if (seg[i] == '~' && !sq && (prev == ' ' || prev == '<' || prev == '>')
+            && (seg[i + 1] == '\0' || seg[i + 1] == ' ' || seg[i + 1] == '/')) {
+            const char *h = home;
+            if (seg[i + 1] == '/' && h[0] == '/' && h[1] == '\0') h = "";   /* ~/X with home / */
+            while (*h && k < INPUT_MAX - 1) ex[k++] = *h++;
+            continue;
+        }
+        /* $NAME and ${NAME} (v0.58.0): a shell variable, empty if unset;
+         * not inside '...'. */
+        if (seg[i] == '$' && sq != '\'' &&
+            (seg[i + 1] == '{' || seg[i + 1] == '_' ||
+             (seg[i + 1] >= 'A' && seg[i + 1] <= 'Z') || (seg[i + 1] >= 'a' && seg[i + 1] <= 'z'))) {
+            char name[16]; int nn = 0, j = i + 1, braced = (seg[j] == '{');
+            if (braced) j++;
+            while ((seg[j] == '_' || (seg[j] >= 'A' && seg[j] <= 'Z') || (seg[j] >= 'a' && seg[j] <= 'z') ||
+                    (seg[j] >= '0' && seg[j] <= '9')) && nn < 15) name[nn++] = seg[j++];
+            name[nn] = '\0';
+            if (braced) { if (seg[j] != '}') { ex[k++] = seg[i]; continue; } j++; }
+            shell_t *me = cur_shell();
+            for (int v = 0; v < me->nvars; v++)
+                if (str_eq(me->vname[v], name)) {
+                    for (const char *val = me->vval[v]; *val && k < INPUT_MAX - 1; val++) ex[k++] = *val;
+                    break;
+                }
+            i = j - 1;
+            continue;
+        }
+        if (seg[i] == '$' && seg[i + 1] == '?' && sq != '\'') {
+            char d[12]; int nd = 0; unsigned v = (unsigned)cur_shell()->last_status;
+            do { d[nd++] = (char)('0' + v % 10); v /= 10; } while (v);
+            while (nd && k < INPUT_MAX - 1) ex[k++] = d[--nd];
+            i++;
+        } else ex[k++] = seg[i];
+    }
+    ex[k] = '\0';
+}
+
+/* Run one command: expand it, then it is an assignment or a dispatch. */
+static void run_one(const char *seg) {
+    const char *q = seg; while (*q == ' ') q++;
+    if (!*q) return;
+    char ex[INPUT_MAX];
+    expand_seg(seg, ex);
+    if (!try_assign(ex)) dispatch(ex);
+}
+
+/* ---- control flow: for and if (v0.59.3) ---------------------------------
+ * A line is split into segments joined by ; && ||, as before, but a segment
+ * that starts with do, then or else becomes the keyword and the command
+ * after it, and `if X` becomes `if` and `X`, so the keywords stand alone.
+ * exec_range then walks the segments: `for NAME in WORDS ; do ... ; done`
+ * and `if ... ; then ... ; [else ... ;] fi` find their matching done or fi
+ * by counting nesting, and run their bodies through exec_range again. Each
+ * command is expanded just before it runs, so $NAME takes each value of a
+ * loop in turn. */
+#define LSEG_MAX 64
+typedef struct { const char *text; int op; } lseg_t;     /* op: ';' 'A' 'O' */
+
+static int is_kw(const char *t, const char *kw) {
+    int n = (int)strlen(kw);
+    return strncmp(t, kw, (uint32_t)n) == 0 && (t[n] == '\0' || t[n] == ' ');
+}
+
+static int split_segs(char *buf, lseg_t *sg, int max) {
+    int n = 0, op = ';';
+    char *s = buf;
+    while (n < max) {
+        char *start = s, inq = 0;
+        int next_op = 0;
         while (*s) {
-            if (inq) { if (*s == inq) inq = 0; if (n < INPUT_MAX - 1) seg[n++] = *s; s++; continue; }
-            if (*s == '\'' || *s == '"') { inq = *s; if (n < INPUT_MAX - 1) seg[n++] = *s; s++; continue; }
-            if (s[0] == ';')                 { next_op = ';'; s += 1; break; }
-            if (s[0] == '&' && s[1] == '&')  { next_op = 'A'; s += 2; break; }
-            if (s[0] == '|' && s[1] == '|')  { next_op = 'O'; s += 2; break; }
-            if (n < INPUT_MAX - 1) seg[n++] = *s;
+            if (inq) { if (*s == inq) inq = 0; s++; continue; }
+            if (*s == '\'' || *s == '"') { inq = *s; s++; continue; }
+            if (s[0] == ';')                { next_op = ';'; *s = '\0'; s += 1; break; }
+            if (s[0] == '&' && s[1] == '&') { next_op = 'A'; *s = '\0'; s += 2; break; }
+            if (s[0] == '|' && s[1] == '|') { next_op = 'O'; *s = '\0'; s += 2; break; }
             s++;
         }
-        while (n > 0 && seg[n - 1] == ' ') n--;   /* "reheat " is not "reheat" */
-        seg[n] = '\0';
-        int status = cur_shell()->last_status;
-        int run = (op == ';') || (op == 'A' && status == 0) || (op == 'O' && status != 0);
-        const char *q = seg; while (*q == ' ') q++;
-        if (run && *q) {
-            /* $? is the status when THIS part runs (v0.57.1), as in sh:
-             * in `a || echo $?` it is a's. */
-            char ex[INPUT_MAX];
-            int  k = 0;
-            char sq = 0;                     /* inside '...', $? is left alone */
-            /* ~ is the cook's home (v0.57.3): a word that is ~ or starts
-             * with ~/, unquoted, at the start of a word (after a space, or
-             * right after < >). The headchef's home is /, and ~/X gives /X
-             * (sh would give //X). */
-            char home[FAT_PATH_MAX];
-            if (cur_shell()->uid == 0) strcpy(home, "/");
-            else { strcpy(home, "/home/"); strncpy(home + 6, users_name_of(cur_shell()->uid), sizeof(home) - 7); home[sizeof(home) - 1] = '\0'; }
-            for (int i = 0; seg[i] && k < INPUT_MAX - 1; i++) {
-                if (seg[i] == '\'' && sq != '"') sq = sq ? 0 : '\'';
-                else if (seg[i] == '"' && sq != '\'') sq = sq ? 0 : '"';
-                char prev = i ? seg[i - 1] : ' ';
-                if (seg[i] == '~' && !sq && (prev == ' ' || prev == '<' || prev == '>')
-                    && (seg[i + 1] == '\0' || seg[i + 1] == ' ' || seg[i + 1] == '/')) {
-                    const char *h = home;
-                    if (seg[i + 1] == '/' && h[0] == '/' && h[1] == '\0') h = "";   /* ~/X with home / */
-                    while (*h && k < INPUT_MAX - 1) ex[k++] = *h++;
-                    continue;
+        char *t = start;
+        while (*t == ' ') t++;
+        char *end = t + strlen(t);
+        while (end > t && end[-1] == ' ') *--end = '\0';
+        /* do X / then X / else X / if X: the keyword, then X on its own -
+         * repeatedly, since X may start with a keyword too (`do if ...`,
+         * `then for ...`, `else if ...`). */
+        static const char *const kws[] = { "do", "then", "else", "if" };
+        int again = 1;
+        while (again && n < max - 1) {
+            again = 0;
+            for (int k = 0; k < 4; k++) {
+                int kl = (int)strlen(kws[k]);
+                if (strncmp(t, kws[k], (uint32_t)kl) == 0 && t[kl] == ' ') {
+                    t[kl] = '\0';
+                    sg[n].text = t; sg[n].op = op; n++;
+                    op = ';';
+                    t += kl + 1; while (*t == ' ') t++;
+                    again = 1; break;
                 }
-                /* $NAME and ${NAME} (v0.58.0): a shell variable, empty if unset;
-                 * not inside '...'. */
-                if (seg[i] == '$' && sq != '\'' &&
-                    (seg[i + 1] == '{' || seg[i + 1] == '_' ||
-                     (seg[i + 1] >= 'A' && seg[i + 1] <= 'Z') || (seg[i + 1] >= 'a' && seg[i + 1] <= 'z'))) {
-                    char name[16]; int nn = 0, j = i + 1, braced = (seg[j] == '{');
-                    if (braced) j++;
-                    while ((seg[j] == '_' || (seg[j] >= 'A' && seg[j] <= 'Z') || (seg[j] >= 'a' && seg[j] <= 'z') ||
-                            (seg[j] >= '0' && seg[j] <= '9')) && nn < 15) name[nn++] = seg[j++];
-                    name[nn] = '\0';
-                    if (braced) { if (seg[j] != '}') { ex[k++] = seg[i]; continue; } j++; }
-                    shell_t *me = cur_shell();
-                    for (int v = 0; v < me->nvars; v++)
-                        if (str_eq(me->vname[v], name)) {
-                            for (const char *val = me->vval[v]; *val && k < INPUT_MAX - 1; val++) ex[k++] = *val;
-                            break;
-                        }
-                    i = j - 1;
-                    continue;
-                }
-                if (seg[i] == '$' && seg[i + 1] == '?' && sq != '\'') {
-                    char d[12]; int nd = 0; unsigned v = (unsigned)cur_shell()->last_status;
-                    do { d[nd++] = (char)('0' + v % 10); v /= 10; } while (v);
-                    while (nd && k < INPUT_MAX - 1) ex[k++] = d[--nd];
-                    i++;
-                } else ex[k++] = seg[i];
             }
-            ex[k] = '\0';
-            if (!try_assign(ex)) dispatch(ex);
         }
-        if (cur_shell()->exiting || !next_op) break;
+        if (*t && n < max) { sg[n].text = t; sg[n].op = op; n++; }
+        if (!next_op) break;
         op = next_op;
     }
+    return n;
+}
+
+static int match_end(lseg_t *sg, int from, int to, const char *open, const char *close) {
+    int depth = 0;
+    for (int i = from; i < to; i++) {
+        if (is_kw(sg[i].text, open)) depth++;
+        else if (is_kw(sg[i].text, close) && --depth == 0) return i;
+    }
+    return -1;
+}
+
+static void set_var(const char *name, const char *value);
+
+typedef struct { char words[INPUT_MAX * 2]; int used, n; const char *list[64]; } wordlist_t;
+static void wl_add(void *ctx, const char *raw) {
+    wordlist_t *wl = (wordlist_t *)ctx;
+    char w[INPUT_MAX];
+    strncpy(w, raw, sizeof(w) - 1); w[sizeof(w) - 1] = '\0';
+    unquote(w);                                   /* a loop's values have no quotes */
+    int len = (int)strlen(w);
+    if (wl->n >= 64 || wl->used + len + 1 > (int)sizeof(wl->words)) return;
+    memcpy(wl->words + wl->used, w, (uint32_t)len + 1);
+    wl->list[wl->n++] = wl->words + wl->used;
+    wl->used += len + 1;
+}
+
+static void exec_range(lseg_t *sg, int from, int to, int depth) {
+    if (depth > 8) { t_puts("  Nested eight deep; not going further.\n"); cur_shell()->last_status = 1; return; }
+    int i = from;
+    while (i < to && !cur_shell()->exiting) {
+        int status = cur_shell()->last_status, op = sg[i].op;
+        int run = (op == ';') || (op == 'A' && status == 0) || (op == 'O' && status != 0);
+        if (is_kw(sg[i].text, "for")) {
+            int d = match_end(sg, i, to, "for", "done");
+            if (d < 0 || i + 1 >= d || !is_kw(sg[i + 1].text, "do")) {
+                t_puts("  for: expected `for NAME in WORDS ; do ... ; done`.\n");
+                cur_shell()->last_status = 2; return;
+            }
+            if (run) {
+                char ex[INPUT_MAX];
+                expand_seg(sg[i].text + 3, ex);
+                /* NAME in WORDS */
+                char name[16]; const char *r = first_word(ex, name, sizeof(name));
+                char inw[8]; r = first_word(r, inw, sizeof(inw));
+                if (!name[0] || !str_eq(inw, "in")) { t_puts("  for: expected `for NAME in WORDS`.\n"); cur_shell()->last_status = 2; return; }
+                wordlist_t *wl = kmalloc(sizeof(wordlist_t));
+                if (!wl) return;
+                wl->used = wl->n = 0;
+                while (*r) {
+                    /* a word as written (quotes kept), then globbed or unquoted */
+                    char raw[INPUT_MAX]; int k = 0; char q = 0;
+                    while (*r == ' ') r++;
+                    while (*r && (q || *r != ' ') && k < INPUT_MAX - 1) {
+                        if (q) { if (*r == q) q = 0; } else if (*r == '\'' || *r == '"') q = *r;
+                        raw[k++] = *r++;
+                    }
+                    raw[k] = '\0';
+                    if (k) glob_expand(raw, wl_add, wl);
+                }
+                cur_shell()->last_status = 0;
+                for (int w = 0; w < wl->n && !cur_shell()->exiting; w++) {
+                    set_var(name, wl->list[w]);
+                    exec_range(sg, i + 2, d, depth + 1);
+                }
+                kfree(wl);
+            }
+            i = d + 1;
+            continue;
+        }
+        if (is_kw(sg[i].text, "if")) {
+            int f = match_end(sg, i, to, "if", "fi");
+            int th = -1, el = -1, dep = 0;
+            for (int j = i; f >= 0 && j < f; j++) {
+                if (is_kw(sg[j].text, "if")) dep++;
+                else if (is_kw(sg[j].text, "fi")) dep--;
+                else if (dep == 1 && is_kw(sg[j].text, "then") && th < 0) th = j;
+                else if (dep == 1 && is_kw(sg[j].text, "else") && th >= 0 && el < 0) el = j;
+            }
+            if (f < 0 || th < 0) { t_puts("  if: expected `if ... ; then ... ; fi`.\n"); cur_shell()->last_status = 2; return; }
+            if (run) {
+                exec_range(sg, i + 1, th, depth + 1);
+                if (cur_shell()->last_status == 0) exec_range(sg, th + 1, el >= 0 ? el : f, depth + 1);
+                else if (el >= 0)                  exec_range(sg, el + 1, f, depth + 1);
+                else                               cur_shell()->last_status = 0;
+            }
+            i = f + 1;
+            continue;
+        }
+        if (run) run_one(sg[i].text);
+        i++;
+    }
+}
+
+static void run_line(const char *line) {
+    char *buf = kmalloc(INPUT_MAX * 2);
+    lseg_t *sg = kmalloc(sizeof(lseg_t) * LSEG_MAX);
+    if (!buf || !sg) { if (buf) kfree(buf); if (sg) kfree(sg); return; }
+    strncpy(buf, line, INPUT_MAX * 2 - 1); buf[INPUT_MAX * 2 - 1] = '\0';
+    int n = split_segs(buf, sg, LSEG_MAX);
+    exec_range(sg, 0, n, 0);
+    kfree(sg); kfree(buf);
 }
 
 /* ---- main shell loop ---- */

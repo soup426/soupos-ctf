@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.59.2
+Current version: v0.59.3
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,27 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.59.3 (2026-10-08)  — for LOOPS AND if BLOCKS
+  Twenty-first queue, items 1 and 2 (one executor for both).
+  - run_line is now split, expand and execute: the line is split into
+    segments on ; && || as before, with do, then, else and if separated
+    from the command after them (repeatedly: `do if ...`, `then for ...`);
+    exec_range walks the segments, and `for NAME in WORDS ; do ... ; done`
+    and `if ... ; then ... ; [else ... ;] fi` find their matching done or
+    fi by counting nesting and run their bodies through it. Each command
+    is expanded just before it runs, so $NAME takes each value in turn.
+    The words of a for are expanded (vars, globs, quotes dropped); its
+    status is the last command's; an if whose condition failed and has no
+    else leaves 0, as sh does. Eight levels deep at most.
+  - glob_expand (the v0.58.3 glob code, now with a callback) serves both
+    program arguments and for's words; set_var serves NAME=value and for.
+  - Found by the test: the first split of `do if X` left `if X` whole, so
+    the condition was empty and every turn took the then branch.
+  - scripts/control-test.sh, in check.sh: eight lines - a for, a for over
+    a glob, if/else both ways, if inside for, for inside if with a quoted
+    word, the status after a loop and after an if with no else - leave the
+    same files as sh running the same lines.
 
 v0.59.2 (2026-10-08)  — find.elf
   Twentieth queue, item 3.
