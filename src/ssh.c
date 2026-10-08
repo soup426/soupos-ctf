@@ -14,6 +14,7 @@
  * the pieces rather than only the RFC's combined call.
  */
 #include "ssh.h"
+#include "logins.h"
 #include "tcp.h"
 #include "net.h"
 #include "task.h"
@@ -642,6 +643,19 @@ static int address_locked(uint32_t ip) {
     return fail_table[i].fails >= FAIL_LIMIT;
 }
 
+/* A dotted quad, by hand; out holds at least 16 bytes. */
+static void ip_text(uint32_t a, char *out) {
+    int k = 0;
+    for (int part = 3; part >= 0; part--) {
+        uint32_t v = (a >> (part * 8)) & 255;
+        if (v >= 100) out[k++] = (char)('0' + v / 100);
+        if (v >= 10)  out[k++] = (char)('0' + (v / 10) % 10);
+        out[k++] = (char)('0' + v % 10);
+        if (part) out[k++] = '.';
+    }
+    out[k] = '\0';
+}
+
 static void note_failure(uint32_t ip) {
     int i = fail_slot(ip, 1);
     if (timer_get_ticks() - fail_table[i].last > FAIL_WINDOW) fail_table[i].fails = 0;
@@ -716,6 +730,7 @@ static int userauth(void) {
         }
         if (ok) {
             note_success(S.peer_ip);
+            { char ip[16]; ip_text(S.peer_ip, ip); logins_record(u, ip, 1); }
             if (strcmp(m, "password") == 0) klog("[ssh] %s authenticated by password\n", u);
             uint8_t ok_msg = MSG_USERAUTH_SUCCESS;
             return write_packet(&ok_msg, 1);
@@ -726,6 +741,7 @@ static int userauth(void) {
              * question: it costs this connection a pause, and the address
              * a mark. */
             note_failure(S.peer_ip);
+            { char ip[16]; ip_text(S.peer_ip, ip); logins_record(u, ip, 0); }
             uint32_t pause = 1000u << (S.pw_fails < 3 ? S.pw_fails : 3);
             S.pw_fails++;
             task_sleep(pause);
@@ -748,16 +764,7 @@ static int start_session(const char *exec_line) {
     if (S.shell) return -1;                          /* one per channel */
     term_stream_init(&S.term, S.pty_cols, S.pty_rows, stream_write, &S);
     char where[20];
-    uint32_t a = S.peer_ip;
-    int k = 0;
-    for (int part = 3; part >= 0; part--) {           /* dotted quad, by hand */
-        uint32_t v = (a >> (part * 8)) & 255;
-        if (v >= 100) where[k++] = (char)('0' + v / 100);
-        if (v >= 10)  where[k++] = (char)('0' + (v / 10) % 10);
-        where[k++] = (char)('0' + v % 10);
-        if (part) where[k++] = '.';
-    }
-    where[k] = '\0';
+    ip_text(S.peer_ip, where);
     S.shell = shell_session_start(&S.term.t, S.uid, exec_line, where);
     if (!S.shell) return -1;
     klog("[ssh] %s: a shell of its own for uid %u\n", exec_line ? "exec" : "shell", S.uid);

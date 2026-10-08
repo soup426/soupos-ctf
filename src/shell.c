@@ -28,6 +28,7 @@
 #include "mixer.h"
 #include "remote.h"
 #include "ssh.h"
+#include "logins.h"
 #include "swap.h"
 #ifndef NO_DOOM
 #include "music.h"
@@ -332,6 +333,7 @@ static void do_login(void) {
         if (uid >= 0) {
             set_session_uid((uint8_t)uid);
             ensure_home((uint8_t)uid, cur_shell()->cwd);
+            logins_record(users_current_name(), "console", 1);
             t_color(VGA_LIGHT_GREEN, VGA_BLACK);
             t_printf("\n  Welcome to the kitchen, %s.%s\n\n",
                        users_current_name(),
@@ -341,6 +343,7 @@ static void do_login(void) {
         }
         t_color(VGA_LIGHT_RED, VGA_BLACK);
         t_puts("  The kitchen door stays locked -- wrong cook or secret.\n");
+        logins_record(name, "console", 0);
         t_color(VGA_LIGHT_GREY, VGA_BLACK);
     }
 }
@@ -576,6 +579,7 @@ static void cmd_menu(void) {
         {0, "    ps                 - list running tasks"},
         {0, "    kitchen            - the whole room, live, until a key"},
         {0, "    who                - every shell: its cook, where, up, idle"},
+        {0, "    last               - who clocked in, and who was refused, newest first"},
         {0, "    kill <id>          - stop a background task"},
         {0, "    bgclock            - spawn a clock in the top-right corner"},
         {0, "    yieldbg            - bg task logging [bg] to serial (pairs with cook spin.elf)"},
@@ -2051,6 +2055,37 @@ static void cmd_who(void) {
         t_printf("  %-10s  %-18s  %8s  %8s%s\n", users_name_of(sh->uid), sh->where, up, idle,
                  sh == cur_shell() ? "   (you)" : (sh->exec_line[0] ? "   exec" : ""));
     }
+}
+
+/* last - the login record, newest first (v0.53.2). /etc/logins is the
+ * headchef's but readable by every cook, as a login record usually is. */
+static void cmd_last(void) {
+    if (!may(LOGINS_PATH, 'r')) { deny(LOGINS_PATH); return; }
+    uint32_t cap = LOGINS_KEEP * (LOGINS_LINE + 8), got = 0;
+    char *buf = kmalloc(cap + 1);
+    if (!buf) return;
+    if (fat_read(LOGINS_PATH, (uint8_t *)buf, cap, &got) < 0) {
+        t_puts("  No logins recorded yet.\n"); kfree(buf); return;
+    }
+    if (got > cap) got = cap;
+    buf[got] = '\0';
+    t_color(VGA_YELLOW, VGA_BLACK);
+    t_puts("  WHEN              RESULT   COOK             FROM\n");
+    t_color(VGA_LIGHT_GREY, VGA_BLACK);
+    int end = (int)got;
+    while (end > 0) {
+        int start = end - 1;                       /* end is one past a '\n' */
+        while (start > 0 && buf[start - 1] != '\n') start--;
+        int len = end - start;
+        if (len > 1) {
+            buf[start + len - 1] = '\0';           /* drop the newline */
+            if (len > 25 && buf[start + 18] == 'r') t_color(VGA_LIGHT_RED, VGA_BLACK);   /* the RESULT column */
+            t_printf("  %s\n", buf + start);
+            t_color(VGA_LIGHT_GREY, VGA_BLACK);
+        }
+        end = start;
+    }
+    kfree(buf);
 }
 
 /* sample - taste the soup: run the in-kernel subsystem checks. `sample slow`
@@ -3666,7 +3701,7 @@ static const char *const cmd_names[] = {
     "jot", "ai", "cook", "soup", "hash",
     "beep", "mandelbrot", "vgademo", "uname", "cal",
     "clock", "wipe", "fortune", "bounce", "recipe", "leftovers", "spill",
-    "freeze", "reheat", "ps", "kitchen", "who", "orders", "plate", "steep", "kill", "scraps", "sample", "skewer", "larder", "whistle", "hatch", "hush", "pass", "vault",
+    "freeze", "reheat", "ps", "kitchen", "who", "last", "orders", "plate", "steep", "kill", "scraps", "sample", "skewer", "larder", "whistle", "hatch", "hush", "pass", "vault",
 #ifndef NO_DOOM
     "sizzle", "hum",
 #endif
@@ -3906,6 +3941,7 @@ static void dispatch(const char *buf) {
     else if (str_eq(p, "cat"))       cmd_cat();  /* hidden */
     else if (str_eq(p, "ps"))          cmd_ps();
     else if (str_eq(p, "who"))         cmd_who();
+    else if (str_eq(p, "last"))        cmd_last();
     else if (str_eq(p, "kitchen"))     cmd_kitchen();
     else if (str_eq(p, "orders"))      cmd_orders();
     else if (str_eq(p, "scraps"))      cmd_scraps();

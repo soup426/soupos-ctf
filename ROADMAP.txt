@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.53.1
+Current version: v0.53.2
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,31 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.53.2 (2026-10-08)  — last
+  Ninth queue, item 3.
+  - Logins left only klog lines, which die with the machine. Every console
+    and SSH login, and every refused password, now appends a line to
+    /etc/logins: when, ok or refused, the cook (a refused name is cut to
+    15 printable characters), and console or the client's address. The
+    newest 64 lines are kept. The file is always the headchef's, rw-r--,
+    though it is written as whoever is logging in; a mutex serialises the
+    four SSH workers and the console. SSH's "none" probes are not logins
+    and are not recorded.
+  - `last` shows the record newest first, refusals in red.
+  - scripts/last-test.sh, in check.sh: the disk is seeded with a full
+    64-line record; a first boot has a refused and an accepted console
+    login and an SSH login after a wrong password; after a reboot `last`
+    shows all of them newest first, mtools reads the file, the oldest
+    seeded line is gone with 64 kept, the file is the headchef's, and fsck
+    is clean.
+  - console-test's last check ("arrows not leaked") failed once in the
+    full check. It passed 9 of 9 runs under gate load, on this kernel and
+    the previous one; the test read the socket in fixed windows, and the
+    last command alone has no later window to catch slow output. It now
+    waits for that answer (up to 10 s), and keeps its transcript on a
+    failure. (A six-wide run of console-test proves nothing: it has one
+    fixed port, so copies collide.)
 
 v0.53.1 (2026-10-08)  — A CLOSED BOWL CLOSES WHAT IS INSIDE IT
   Ninth queue, item 2 (found while proving item 1).

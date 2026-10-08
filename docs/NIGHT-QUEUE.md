@@ -48,7 +48,7 @@ the file's own mode and never the bowls above it. Homes are only closed to
 `cd`. Require search (x) on every bowl along a path, in users_may so the
 shell and the syscalls agree, and prove it on the old kernel first.
 
-## 3. last
+## 3. last — DONE v0.53.2
 
 Logins leave only klog lines, which do not survive a reboot. Record each
 login and each refused one (cook, console or address, time) in a file that
