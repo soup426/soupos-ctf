@@ -72,7 +72,17 @@ def send(raw, wait=1.5):
     time.sleep(0.2)
     drain(wait)
 
-drain(8)                                  # boot + login prompt
+# Wait for the login prompt itself. This was drain(8), which stops at the
+# first 2 s of silence: under the full check's load the boot (no KVM here)
+# went quiet that long before the kernel was up, the test typed into the
+# bootloader, and the first byte was lost ("cook: eadchef"), twice
+# (2026-10-08). Measured then: a byte sent once the kernel runs is kept and
+# reaches the login; only one sent before the kernel exists is lost.
+import re
+end = time.time() + 120
+while time.time() < end and b"clock in to start your shift" not in b"".join(chunks):
+    drain(1.0)
+time.sleep(0.5)
 send(b"headchef\r", 1.5)                  # CR is what a terminal sends
 send(b"rosemary\r", 2.0)
 send(b"whoami\r", 1.5)
@@ -83,11 +93,8 @@ send(b"\x7f\x7f", 0.5)                    # terminal backspace
 send(b"r\r", 2.0)
 # ANSI arrows must not leak raw escape bytes into the command line.
 send(b"pwd\x1b[D\x1b[C\r", 2.0)
-# The last command has no later command whose reads would catch its output
-# if it is slow, so wait for the answer itself (up to 10 s) rather than a
-# fixed window. Under the full check's load the fixed 2 s once missed it
-# (2026-10-08); every earlier check passed in that run.
-import re
+# The last command has no later command whose reads would catch slow
+# output, so wait for its answer itself (up to 10 s).
 end = time.time() + 10
 while time.time() < end and not re.search(rb"(?m)^\s*/\s*$", b"".join(chunks)):
     drain(1.0)
