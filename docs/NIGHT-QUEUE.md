@@ -55,7 +55,7 @@ History is per shell and wiped at clockout (v0.60.12). Keep each cook's
 in their home (a file only they can read), load it at login, so the up
 arrow and `leftovers` survive a clockout and a reboot. Test across both.
 
-## 5. Ctrl+R finds an old line
+## 5. Ctrl+R finds an old line — DONE v0.60.18
 
 A reverse search through the history at the prompt, as in bash: type and
 the newest match is shown; Ctrl+R again for the one before; Enter runs it,

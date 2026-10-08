@@ -624,6 +624,97 @@ static void line_replace(char *input, int *pos, int *len, const char *new_str) {
     cursor_to(*pos);
 }
 
+/* Ctrl+R: search the leftovers, newest first (v0.60.18). The line becomes
+ *   (leftovers)`query': the newest line containing the query
+ * Typing narrows it, Ctrl+R steps to an older match, Backspace widens it
+ * again. Enter runs the match (returns 1, with it in input); Ctrl+C or
+ * Ctrl+G gives back the line as it was; any other key (an arrow, Home, End,
+ * Esc) keeps the match on the prompt to edit. "(no leftovers)" says the
+ * query matches nothing, and the last match stays shown. */
+static int hist_find(const char *q, int ql, int from, const char *skip) {
+    for (int i = from; i <= cur_shell()->hist_size; i++) {
+        const char *h = hist_get(i);
+        if (!h || (skip && str_eq(h, skip))) continue;
+        for (int k = 0; h[k]; k++)
+            if (strncmp(h + k, q, (size_t)ql) == 0) return i;
+    }
+    return 0;
+}
+
+static void prompt(void);
+
+/* Back to an ordinary prompt on the same row, showing input[0..len). */
+static void search_leave(char *input, int *pos, int *len, int drawn) {
+    t_cursor(cur_shell()->prompt_row, 0);
+    prompt();
+    for (int i = 0; i < *len; i++) t_putc(input[i]);
+    for (int i = cur_shell()->prompt_len + *len; i < drawn; i++) t_putc(' ');
+    cursor_to(*pos);
+}
+
+static int shell_search(char *input, int *pos, int *len) {
+    shell_t *sh = cur_shell();
+    char orig[INPUT_MAX];
+    int olen = *len, opos = *pos;
+    memcpy(orig, input, (size_t)olen);
+    char q[48];
+    int ql = 0, at = 0, failed = 0, drawn = 0;
+    cursor_to(*len);
+    t_putc('\n');
+    sh->prompt_row = t_row();
+    *len = *pos = 0;
+    for (;;) {
+        /* Draw: the label, then the match as the editable line. */
+        const char *label = failed ? "(no leftovers)`" : "(leftovers)`";
+        t_cursor(sh->prompt_row, 0);
+        t_color(VGA_DARK_GREY, VGA_BLACK); t_puts(label);
+        t_color(VGA_WHITE, VGA_BLACK);
+        for (int i = 0; i < ql; i++) t_putc(q[i]);
+        t_color(VGA_DARK_GREY, VGA_BLACK); t_puts("': ");
+        t_color(VGA_LIGHT_GREY, VGA_BLACK);
+        sh->prompt_len = (int)strlen(label) + ql + 3;
+        for (int i = 0; i < *len; i++) t_putc(input[i]);
+        int now = sh->prompt_len + *len;
+        for (int i = now; i < drawn; i++) t_putc(' ');
+        drawn = now;
+        cursor_to(*pos);
+
+        int c = t_getc();
+        if (c < 0) return 0;
+        int found = -1;                  /* -1: nothing to look for this key */
+        if (c == '\n') return *len > 0;
+        if (c == 0x03 || c == 0x07) {    /* Ctrl+C, Ctrl+G: the line as it was */
+            memcpy(input, orig, (size_t)olen);
+            *len = olen; *pos = opos;
+            search_leave(input, pos, len, drawn);
+            return 0;
+        }
+        if (c == 0x12) {                 /* Ctrl+R: an older one */
+            if (ql) { input[*len] = '\0'; found = hist_find(q, ql, at + 1, input); }
+        } else if (c == '\b') {
+            if (ql) { ql--; found = ql ? hist_find(q, ql, 1, 0) : 0; if (!ql) { *len = *pos = 0; at = 0; failed = 0; } }
+        } else if (c >= ' ' && c < 127) {
+            if (ql < (int)sizeof(q)) { q[ql++] = (char)c; found = hist_find(q, ql, at ? at : 1, 0); }
+        } else {                         /* anything else: edit the match */
+            *pos = *len;
+            search_leave(input, pos, len, drawn);
+            return 0;
+        }
+        if (found > 0) {
+            const char *h = hist_get(found);
+            at = found; failed = 0;
+            *len = 0;
+            while (h[*len] && *len < INPUT_MAX - 1) { input[*len] = h[*len]; (*len)++; }
+            input[*len] = '\0';
+            *pos = 0;
+            for (int i = 0; i + ql <= *len; i++)             /* the cursor on the match, as bash */
+                if (strncmp(input + i, q, (size_t)ql) == 0) { *pos = i; break; }
+        } else if (found == 0 && ql) {
+            failed = 1;
+        }
+    }
+}
+
 /* ===========================================================================
  * Commands
  *
@@ -750,7 +841,7 @@ static void cmd_menu(void) {
         {0, "    sleeptest          - test task_sleep and wait-queue (500 ms sleep)"},
         {0, "    vfstest            - test the VFS shim (/dev nodes + file round-trip)"},
         {0, "    dmesg              - dump the kernel log ring buffer"},
-        {0, "  (up/down arrows, Tab finishes commands, programs, paths)"},
+        {0, "  (up/down arrows, Ctrl+R searches, Tab finishes words)"},
         {0, "  (Ctrl+A/E home/end, Ctrl+U clear line, Ctrl+W kill word, Ctrl+C cancel)"},
     };
     page_begin();
@@ -5270,6 +5361,10 @@ static void shell_loop(char *input, char *saved, int *pos_p, int *len_p, int *hb
         if (c < 0) break;
         cur_shell()->last_input = timer_get_ticks();
         if (c != '\t') cur_shell()->tabs = 0;
+        if (c == 0x12) {                         /* Ctrl+R (v0.60.18) */
+            if (!shell_search(input, &pos, &len)) { hist_browse = 0; continue; }
+            c = '\n';                           /* Enter on a match runs it */
+        }
         if (console_hangup && cur_shell() == &the_shell) {
             /* The pass caller left logged in (v0.55.1). */
             console_hangup = 0;

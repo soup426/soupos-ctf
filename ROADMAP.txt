@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.17
+Current version: v0.60.18
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,16 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.18 (2026-10-08)  — CTRL+R
+  - Ctrl+R at the prompt searches the leftovers, newest first, as bash's
+    reverse-i-search does: the line reads (leftovers)`query': match.
+    Typing narrows it, Ctrl+R again steps to an older match (past copies
+    of the one shown), Backspace widens it again from the newest. Enter
+    runs the match; Ctrl+C or Ctrl+G gives back the line as it was; any
+    other key (End, an arrow, Esc) keeps the match on the prompt to edit.
+    "(no leftovers)" says the query matches nothing.
+  - scripts/search-test.sh runs each of those and reads back what ran.
 
 v0.60.17 (2026-10-08)  — LEFTOVERS OUTLIVE THE SHIFT
   - A cook's history is kept on the disk: the shift's end (clockout, an
