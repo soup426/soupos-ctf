@@ -4,6 +4,8 @@
  *   cook rack.elf -r NAMES.TXT       reversed
  *   cook rack.elf -n NUMS.TXT        by the number at the start of the line
  *   cook spoon.elf X | rack.elf -n -r  a pipe stage
+ *   cook rack.elf -t , -k 2,2 -n X     by the second comma field, as a number
+ *   cook rack.elf -u X                 one of each (v0.60.25)
  *
  * The rules are GNU sort's in the C locale: bytes compare unsigned and a
  * prefix sorts first; -n reads leading blanks, an optional '-', digits and
@@ -11,11 +13,45 @@
  * lines -n calls equal fall back to the byte comparison of the whole line;
  * -r reverses all of it. A last line with no newline is printed with one.
  * The input is read whole into memory, then a merge sort over pointers.
+ *
+ * -k N[,M] (v0.60.25) compares from the start of field N to the end of
+ * field M (the end of the line without M). Fields are split on the -t
+ * character, or else where a blank follows a non-blank, so a field starts
+ * with the blanks before it, as GNU sort counts them (no -b here). A line
+ * short of fields has an empty key. -u keeps the first line of each run the
+ * keys call equal, with the whole-line comparison switched off for it, as
+ * GNU sort does; the merge sort is stable, so "first" is the input's first.
  */
 #include "ulib.h"
 
 typedef struct { const char *s; int n; } line_t;
-static int numeric, reverse;
+static int numeric, reverse, unique;
+static int kbeg, kend;             /* -k fields, 1-based; 0: the whole line / to the end */
+static char tsep;                  /* -t character, or 0 for blanks */
+
+static int blank(char c) { return c == ' ' || c == '\t'; }
+
+/* The key of a line: from the start of field kbeg to the end of field kend. */
+static line_t key_of(const line_t *l) {
+    if (!kbeg) return *l;
+    const char *p = l->s, *e = l->s + l->n;
+    for (int f = 1; f < kbeg && p < e; f++) {             /* past kbeg-1 fields */
+        if (tsep) { while (p < e && *p != tsep) p++; if (p < e) p++; }
+        else      { while (p < e && blank(*p)) p++; while (p < e && !blank(*p)) p++; }
+    }
+    const char *q = e;
+    if (kend) {
+        q = l->s;
+        for (int f = 1; f < kend && q < e; f++) {
+            if (tsep) { while (q < e && *q != tsep) q++; if (q < e) q++; }
+            else      { while (q < e && blank(*q)) q++; while (q < e && !blank(*q)) q++; }
+        }
+        if (tsep) { while (q < e && *q != tsep) q++; }
+        else      { while (q < e && blank(*q)) q++; while (q < e && !blank(*q)) q++; }
+    }
+    line_t k = { p, q > p ? (int)(q - p) : 0 };
+    return k;
+}
 
 static int bytecmp(const line_t *a, const line_t *b) {
     int m = a->n < b->n ? a->n : b->n;
@@ -59,10 +95,16 @@ static int numcmp(const line_t *a, const line_t *b) {
     return c * sign;
 }
 
-static int cmp(const line_t *a, const line_t *b) {
-    int c = numeric ? numcmp(a, b) : 0;
-    if (!c) c = bytecmp(a, b);                        /* the last resort */
+/* The keys, then (unless -u) the whole line as the last resort. */
+static int keycmp(const line_t *a, const line_t *b) {
+    line_t x = key_of(a), y = key_of(b);
+    int c = numeric ? numcmp(&x, &y) : bytecmp(&x, &y);
     return reverse ? -c : c;
+}
+static int cmp(const line_t *a, const line_t *b) {
+    int c = keycmp(a, b);
+    if (!c && !unique) { c = bytecmp(a, b); if (reverse) c = -c; }
+    return c;
 }
 
 static void msort(line_t *v, line_t *tmp, int n) {
@@ -77,14 +119,30 @@ static void msort(line_t *v, line_t *tmp, int n) {
 }
 
 int main(void) {
-    char *tok[6];
-    int nt = uargv(tok, 6);        /* sh's splitting, quotes kept together (v0.57.2) */
+    char *tok[12];
+    int nt = uargv(tok, 12);       /* sh's splitting, quotes kept together (v0.57.2) */
     int t = 0;
     for (; t < nt && tok[t][0] == '-' && tok[t][1]; t++)
         for (char *f = tok[t] + 1; *f; f++) {
             if      (*f == 'r') reverse = 1;
             else if (*f == 'n') numeric = 1;
-            else { print("usage: rack.elf [-r] [-n] [file]\n"); return 2; }
+            else if (*f == 'u') unique = 1;
+            else if (*f == 't' || *f == 'k') {
+                /* the value is the rest of this word, or the next word */
+                const char *v = f[1] ? f + 1 : (t + 1 < nt ? tok[++t] : 0);
+                if (!v || !*v) { print("usage: rack.elf [-rnu] [-t C] [-k N[,M]] [file]\n"); return 2; }
+                if (*f == 't') {
+                    if (v[1]) { print("rack: -t takes one character\n"); return 2; }
+                    tsep = v[0];
+                } else {
+                    kbeg = 0; kend = 0;
+                    while (*v >= '0' && *v <= '9') kbeg = kbeg * 10 + (*v++ - '0');
+                    if (*v == ',') { v++; while (*v >= '0' && *v <= '9') kend = kend * 10 + (*v++ - '0'); }
+                    if (kbeg < 1 || *v || (kend && kend < kbeg)) { print("rack: bad -k\n"); return 2; }
+                }
+                break;                       /* the word is used up */
+            }
+            else { print("usage: rack.elf [-rnu] [-t C] [-k N[,M]] [file]\n"); return 2; }
         }
     int fd = FD_STDIN;
     if (t < nt) {
@@ -116,6 +174,9 @@ int main(void) {
         if (all[i] == '\n') { v[k].s = all + s; v[k].n = i - s; k++; s = i + 1; }
     if (s < len) { v[k].s = all + s; v[k].n = len - s; k++; }
     msort(v, tmp, k);
-    for (int i = 0; i < k; i++) { sys_write(FD_STDOUT, v[i].s, v[i].n); sys_write(FD_STDOUT, "\n", 1); }
+    for (int i = 0; i < k; i++) {
+        if (unique && i > 0 && keycmp(&v[i - 1], &v[i]) == 0) continue;   /* -u: the first of a run */
+        sys_write(FD_STDOUT, v[i].s, v[i].n); sys_write(FD_STDOUT, "\n", 1);
+    }
     return 0;
 }

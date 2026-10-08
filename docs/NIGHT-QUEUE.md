@@ -56,7 +56,7 @@ the one after it, as tac's output shows). Compare with the host's tac.
 Tabs to spaces, as `expand` does (-t N, default 8). Compare with the host's
 expand.
 
-## 5. rack sorts by a field, once
+## 5. rack sorts by a field, once — DONE v0.60.25
 
 `-u` (one of each line the sort calls equal), `-t SEP` and `-k N` (sort by
 field N), with the existing -n and -r. Compare with the host's sort.
