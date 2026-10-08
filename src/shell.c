@@ -281,6 +281,31 @@ static void deny(const char *path) {
     t_color(VGA_LIGHT_GREY, VGA_BLACK);
 }
 
+/* Every ordinary cook has a home bowl, /home/<cook>, theirs and closed to
+ * the other cooks, and their shells start in it (v0.52.2). The headchef
+ * keeps the root, as root traditionally does. Made at `hire`, or at the
+ * first login of a cook hired before homes existed. Built here with the
+ * kernel's own hands, not the cook's, since a cook may not write in /home. */
+static void ensure_home(uint8_t uid, char *cwd_out) {
+    if (uid == 0) { strcpy(cwd_out, "/"); return; }
+    const char *name = users_name_of(uid);
+    char home[FAT_PATH_MAX];
+    strcpy(home, "/home/");
+    strncpy(home + 6, name, sizeof(home) - 7); home[sizeof(home) - 1] = '\0';
+    if (!fat_is_dir("/home")) {
+        fat_mkdir("/home");
+        fat_chown("/home", 0);
+        fat_chmod("/home", FAT_PERM_OR | FAT_PERM_OW | FAT_PERM_OX | FAT_PERM_AR | FAT_PERM_AX);
+    }
+    if (!fat_is_dir(home)) {
+        fat_mkdir(home);
+        fat_chown(home, uid);
+        fat_chmod(home, FAT_PERM_OR | FAT_PERM_OW | FAT_PERM_OX);      /* rwx--- */
+        klog("[users] made %s for %s\n", home, name);
+    }
+    strcpy(cwd_out, fat_is_dir(home) ? home : "/");
+}
+
 /* Login gate - loops until a valid cook clocks in. Used at boot and by
  * the `clockout` command. */
 static void do_login(void) {
@@ -298,6 +323,7 @@ static void do_login(void) {
         int uid = users_check(name, secret);
         if (uid >= 0) {
             set_session_uid((uint8_t)uid);
+            ensure_home((uint8_t)uid, cur_shell()->cwd);
             t_color(VGA_LIGHT_GREEN, VGA_BLACK);
             t_printf("\n  Welcome to the kitchen, %s.%s\n\n",
                        users_current_name(),
@@ -1162,6 +1188,13 @@ static void cmd_cook(const char *args) {
      * than none, and a typo in stage 3 should not leave stages 1 and 2 running. */
     for (int i = 0; i < nst; i++) {
         resolve_path(st[i].prog, st[i].path);
+        /* Not here? Programs live in the root: look there too, the way a
+         * PATH would (v0.52.2) - a cook starts in their home bowl now. */
+        if ((!fat_exists(st[i].path) || fat_is_dir(st[i].path)) && st[i].prog[0] != '/') {
+            char alt[FAT_PATH_MAX];
+            alt[0] = '/'; strncpy(alt + 1, st[i].prog, sizeof(alt) - 2); alt[sizeof(alt) - 1] = '\0';
+            if (fat_exists(alt) && !fat_is_dir(alt)) strcpy(st[i].path, alt);
+        }
         if (!fat_exists(st[i].path) || fat_is_dir(st[i].path)) {
             t_color(VGA_LIGHT_RED, VGA_BLACK);
             t_printf("  No such program: %s\n", st[i].prog);
@@ -2281,8 +2314,11 @@ static void cmd_hire(const char *args) {
         t_puts("  Secrets do not match -- nobody hired.\n");
         return;
     }
-    if (users_add(name, secret) == 0)
-        t_printf("  Hired: %s now has a place in the kitchen.\n", name);
+    if (users_add(name, secret) == 0) {
+        char home[FAT_PATH_MAX];
+        ensure_home((uint8_t)users_uid_of(name), home);
+        t_printf("  Hired: %s now has a place in the kitchen, and a home at %s.\n", name, home);
+    }
     else
         t_puts("  Could not hire (name taken, roster full, or disk error).\n");
 }
@@ -4006,6 +4042,7 @@ static void session_task(void *arg) {
     task_t  *me = task_current();
     me->shell = sh;
     me->term  = sh->term;
+    ensure_home(sh->uid, sh->cwd);            /* a session starts at home too */
 
     if (sh->exec_line[0]) {
         /* One command, no prompt and no echo: what `ssh host cmd` means. */

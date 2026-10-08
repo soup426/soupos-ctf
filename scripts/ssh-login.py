@@ -95,7 +95,7 @@ try:
         b.expect(r"headchef\s+10\.0\.2\.2")
         b.expect(r"saucier\s+10\.0\.2\.2\s+\S+\s+\S+\s+\(you\)")
         a.sendline("mkbowl ABOWL"); a.sendline("cd ABOWL")
-        b.sendline("pwd"); b.expect(r"\r\n/\r\n|\s/\s")          # b is still at the root
+        b.sendline("pwd"); b.expect("/home/saucier")             # b starts at home (v0.52.2)
         a.sendline("pwd"); a.expect("/ABOWL")
         # Both run a program; Ctrl-C in a kills a's, b's keeps printing.
         a.sendline("cook /hog.elf"); a.expect("running, never yields")   # a is in /ABOWL now

@@ -891,6 +891,12 @@ the key-typer's exit status: an untypeable character ends the sequence silently.
 check.sh builds once at its start but reads each test script when that test
 starts: editing scripts mid-run tests new scripts against the old binary.
 
+## Homes (v0.52.2)
+
+Ordinary cooks start in /home/<cook> (`ensure_home` in shell.c); the headchef in /.
+Tests that log in as a cook must use absolute paths for files, or expect home.
+`cook` falls back to the root for programs.
+
 ## Boot (v0.47.0)
 
 The kernel leases an address at boot (kernel.c); tests do not need `plumbing dhcp`.

@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.52.1
+Current version: v0.52.2
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,24 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.52.2 (2026-10-08)  — HOME BOWLS
+  Eighth queue, item 3.
+  - `hire` made a cook who could write almost nowhere. Every ordinary cook
+    now has /home/<cook>, theirs and closed to other cooks (rwx---), made
+    at hire, or at the first login of a cook hired before homes existed;
+    /home itself is the headchef's, open for reading and entering. Every
+    shell of theirs starts there, console login and SSH session alike.
+    The headchef keeps the root, as root traditionally does.
+  - Starting in a home would have stranded a cook away from the programs,
+    which live in the root: `cook` now also looks in the root for a
+    program it cannot find relative to the cwd, as a PATH would.
+  - users-test.sh: homes are made at hire and at first login; each cook's
+    shell starts at home; saucier cannot cd into cook's; a program runs
+    from a home; mtools sees /home and fsck is clean. The SSH pair test
+    now expects saucier's session to start at /home/saucier. The first run
+    "failed" on a test that expected hello.elf to exit 0; it exits 42 by
+    design.
 
 v0.52.1 (2026-10-07)  — secret
   Eighth queue, item 2 (committed with item 1: both live in shell.c and

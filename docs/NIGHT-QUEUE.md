@@ -45,7 +45,7 @@ twice; the headchef may set any cook's without the old one. Check that the
 old secret stops working, the new one works over SSH, and /etc/kitchen holds a
 fresh salt.
 
-## 3. Home bowls
+## 3. Home bowls — DONE v0.52.2
 
 `hire` makes a cook who can write almost nowhere (the root is the headchef's).
 Make /home/<cook> at hire, owned by the cook, and start every shell of theirs
