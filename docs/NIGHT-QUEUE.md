@@ -1,9 +1,9 @@
 # Night queue
 
-Twenty-sixth queue. The first twenty-five are in `docs/queue-archive-2026-10-0*.md`.
+Twenty-seventh queue. The first twenty-six are in `docs/queue-archive-2026-10-0*.md`.
 Items wait on a person in three archives (the seventh, the thirteenth and
-the twenty-fourth). Three more tools, and the shell and its history grow up
-a little.
+the twenty-fourth). Programs get somewhere to send their complaints, an
+environment and two more tools; the shell gets functions.
 
 ## Standing rules
 
@@ -20,65 +20,53 @@ a little.
    never a bare `wait` (QEMU is a child too).
 6. **Reproduce under load**: six-wide soaks for anything timing-shaped.
 7. **Crypto gets published vectors from an independent implementation.**
-8. **Kitchen names** for every new command, builtins and programs alike
+8. **Never pipe into `grep -q` in a test**: pipefail turns the writer's
+   SIGPIPE into a failed check. lint-test.sh enforces it.
+9. **Kitchen names** for every new command, builtins and programs alike
    (sift.elf, not grep.elf); compare with the host tool under its real name.
-9. **Gitea only.** Never GitHub, never the `cdctf-release` branch.
-10. **`make clean` leaves disk.img alone**: `rm disk.img && make disk` after
+10. **Gitea only.** Never GitHub, never the `cdctf-release` branch.
+11. **`make clean` leaves disk.img alone**: `rm disk.img && make disk` after
     changing anything the Makefile embeds.
-11. Do not edit the tree while check.sh runs: it builds once at its start
+12. Do not edit the tree while check.sh runs: it builds once at its start
     and reads each test script when that test starts.
-12. If an item is blocked or needs a decision that is not written down, leave
+13. If an item is blocked or needs a decision that is not written down, leave
     a note at the bottom and move on.
 
 ---
 
-## 1. mince.elf — DONE v0.60.14
+## 1. 2> sends a program's complaints somewhere
 
-A hex dump in `hexdump -C` form: offset, sixteen bytes in two groups of
-eight, the printable ones between bars, a `*` for repeated lines and the
-final offset. Compare with the host's hexdump -C byte for byte.
+`cook X.elf 2> ERR.TXT`, `2>> ERR.TXT` and `2>&1` for a program's stderr
+(fd 2), on any stage of a pipeline, as sh does. Today stderr always goes to
+the screen. Compare what lands where with bash running the host tools.
 
-## 2. knead.elf — DONE v0.60.15
+## 2. Shell functions
 
-Lines folded at a width, as `fold -w N` does (default 80), and with -s at
-the last space. Compare with the host's fold.
+`name() { cmd ; cmd ; }` on one line defines one; `name a b` runs it with
+$1..$9, $# and $@ set for the body and restored after; its status is the
+last command's. Compare with bash.
 
-## 3. layer.elf — DONE v0.60.16
+## 3. stack.elf
 
-Lines of two or more files side by side, as `paste` does (tab between,
--d to choose), files of different lengths included. Compare with the
-host's paste.
+Lines in reverse order, as `tac` does (a last line with no newline joins
+the one after it, as tac's output shows). Compare with the host's tac.
 
-## 4. A cook's leftovers outlive the shift — DONE v0.60.17
+## 4. spread.elf
 
-History is per shell and wiped at clockout (v0.60.12). Keep each cook's
-in their home (a file only they can read), load it at login, so the up
-arrow and `leftovers` survive a clockout and a reboot. Test across both.
+Tabs to spaces, as `expand` does (-t N, default 8). Compare with the host's
+expand.
 
-## 5. Ctrl+R finds an old line — DONE v0.60.18
+## 5. rack sorts by a field, once
 
-A reverse search through the history at the prompt, as in bash: type and
-the newest match is shown; Ctrl+R again for the one before; Enter runs it,
-Ctrl+C gives the line back. Test by typing.
+`-u` (one of each line the sort calls equal), `-t SEP` and `-k N` (sort by
+field N), with the existing -n and -r. Compare with the host's sort.
 
-## 6. case ... esac — DONE v0.60.19
+## 6. export: programs get an environment
 
-`case WORD in pat) ... ;; pat|pat) ... ;; *) ... ;; esac`, with the glob
-patterns the shell already has. Compare with bash's results for the same
-script.
-
-## 8. A gate failure that its own log says passed — DONE v0.60.20 (grep -q under pipefail; desk did not recur)
-
-2026-10-08 10:34, one full check (the run before v0.60.16's commit) failed
-two gate checks; the rerun passed. Both logs are in docs/flakes/.
-- desk: the in-kernel self-test's "services are not busy" failed with
-  "busiest service: fbcon at 55%". A share of CPU measured while ~55 QEMUs
-  run is a load measurement; decide whether the self-test should judge it
-  under check.sh at all.
-- jobs: "no ring-3 output after the kill" failed, yet run against the kept
-  log the same check passes (first `killed (irq)` at line 93, TESTOUT at
-  108). Find how the check saw something else: the log at check time, the
-  grep on it, or a second writer.
+`export NAME` (and `export NAME=value`) marks a variable; every program a
+cook runs gets the marked ones as NAME=value strings, read through a new
+ulib getenv(). A program to list them (a kitchen name). Test that only
+exported ones arrive and that unset removes one.
 
 ## 7. Doom at the framebuffer's own resolution — DEFERRED
 
