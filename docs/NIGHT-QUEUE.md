@@ -76,7 +76,7 @@ words; only `cook` lines make pipes. Run the left side with its output
 captured (the $(...) capture terminal is the start) and feed it to the
 program as stdin. Compare with bash.
 
-## 9. music-test judges fixed seconds of the capture
+## 9. music-test judges fixed seconds of the capture — DONE v0.60.28
 
 2026-10-08: one full check (the first for v0.60.23) failed music-test with
 "the music and the effects did not coexist"; the rerun passed, and twelve

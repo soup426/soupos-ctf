@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.27
+Current version: v0.60.28
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,20 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.28 (2026-10-08)  — MUSIC-TEST LISTENS FOR THE EFFECTS
+  - music-test judged fixed seconds of the capture: music 1.0-3.5 s, with
+    effects 5.0-6.5 s, music again 7.5-9.0 s. The effects are typed four
+    seconds into the music, and measured they start at 6.00-6.25 s, so the
+    "with effects" window held a quarter second of them at best and passed
+    on 2227 against a bar of 1807; under a full check's load they started
+    later still and it failed (twice today, the reruns passing).
+  - It now finds their start in the capture: the first quarter second half
+    again as loud as the loudest quarter second of the music alone (which
+    swings from 430 to 2275; the effects measure 3800-6200), and measures
+    from there. With effects is now 4040-4490 against the same bar, twelve
+    runs six at a time all pass, and a FAIL line carries the numbers (check.sh
+    keeps only FAIL lines, which is how two failures' numbers were lost).
 
 v0.60.27 (2026-10-08)  — A BUILTIN INTO A PROGRAM
   - `slurp hi | raise.elf`, `myfunc | stack.elf`: a command that is not a

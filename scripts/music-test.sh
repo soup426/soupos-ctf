@@ -99,16 +99,39 @@ try:
           f"({freqs} Hz, floor {floor:.1f})")
     ok = present == len(freqs)
 
-    # Music alone, then music plus effects, then music alone again.
+    # Music alone, then music plus effects, then music alone again. The
+    # effects are typed four seconds into the music, but when they start
+    # depends on the typing and the load (v0.60.28: fixed windows at 5.0-6.5 s
+    # failed full checks twice, the effects starting after the window did).
+    # So find their start in the capture. The music alone swings a lot from
+    # one quarter second to the next (measured: 430 to 2275), so the start is
+    # the first quarter second after the music's own stretch that is half
+    # again as loud as the loudest quarter second of that stretch (the
+    # effects measured 3800-6200).
     def mean(a, b):
         sl = left[int(a*sr):int(b*sr)]
         return sum(abs(x) for x in sl) / max(1, len(sl))
-    before, during, after = mean(1.0, 3.5), mean(5.0, 6.5), mean(7.5, 9.0)
-    print(f"  mean amplitude: music {before:.0f}, with effects {during:.0f}, music again {after:.0f}")
-    if during > before * 1.4 and after > before * 0.4:
+    total = len(left) / sr
+    before = mean(1.0, 3.5)
+    loudest = max(mean(1.0 + q / 4, 1.25 + q / 4) for q in range(10))
+    onset = None
+    t = 3.5
+    while t + 0.25 <= total:
+        if mean(t, t + 0.25) > loudest * 1.5: onset = t; break
+        t += 0.25
+    if onset is None:
+        print(f"  FAIL  the effects never showed in the capture (music {before:.0f}, {total:.1f} s captured)")
+        sys.exit(1)
+    during, after = mean(onset, onset + 1.5), mean(onset + 2.5, onset + 4.0)
+    nums = f"music {before:.0f}, with effects {during:.0f} from {onset:.2f} s, music again {after:.0f}"
+    print(f"  mean amplitude: {nums}")
+    if onset + 4.0 > total:
+        print(f"  FAIL  the capture ends before the music's return could be measured ({nums}, {total:.1f} s)")
+        ok = False
+    elif during > before * 1.4 and after > before * 0.4:
         print("  ok    effects played over the music without stopping it")
     else:
-        print("  FAIL  the music and the effects did not coexist")
+        print(f"  FAIL  the music and the effects did not coexist ({nums})")
         ok = False
     sys.exit(0 if ok else 1)
 except SystemExit:
