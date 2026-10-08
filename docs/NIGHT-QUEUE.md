@@ -32,7 +32,7 @@ a little.
 
 ---
 
-## 1. mince.elf
+## 1. mince.elf — DONE v0.60.14
 
 A hex dump in `hexdump -C` form: offset, sixteen bytes in two groups of
 eight, the printable ones between bars, a `*` for repeated lines and the

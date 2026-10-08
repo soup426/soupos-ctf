@@ -64,7 +64,7 @@ run "gate"                      ./scripts/smoke-test.sh
 if [ "$MODE" = "full" ]; then
     for t in ssh-test pass-test hatch-test console-test fat-longname-test \
              random-test x25519-test sound-test mixer-test music-test \
-             framebuffer-test fullness-test lines-test fsck-test ls-test users-test rc-test fsops-test guess-test owner-test cooks-test bowls-test last-test idle-test du-test secrets-test privs-test reserve-test motd-test append-test grep-test headtail-test sort-test redirect-test uniq-test wc-test tee-test cut-test tr-test chain-test status-test quote-test tilde-test bquote-test run-test lname-test seq-test vars-test testcmd-test glob-test stat-test lsl-test find-test control-test cmp-test arith-test while-test args-test subst-test read-test profile-test flip-test label-test tab-test clockout-test clip-test; do
+             framebuffer-test fullness-test lines-test fsck-test ls-test users-test rc-test fsops-test guess-test owner-test cooks-test bowls-test last-test idle-test du-test secrets-test privs-test reserve-test motd-test append-test grep-test headtail-test sort-test redirect-test uniq-test wc-test tee-test cut-test tr-test chain-test status-test quote-test tilde-test bquote-test run-test lname-test seq-test vars-test testcmd-test glob-test stat-test lsl-test find-test control-test cmp-test arith-test while-test args-test subst-test read-test profile-test flip-test label-test tab-test clockout-test clip-test mince-test; do
         run "$t" "./scripts/$t.sh"
     done
     # challenge-test rebuilds as CHALLENGE=1, so it gets a tree of its own too.

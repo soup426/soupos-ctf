@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.13
+Current version: v0.60.14
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,13 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.14 (2026-10-08)  — MINCE
+  - mince.elf dumps a file or stdin in hex, in `hexdump -C` form: offset,
+    sixteen bytes in two groups, the printable ones between bars, `*` for a
+    full line repeating the one before, and the length last. It streams.
+  - scripts/mince-test.sh compares eight forms with the host's hexdump -C
+    byte for byte, 4 KB of random bytes among them.
 
 v0.60.13 (2026-10-08)  — A CLIPBOARD PER COOK
   - The clipboard was one buffer for the whole kernel: what the saucier
