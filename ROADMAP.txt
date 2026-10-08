@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.56.7
+Current version: v0.56.8
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,19 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.56.8 (2026-10-08)  — cut.elf
+  Fifteenth queue, item 4.
+  - user/cut.c: -f LIST with -d C (a tab by default), GNU cut's rules: the
+    list takes N, N-M, N- and -M, comma-separated; fields come out in the
+    line's order, each once, whatever order the list names them; a line
+    with no delimiter is printed whole; a last line with no newline gets
+    one. -dC and -fN may be written attached.
+  - scripts/cut-test.sh, in check.sh: a passwd-like file (with a line
+    with no colon), a tab-separated one and a comma one with empty fields
+    and no final newline; ten forms (lists out of order, open ranges at
+    either end, a field past the last, attached options, a pipe) compared
+    byte for byte with the host's cut.
 
 v0.56.7 (2026-10-08)  — tee.elf, AND O_APPEND FOR PROGRAMS
   Fifteenth queue, item 3.

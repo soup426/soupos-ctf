@@ -51,7 +51,7 @@ stdin to stdout and to a file, -a to append; the file follows the cook's
 permissions like any other write. Compare the stdout and the file with the
 host's tee.
 
-## 4. cut.elf
+## 4. cut.elf — DONE v0.56.8
 
 -d C -f N[,M...] and -f N-M: fields by a one-character delimiter, lines
 without it printed whole as cut does. Compare with the host's cut.
