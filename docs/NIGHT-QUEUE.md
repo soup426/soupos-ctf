@@ -45,7 +45,7 @@ Nothing limits how many processes one cook runs. Find the table's size,
 prove a cook can fill it so that nobody else (the headchef included) can
 cook anything, then add a per-cook limit (the headchef exempt) and test it.
 
-## 3. The login record can be flushed
+## 3. The login record can be flushed — DONE v0.55.4
 
 /etc/logins keeps the newest 64 lines, so refusals push real logins out.
 Measure how long a determined guesser needs to flush a login out through

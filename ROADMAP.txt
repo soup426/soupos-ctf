@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.55.3
+Current version: v0.55.4
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,23 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.55.4 (2026-10-08)  — REFUSALS CANNOT FLUSH THE LOGIN RECORD
+  Twelfth queue, item 3.
+  - /etc/logins kept the newest 64 lines whatever they were. Measured on
+    v0.55.3: 64 wrong logins typed at the console took 81 s and pushed the
+    headchef's real login out of the record. Through the pass and chef
+    (up to 8 s a guess, no lockout) the same takes about 8-9 minutes;
+    through the vault, which locks an address out after 10 failures in 5
+    minutes, about half an hour.
+  - Decided: keep successes and refusals apart rather than only keeping
+    more lines, since more lines only raises the count a guesser needs.
+    The newest 48 of each are kept, in time order, so a refusal can only
+    push out a refusal. Re-measured: after 64 refusals the headchef's real
+    login is still there, with 48 refusals kept.
+  - last-test.sh seeds 48 successes and 48 refusals; after its logins each
+    kind is back to 48 with its own oldest gone, and all six real logins
+    are still in the record.
 
 v0.55.3 (2026-10-08)  — ONE COOK CANNOT FILL THE PROCESS TABLE
   Twelfth queue, item 2.

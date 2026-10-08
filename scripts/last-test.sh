@@ -16,7 +16,10 @@ trap cleanup EXIT
 cp disk.img "$WORK/disk.img"
 # A full record already on the disk (64 lines, the cap), so the logins below
 # must push the oldest out. Line 1 is the one that must go first.
-for i in $(seq 1 64); do printf '2020-01-01 00:00  ok       seed%-13s console\n' "$i"; done > "$WORK/seed"
+# Since v0.55.4 successes and refusals are kept apart, 48 of each: seed a
+# full record of both, so the new logins must push out only their own kind.
+{ for i in $(seq 1 48); do printf '2020-01-01 00:00  ok       seed%-13s console\n' "$i"; done
+  for i in $(seq 1 48); do printf '2020-01-01 00:00  refused  bad%-14s console\n' "$i"; done; } > "$WORK/seed"
 mmd -i "$WORK/disk.img" ::/etc 2>/dev/null
 mcopy -o -i "$WORK/disk.img" "$WORK/seed" ::/etc/logins
 
@@ -73,12 +76,18 @@ mtype -i "$WORK/disk.img" ::/etc/logins 2>/dev/null | grep -qE "refused +saucier
     && echo "  ok    mtools reads /etc/logins" || { echo "  FAIL  mtools could not read the record"; fail=1; }
 grep -q "owner: headchef" <(start "$WORK/three.log"; keys "headchef" "rosemary" "WAIT:2" "perms /etc/logins" "WAIT:1"; stop; tr -d '\r' < "$WORK/three.log") \
     && echo "  ok    the record stays the headchef's though saucier's logins wrote it" || { echo "  FAIL  /etc/logins owner"; fail=1; }
-n=$(mtype -i "$WORK/disk.img" ::/etc/logins 2>/dev/null | grep -c .)
-if [ "$n" = "64" ] && ! mtype -i "$WORK/disk.img" ::/etc/logins | grep -qE "seed1 " && mtype -i "$WORK/disk.img" ::/etc/logins | grep -qE "seed64 "; then
-    echo "  ok    the record keeps the newest 64 lines; the oldest seeded ones are gone"
+R=$(mtype -i "$WORK/disk.img" ::/etc/logins 2>/dev/null)
+nok=$(echo "$R" | grep -cE "^[0-9-]+ [0-9:]+  ok "); nbad=$(echo "$R" | grep -cE "^[0-9-]+ [0-9:]+  refused ")
+if [ "$nok" = 48 ] && [ "$nbad" = 48 ] && ! echo "$R" | grep -qE "seed1 " && ! echo "$R" | grep -qE "bad1 " \
+   && echo "$R" | grep -qE "seed48 " && echo "$R" | grep -qE "bad48 "; then
+    echo "  ok    48 successes and 48 refusals kept; the oldest of each kind went"
 else
-    echo "  FAIL  trimming: $n lines"; fail=1
+    echo "  FAIL  trimming: $nok successes, $nbad refusals"; fail=1
 fi
+# The point of keeping them apart: refusals cannot flush a real login out.
+# Six: four from the first boot, and the headchef's login in each later one.
+[ "$(echo "$R" | grep -cE "ok +(headchef|saucier) +(console|10\.0\.2\.2)")" = 6 ] \
+    && echo "  ok    every real login survived a full record of refusals" || { echo "  FAIL  a real login was pushed out"; fail=1; }
 [ "$(fsck.fat -n "$WORK/disk.img" 2>&1 | wc -l)" -le 2 ] \
     && echo "  ok    fsck is clean" || { echo "  FAIL  fsck"; fsck.fat -n "$WORK/disk.img"; fail=1; }
 exit $fail
