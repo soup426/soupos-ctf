@@ -1,10 +1,9 @@
 # Night queue
 
-Twenty-fourth queue. The first twenty-three are in `docs/queue-archive-2026-10-0*.md`.
-Two items wait on a person, with notes in their archives: the seventh's
-syscall-pointer item and the thirteenth's swap-shares item. Eight queues
-built the shell up; this one turns back to the kernel, and asks whether the
-machine holds up under long use.
+Twenty-fifth queue. The first twenty-four are in `docs/queue-archive-2026-10-0*.md`.
+Items wait on a person in three archives (the seventh, the thirteenth and
+the twenty-fourth). Every command now has a kitchen name; this queue adds
+two more tools and makes the prompt finish words for you.
 
 ## Standing rules
 
@@ -33,27 +32,22 @@ machine holds up under long use.
 
 ---
 
-## 1. Finished background jobs free their slots
+## 1. flip.elf
 
-A process that ends stays in the table until it is reaped, and the
-per-cook limit (four) counts those. Find out whether a cook who runs four
-background jobs that finish is then refused a fifth until someone looks at
-`orders`; if so, reap finished jobs (keeping their status for `orders` to
-report once) so their slots come back. Prove before fixing.
+Each line reversed, character by character, as rev does; a last line with
+no newline keeps none. Compare with the host's rev.
 
-## 2. Nothing leaks over a soak
+## 2. label.elf
 
-Kernel heap in use, free pages, free clusters and open VFS nodes, before
-and after a soak: hundreds of program runs (pipes and redirections among
-them), SSH sessions opened and closed, files written and deleted, $(...)
-substitutions, scripts. Equal after, or each difference explained. Find
-and fix any leak.
+Lines numbered as `nl -ba` numbers them (every line, empty ones included,
+the number right-aligned in six columns and a tab). Compare with the host.
 
-## 3. The open-file table runs out cleanly
+## 3. Tab finishes a word at the prompt
 
-A program that opens more files than the VFS table holds (16) must get -1
-for the rest, not hang or corrupt anything, and the table must be whole
-again once it exits. Measure, then fix whatever is wrong.
+Tab after part of the first word finishes it to a command name when only
+one fits (a builtin, or a program on the disk); after a later word it
+finishes a path in its bowl. More than one fit: complete the part they
+share, and a second Tab lists them. Test by typing.
 
 ## 4. Doom at the framebuffer's own resolution — DEFERRED
 
