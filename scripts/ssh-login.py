@@ -88,6 +88,12 @@ try:
         b.expect("password:"); b.sendline("basil"); b.expect("a shell of your own")
         a.sendline("whoami"); a.expect(r"headchef\s+\(uid 0\)")
         b.sendline("whoami"); b.expect(r"saucier\s+\(uid [1-9]")
+        # who (v0.52.0): the console and both sessions, each with its cook and
+        # where it is; b sees itself marked.
+        b.sendline("who")
+        b.expect(r"headchef\s+console")
+        b.expect(r"headchef\s+10\.0\.2\.2")
+        b.expect(r"saucier\s+10\.0\.2\.2\s+\S+\s+\S+\s+\(you\)")
         a.sendline("mkbowl ABOWL"); a.sendline("cd ABOWL")
         b.sendline("pwd"); b.expect(r"\r\n/\r\n|\s/\s")          # b is still at the root
         a.sendline("pwd"); a.expect("/ABOWL")

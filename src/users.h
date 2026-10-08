@@ -33,6 +33,8 @@ const char *users_name_of(uint8_t uid);       /* "?" if unknown     */
 /* Hire a new cook / fire one. Auto-assigns a uid. Persists /etc/kitchen.
  * Returns 0=ok, -1=error (duplicate, roster full, headchef, disk error). */
 int  users_add(const char *name, const char *secret);
+/* Give a cook a new secret (a fresh salt, in the build's kind). 0, or -1. */
+int  users_set_secret(const char *name, const char *secret);
 int  users_remove(const char *name);
 
 /* The logged-in session. */

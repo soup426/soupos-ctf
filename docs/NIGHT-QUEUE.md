@@ -30,14 +30,14 @@ This queue makes the multi-user system the last queues built usable.
 
 ---
 
-## 1. who
+## 1. who — DONE v0.52.0
 
 Since v0.36.0 there can be five shells at once: the console and four SSH
 sessions. Nothing lists them. `who`: each shell, its cook, where it is (the
 console, or the client's address), when it started and how long it has been
 idle. Test with the console and two SSH sessions as two cooks.
 
-## 2. passwd
+## 2. passwd — DONE v0.52.1 as `secret`
 
 Secrets are PBKDF2 since v0.46.0, but the only way to set one is `hire`, and
 a cook cannot change their own. `passwd`: the old secret, then the new one

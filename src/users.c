@@ -308,3 +308,12 @@ int users_may(const char *path, char need) {
                (need == 'w') ? FAT_PERM_AW : FAT_PERM_AX;
     return (mode & bits) ? 1 : 0;
 }
+
+int users_set_secret(const char *name, const char *secret) {
+    for (int i = 0; i < n_users; i++)
+        if (strcmp(roster[i].name, name) == 0) {
+            set_secret(&roster[i], secret ? secret : "");
+            return users_save();
+        }
+    return -1;
+}

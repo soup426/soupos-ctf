@@ -72,13 +72,27 @@ typedef struct {
     int     exiting;             /* clockout in a session: leave the loop        */
     volatile int done;           /* the session task has finished                */
     char    exec_line[INPUT_MAX];/* a session that runs one line (ssh host cmd)  */
+    char    where[20];           /* "console", or the client's address (v0.52.0) */
+    uint32_t started, last_input;/* ticks: for `who`                          */
 } shell_t;
 
 /* The console's shell. A session's shell_t is kmalloc'd by
  * shell_session_start, and every task that belongs to it (the session task,
  * and through inheritance every program and script it starts) points at it,
  * so cur_shell() answers for whoever is asking. */
-static shell_t the_shell = { .cwd = "/", .prompt_len = 8, .term = &term_vga };
+static shell_t the_shell = { .cwd = "/", .prompt_len = 8, .term = &term_vga, .where = "console" };
+
+/* Every live shell, for `who`: the console's always, and each session's
+ * from its start to its end (v0.52.0). */
+static shell_t *shells[8] = { &the_shell };
+static void shell_register(shell_t *sh, int on) {
+    preempt_disable();
+    for (int i = 1; i < 8; i++) {
+        if (on && !shells[i])      { shells[i] = sh; break; }
+        if (!on && shells[i] == sh) { shells[i] = 0; break; }
+    }
+    preempt_enable();
+}
 static inline shell_t *cur_shell(void) {
     task_t *me = task_current();
     return (me && me->shell) ? (shell_t *)me->shell : &the_shell;
@@ -487,6 +501,7 @@ static void cmd_menu(void) {
         {0, "    perms <file> [spec]- show / set file permissions"},
         {0, "    chef <command>     - run one command as the headchef"},
         {0, "    hire <name>        - headchef: add a cook"},
+        {0, "    secret [cook]      - change your secret (headchef: anyone's)"},
         {0, "    fire <name>        - headchef: remove a cook"},
         {0, "    clockout           - log out, return to the login prompt"},
         {0, "    ai <prompt>        - ask the host LLM (needs: make run-ai)"},
@@ -526,6 +541,7 @@ static void cmd_menu(void) {
         {0, "    reheat             - reboot"},
         {0, "    ps                 - list running tasks"},
         {0, "    kitchen            - the whole room, live, until a key"},
+        {0, "    who                - every shell: its cook, where, up, idle"},
         {0, "    kill <id>          - stop a background task"},
         {0, "    bgclock            - spawn a clock in the top-right corner"},
         {0, "    yieldbg            - bg task logging [bg] to serial (pairs with cook spin.elf)"},
@@ -1961,6 +1977,41 @@ static void cmd_vault(const char *args) {
     }
 }
 
+/* who - every shell on the machine: its cook, where it is, how long it has
+ * been up and how long since its last keystroke (v0.52.0). */
+static int u_to_str(uint32_t v, char *out) {      /* decimal, no NUL; returns length */
+    char d[11]; int n = 0;
+    do { d[n++] = (char)('0' + v % 10); v /= 10; } while (v);
+    for (int i = 0; i < n; i++) out[i] = d[n - 1 - i];
+    return n;
+}
+
+static void fmt_dur(char *out, uint32_t ticks) {
+    uint32_t sec = ticks / 100, h = sec / 3600, m = (sec / 60) % 60, s = sec % 60;
+    char *p = out;
+    if (h) { p += u_to_str(h, p); *p++ = ':'; *p++ = (char)('0' + m / 10); *p++ = (char)('0' + m % 10); }
+    else   { p += u_to_str(m, p); }
+    *p++ = ':'; *p++ = (char)('0' + s / 10); *p++ = (char)('0' + s % 10); *p = '\0';
+}
+
+static void cmd_who(void) {
+    t_color(VGA_YELLOW, VGA_BLACK);
+    t_puts("  COOK        WHERE                UP        IDLE\n");
+    t_color(VGA_LIGHT_GREY, VGA_BLACK);
+    uint32_t now = timer_get_ticks();
+    preempt_disable();
+    shell_t *list[8]; int n = 0;
+    for (int i = 0; i < 8; i++) if (shells[i]) list[n++] = shells[i];
+    preempt_enable();
+    for (int i = 0; i < n; i++) {
+        shell_t *sh = list[i];
+        char up[16], idle[16];
+        fmt_dur(up, now - sh->started); fmt_dur(idle, now - sh->last_input);
+        t_printf("  %-10s  %-18s  %8s  %8s%s\n", users_name_of(sh->uid), sh->where, up, idle,
+                 sh == cur_shell() ? "   (you)" : (sh->exec_line[0] ? "   exec" : ""));
+    }
+}
+
 /* sample - taste the soup: run the in-kernel subsystem checks. `sample slow`
  * adds the ones that take seconds, which the gate leaves to their own script. */
 static void cmd_sample(const char *args) {
@@ -2168,6 +2219,45 @@ static void cmd_clockout(void) {
     t_printf("  %s clocks out. The kitchen is yours, next cook.\n",
                users_current_name());
     do_login();
+}
+
+/* secret - change your own secret (the old one, then the new one twice), or,
+ * as the headchef, `secret <cook>` sets anyone's without the old one
+ * (v0.52.1). Stored in the build's kind: PBKDF2 with a fresh salt. */
+static void cmd_secret(const char *args) {
+    while (*args == ' ') args++;
+    char name[USER_NAME_MAX];
+    int i = 0;
+    while (args[i] && args[i] != ' ' && i < USER_NAME_MAX - 1) { name[i] = args[i]; i++; }
+    name[i] = '\0';
+    const char *who = name[0] ? name : users_current_name();
+    int self = str_eq(who, users_current_name());
+    if (!self && !users_is_headchef()) { t_puts("  Only the headchef sets another cook's secret.\n"); return; }
+    if (users_uid_of(who) < 0) { t_printf("  No cook called %s.\n", who); return; }
+    char old[64], fresh[64], again[64];
+    /* Your own secret always needs the current one, the headchef's included:
+     * otherwise an unattended session hands over the account. */
+    if (self) {
+        t_puts("  Current secret: ");
+        read_line(old, sizeof(old), '*');
+        if (users_check(who, old) < 0) {
+            memset(old, 0, sizeof(old));
+            t_color(VGA_LIGHT_RED, VGA_BLACK); t_puts("  That is not your secret.\n"); t_color(VGA_LIGHT_GREY, VGA_BLACK);
+            klog("[users] %s: secret change refused (wrong current secret)\n", who);
+            return;
+        }
+        memset(old, 0, sizeof(old));
+    }
+    t_printf("  New secret for %s: ", who);  read_line(fresh, sizeof(fresh), '*');
+    t_puts("  Again:                 ");       read_line(again, sizeof(again), '*');
+    int same = str_eq(fresh, again) && fresh[0];
+    if (same && users_set_secret(who, fresh) == 0) {
+        t_printf("  %s has a new secret.\n", who);
+        klog("[users] %s: secret changed\n", who);
+    } else {
+        t_puts(same ? "  Could not save the roster.\n" : "  The two did not match (or were empty); nothing changed.\n");
+    }
+    memset(fresh, 0, sizeof(fresh)); memset(again, 0, sizeof(again));
 }
 
 static void cmd_hire(const char *args) {
@@ -3479,14 +3569,14 @@ static const char *const cmd_names[] = {
     "jot", "ai", "cook", "soup", "hash",
     "beep", "mandelbrot", "vgademo", "uname", "cal",
     "clock", "wipe", "fortune", "bounce", "recipe", "leftovers", "spill",
-    "freeze", "reheat", "ps", "kitchen", "orders", "plate", "steep", "kill", "scraps", "sample", "skewer", "larder", "whistle", "hatch", "hush", "pass", "vault",
+    "freeze", "reheat", "ps", "kitchen", "who", "orders", "plate", "steep", "kill", "scraps", "sample", "skewer", "larder", "whistle", "hatch", "hush", "pass", "vault",
 #ifndef NO_DOOM
     "sizzle", "hum",
 #endif
     "faucet", "plumbing", "table", "sip", "sniff", "reserve", "holler",
     "takeout", "bgclock", "yieldbg", "spinbg", "sleeptest", "vfstest",
     "dmesg", "pwd", "cd", "mkbowl", "rmbowl", "bowltest",
-    "whoami", "roster", "clockout", "hire", "fire", "perms",
+    "whoami", "roster", "clockout", "hire", "fire", "perms", "secret",
 };
 #define CMD_COUNT  (int)(sizeof(cmd_names) / sizeof(cmd_names[0]))
 
@@ -3677,6 +3767,7 @@ static void dispatch(const char *buf) {
 #endif
     else if (str_eq(p, "roster"))    cmd_roster();
     else if (str_eq(p, "clockout"))  cmd_clockout();
+    else if (str_eq(p, "secret") || str_startswith(p, "secret ")) cmd_secret(p + 6);
     else if (str_startswith(p, "hire")) {
         const char *a = p + 4; while (*a == ' ') a++;
         cmd_hire(a);
@@ -3717,6 +3808,7 @@ static void dispatch(const char *buf) {
 #endif
     else if (str_eq(p, "cat"))       cmd_cat();  /* hidden */
     else if (str_eq(p, "ps"))          cmd_ps();
+    else if (str_eq(p, "who"))         cmd_who();
     else if (str_eq(p, "kitchen"))     cmd_kitchen();
     else if (str_eq(p, "orders"))      cmd_orders();
     else if (str_eq(p, "scraps"))      cmd_scraps();
@@ -3802,6 +3894,7 @@ void shell_run(void) {
     input[0] = saved[0] = '\0';
     users_set_resolver(shell_uid_resolver);
     fat_set_creator_hook(shell_creator);
+    the_shell.started = the_shell.last_input = timer_get_ticks();
     run_rc();                   /* /etc/rc, as headchef, before anyone logs in */
     do_login();                 /* clock in before the kitchen opens */
     prompt();
@@ -3818,6 +3911,7 @@ static void shell_loop(char *input, char *saved, int *pos_p, int *len_p, int *hb
     while (1) {
         int c = t_getc();
         if (c < 0) break;
+        cur_shell()->last_input = timer_get_ticks();
 
         if (c == '\n') {
             cursor_to(len);
@@ -3929,11 +4023,12 @@ static void session_task(void *arg) {
     }
     t_color(VGA_LIGHT_GREY, VGA_BLACK);
     klog("[shell] session for %s ended, status %d\n", users_current_name(), sh->last_status);
+    shell_register(sh, 0);
     sh->done = 1;
     task_exit();
 }
 
-void *shell_session_start(term_t *t, int uid, const char *exec_line) {
+void *shell_session_start(term_t *t, int uid, const char *exec_line, const char *where) {
     shell_t *sh = kmalloc(sizeof(shell_t));
     if (!sh) return 0;
     memset(sh, 0, sizeof(*sh));
@@ -3941,6 +4036,9 @@ void *shell_session_start(term_t *t, int uid, const char *exec_line) {
     sh->prompt_len = 8;
     sh->term = t;
     sh->uid  = (uint8_t)uid;
+    strncpy(sh->where, where ? where : "?", sizeof(sh->where) - 1);
+    sh->started = sh->last_input = timer_get_ticks();
+    shell_register(sh, 1);
     if (exec_line) {
         strncpy(sh->exec_line, exec_line, INPUT_MAX - 1);
         sh->exec_line[INPUT_MAX - 1] = '\0';

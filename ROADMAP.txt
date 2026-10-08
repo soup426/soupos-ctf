@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.51.0
+Current version: v0.52.1
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,34 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.52.1 (2026-10-07)  — secret
+  Eighth queue, item 2 (committed with item 1: both live in shell.c and
+  were checked together).
+  - `secret` changes your own secret: the current one, then the new one
+    twice. The current one is asked for ALWAYS, the headchef's own
+    included - otherwise an unattended session hands over the account.
+    `secret <cook>` lets the headchef set anyone's without it. Stored in the
+    build's kind, so PBKDF2 with a fresh salt in the ordinary build.
+  - users-test.sh: a wrong current secret is refused; a cook changes their
+    own and the headchef sets it again; the old secret stops working and
+    each new one logs in; the stored line is PBKDF2.
+  - A note on checking: a full check that starts while scripts are being
+    edited runs the NEW scripts against the binary it built at its start.
+    One did, and "failed" on checks for a command not yet built.
+
+v0.52.0 (2026-10-07)  — who
+  Eighth queue, item 1.
+  - There can be five shells at once (the console and four SSH sessions)
+    and nothing listed them. `who` does: each shell's cook, where it is
+    (the console, or the client's address, which the vault now passes to
+    the session it starts), how long it has been up and how long since its
+    last keystroke; the asker's own line is marked, exec sessions too.
+  - Shells register at start and leave at end in a small table; each
+    shell_t carries its start and last-input times.
+  - The two-cook SSH test asks `who` from saucier's session and expects the
+    console's headchef, the headchef's session from 10.0.2.2, and saucier's
+    own line marked "(you)". Gate 99.
 
 v0.51.0 (2026-10-07)  — ONLY YOUR OWN PROCESSES
   Seventh queue, item 3.

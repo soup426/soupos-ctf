@@ -886,6 +886,11 @@ too, the way the matching shell command does. The open check is
 any user path with `copy_user_path`, never read it in place. In tests, check
 the key-typer's exit status: an untypeable character ends the sequence silently.
 
+## Do not edit while check.sh runs (v0.52.1)
+
+check.sh builds once at its start but reads each test script when that test
+starts: editing scripts mid-run tests new scripts against the old binary.
+
 ## Boot (v0.47.0)
 
 The kernel leases an address at boot (kernel.c); tests do not need `plumbing dhcp`.

@@ -747,7 +747,18 @@ static int reply_status(uint8_t msg) {
 static int start_session(const char *exec_line) {
     if (S.shell) return -1;                          /* one per channel */
     term_stream_init(&S.term, S.pty_cols, S.pty_rows, stream_write, &S);
-    S.shell = shell_session_start(&S.term.t, S.uid, exec_line);
+    char where[20];
+    uint32_t a = S.peer_ip;
+    int k = 0;
+    for (int part = 3; part >= 0; part--) {           /* dotted quad, by hand */
+        uint32_t v = (a >> (part * 8)) & 255;
+        if (v >= 100) where[k++] = (char)('0' + v / 100);
+        if (v >= 10)  where[k++] = (char)('0' + (v / 10) % 10);
+        where[k++] = (char)('0' + v % 10);
+        if (part) where[k++] = '.';
+    }
+    where[k] = '\0';
+    S.shell = shell_session_start(&S.term.t, S.uid, exec_line, where);
     if (!S.shell) return -1;
     klog("[ssh] %s: a shell of its own for uid %u\n", exec_line ? "exec" : "shell", S.uid);
     return 0;

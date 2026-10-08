@@ -81,4 +81,21 @@ grep -q "headchef: pbkdf2 check took" "$WORK/old2.log" && grep -qE "headchef  \(
     || { echo "  FAIL  the upgraded entry did not log in on the next boot"; fail=1; }
 fsck.fat -n "$WORK/old.img" 2>&1 | wc -l | grep -qx 2 && echo "  ok    fsck is clean after the kitchen was rewritten" \
     || { echo "  FAIL  fsck after the rewrite:"; fsck.fat -n "$WORK/old.img" 2>&1 | head -5; fail=1; }
+# ── changing a secret (v0.52.1) ──
+cp disk.img "$WORK/sec.img"
+boot "$WORK/sec.img" "$WORK/sec.log" "headchef" "rosemary" "WAIT:1" \
+    "hire saucier" "WAIT:1" "basil" "WAIT:1" "basil" "WAIT:1" "clockout" "WAIT:1" \
+    "saucier" "basil" "WAIT:2" "secret" "WAIT:1" "wrongbasil" "WAIT:2" \
+    "secret" "WAIT:1" "basil" "WAIT:2" "thyme" "WAIT:1" "thyme" "WAIT:1" "clockout" "WAIT:1" \
+    "saucier" "basil" "WAIT:2" "saucier" "thyme" "WAIT:2" "whoami" "WAIT:1" "clockout" "WAIT:1" \
+    "headchef" "rosemary" "WAIT:2" "secret saucier" "WAIT:1" "sage" "WAIT:1" "sage" "WAIT:1" "clockout" "WAIT:1" \
+    "saucier" "sage" "WAIT:2" "whoami" "WAIT:1"
+grep -q "secret change refused (wrong current secret)" "$WORK/sec.log" \
+    && echo "  ok    changing your secret needs the current one" || { echo "  FAIL  a wrong current secret was accepted"; fail=1; }
+[ "$(grep -c "saucier: secret changed" "$WORK/sec.log")" = "2" ] \
+    && echo "  ok    a cook changed their own, and the headchef set it again" || { echo "  FAIL  secret changes"; fail=1; }
+[ "$(grep -c "door stays locked" "$WORK/sec.log")" -ge 1 ] && [ "$(grep -cE "saucier  \(uid [0-9]+\)" "$WORK/sec.log")" = "2" ] \
+    && echo "  ok    the old secret stops working and each new one logs in" || { echo "  FAIL  logins after the changes"; fail=1; }
+mtype -i "$WORK/sec.img" ::/etc/kitchen 2>/dev/null | grep -q '^saucier:[0-9]*:\$p\$20000\$' \
+    && echo "  ok    the changed secret is stored as PBKDF2" || { echo "  FAIL  saucier's stored secret"; fail=1; }
 exit $fail

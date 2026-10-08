@@ -7,7 +7,7 @@ void shell_run(void);
  * ends; otherwise it is interactive until the terminal hangs up or the cook
  * clocks out. Returns a handle, or NULL. */
 struct term;
-void *shell_session_start(struct term *t, int uid, const char *exec_line);
+void *shell_session_start(struct term *t, int uid, const char *exec_line, const char *where);
 /* 1 once the session has ended, with its last command's status. */
 int   shell_session_done(void *s, int *status);
 /* The terminal has gone: kill every program the session started. */
