@@ -48,7 +48,7 @@ then compare echo, grep and tr results with sh on the same lines.
 with ~/ means the current cook's home, as sh does. Not inside quotes.
 Test as the headchef (whose home is /) and as a cook.
 
-## 3. Every test waits for what it checks
+## 3. Every test waits for what it checks — DONE (scripts only)
 
 rc-test slept 8 s and then read the log, and failed once under the full
 check's load (fixed in 1d5d174). Find every script that sleeps a fixed

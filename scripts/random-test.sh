@@ -21,7 +21,9 @@ draw() {
         -serial "file:$log" -monitor "unix:$mon,server,nowait" >/dev/null 2>&1 &
     pid=$!
     sleep 4
-    python3 scripts/qemu_keys.py "$mon" "headchef" "rosemary" "WAIT:1" "sample" "WAIT:8" >/dev/null 2>&1
+    python3 scripts/qemu_keys.py "$mon" "headchef" "rosemary" "WAIT:1" "sample" >/dev/null 2>&1
+    # Until sample's own last line, not a fixed 8 s (2026-10-08).
+    for i in $(seq 1 120); do grep -qE "^\[sample\] [0-9]+ tests, [0-9]+ failed" "$log" && break; sleep 0.5; done
     kill "$pid" 2>/dev/null
     grep -oE "^\[sample\] random draw: [0-9a-f]{16}" "$log" | awk '{print $4}'
     rm -f "$log" "$mon" "$disk"
