@@ -896,8 +896,26 @@ static const char *uq_args(const char *raw) {
     out[n] = '\0';
     return out;
 }
+/* slurp - echo (v0.60.38: as echo, word by word). The words are split at
+ * blanks outside quotes and printed with one space between, so `slurp a
+ * b` and `slurp $v` (v holding "x   y") print "a b" and "x y", as echo does;
+ * quoted stretches keep their spaces, and '' is a word of its own. It
+ * printed the rest of the line as typed before. */
 static void cmd_slurp(const char *args) {
-    t_puts(args);
+    int words = 0;
+    const char *r = args;
+    for (;;) {
+        while (*r == ' ' || *r == '\t') r++;
+        if (!*r) break;
+        if (words++) t_putc(' ');
+        char q = 0;
+        while (*r && (q || (*r != ' ' && *r != '\t'))) {
+            if (q) { if (*r == q) q = 0; else t_putc(*r); }
+            else if (*r == '\'' || *r == '"') q = *r;
+            else t_putc(*r);
+            r++;
+        }
+    }
     t_putc('\n');
 }
 
@@ -4642,7 +4660,7 @@ static void dispatch(const char *buf) {
     else if (str_eq(p, "reheat"))     { if (headchef_only("reboot the machine")) { hist_save(); cmd_reheat(); } }
     else if (str_startswith(p, "slurp")) {
         const char *a = p + 5; while (*a == ' ') a++;
-        cmd_slurp(uq_args(a));
+        cmd_slurp(a);                           /* its own word splitting (v0.60.38) */
     }
     else if (str_startswith(p, "season")) {
         const char *a = p + 6; while (*a == ' ') a++;

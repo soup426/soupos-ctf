@@ -81,7 +81,7 @@ has `| ...` after it (the feed exec_ranges the compound instead of a line),
 and refuse anything after done/fi/esac that cook would not take. Compare
 `for ... done | rack.elf` and `while ... done | skim.elf -n 3` with bash.
 
-## 9. Word splitting of an unquoted $VAR
+## 9. Word splitting of an unquoted $VAR — DONE v0.60.38 (it was slurp's alone)
 
 Found with item 4: line="a  b" ; `slurp x:$line` prints "x:a  b" where
 bash's `echo x:$line` prints "x:a b": sh splits an unquoted expansion into
@@ -89,6 +89,15 @@ words at blanks, and a builtin that joins its words gets one space between
 them. soupOS keeps the expansion as it is. Decide where splitting belongs
 (expand_seg marks the text from expansions; the builtins that take words
 split there) and compare echo/slurp, for and a program's args with bash.
+
+## 10. Quotes that come out of an expansion are text
+
+Found with item 9: v="it's" ; `slurp $v` prints "its", and `cook call.elf
+$v` gets an unbalanced quote: expand_seg puts the value into the line as
+it is, and the quote handling after it (uargv, slurp, first_word) reads its
+' and " as quotes. sh never re-reads an expansion's quotes. Mark expanded
+quote characters (or escape them) so only typed quotes group words;
+compare with bash for $v, $(...) and $1 holding quotes.
 
 ## 7. Doom at the framebuffer's own resolution — DEFERRED
 
