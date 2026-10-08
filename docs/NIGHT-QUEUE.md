@@ -59,7 +59,19 @@ and replace FIFO with the clock algorithm over the accessed bit, so a page in
 use stays. Measure with a working-set program: a hot set that fits plus a
 cold sweep, counting page-ins of the hot set under FIFO and under clock.
 
-## 4. Interrupt-driven DMA completion
+## 4. Interrupt-driven DMA completion — CLOSED 2026-10-07 by measurement: polling costs ~4 port reads a request
+
+Measured with TSC counters around the completion loop (instrumentation
+reverted). A DMA request completes in 47-136 thousand cycles, about 20-60 us,
+after about four polls of the bus-master status: the polling itself is a
+handful of port reads. During fatstress the waits total 57 M cycles in a 30 s
+run, 0.07%. During the swap greedy run they are about 24% of the run - but
+inside the page-fault handler with interrupts off, where nothing else could
+use the cpu unless the fault path learned to sleep, and the only gain would
+be letting a second runnable process use 50 us gaps. Not built; if a
+workload ever has two processes swapping at once, this is the number to beat.
+Original item follows.
+
 
 v0.39.0 made disk I/O DMA, which removed the per-word cost. Completion is
 still polled: a few port reads per request, and a task waiting on the disk

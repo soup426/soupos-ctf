@@ -10,6 +10,11 @@ everything is just "it would be funny/cool to build."
 CHANGELOG
 ────────────────────────────────────────────────────────────────
 
+(2026-10-07, no version)  — QUEUE ITEM 5.4 CLOSED BY MEASUREMENT
+  Interrupt-driven DMA completion would save ~4 status polls a request
+  (20-60 us waits); 0.07% of fatstress, and the swap path's 24% is spent
+  with interrupts off in the fault handler. Numbers in the queue.
+
 v0.43.0 (2026-10-07)  — SWAP KEEPS THE WORKING SET (APPROXIMATE LRU)
   Fifth queue, item 3. A story of two wrong turns, both caught by measuring.
   - GLOBAL PRESSURE has an arithmetic answer: eight processes at the
