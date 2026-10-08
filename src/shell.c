@@ -5021,7 +5021,8 @@ static void run_one(const char *seg) {
  * and `if ... ; then ... ; [else ... ;] fi` find their matching done or fi
  * by counting nesting, and run their bodies through exec_range again. Each
  * command is expanded just before it runs, so $NAME takes each value of a
- * loop in turn. */
+ * loop in turn. `case W in P) ... ;; esac` (v0.60.19) splits further: the
+ * header, each arm's pattern and a ;; are segments of their own. */
 #define LSEG_MAX 64
 typedef struct { const char *text; int op; } lseg_t;     /* op: ';' 'A' 'O' */
 
@@ -5030,12 +5031,37 @@ static int is_kw(const char *t, const char *kw) {
     return strncmp(t, kw, (uint32_t)n) == 0 && (t[n] == '\0' || t[n] == ' ');
 }
 
+/* The first ')' outside quotes, or 0: where a case arm's pattern ends. */
+static char *pattern_close(char *t) {
+    char q = 0;
+    for (; *t; t++) {
+        if (q) { if (*t == q) q = 0; }
+        else if (*t == '\'' || *t == '"') q = *t;
+        else if (*t == ')') return t;
+    }
+    return 0;
+}
+
+/* `case WORD in` at t: where the header ends (after "in"), or 0. */
+static char *case_header_end(char *t) {
+    if (!is_kw(t, "case")) return 0;
+    char *r = t + 4, q = 0;
+    while (*r == ' ') r++;
+    if (!*r) return 0;
+    while (*r && (q || *r != ' ')) { if (q) { if (*r == q) q = 0; } else if (*r == '\'' || *r == '"') q = *r; r++; }
+    while (*r == ' ') r++;
+    if (r[0] != 'i' || r[1] != 'n' || (r[2] && r[2] != ' ')) return 0;
+    return r + 2;
+}
+
+static const char *const DSEMI = ";;";
+
 static int split_segs(char *buf, lseg_t *sg, int max) {
-    int n = 0, op = ';';
+    int n = 0, op = ';', arm_next = 0;
     char *s = buf;
     while (n < max) {
         char *start = s, inq = 0;
-        int next_op = 0, pdepth = 0;      /* inside $( ... ): no splitting (v0.60.4) */
+        int next_op = 0, pdepth = 0, dsemi = 0;   /* inside $( ... ): no splitting (v0.60.4) */
         while (*s) {
             if (inq) { if (*s == inq) inq = 0; s++; continue; }
             if (*s == '\'' || *s == '"') { inq = *s; s++; continue; }
@@ -5043,6 +5069,7 @@ static int split_segs(char *buf, lseg_t *sg, int max) {
             if (pdepth && *s == '(') { pdepth++; s++; continue; }
             if (pdepth && *s == ')') { pdepth--; s++; continue; }
             if (pdepth) { s++; continue; }
+            if (s[0] == ';' && s[1] == ';') { next_op = ';'; dsemi = 1; *s = '\0'; s += 2; break; }
             if (s[0] == ';')                { next_op = ';'; *s = '\0'; s += 1; break; }
             if (s[0] == '&' && s[1] == '&') { next_op = 'A'; *s = '\0'; s += 2; break; }
             if (s[0] == '|' && s[1] == '|') { next_op = 'O'; *s = '\0'; s += 2; break; }
@@ -5052,25 +5079,59 @@ static int split_segs(char *buf, lseg_t *sg, int max) {
         while (*t == ' ') t++;
         char *end = t + strlen(t);
         while (end > t && end[-1] == ' ') *--end = '\0';
+    again:
         /* do X / then X / else X / if X: the keyword, then X on its own -
          * repeatedly, since X may start with a keyword too (`do if ...`,
          * `then for ...`, `else if ...`). */
-        static const char *const kws[] = { "do", "then", "else", "if", "while" };
-        int again = 1;
-        while (again && n < max - 1) {
-            again = 0;
-            for (int k = 0; k < 5; k++) {
-                int kl = (int)strlen(kws[k]);
-                if (strncmp(t, kws[k], (uint32_t)kl) == 0 && t[kl] == ' ') {
-                    t[kl] = '\0';
-                    sg[n].text = t; sg[n].op = op; n++;
-                    op = ';';
-                    t += kl + 1; while (*t == ' ') t++;
-                    again = 1; break;
+        {
+            static const char *const kws[] = { "do", "then", "else", "if", "while" };
+            int more = 1;
+            while (more && n < max - 1) {
+                more = 0;
+                for (int k = 0; k < 5; k++) {
+                    int kl = (int)strlen(kws[k]);
+                    if (strncmp(t, kws[k], (uint32_t)kl) == 0 && t[kl] == ' ') {
+                        t[kl] = '\0';
+                        sg[n].text = t; sg[n].op = op; n++;
+                        op = ';';
+                        t += kl + 1; while (*t == ' ') t++;
+                        more = 1; break;
+                    }
                 }
             }
         }
+        /* case (v0.60.19): `case W in` stands alone; each arm's pattern
+         * (without its ')') is a segment of its own, then its command; ;;
+         * is a segment of its own, and the one after it is an arm again. */
+        if (arm_next && *t && n < max - 1) {
+            if (is_kw(t, "esac")) arm_next = 0;
+            else {
+                char *cp = pattern_close(t);
+                if (cp) {
+                    *cp = '\0';
+                    sg[n].text = t; sg[n].op = op; n++;
+                    op = ';';
+                    arm_next = 0;
+                    t = cp + 1; while (*t == ' ') t++;
+                    goto again;
+                }
+            }
+        }
+        {
+            char *he = case_header_end(t);
+            if (he && n < max - 1) {
+                char *rest = he;
+                while (*rest == ' ') rest++;
+                *he = '\0';
+                sg[n].text = t; sg[n].op = op; n++;
+                op = ';';
+                arm_next = 1;
+                t = rest;
+                goto again;
+            }
+        }
         if (*t && n < max) { sg[n].text = t; sg[n].op = op; n++; }
+        if (dsemi && n < max) { sg[n].text = DSEMI; sg[n].op = ';'; n++; arm_next = 1; }
         if (!next_op) break;
         op = next_op;
     }
@@ -5192,6 +5253,61 @@ static void exec_range(lseg_t *sg, int from, int to, int depth) {
             i = d + 1;
             continue;
         }
+        if (is_kw(sg[i].text, "case")) {
+            /* case WORD in PAT|PAT) ... ;; ... esac (v0.60.19): the first arm
+             * whose pattern matches runs, and no other; none matching is
+             * status 0, as sh has it. A pattern is expanded like a word, then
+             * matched as a glob, or as plain text where it was quoted. */
+            int e = match_end(sg, i, to, "case", "esac");
+            if (e < 0) { t_puts("  case: expected `case WORD in PATTERN) ... ;; esac`.\n"); cur_shell()->last_status = 2; return; }
+            if (run) {
+                char ex[INPUT_MAX], word[INPUT_MAX];
+                expand_seg(sg[i].text + 4, ex);
+                const char *w = ex; while (*w == ' ') w++;
+                int k = 0; char q = 0;
+                while (*w && (q || *w != ' ') && k < INPUT_MAX - 1) {
+                    if (q) { if (*w == q) q = 0; } else if (*w == '\'' || *w == '"') q = *w;
+                    word[k++] = *w++;
+                }
+                word[k] = '\0';
+                unquote(word);
+                cur_shell()->last_status = 0;
+                int j = i + 1, matched = 0;
+                while (j < e && !matched) {
+                    /* the arm: its pattern at j, its commands up to ;; or esac */
+                    int b = j + 1, dep = 0;
+                    while (b < e) {
+                        if (is_kw(sg[b].text, "case")) dep++;
+                        else if (is_kw(sg[b].text, "esac")) dep--;
+                        else if (dep == 0 && sg[b].text == DSEMI) break;
+                        b++;
+                    }
+                    char pat[INPUT_MAX];
+                    const char *pt = sg[j].text;
+                    if (*pt == '(') pt++;                         /* (PAT) is sh too */
+                    expand_seg(pt, pat);
+                    char *alt = pat;
+                    while (alt && !matched) {
+                        char *bar = alt, qq = 0;
+                        while (*bar && (qq || *bar != '|')) { if (qq) { if (*bar == qq) qq = 0; } else if (*bar == '\'' || *bar == '"') qq = *bar; bar++; }
+                        char *next = *bar ? bar + 1 : 0;
+                        *bar = '\0';
+                        while (*alt == ' ') alt++;
+                        char *ae = alt + strlen(alt);
+                        while (ae > alt && ae[-1] == ' ') *--ae = '\0';
+                        int quoted = strchr(alt, '\'') || strchr(alt, '"');
+                        if (quoted) { unquote(alt); matched = str_eq(alt, word); }
+                        else matched = glob_match(alt, word);
+                        alt = next;
+                    }
+                    if (matched) exec_range(sg, j + 1, b, depth + 1);
+                    j = b + 1;
+                }
+            }
+            i = e + 1;
+            continue;
+        }
+        if (sg[i].text == DSEMI) { i++; continue; }
         if (is_kw(sg[i].text, "if")) {
             int f = match_end(sg, i, to, "if", "fi");
             int th = -1, el = -1, dep = 0;

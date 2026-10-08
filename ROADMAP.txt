@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.18
+Current version: v0.60.19
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,15 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.19 (2026-10-08)  — CASE
+  - `case WORD in PAT|PAT) ... ;; (PAT) ... ;; *) ... ;; esac` on one line,
+    in a loop, nested, with several commands in an arm and the last ;;
+    optional. The first arm that matches runs and no other; none matching
+    is status 0. Patterns are expanded like words and matched with the
+    shell's globs (* and ?), or as plain text where quoted.
+  - scripts/case-test.sh types fourteen lines and compares their output
+    with bash's. qemu_keys.py can type ( and ) now.
 
 v0.60.18 (2026-10-08)  — CTRL+R
   - Ctrl+R at the prompt searches the leftovers, newest first, as bash's

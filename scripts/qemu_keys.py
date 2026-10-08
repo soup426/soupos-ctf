@@ -13,7 +13,8 @@ KEYMAP = {' ':'spc', '\n':'ret', '.':'dot', '-':'minus', '_':'shift-minus',
           '~':'shift-grave_accent', '?':'shift-slash', '!':'shift-1',
           ';':'semicolon', '$':'shift-4',
           "'":'apostrophe', '"':'shift-apostrophe', '#':'shift-3',
-          '\\':'backslash', '[':'bracket_left', ']':'bracket_right'}
+          '\\':'backslash', '[':'bracket_left', ']':'bracket_right',
+          '(':'shift-9', ')':'shift-0'}
 
 def keys_for(ch):
     if ch in KEYMAP: return [KEYMAP[ch]]

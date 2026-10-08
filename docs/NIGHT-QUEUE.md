@@ -61,7 +61,7 @@ A reverse search through the history at the prompt, as in bash: type and
 the newest match is shown; Ctrl+R again for the one before; Enter runs it,
 Ctrl+C gives the line back. Test by typing.
 
-## 6. case ... esac
+## 6. case ... esac — DONE v0.60.19
 
 `case WORD in pat) ... ;; pat|pat) ... ;; *) ... ;; esac`, with the glob
 patterns the shell already has. Compare with bash's results for the same
