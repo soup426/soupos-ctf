@@ -61,6 +61,9 @@ int fat_delete(const char *path);
 /* Free and total data clusters, and the size of one in bytes. Any pointer may
  * be NULL. Walks the FAT, so it is a command-speed call, not a hot path. */
 void fat_space(uint32_t *out_free, uint32_t *out_total, uint32_t *out_cluster_bytes);
+/* Sectors the volume occupies from the start of the disk; what lies past it
+ * belongs to nobody on the FAT side, which is where swap lives. 0 if unmounted. */
+uint32_t fat_volume_sectors(void);
 
 /* Create a directory ("bowl"). FAT16 only. Fails if it already exists,
    the parent is missing, or the disk is full. Returns 0=ok, -1=error. */

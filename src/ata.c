@@ -140,10 +140,12 @@ static int ata_read_sector_impl(uint32_t lba, uint8_t *buf) {
     if (wait_bsy() < 0) return -1;
     if (wait_drq() < 0) return -1;
 
-    for (int i = 0; i < 256; i++) {
-        uint16_t w = inw(ATA_DATA);
-        buf[i * 2]     = (uint8_t)w;
-        buf[i * 2 + 1] = (uint8_t)(w >> 8);
+    /* One string instruction for the whole sector. Under a hypervisor every
+     * port access is a VM exit, and 256 of them per sector made a sector
+     * cost about a millisecond; a `rep insw` is handled as a single one. */
+    {
+        uint8_t *dst = buf; uint32_t n = 256;
+        __asm__ volatile ("rep insw" : "+D"(dst), "+c"(n) : "d"(ATA_DATA) : "memory");
     }
     return 0;
 }
@@ -164,9 +166,9 @@ static int ata_write_sector_impl(uint32_t lba, const uint8_t *buf) {
     if (wait_bsy() < 0) return -1;
     if (wait_drq() < 0) return -1;
 
-    for (int i = 0; i < 256; i++) {
-        uint16_t w = (uint16_t)buf[i * 2] | ((uint16_t)buf[i * 2 + 1] << 8);
-        outw(ATA_DATA, w);
+    {
+        const uint8_t *src = buf; uint32_t n = 256;
+        __asm__ volatile ("rep outsw" : "+S"(src), "+c"(n) : "d"(ATA_DATA) : "memory");
     }
 
     /* Wait for completion then flush write cache */
@@ -178,6 +180,61 @@ static int ata_write_sector_impl(uint32_t lba, const uint8_t *buf) {
 }
 
 uint32_t ata_total_sectors(void) { return total_sec; }
+
+static int ata_read_sectors_impl(uint32_t lba, uint8_t count, uint8_t *buf) {
+    if (!drive_present || count == 0) return -1;
+    if (wait_bsy() < 0) return -1;
+    outb(ATA_DRIVE_HEAD, (uint8_t)(0xE0 | ((lba >> 24) & 0x0F)));
+    outb(ATA_SECCOUNT,   count);
+    outb(ATA_LBA_LO,     (uint8_t) lba);
+    outb(ATA_LBA_MID,    (uint8_t)(lba >>  8));
+    outb(ATA_LBA_HI,     (uint8_t)(lba >> 16));
+    outb(ATA_COMMAND,    ATA_CMD_READ_SECTORS);
+    delay400();
+    for (uint8_t k = 0; k < count; k++) {
+        if (wait_bsy() < 0) return -1;
+        if (wait_drq() < 0) return -1;
+        uint8_t *dst = buf + (uint32_t)k * 512; uint32_t n = 256;
+        __asm__ volatile ("rep insw" : "+D"(dst), "+c"(n) : "d"(ATA_DATA) : "memory");
+    }
+    return 0;
+}
+
+static int ata_write_sectors_impl(uint32_t lba, uint8_t count, const uint8_t *buf) {
+    if (!drive_present || count == 0) return -1;
+    if (wait_bsy() < 0) return -1;
+    outb(ATA_DRIVE_HEAD, (uint8_t)(0xE0 | ((lba >> 24) & 0x0F)));
+    outb(ATA_SECCOUNT,   count);
+    outb(ATA_LBA_LO,     (uint8_t) lba);
+    outb(ATA_LBA_MID,    (uint8_t)(lba >>  8));
+    outb(ATA_LBA_HI,     (uint8_t)(lba >> 16));
+    outb(ATA_COMMAND,    0x30);  /* WRITE SECTORS */
+    delay400();
+    for (uint8_t k = 0; k < count; k++) {
+        if (wait_bsy() < 0) return -1;
+        if (wait_drq() < 0) return -1;
+        const uint8_t *src = buf + (uint32_t)k * 512; uint32_t n = 256;
+        __asm__ volatile ("rep outsw" : "+S"(src), "+c"(n) : "d"(ATA_DATA) : "memory");
+    }
+    if (wait_bsy() < 0) return -1;
+    outb(ATA_COMMAND, 0xE7);  /* CACHE FLUSH */
+    if (wait_bsy() < 0) return -1;
+    return 0;
+}
+
+int ata_read_sectors(uint32_t lba, uint8_t count, uint8_t *buf) {
+    mutex_lock(&ata_mtx);
+    int r = ata_read_sectors_impl(lba, count, buf);
+    mutex_unlock(&ata_mtx);
+    return r;
+}
+
+int ata_write_sectors(uint32_t lba, uint8_t count, const uint8_t *buf) {
+    mutex_lock(&ata_mtx);
+    int r = ata_write_sectors_impl(lba, count, buf);
+    mutex_unlock(&ata_mtx);
+    return r;
+}
 
 int ata_read_sector(uint32_t lba, uint8_t *buf) {
     mutex_lock(&ata_mtx);

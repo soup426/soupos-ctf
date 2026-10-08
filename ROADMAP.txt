@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.34.0
+Current version: v0.34.1
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,23 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.34.1 (2026-10-07)  — ATA: STRING PIO
+  Groundwork for swap, measured on the way.
+  - The driver moved each sector one `inw` at a time: 256 port accesses,
+    and under a hypervisor every one is a VM exit. Now `rep insw` and
+    `rep outsw`, one instruction per sector, which KVM services as one
+    exit.
+  - Measured with a new once-per-mount yardstick, the free-cluster count
+    that reads the whole FAT (64 sectors): 6-7 ticks before, 3 after. A
+    doubling, not the order of magnitude the exit count suggested, so the
+    data port was never the bulk of a sector's cost. What remains is per
+    command: the 400 ns settle, the BSY/DRQ polling, and the host's own
+    latency to service the request. That is why swap, which moves eight
+    sectors at a time, will use multi-sector commands: one wait per page
+    rather than eight.
+  - The fat segment and fat-longname-test are the proof nothing changed
+    but the speed. Gate 85.
 
 v0.34.0 (2026-10-07)  — SSH: KEYS, ONE-SHOT COMMANDS, AND A POLITE "BUSY"
   Queue item S8, the loose ends noticed in the first real logins.

@@ -1,4 +1,6 @@
 #include "fat.h"
+#include "timer.h"
+#include "klog.h"
 #include "task.h"
 
 /* One lock for the whole FAT layer.
@@ -84,6 +86,7 @@ static uint8_t  spc;                /* sectors per cluster */
 static uint32_t fat_start;          /* LBA of first FAT */
 static uint32_t fat_sectors;        /* sectors per FAT copy */
 static uint32_t cluster_count;      /* total data cluster count */
+static uint32_t volume_sectors;     /* sectors in the volume, from the BPB */
 static uint32_t root_dir_start;     /* LBA of root dir  (FAT16 only) */
 static uint32_t root_dir_sectors;   /* sectors in fixed root dir (FAT16) */
 static uint32_t data_start;         /* LBA of cluster 2 */
@@ -441,6 +444,7 @@ int fat_init(void) {
 
     uint32_t fat_size  = b->fat_size16;
     uint32_t total_sec = b->total_sectors16 ? b->total_sectors16 : b->total_sectors32;
+    volume_sectors = total_sec;
     uint32_t root_sec  = ((uint32_t)b->root_entry_count * 32 + bps - 1) / bps;
 
     if (fat_size == 0) {
@@ -985,14 +989,20 @@ fail:
 static uint32_t fat_free_clusters_impl(void) {
     if (!initialized) return 0;
     if (!free_known) {
+        uint32_t t0 = timer_get_ticks();
         uint32_t last = cluster_count + 1, n = 0;
         for (uint32_t c = 2; c <= last; c++)
             if (fat_get_entry(c) == 0) n++;
         free_cached = n;
         free_known  = 1;
+        /* Once per mount, and it reads the whole FAT: a cheap yardstick for
+         * the disk path (64 sectors here; 6-7 ticks with word-at-a-time PIO). */
+        klog("[fat] counted %u free clusters in %u ticks\n", n, timer_get_ticks() - t0);
     }
     return free_cached;
 }
+
+uint32_t fat_volume_sectors(void) { return initialized ? volume_sectors : 0; }
 
 void fat_space(uint32_t *out_free, uint32_t *out_total, uint32_t *out_cluster_bytes) {
     mutex_lock(&fat_mtx);
