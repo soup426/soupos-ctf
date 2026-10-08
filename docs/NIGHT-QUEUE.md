@@ -46,7 +46,7 @@ itself: pressing it stops a for or while (and the rest of its line), and
 the shell carries on. Compare a counting loop with sh; test Ctrl-C on
 `while cook test.elf 1 = 1 ; do cook echo.elf x > /dev/null ; done`.
 
-## 3. Script arguments
+## 3. Script arguments — DONE v0.60.2
 
 `run FILE a b c`: $1 to $9, $# and $@ inside the script, as sh gives them
 to `sh FILE a b c`. Compare a script's results with sh's.

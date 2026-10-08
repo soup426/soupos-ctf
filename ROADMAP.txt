@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.1
+Current version: v0.60.2
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,18 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.2 (2026-10-08)  — SCRIPT ARGUMENTS
+  Twenty-second queue, item 3.
+  - `run FILE a "b c" d`: the words after the file (quotes grouping them)
+    are the script's $1..$9; $# is how many, $@ all of them joined by
+    spaces; not expanded inside '...'. A script run from a script gets its
+    own, and the caller's are given back after. Outside a script $# is 0.
+  - scripts/args-test.sh, in check.sh: a script run with `one "two words"
+    three` leaves what `sh P.sh one "two words" three` leaves - $#, $1,
+    $2 with its space, $@, for over $@, a nested script's own $1, the
+    caller's back after it - and $# is 0 at the prompt. qemu_keys can now
+    type '#'.
 
 v0.60.1 (2026-10-08)  — while LOOPS, AND Ctrl-C STOPS A SHELL LOOP
   Twenty-second queue, item 2.

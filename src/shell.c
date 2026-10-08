@@ -77,6 +77,8 @@ typedef struct {
     char    vname[16][16];       /* shell variables (v0.58.0): NAME=value, $NAME */
     char    vval[16][96];
     int     nvars;
+    char    parg[9][64];         /* a script's $1..$9 (v0.60.2)            */
+    int     npargs;              /* $#                                      */
     uint32_t started, last_input;/* ticks: for `who`                          */
 } shell_t;
 
@@ -651,7 +653,7 @@ static void cmd_menu(void) {
         {0, "    who                - every shell: its cook, where, up, idle"},
         {0, "    last               - who clocked in, and who was refused, newest first"},
         {0, "    du [bowl]          - clusters and bytes under each entry, and the total"},
-        {0, "    run <file>         - run a file of command lines (a script)"},
+        {0, "    run <file> [args]  - run a script; its $1..$9, $#, $@ are the args"},
         {0, "    NAME=value, $NAME  - shell variables; unset NAME removes one"},
         {0, "    kill <id>          - stop a background task"},
         {0, "    bgclock            - spawn a clock in the top-right corner"},
@@ -4213,7 +4215,7 @@ static void dispatch(const char *buf) {
         cmd_season(a);
     }
     else if (str_eq(p, "serve"))       cmd_serve();
-    else if (str_eq(p, "run") || str_startswith(p, "run ")) cmd_run(uq_args(p + 3));
+    else if (str_eq(p, "run") || str_startswith(p, "run ")) cmd_run(p + 3);
     else if (str_startswith(p, "unset ")) cmd_unset(uq_args(p + 6));
     else if (str_startswith(p, "pour")) {
         const char *a = p + 4; while (*a == ' ') a++;
@@ -4541,6 +4543,25 @@ static void expand_seg(const char *seg, char *ex) {
             i = j + 1;
             continue;
         }
+        /* $1..$9, $# and $@: a script's arguments (v0.60.2); not in '...'. */
+        if (seg[i] == '$' && sq != '\'' && ((seg[i + 1] >= '1' && seg[i + 1] <= '9') || seg[i + 1] == '#' || seg[i + 1] == '@')) {
+            shell_t *me = cur_shell();
+            char c = seg[i + 1];
+            if (c == '#') {
+                char d[4]; int nd = 0; int v = me->npargs;
+                do { d[nd++] = (char)('0' + v % 10); v /= 10; } while (v);
+                while (nd && k < INPUT_MAX - 1) ex[k++] = d[--nd];
+            } else if (c == '@') {
+                for (int a = 0; a < me->npargs; a++) {
+                    if (a && k < INPUT_MAX - 1) ex[k++] = ' ';
+                    for (const char *v = me->parg[a]; *v && k < INPUT_MAX - 1; v++) ex[k++] = *v;
+                }
+            } else if (c - '1' < me->npargs) {
+                for (const char *v = me->parg[c - '1']; *v && k < INPUT_MAX - 1; v++) ex[k++] = *v;
+            }
+            i++;
+            continue;
+        }
         /* $NAME and ${NAME} (v0.58.0): a shell variable, empty if unset;
          * not inside '...'. */
         if (seg[i] == '$' && sq != '\'' &&
@@ -4810,9 +4831,13 @@ static void shell_loop(char *input, char *saved, int *pos_p, int *len_p, int *hb
 static void run_line(const char *line);
 static void cmd_run(const char *args) {
     static int depth;
-    if (!*args) { t_puts("Usage: run <file>\n"); cur_shell()->last_status = 2; return; }
+    /* run FILE [ARGS...] (v0.60.2): the words after the file are the
+     * script's $1..$9; quotes group them, as everywhere. */
+    char file[FAT_PATH_MAX];
+    const char *rest = first_word(args, file, sizeof(file));
+    if (!file[0]) { t_puts("Usage: run <file> [args...]\n"); cur_shell()->last_status = 2; return; }
     char path[FAT_PATH_MAX];
-    resolve_path(args, path);
+    resolve_path(file, path);
     if (!fat_exists(path) || fat_is_dir(path)) { cook_err("No such script."); return; }
     if (!may(path, 'r')) { deny(path); return; }
     if (depth >= 8) {
@@ -4827,6 +4852,15 @@ static void cmd_run(const char *args) {
     if (fat_read(path, (uint8_t *)text, 8192, &size) < 0) { kfree(text); cook_err("Cannot read the script."); return; }
     if (size > 8192) size = 8192;                    /* fat_read reports the file's size */
     text[size] = '\0';
+    /* The caller's arguments are kept and given back after: a script run
+     * from a script does not take its parent's $1. */
+    shell_t *me = cur_shell();
+    char (*saved)[64] = kmalloc(sizeof(me->parg));
+    int  saved_n = me->npargs;
+    if (!saved) { kfree(text); return; }
+    memcpy(saved, me->parg, sizeof(me->parg));
+    me->npargs = 0;
+    while (*rest && me->npargs < 9) { rest = first_word(rest, me->parg[me->npargs], 64); me->npargs++; }
     depth++;
     cur_shell()->last_status = 0;
     uint32_t i = 0;
@@ -4843,6 +4877,9 @@ static void cmd_run(const char *args) {
         i = e + 1;
     }
     depth--;
+    memcpy(me->parg, saved, sizeof(me->parg));
+    me->npargs = saved_n;
+    kfree(saved);
     kfree(text);
 }
 
