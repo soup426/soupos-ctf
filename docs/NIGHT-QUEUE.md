@@ -1,9 +1,9 @@
 # Night queue
 
-Ninth queue. The first eight are in `docs/queue-archive-2026-10-0*.md`. The
-seventh's notes still hold the set-aside syscall item (item 4) for a person
-to decide on. The eighth made the system multi-user in practice; this one
-looks at what that leaves loose.
+Tenth queue. The first nine are in `docs/queue-archive-2026-10-0*.md`. The
+seventh's notes still hold the set-aside syscall item for a person to decide
+on. The ninth closed holes in how cooks come and go; this one looks at the
+files that hold the kitchen's secrets.
 
 ## Standing rules
 
@@ -31,51 +31,29 @@ looks at what that leaves loose.
 
 ---
 
-## 1. A fired cook's files go to the next hire — DONE v0.53.0
+## 1. The roster is readable by every cook
 
-`hire` takes the smallest free uid, and `fire` frees it. Files record their
-owner as a uid, so the next cook hired is likely to own everything the fired
-one left, home included. Prove it first: hire, write a file, fire, hire
-someone else, and see who owns the file. Then decide between never reusing a
-uid and handing a fired cook's files to the headchef, and write down why.
-Also find the real upper bound on uids, given how the owner is stored on disk.
+/etc/kitchen is rwxr-x (checked 2026-10-08), so any cook can read every
+cook's PBKDF2 secret and attack it offline. Close it to the headchef in the
+ordinary build. FIRST read what the CHALLENGE build's stages need: stage 2
+is the AlphaSOUP-32 hash, and if reading the roster is part of it, that
+build must keep it readable. Prove the read on the old kernel, and check
+that login, `secret` and `hire` still work for a cook who cannot read it.
 
-## 2. A closed bowl closes what is inside it — DONE v0.53.1
+## 2. fire leaves the cook's SSH keys
 
-Found while proving item 1: a cook refused at `cd /home/saucier` (rwx---) can
-still `pour /home/saucier/RECIPE.TXT`, because commands and syscalls check
-the file's own mode and never the bowls above it. Homes are only closed to
-`cd`. Require search (x) on every bowl along a path, in users_may so the
-shell and the syscalls agree, and prove it on the old kernel first.
+/AUTHKEYS lines name a cook. Firing removes the cook but not the lines, so a
+cook later hired under the same name logs in with the fired one's key.
+Prove it, then remove a fired cook's lines (and say how many).
 
-## 3. last — DONE v0.53.2
+## 3. Every system file has a known owner and mode
 
-Logins leave only klog lines, which do not survive a reboot. Record each
-login and each refused one (cook, console or address, time) in a file that
-does, and add `last` to show them, newest first. Check the record survives a
-reboot and that mtools can read it.
+/etc/kitchen, /etc/logins, /etc/rc, /AUTHKEYS, the host key, /home: list
+every file the kernel writes or trusts, pin each one's owner and mode, set
+them where the kernel writes them, and add a test that checks all of them
+after a session of cooks doing ordinary things.
 
-## 4. Idle sessions end — DONE v0.53.3
-
-An SSH session left open holds one of four slots forever. End sessions with
-no input for a set time (a setting in /etc/rc, off by default on the
-console), say why to the client, and log it. Test with a short timeout.
-
-## 5. du — DONE v0.53.4
-
-Homes make it worth knowing what takes the space. `du [bowl]`: the bytes and
-clusters under each entry, with a total, checked against mtools.
-
-## 6. Tests type when the kernel is listening, not after a sleep — DONE (scripts only, no version)
-
-console-test typed into the bootloader under load and lost a byte (fixed in
-5c3dc12 by waiting for the login prompt). Most other tests boot, `sleep 4`
-or 5, then type through the QEMU monitor: the same blind wait. Give
-qemu_keys.py a way to wait for a line in the serial log (the login banner)
-before typing, use it everywhere, and prove it with the freeze-QEMU-in-the-
-bootloader reproduction that caught console-test.
-
-## 7. Doom at the framebuffer's own resolution — DEFERRED
+## 4. Doom at the framebuffer's own resolution — DEFERRED
 
 Carried; the user asked to keep to OS work.
 
