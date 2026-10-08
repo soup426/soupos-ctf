@@ -1,11 +1,10 @@
 # Night queue
 
-Twenty-third queue. The first twenty-two are in `docs/queue-archive-2026-10-0*.md`.
+Twenty-fourth queue. The first twenty-three are in `docs/queue-archive-2026-10-0*.md`.
 Two items wait on a person, with notes in their archives: the seventh's
-syscall-pointer item and the thirteenth's swap-shares item. The
-twenty-second added arithmetic, while (with Ctrl-C stopping a loop) and
-script arguments; this one lets a script use a program's output and the
-cook's input, and gives each cook a profile.
+syscall-pointer item and the thirteenth's swap-shares item. Eight queues
+built the shell up; this one turns back to the kernel, and asks whether the
+machine holds up under long use.
 
 ## Standing rules
 
@@ -33,24 +32,27 @@ cook's input, and gives each cook a profile.
 
 ---
 
-## 1. Command substitution — DONE v0.60.3
+## 1. Finished background jobs free their slots
 
-`$(COMMAND)` is replaced by what COMMAND (a program or pipeline, through
-the shell as usual) writes to stdout, trailing newlines removed, as sh
-does; not inside '...'. Nested is not needed. Compare with sh, e.g.
-`N=$(cook wc.elf -l < F)`, a pipeline's output, and an empty result.
+A process that ends stays in the table until it is reaped, and the
+per-cook limit (four) counts those. Find out whether a cook who runs four
+background jobs that finish is then refused a fifth until someone looks at
+`orders`; if so, reap finished jobs (keeping their status for `orders` to
+report once) so their slots come back. Prove before fixing.
 
-## 2. read VAR — DONE v0.60.4
+## 2. Nothing leaks over a soak
 
-`read NAME` reads a line from the terminal (console or session) into a
-variable; at end of input the status is 1. Test from a script that asks
-and the console that answers.
+Kernel heap in use, free pages, free clusters and open VFS nodes, before
+and after a soak: hundreds of program runs (pipes and redirections among
+them), SSH sessions opened and closed, files written and deleted, $(...)
+substitutions, scripts. Equal after, or each difference explained. Find
+and fix any leak.
 
-## 3. ~/profile at login — DONE v0.60.5
+## 3. The open-file table runs out cleanly
 
-If the cook's home holds a file named profile, it is run (as `run` would)
-at each interactive login - console, pass, vault, not `ssh host cmd` -
-with the cook's permissions. An error in it does not stop the login.
+A program that opens more files than the VFS table holds (16) must get -1
+for the rest, not hang or corrupt anything, and the table must be whole
+again once it exits. Measure, then fix whatever is wrong.
 
 ## 4. Doom at the framebuffer's own resolution — DEFERRED
 
