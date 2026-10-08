@@ -1,6 +1,6 @@
-/* systest.c - exercises the user-mode syscall ABI and reports to the serial
+/* mise.c - exercises the user-mode syscall ABI and reports to the serial
  * port (fd 2) with TESTOUT markers, so the whole thing is verifiable headless.
- * Usage: cook systest.elf <some args> */
+ * Usage: cook mise.elf <some args> */
 #include "ulib.h"
 
 static void emit(const char *tag, const char *val) {

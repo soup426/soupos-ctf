@@ -3,7 +3,7 @@
 #
 # Each case is a command line whose parts leave marker files when they run.
 # The same line runs in the host's sh, with (exit 42) standing in for
-# hello.elf (which exits 42), (exit 127) for an unknown command, and the
+# greet.elf (which exits 42), (exit 127) for an unknown command, and the
 # same echo > file for call.elf. The marker files left must be the same.
 # (Case 8's host wc reads a file: GNU wc pads a pipe to 7, weigh.elf cannot
 # tell a pipe from a file; see weigh.c.)
@@ -19,13 +19,13 @@ cp disk.img "$WORK/disk.img"
 CASES=(
   "cook call.elf a > /C1A.TXT ; cook call.elf b > /C1B.TXT#echo a > C1A.TXT ; echo b > C1B.TXT"
   "cook call.elf a > /C2A.TXT && cook call.elf b > /C2B.TXT#echo a > C2A.TXT && echo b > C2B.TXT"
-  "cook hello.elf && cook call.elf b > /C3B.TXT#(exit 42) && echo b > C3B.TXT"
-  "cook hello.elf || cook call.elf b > /C4B.TXT#(exit 42) || echo b > C4B.TXT"
+  "cook greet.elf && cook call.elf b > /C3B.TXT#(exit 42) && echo b > C3B.TXT"
+  "cook greet.elf || cook call.elf b > /C4B.TXT#(exit 42) || echo b > C4B.TXT"
   "cook call.elf a > /C5A.TXT || cook call.elf b > /C5B.TXT#echo a > C5A.TXT || echo b > C5B.TXT"
-  "cook hello.elf && cook call.elf b > /C6B.TXT || cook call.elf c > /C6C.TXT#(exit 42) && echo b > C6B.TXT || echo c > C6C.TXT"
+  "cook greet.elf && cook call.elf b > /C6B.TXT || cook call.elf c > /C6C.TXT#(exit 42) && echo b > C6B.TXT || echo c > C6C.TXT"
   "nosuchthing && cook call.elf b > /C7B.TXT ; cook call.elf c > /C7C.TXT#(exit 127) && echo b > C7B.TXT ; echo c > C7C.TXT"
   "cook call.elf x y | weigh.elf > /C8A.TXT && cook call.elf ok > /C8B.TXT#echo x y > t8 && wc < t8 > C8A.TXT && echo ok > C8B.TXT"
-  "cook hello.elf ; cook hello.elf || cook call.elf a > /C9A.TXT && cook call.elf b > /C9B.TXT#(exit 42) ; (exit 42) || echo a > C9A.TXT && echo b > C9B.TXT"
+  "cook greet.elf ; cook greet.elf || cook call.elf a > /C9A.TXT && cook call.elf b > /C9B.TXT#(exit 42) ; (exit 42) || echo a > C9A.TXT && echo b > C9B.TXT"
 )
 keys=("headchef" "rosemary" "WAIT:1")
 for c in "${CASES[@]}"; do keys+=("${c%%#*}" "WAIT:3"); done

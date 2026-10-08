@@ -1,14 +1,14 @@
-/* deep.c - a stack that grows, and one that grows too far.
+/* stockpot.c - a stack that grows, and one that grows too far.
  *
  * Every level of recursion keeps a kilobyte of its own on the stack and
  * writes all of it, so each level really does use the memory and the
  * compiler cannot fold the frames away.
  *
- *   cook deep.elf           600 levels, about 600 KB: far past the 16 KB the
+ *   cook stockpot.elf           600 levels, about 600 KB: far past the 16 KB the
  *                           stack used to be, so it only works if the stack
  *                           grows on demand. Checks every frame on the way
  *                           back up.
- *   cook deep.elf forever   recurses until the guard page stops it: the
+ *   cook stockpot.elf forever   recurses until the guard page stops it: the
  *                           kernel must say "stack overflow" and kill this
  *                           program, and the shell must carry on.
  */

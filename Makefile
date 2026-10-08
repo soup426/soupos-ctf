@@ -105,9 +105,9 @@ OBJS    = $(OBJ_C) $(OBJ_ASM)
 # Each links the user runtime (user/ulib.c) which provides _start + syscalls.
 UCFLAGS  = -m32 -ffreestanding -fno-pie -no-pie -fno-stack-protector \
            -nostdlib -Isrc -mgeneral-regs-only -O2
-USER_ELFS = user/hello.elf user/spoon.elf user/call.elf user/systest.elf user/spin.elf \
-            user/crash.elf user/unhex.elf user/marker.elf user/hog.elf \
-            user/upper.elf user/weigh.elf user/memtest.elf user/lazy.elf user/deep.elf user/hotcold.elf user/peek.elf user/toss.elf user/newbowl.elf user/sift.elf user/skim.elf user/dregs.elf user/rack.elf user/cull.elf user/divvy.elf user/slice.elf user/swap.elf user/tally.elf user/taste.elf user/forage.elf user/pair.elf
+USER_ELFS = user/greet.elf user/spoon.elf user/call.elf user/mise.elf user/whisk.elf \
+            user/drop.elf user/unwrap.elf user/ticket.elf user/glutton.elf \
+            user/raise.elf user/weigh.elf user/measure.elf user/proof.elf user/stockpot.elf user/fridge.elf user/peek.elf user/toss.elf user/newbowl.elf user/sift.elf user/skim.elf user/dregs.elf user/rack.elf user/cull.elf user/divvy.elf user/slice.elf user/swap.elf user/tally.elf user/taste.elf user/forage.elf user/pair.elf
 
 .PHONY: all clean distclean run run-ai run-console run-tcp iso disk user
 
@@ -244,21 +244,21 @@ $(DISK):
 	printf '# include + new builtins demo - run with: soup INCLUDE.SC\ninclude "MATHLIB.SC"\npour "cube(3)  = " + cube(3)\nlet nums = [5, 2, 9, 1, 7]\nsort(nums)\npour "sorted   ="\npour nums\npour "sum      = " + sum(nums)\nreverse(nums)\npour "reversed ="\npour nums\npour "find OS  = " + find("soupOS", "OS")\n' \
 	    | mcopy -i $(DISK) - ::INCLUDE.SC
 	$(MAKE) user
-	mcopy -i $(DISK) -o user/hello.elf   ::HELLO.ELF
+	mcopy -i $(DISK) -o user/greet.elf   ::GREET.ELF
 	mcopy -i $(DISK) -o user/spoon.elf     ::SPOON.ELF
 	mcopy -i $(DISK) -o user/call.elf    ::CALL.ELF
-	mcopy -i $(DISK) -o user/systest.elf ::SYSTEST.ELF
-	mcopy -i $(DISK) -o user/spin.elf    ::SPIN.ELF
-	mcopy -i $(DISK) -o user/crash.elf   ::CRASH.ELF
-	mcopy -i $(DISK) -o user/unhex.elf   ::UNHEX.ELF
-	mcopy -i $(DISK) -o user/marker.elf  ::MARKER.ELF
-	mcopy -i $(DISK) -o user/hog.elf     ::HOG.ELF
-	mcopy -i $(DISK) -o user/upper.elf   ::UPPER.ELF
+	mcopy -i $(DISK) -o user/mise.elf ::MISE.ELF
+	mcopy -i $(DISK) -o user/whisk.elf    ::WHISK.ELF
+	mcopy -i $(DISK) -o user/drop.elf   ::DROP.ELF
+	mcopy -i $(DISK) -o user/unwrap.elf   ::UNWRAP.ELF
+	mcopy -i $(DISK) -o user/ticket.elf  ::TICKET.ELF
+	mcopy -i $(DISK) -o user/glutton.elf     ::GLUTTON.ELF
+	mcopy -i $(DISK) -o user/raise.elf   ::RAISE.ELF
 	mcopy -i $(DISK) -o user/weigh.elf      ::WEIGH.ELF
-	mcopy -i $(DISK) -o user/memtest.elf ::MEMTEST.ELF
-	mcopy -i $(DISK) -o user/lazy.elf    ::LAZY.ELF
-	mcopy -i $(DISK) -o user/deep.elf    ::DEEP.ELF
-	mcopy -i $(DISK) -o user/hotcold.elf ::HOTCOLD.ELF
+	mcopy -i $(DISK) -o user/measure.elf ::MEASURE.ELF
+	mcopy -i $(DISK) -o user/proof.elf    ::PROOF.ELF
+	mcopy -i $(DISK) -o user/stockpot.elf    ::STOCKPOT.ELF
+	mcopy -i $(DISK) -o user/fridge.elf ::FRIDGE.ELF
 	mcopy -i $(DISK) -o user/peek.elf      ::PEEK.ELF
 	mcopy -i $(DISK) -o user/toss.elf      ::TOSS.ELF
 	mcopy -i $(DISK) -o user/newbowl.elf   ::NEWBOWL.ELF

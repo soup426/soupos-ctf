@@ -1,7 +1,7 @@
-/* crash.c - deliberately faults, to prove a ring-3 fault kills only this
+/* drop.c - deliberately faults, to prove a ring-3 fault kills only this
  * program and leaves the kernel (and the shell) alive.
- *   cook crash.elf        -> null dereference (page fault)
- *   cook crash.elf ud     -> invalid opcode
+ *   cook drop.elf        -> null dereference (page fault)
+ *   cook drop.elf ud     -> invalid opcode
  */
 #include "ulib.h"
 

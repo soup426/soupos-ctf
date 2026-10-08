@@ -6,18 +6,18 @@ source "$(dirname "$0")/lib.sh"
 gate_init jobs
 gate_boot
 gate_drive \
-    "cook hog.elf &" "WAIT:2" "kill %" "WAIT:2" \
-    "cook hog.elf" "WAIT:2" "KEY:ctrl-c" "WAIT:2" \
-    "cook systest.elf afterctrlc" "WAIT:3" \
-    "cook marker.elf Z" "WAIT:1" "KEY:ctrl-z" "WAIT:3" \
+    "cook glutton.elf &" "WAIT:2" "kill %" "WAIT:2" \
+    "cook glutton.elf" "WAIT:2" "KEY:ctrl-c" "WAIT:2" \
+    "cook mise.elf afterctrlc" "WAIT:3" \
+    "cook ticket.elf Z" "WAIT:1" "KEY:ctrl-z" "WAIT:3" \
     "orders" "WAIT:1" "steep" "WAIT:3" \
-    "cook marker.elf K" "WAIT:1" "KEY:ctrl-z" "WAIT:1" "kill %" "WAIT:2" \
+    "cook ticket.elf K" "WAIT:1" "KEY:ctrl-z" "WAIT:1" "kill %" "WAIT:2" \
     "cook call.elf hello pipes | weigh.elf" "WAIT:3" \
-    "cook call.elf pipes are plumbing | upper.elf | weigh.elf" "WAIT:4" \
+    "cook call.elf pipes are plumbing | raise.elf | weigh.elf" "WAIT:4" \
     "cook call.elf through a file > P.TXT" "WAIT:2" \
     "cook weigh.elf < P.TXT" "WAIT:3" \
-    "cook hog.elf | weigh.elf &" "WAIT:2" "kill %" "WAIT:2" "kill %" "WAIT:2" \
-    "cook memtest.elf A | memtest.elf B | memtest.elf C" "WAIT:14"
+    "cook glutton.elf | weigh.elf &" "WAIT:2" "kill %" "WAIT:2" "kill %" "WAIT:2" \
+    "cook measure.elf A | measure.elf B | measure.elf C" "WAIT:14"
 
 check "kill reached a non-cooperating program via the IRQ path" 'killed \(irq\)'
 
@@ -38,10 +38,10 @@ else
 fi
 
 # ── Job control ──
-# marker.elf prints a tagged line every 100 ms, so its output IS the evidence
+# ticket.elf prints a tagged line every 100 ms, so its output IS the evidence
 # of whether it is running. Ctrl-Z it, and those lines must stop.
-check "Ctrl-Z stopped the foreground job" '\[proc [0-9]+\] /marker\.elf stopped'
-stop_line=$(line_of '/marker\.elf stopped'); cont_line=$(line_of '/marker\.elf continued')
+check "Ctrl-Z stopped the foreground job" '\[proc [0-9]+\] /ticket\.elf stopped'
+stop_line=$(line_of '/ticket\.elf stopped'); cont_line=$(line_of '/ticket\.elf continued')
 if [ -n "$stop_line" ] && [ -n "$cont_line" ]; then
     while_parked=$(between "$stop_line" "$cont_line" | grep -cE '\[p:Z\]' || true)
     if [ "$while_parked" = "0" ]; then
@@ -61,12 +61,12 @@ if [ -n "$stop_line" ] && [ -n "$cont_line" ]; then
 else
     echo "  FAIL  job control markers missing (stopped=${stop_line:-none} continued=${cont_line:-none})"; fail=1
 fi
-if [ -n "${stop_line:-}" ] && after "$stop_line" | grep -qE '\[proc [0-9]+\] spawned /marker\.elf K'; then
+if [ -n "${stop_line:-}" ] && after "$stop_line" | grep -qE '\[proc [0-9]+\] spawned /ticket\.elf K'; then
     echo "  ok    shell took commands again after Ctrl-Z"
 else echo "  FAIL  shell did not come back after Ctrl-Z"; fail=1; fi
 # A stopped job is parked on a wait queue and would never reach a safe point
 # on its own, so kill has to wake it to let it die.
-last_stop=$(line_of '/marker\.elf stopped' last)
+last_stop=$(line_of '/ticket\.elf stopped' last)
 if [ -n "$last_stop" ] && after "$last_stop" | grep -qE '\[proc [0-9]+\] killed'; then
     echo "  ok    a stopped job can still be killed"
 else echo "  FAIL  killing a stopped job did not end it"; fail=1; fi
@@ -74,7 +74,7 @@ else echo "  FAIL  killing a stopped job did not end it"; fail=1; fi
 # ── Pipes and redirection ──
 check "two-stage pipeline carries the data"  'WCOUT lines=1 words=2 bytes=12'
 check "three-stage pipeline works"           'WCOUT lines=1 words=3 bytes=19'
-check "the middle stage ran and exited"      '/upper\.elf exited with code 0'
+check "the middle stage ran and exited"      '/raise\.elf exited with code 0'
 check "> redirection reached the filesystem" 'WCOUT lines=1 words=3 bytes=15'
 # A reader parked on a pipe nobody will write to must still be killable.
 if grep -qE '/weigh\.elf' "$LOG" && [ "$(grep -cE '\[proc [0-9]+\] killed' "$LOG")" -ge 3 ]; then
@@ -82,9 +82,9 @@ if grep -qE '/weigh\.elf' "$LOG" && [ "$(grep -cE '\[proc [0-9]+\] killed' "$LOG
 else echo "  FAIL  a process blocked on a pipe survived kill"; fail=1; fi
 # `kill %` on a backgrounded pipeline: the flag lands on weigh.elf, blocked in a
 # pipe read; it must be woken to die, or it stays the newest process and the
-# second kill hits it again while hog.elf runs on at 90%.
+# second kill hits it again while glutton.elf runs on at 90%.
 check "killing a reader blocked on a pipe works" '/weigh.elf exited with code -137'
-check "the second kill then reaches the hog" 'killing process [0-9]+ \(/hog.elf\)'
+check "the second kill then reaches the hog" 'killing process [0-9]+ \(/glutton.elf\)'
 
 # ── Concurrent allocation ──
 # Three processes started back-to-back by one pipeline, so their ELF loads

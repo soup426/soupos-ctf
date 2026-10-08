@@ -1,4 +1,4 @@
-/* memtest.c - catches two processes being handed the same physical page.
+/* measure.c - catches two processes being handed the same physical page.
  *
  * Takes a one-character tag, claims a block of heap with sbrk, fills every
  * byte with that tag, yields enough for the other copies to do the same, then
@@ -7,9 +7,9 @@
  * the other one sees the wrong tag here.
  *
  * Run several at once:
- *   cook memtest.elf A &
- *   cook memtest.elf B &
- *   cook memtest.elf C
+ *   cook measure.elf A &
+ *   cook measure.elf B &
+ *   cook measure.elf C
  */
 #include "ulib.h"
 

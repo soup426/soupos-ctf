@@ -24,7 +24,7 @@ void klog_putc(char c) {
 /* A line is written whole. Without this a task's log line and another
  * task's output interleave on the serial port whenever a switch lands mid-
  * line, which is what the "flaky" job-control check was: the kernel's
- * "[proc 5] /marker.elf continued" torn in two by the process it had just
+ * "[proc 5] /ticket.elf continued" torn in two by the process it had just
  * resumed. Holding off preemption (not interrupts) for the length of a line
  * costs other tasks the line's transmit time on real hardware; an interrupt
  * handler's own klog can still land inside a task's line. */

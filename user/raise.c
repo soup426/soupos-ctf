@@ -1,7 +1,7 @@
-/* upper.c - stdin to stdout, uppercased. A pipeline stage with no purpose
+/* raise.c - stdin to stdout, uppercased. A pipeline stage with no purpose
  * other than being obviously a pipeline stage:
  *
- *   cook call.elf hello | upper.elf      -> HELLO
+ *   cook call.elf hello | raise.elf      -> HELLO
  */
 #include "ulib.h"
 

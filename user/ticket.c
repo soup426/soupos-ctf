@@ -1,4 +1,4 @@
-/* marker.c - proof that two ring-3 programs really run at the same time.
+/* ticket.c - proof that two ring-3 programs really run at the same time.
  *
  * Prints "[p:<args>] step N" to the serial port a dozen times, yielding
  * between each, so two copies started with different arguments interleave in
@@ -6,8 +6,8 @@
  * [p:A] and [p:B] alternate is the thing itself, not an inference.
  *
  * Verify headless:
- *   cook marker.elf A &
- *   cook marker.elf B &
+ *   cook ticket.elf A &
+ *   cook ticket.elf B &
  * then read the serial log (dmesg, or scripts/smoke-test.sh).
  */
 #include "ulib.h"

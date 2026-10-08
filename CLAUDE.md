@@ -3,7 +3,7 @@
 ## What this is
 
 soupOS is a 32-bit x86 hobby OS written in C and NASM assembly (currently
-**v0.60.6**; ROADMAP.txt is the authority on the version). It boots via GRUB and runs in protected mode with paging, a
+**v0.60.7**; ROADMAP.txt is the authority on the version). It boots via GRUB and runs in protected mode with paging, a
 physical/heap allocator, and a cooperative scheduler. On top of that:
 
 - **Filesystem**: FAT16 read/write with subdirectories ("bowls") and a VFS shim
@@ -48,7 +48,7 @@ make run
 # Run with the AI bridge attached on COM2 (see "AI serial bridge")
 make run-ai            # AI_FAKE=1 make run-ai  for offline canned replies
 
-# Build a ring-3 user program (user/hello.c -> user/hello.elf)
+# Build a ring-3 user program (user/hello.c -> user/greet.elf)
 make user
 
 # Rebuild FAT disk image (wipes disk.img; includes the .SC demos + HELLO.ELF)
@@ -440,7 +440,7 @@ soupOS runs real ring-3 user programs with hardware memory protection.
     frame left on the shared esp0 stack); since v0.8.0 it is safe by
     construction, because `esp0` follows `current` and every task traps onto
     its own kernel stack. iret restores the user's IF from its saved EFLAGS.
-    Demo: shell `yieldbg` + `cook spin.elf` show interleaved serial markers.
+    Demo: shell `yieldbg` + `cook whisk.elf` show interleaved serial markers.
   - `ticks` (v0.7.2) returns `timer_get_ticks()` (100 Hz uptime) — lets a
     user program pace itself in wall-clock time (see `user/spin.c`).
   - Every user pointer is bounds-checked via `user_ok()` so a buggy or
@@ -902,7 +902,7 @@ for 6 s at 0.3 s into the boot; the old driver garbled the login 3 of 3.
 ## Kitchen names (v0.60.6)
 
 Every new command gets a kitchen name: shell builtins AND ring-3 programs
-(sift.elf, not grep.elf; spoon.elf, not cat.elf). Tests compare behaviour with the host tool under
+(sift.elf, not grep.elf; spoon.elf, not spoon.elf). Tests compare behaviour with the host tool under
 its real name; only the soupOS side is kitchen-named. sh syntax keywords
 (for, if, while, ...) stay as sh has them.
 
@@ -1003,7 +1003,7 @@ there (an old 32 MB disk.img has no swap: `rm disk.img && make disk`).
 `swap_out_one` at `PROC_PAGE_CAP`. Eviction is approximate LRU (v0.43.0): accessed
 bits sampled every 32 evictions into `pr->last_ref`, oldest stamp goes; `pr->fifo`
 is now an unordered resident set. Before changing the policy, model it on the
-host against hotcold.elf - the model matched the kernel to the page; only
+host against fridge.elf - the model matched the kernel to the page; only
 heap pages are ever swapped. `swap_release` runs at process exit. Since v0.39.0 the ATA driver uses bus-master DMA
 (PIIX BAR4, bounce buffer `dma_buf`, PIO fallback): under KVM, PIO cost one VM
 exit per 16-bit word, which was 85% of swap's time.
@@ -1018,7 +1018,7 @@ in `isr_handler` for vector 14, **before** the ring-3 kill and the ring-0
 panic) maps a zeroed page for a not-present fault inside `[USER_HEAP, brk)`,
 up to `PROC_PAGE_CAP`, and the instruction retries. Two consequences to keep
 in mind: the kernel may fault while copying into user memory (that is handled,
-and `lazy.elf read` proves it), and a program is killed at first touch past
+and `proof.elf read` proves it), and a program is killed at first touch past
 the cap, not at sbrk. The user stack and the ELF image are still mapped
 eagerly at exec. `pr->demand_pages` is reported on the exit line.
 
@@ -1057,7 +1057,7 @@ image and fails on a "missing" file.
 
 `scripts/gate/*.sh` each boot their own QEMU and run at once; `gate.sh` is
 the runner. The split follows one rule: **a check that counts lines (two IRQ
-kills, three `killed`, the last two hello.elf exits) lives in the segment
+kills, three `killed`, the last two greet.elf exits) lives in the segment
 whose drive sequence produces every line it counts.** Add a drive step and its
 checks to the same segment; a new subsystem gets a new segment, which is cheap
 (it adds nothing to the wall time until it is the slowest). The serial logs

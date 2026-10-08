@@ -13,8 +13,8 @@ insists on a tty for its password prompt.
     ssh-login.py <port> execfail      `ssh host nonsense` must exit 127, as sh would
     ssh-login.py <port> isolate       a session's own cwd and output: hash zebracake, a bowl,
                                       cd into it, pwd, then clockout must end the session
-    ssh-login.py <port> ctrlc         cook hog.elf, Ctrl-C over the wire kills it, shell carries on
-    ssh-login.py <port> hangup        cook hog.elf &, then drop the connection with it running
+    ssh-login.py <port> ctrlc         cook glutton.elf, Ctrl-C over the wire kills it, shell carries on
+    ssh-login.py <port> hangup        cook glutton.elf &, then drop the connection with it running
     ssh-login.py <port> rekey         the CLIENT rekeys every 2 KB (RekeyLimit): menu twice, then
                                       whoami must still answer through the new keys
 
@@ -98,9 +98,9 @@ try:
         b.sendline("pwd"); b.expect("/home/saucier")             # b starts at home (v0.52.2)
         a.sendline("pwd"); a.expect("/ABOWL")
         # Both run a program; Ctrl-C in a kills a's, b's keeps printing.
-        a.sendline("cook /hog.elf"); a.expect("running, never yields")   # a is in /ABOWL now
-        b.sendline("cook marker.elf B"); b.expect(r"\[p:B\] step")
-        a.sendcontrol("c"); a.expect(r"hog\.elf killed")
+        a.sendline("cook /glutton.elf"); a.expect("running, never yields")   # a is in /ABOWL now
+        b.sendline("cook ticket.elf B"); b.expect(r"\[p:B\] step")
+        a.sendcontrol("c"); a.expect(r"glutton\.elf killed")
         b.expect(r"\[p:B\] step (1[0-9]|[2-9][0-9])")                 # b's program carries on
         a.close(force=True); b.close(force=True)
     elif mode == "execfail":
@@ -122,9 +122,9 @@ try:
         c = login(nokey)
         c.expect("password:"); c.sendline("rosemary")
         c.expect("a shell of your own")
-        c.sendline("cook hog.elf"); c.expect("running, never yields")
+        c.sendline("cook glutton.elf"); c.expect("running, never yields")
         time.sleep(1); c.sendcontrol("c")
-        c.expect(r"hog\.elf killed")
+        c.expect(r"glutton\.elf killed")
         c.sendline("whoami"); c.expect(r"headchef\s+\(uid 0\)")
         c.close(force=True)
     elif mode == "hangup":
@@ -132,7 +132,7 @@ try:
         c = login(nokey)
         c.expect("password:"); c.sendline("rosemary")
         c.expect("a shell of your own")
-        c.sendline("cook hog.elf &"); c.expect("running, never yields")
+        c.sendline("cook glutton.elf &"); c.expect("running, never yields")
         c.close(force=True)
         time.sleep(3)                    # the vault notices, hangs the session up
     elif mode == "rekey":

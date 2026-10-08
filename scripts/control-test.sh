@@ -17,8 +17,8 @@ LINES=(
   "if cook taste.elf -f /NOPE ; then cook call.elf yes > /L4.TXT ; else cook call.elf no > /L4.TXT ; fi"
   "for n in 1 2 3 4 ; do if cook taste.elf \$n -gt 2 ; then cook call.elf big \$n >> /L5.TXT ; else cook call.elf small \$n >> /L5.TXT ; fi ; done"
   "if cook taste.elf -d /G ; then for f in x \"y  z\" ; do cook call.elf v=\$f >> /L6.TXT ; done ; fi"
-  "for f in a ; do cook hello.elf ; done ; cook call.elf \$? > /L7.TXT"
-  "if cook hello.elf ; then cook call.elf t > /L8X.TXT ; fi ; cook call.elf \$? > /L8.TXT"
+  "for f in a ; do cook greet.elf ; done ; cook call.elf \$? > /L7.TXT"
+  "if cook greet.elf ; then cook call.elf t > /L8X.TXT ; fi ; cook call.elf \$? > /L8.TXT"
 )
 keys=("headchef" "rosemary" "WAIT:1")
 for l in "${LINES[@]}"; do keys+=("$l" "WAIT:3"); done
@@ -29,7 +29,7 @@ PID=$!
 python3 scripts/qemu_keys.py "$WORK/mon.sock" "${keys[@]}" >/dev/null 2>&1 || { echo "  FAIL  could not drive QEMU"; fail=1; }
 kill "$PID" 2>/dev/null; wait "$PID" 2>/dev/null; PID=""
 for l in "${LINES[@]}"; do
-    h=$(echo "$l" | sed -e 's|cook taste.elf|test|g' -e 's|cook call.elf|echo|g' -e 's|cook hello.elf|(exit 42)|g' -e 's| /G| G|g' -e 's| /NOPE| NOPE|g' -e 's| /L| L|g')
+    h=$(echo "$l" | sed -e 's|cook taste.elf|test|g' -e 's|cook call.elf|echo|g' -e 's|cook greet.elf|(exit 42)|g' -e 's| /G| G|g' -e 's| /NOPE| NOPE|g' -e 's| /L| L|g')
     ( cd "$WORK/host" && LC_ALL=C sh -c "$h" ) >/dev/null 2>&1
 done
 got=$(mdir -b -i "$WORK/disk.img" ::/ 2>/dev/null | grep -oE "L[0-9]+X?\.TXT" | sort | tr '\n' ' ')

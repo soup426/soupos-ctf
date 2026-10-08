@@ -8,7 +8,7 @@
 # The gate used to be ONE boot and one five-minute sequence (smoke-test.sh up
 # to v0.30.1). Its assertions were written against that single log, and some
 # count lines across it: two IRQ kills, three `killed` lines, the last two
-# hello.elf exits. Those still hold, because the split keeps every line a
+# greet.elf exits. Those still hold, because the split keeps every line a
 # count depends on inside the segment that counts it. When adding a check that
 # counts, keep it that way.
 #

@@ -1,4 +1,4 @@
-/* hotcold.c - a working set that fits, and a sweep that does not.
+/* fridge.c - a working set that fits, and a sweep that does not.
  *
  * 400 hot pages are touched every round; each round also touches 400 cold
  * pages it will never touch again. The cap is 1024 pages, of which the image

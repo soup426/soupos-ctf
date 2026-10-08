@@ -1,4 +1,4 @@
-/* hello.c - a ring-3 soupOS program built on ulib. */
+/* greet.c - a ring-3 soupOS program built on ulib. */
 #include "ulib.h"
 
 int main(void) {

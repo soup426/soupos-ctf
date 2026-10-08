@@ -28,12 +28,12 @@ for run in $(seq 1 "${1:-8}"); do
     # The gate's own conditions: two background markers already running, and
     # an `orders` between the stop and the resume.
     python3 scripts/qemu_keys.py "$MON" "headchef" "rosemary" "WAIT:1" \
-        "cook marker.elf A &" "cook marker.elf B &" "WAIT:7" \
-        "cook marker.elf Z" "WAIT:1" "KEY:ctrl-z" "WAIT:3" \
+        "cook ticket.elf A &" "cook ticket.elf B &" "WAIT:7" \
+        "cook ticket.elf Z" "WAIT:1" "KEY:ctrl-z" "WAIT:3" \
         "orders" "WAIT:1" "steep" "WAIT:3" >/dev/null 2>&1
     kill $PID 2>/dev/null; rm -f "$TD"
-    stop=$(grep -nE '/marker\.elf stopped' "$LOG" | head -1 | cut -d: -f1)
-    cont=$(grep -nE '/marker\.elf continued' "$LOG" | head -1 | cut -d: -f1)
+    stop=$(grep -nE '/ticket\.elf stopped' "$LOG" | head -1 | cut -d: -f1)
+    cont=$(grep -nE '/ticket\.elf continued' "$LOG" | head -1 | cut -d: -f1)
     if [ -n "$stop" ] && [ -n "$cont" ]; then
         n=$(awk -v a="$stop" -v b="$cont" 'NR>a && NR<b' "$LOG" | grep -cE '\[p:Z\]' || true)
         echo "run $run: $n line(s) while parked"

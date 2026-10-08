@@ -36,7 +36,7 @@ cp disk.img "$WORK/home.img"
 boot "$WORK/home.img" "$WORK/home.log" "headchef" "rosemary" "WAIT:1" \
     "hire saucier" "WAIT:1" "basil" "WAIT:1" "basil" "WAIT:2" "pwd" "WAIT:1" "clockout" "WAIT:1" \
     "cook" "soup" "WAIT:2" "pwd" "WAIT:1" "clockout" "WAIT:1" \
-    "saucier" "basil" "WAIT:2" "pwd" "WAIT:1" "cd /home/cook" "WAIT:1" "cook hello.elf" "WAIT:2"
+    "saucier" "basil" "WAIT:2" "pwd" "WAIT:1" "cd /home/cook" "WAIT:1" "cook greet.elf" "WAIT:2"
 grep -q "made /home/saucier for saucier" "$WORK/home.log" && grep -q "made /home/cook for cook" "$WORK/home.log" \
     && echo "  ok    a hired cook gets a home at hire, an older one at their first login" || { echo "  FAIL  homes not made"; fail=1; }
 grep -qx "  /home/saucier" <(tr -d '\r' < "$WORK/home.log") || grep -q "^/home/saucier\|  /home/saucier$" "$WORK/home.log"
@@ -45,7 +45,7 @@ grep -qx "  /home/saucier" <(tr -d '\r' < "$WORK/home.log") || grep -q "^/home/s
 grep -q "Permission denied: /home/cook" "$WORK/home.log" \
     && echo "  ok    a cook cannot enter another cook's home" || { echo "  FAIL  saucier entered /home/cook"; fail=1; }
 grep -q "hello from ring 3" "$WORK/home.log" \
-    && echo "  ok    programs are still found from a home (the root is searched too)" || { echo "  FAIL  hello.elf not found from a home"; fail=1; }
+    && echo "  ok    programs are still found from a home (the root is searched too)" || { echo "  FAIL  greet.elf not found from a home"; fail=1; }
 mdir -i "$WORK/home.img" ::/home 2>/dev/null | grep -qi "saucier" && [ "$(fsck.fat -n "$WORK/home.img" 2>&1 | wc -l)" -le 2 ] \
     && echo "  ok    mtools sees the homes and fsck is clean" || { echo "  FAIL  /home on disk or fsck"; fail=1; }
 # ── fire hands a cook's files to the headchef (v0.53.0) ──
@@ -54,7 +54,7 @@ mdir -i "$WORK/home.img" ::/home 2>/dev/null | grep -qi "saucier" && [ "$(fsck.f
 cp disk.img "$WORK/fire.img"
 boot "$WORK/fire.img" "$WORK/fire.log" "headchef" "rosemary" "WAIT:1" \
     "hire saucier" "WAIT:1" "basil" "WAIT:1" "basil" "WAIT:2" "clockout" "WAIT:1" \
-    "saucier" "basil" "WAIT:2" "stir /home/saucier/RECIPE.TXT the secret sauce" "WAIT:1" "cook hog.elf &" "WAIT:2" "clockout" "WAIT:1" \
+    "saucier" "basil" "WAIT:2" "stir /home/saucier/RECIPE.TXT the secret sauce" "WAIT:1" "cook glutton.elf &" "WAIT:2" "clockout" "WAIT:1" \
     "headchef" "rosemary" "WAIT:2" "fire saucier" "WAIT:1" "kill %" "WAIT:2" "fire saucier" "WAIT:2" \
     "hire intern" "WAIT:1" "mint" "WAIT:1" "mint" "WAIT:2" "perms /home/saucier/RECIPE.TXT" "WAIT:1" \
     "hire saucier" "WAIT:1" "thyme" "WAIT:1" "thyme" "WAIT:2" "clockout" "WAIT:1" \

@@ -679,7 +679,7 @@ static void cmd_menu(void) {
         {0, "    take NAME...       - take a line from the terminal into variables"},
         {0, "    kill <id>          - stop a background task"},
         {0, "    bgclock            - spawn a clock in the top-right corner"},
-        {0, "    yieldbg            - bg task logging [bg] to serial (pairs with cook spin.elf)"},
+        {0, "    yieldbg            - bg task logging [bg] to serial (pairs with cook whisk.elf)"},
         {0, "    spinbg             - CPU-bound bg task that never yields (preemption demo)"},
         {0, "    sleeptest          - test task_sleep and wait-queue (500 ms sleep)"},
         {0, "    vfstest            - test the VFS shim (/dev nodes + file round-trip)"},
@@ -1219,9 +1219,9 @@ static void cmd_ai(const char *args) {
 
 /* ── Pipelines ────────────────────────────────────────────────────────────
  *
- *   cook call.elf hello | upper.elf | weigh.elf
+ *   cook call.elf hello | raise.elf | weigh.elf
  *   cook spoon.elf < README.TXT > COPY.TXT
- *   cook marker.elf A &
+ *   cook ticket.elf A &
  *
  * Each stage is a process of its own (that is all a pipeline is here), wired
  * stdout-to-stdin with vfs_pipe. The last stage gets the terminal, because it
@@ -3362,7 +3362,7 @@ static void cmd_bgclock(void) {
 
 /* yieldbg - spawn a background task that logs a [bg] marker to the serial
  * port every ~300 ms for ~6 s, then exits. It only makes progress when some
- * other task yields the CPU. Run it, then `cook spin.elf`: the [bg] and [u]
+ * other task yields the CPU. Run it, then `cook whisk.elf`: the [bg] and [u]
  * markers interleave in the serial log, proving a ring-3 program's sys_yield()
  * reaches the scheduler. (klog mirrors every byte to COM1 -> the serial log.) */
 static void yieldbg_task(void *arg) {

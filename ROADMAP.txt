@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.6
+Current version: v0.60.7
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,18 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.7 (2026-10-08)  — KITCHEN NAMES FOR THE TEST AND DEMO PROGRAMS
+  - As the user asked after v0.60.6: hello.elf is greet, hog glutton, spin
+    whisk, crash drop, lazy proof (dough proofs slowly, as demand paging
+    does), deep stockpot, hotcold fridge, marker ticket, memtest measure,
+    systest mise (mise en place), unhex unwrap, upper raise. Every program
+    on the disk now has a kitchen name.
+  - No kernel code depended on the names (only comments and help text);
+    soupyc's upper() string function is not the program and keeps its
+    name. Their output markers (LAZY ..., "hello from ring 3", ...) are
+    unchanged, since the gate and tests read them. CLAUDE.md's mentions
+    are updated; this file's history keeps the names each release had.
 
 v0.60.6 (2026-10-08)  — KITCHEN NAMES FOR THE NEW COMMANDS
   - The commands added since v0.52.0 had taken Unix names, against the

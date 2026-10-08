@@ -11,11 +11,11 @@ cp disk.img "$WORK/disk.img"
 cat > "$WORK/S.TXT" <<'SCRIPT'
 # a comment, skipped
 cook call.elf one > /R1.TXT
-cook hello.elf && cook call.elf skipped > /R2.TXT
-cook hello.elf || cook call.elf fallback > /R3.TXT
+cook greet.elf && cook call.elf skipped > /R2.TXT
+cook greet.elf || cook call.elf fallback > /R3.TXT
 cook call.elf "two  words" ~ > /R4.TXT
 cook call.elf $? > /R5.TXT
-cook hello.elf
+cook greet.elf
 SCRIPT
 printf 'cook call.elf mine > ~/M.TXT\nstir /etc/X.TXT nope\n' > "$WORK/T.TXT"
 printf 'follow /SELF.TXT\n' > "$WORK/SELF.TXT"
@@ -31,8 +31,8 @@ python3 scripts/qemu_keys.py "$WORK/mon.sock" "headchef" "rosemary" "WAIT:1" \
     "follow /etc/kitchen ; cook call.elf \$? > ~/RK.TXT" "WAIT:2" >/dev/null 2>&1 \
     || { echo "  FAIL  could not drive QEMU"; fail=1; }
 kill "$PID" 2>/dev/null; wait "$PID" 2>/dev/null; PID=""
-# The host's sh, the same lines: hello.elf is (exit 42), and HOME is /.
-mkdir -p "$WORK/host"; ( cd "$WORK/host" && sed -e 's|cook hello.elf|(exit 42)|g' -e 's|cook call.elf|echo|g' -e 's| /R| R|g' "$WORK/S.TXT" > s.sh \
+# The host's sh, the same lines: greet.elf is (exit 42), and HOME is /.
+mkdir -p "$WORK/host"; ( cd "$WORK/host" && sed -e 's|cook greet.elf|(exit 42)|g' -e 's|cook call.elf|echo|g' -e 's| /R| R|g' "$WORK/S.TXT" > s.sh \
   && HOME=/ sh s.sh; echo $? > R6.TXT ) >/dev/null 2>&1
 got=$(mdir -b -i "$WORK/disk.img" ::/ 2>/dev/null | grep -oE "R[0-9]\.TXT" | sort | tr '\n' ' ')
 want=$(cd "$WORK/host" && ls R*.TXT | sort | tr '\n' ' ')

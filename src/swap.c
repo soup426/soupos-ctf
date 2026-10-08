@@ -79,7 +79,7 @@ void swap_note_resident(proc_t *pr, uint32_t va) {
  * Every SAMPLE_EVERY evictions, each resident page's accessed bit is read and
  * cleared, and a page found used is stamped with the current epoch. The
  * victim is the resident page with the oldest stamp. FIFO, the first policy,
- * evicted hotcold.elf's 512-page working set every round and fetched it all
+ * evicted fridge.elf's 512-page working set every round and fetched it all
  * back (3,584 page-ins). Clock, tried next, gave 8,152 second chances and the
  * same 3,584: the hot set is used in one phase and the sweep runs in another,
  * the hand laps the resident set twice per sweep, and a page cleared on one

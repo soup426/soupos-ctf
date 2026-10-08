@@ -3,28 +3,28 @@
 source "$(dirname "$0")/lib.sh"
 gate_init boot
 gate_boot
-# spin.elf runs ~3s and yieldbg ~6s, so they overlap on purpose. The two
-# hello.elf runs at the end happen with nothing else alive, which the
+# whisk.elf runs ~3s and yieldbg ~6s, so they overlap on purpose. The two
+# greet.elf runs at the end happen with nothing else alive, which the
 # address-space check depends on.
 gate_drive \
-    "cook systest.elf hello world" "WAIT:3" \
-    "cook hello.elf" "WAIT:2" \
+    "cook mise.elf hello world" "WAIT:3" \
+    "cook greet.elf" "WAIT:2" \
     "preempttest" "WAIT:8" \
     "vmtest" "WAIT:6" \
-    "yieldbg" "cook spin.elf" "WAIT:11" \
-    "cook marker.elf A &" "cook marker.elf B &" "WAIT:7" \
+    "yieldbg" "cook whisk.elf" "WAIT:11" \
+    "cook ticket.elf A &" "cook ticket.elf B &" "WAIT:7" \
     "jobs" "WAIT:1" \
-    "cook lazy.elf" "WAIT:3" \
-    "cook lazy.elf greedy" "WAIT:8" \
-    "cook lazy.elf absurd" "WAIT:5" \
-    "cook lazy.elf read" "WAIT:2" \
-    "cook crash.elf" "WAIT:2" \
-    "cook deep.elf" "WAIT:3" \
-    "cook hotcold.elf" "WAIT:3" \
+    "cook proof.elf" "WAIT:3" \
+    "cook proof.elf greedy" "WAIT:8" \
+    "cook proof.elf absurd" "WAIT:5" \
+    "cook proof.elf read" "WAIT:2" \
+    "cook drop.elf" "WAIT:2" \
+    "cook stockpot.elf" "WAIT:3" \
+    "cook fridge.elf" "WAIT:3" \
     "cook peek.elf /" "WAIT:2" \
-    "cook deep.elf forever" "WAIT:3" \
-    "cook hello.elf" "WAIT:2" "cook hello.elf" "WAIT:2" \
-    "cook lazy.elf hold &" "WAIT:2" "ps" "WAIT:5"
+    "cook stockpot.elf forever" "WAIT:3" \
+    "cook greet.elf" "WAIT:2" "cook greet.elf" "WAIT:2" \
+    "cook proof.elf hold &" "WAIT:2" "ps" "WAIT:5"
 
 check "boot reaches the scheduler"   '\[boot\] scheduler ok'
 check "preemption armed"             '\[boot\] preemption enabled'
@@ -41,27 +41,27 @@ check "second process ran to completion"    '\[p:B\] step 39'
 
 # Demand paging: sbrk promises 16 MB, four times the page cap, and only the
 # pages touched get a frame. The greedy run touches every page, meets the
-# cap, and is killed - the honest answer - and the shell goes on. crash.elf
+# cap, and is killed - the honest answer - and the shell goes on. drop.elf
 # is the fault that was never going to be a heap page, and still kills.
 check "a lazy heap costs only the pages touched" 'LAZY touched 64 of 4096 pages ok'
-check "the kernel counted the pages it faulted in" '\[demand\] /lazy\.elf faulted in 64 pages'
+check "the kernel counted the pages it faulted in" '\[demand\] /proof\.elf faulted in 64 pages'
 # With swap past the volume the greedy run completes: 1024 pages stay, the
 # other 3072 go out and every one comes back holding its value. The absurd
 # run wants more than the cap and the swap together and is killed when the
 # swap is full, and the shell goes on.
 check "the greedy run completes through swap"     'LAZY touched 4096 of 4096 pages ok'
-check "its pages went out and came back"          '\[swap\] /lazy\.elf: [0-9]+ pages out, [0-9]+ back in'
-check "past cap and swap together is refused"     '\[demand\] /lazy\.elf: no page for 0x.*swap 4096 of 4096'
+check "its pages went out and came back"          '\[swap\] /proof\.elf: [0-9]+ pages out, [0-9]+ back in'
+check "past cap and swap together is refused"     '\[demand\] /proof\.elf: no page for 0x.*swap 4096 of 4096'
 check "and that program was killed for it"        '\[user\] fault exc=14 .* -> program killed'
 check "swap was found past the volume at boot"    '\[swap\] 4096 pages past the volume'
-check "a wild fault still kills" '/crash\.elf exited with code'
+check "a wild fault still kills" '/drop\.elf exited with code'
 # The stack grows on demand to 1 MB, far past the 16 KB it used to be, and
 # its guard page turns running off the end into a named kill.
 check "a deep stack grows on demand"        'DEEP reached 600 levels ok'
-check "the kernel counted the stack growth" '\[stack\] /deep\.elf grew its stack by [0-9]+ pages'
-check "running off the stack hits the guard" '\[user\] /deep\.elf: stack overflow at 0x'
+check "the kernel counted the stack growth" '\[stack\] /stockpot\.elf grew its stack by [0-9]+ pages'
+check "running off the stack hits the guard" '\[user\] /stockpot\.elf: stack overflow at 0x'
 
-# The victim policy. hotcold.elf keeps a 400-page working set hot while
+# The victim policy. fridge.elf keeps a 400-page working set hot while
 # sweeping 400 new pages a round. FIFO evicts the hot set every round and
 # fetches back 1,200 pages; approximate LRU fetches back 400 (one round's
 # worth, at the start). The bound sits between them.
@@ -70,7 +70,7 @@ check "a working set survives a sweep" 'HOTCOLD done ok'
 # the whole listing with mtools; here, that it ran and saw a known file.
 check "a program lists a directory" 'LS f 47 HELLO.TXT'
 check "and reaches the end of it" 'LS end [0-9]+ entries'
-hc_in=$(grep -oE '\[swap\] /hotcold\.elf: [0-9]+ pages out, [0-9]+ back in' "$LOG" | grep -oE '[0-9]+ back in' | grep -oE '^[0-9]+')
+hc_in=$(grep -oE '\[swap\] /fridge\.elf: [0-9]+ pages out, [0-9]+ back in' "$LOG" | grep -oE '[0-9]+ back in' | grep -oE '^[0-9]+')
 if [ -n "$hc_in" ] && [ "$hc_in" -lt 600 ]; then
     echo "  ok    the victim policy keeps a working set ($hc_in pages back in; FIFO took 1200)"
 else
@@ -80,7 +80,7 @@ fi
 # to be answered the same way, not treated as a panic.
 check "a syscall can fault in an untouched page" 'LAZY kernel wrote [0-9]+ bytes into an untouched page ok'
 
-# Two ring-3 programs alive at the same time. marker.elf tags every line with
+# Two ring-3 programs alive at the same time. ticket.elf tags every line with
 # its own argument, so an A line between two B lines can only mean both were
 # live: one process cannot interleave with itself.
 if grep -qE '\[p:A\]' "$LOG" && grep -qE '\[p:B\]' "$LOG"; then
@@ -91,7 +91,7 @@ if grep -qE '\[p:A\]' "$LOG" && grep -qE '\[p:B\]' "$LOG"; then
         echo "  FAIL  no B steps between A's first and last: processes did not overlap"; fail=1
     fi
 else
-    echo "  FAIL  marker.elf tags missing: concurrent processes never ran"; fail=1
+    echo "  FAIL  ticket.elf tags missing: concurrent processes never ran"; fail=1
 fi
 
 # The per-task ring-0 stack, asserted as a number rather than inferred from
@@ -112,28 +112,28 @@ fi
 
 # Address spaces are actually reclaimed: two runs of the SAME program with
 # nothing else alive must report the same free page count on exit.
-mapfile -t freepages < <(grep -iE '\[proc [0-9]+\] /hello\.elf exited .* pages free' "$LOG" \
+mapfile -t freepages < <(grep -iE '\[proc [0-9]+\] /greet\.elf exited .* pages free' "$LOG" \
                          | grep -oE '[0-9]+ pages free' | grep -oE '^[0-9]+')
 n=${#freepages[@]}
 if [ "$n" -ge 2 ]; then
     a=${freepages[$((n-2))]}; b=${freepages[$((n-1))]}
-    if [ "$a" = "$b" ]; then echo "  ok    no address-space leak (two hello.elf runs both ended at $b free pages)"
+    if [ "$a" = "$b" ]; then echo "  ok    no address-space leak (two greet.elf runs both ended at $b free pages)"
     else echo "  FAIL  address space leaked across runs of one program: $a free pages then $b"; fail=1; fi
 else
-    echo "  FAIL  need two hello.elf exits to compare page counts, found $n"; fail=1
+    echo "  FAIL  need two greet.elf exits to compare page counts, found $n"; fail=1
 fi
 
-# Memory per process in ps (v0.45.0). lazy.elf hold touches 1500 heap pages
+# Memory per process in ps (v0.45.0). proof.elf hold touches 1500 heap pages
 # and waits: it holds the cap, 1024, resident, and the rest of its pages
 # (1500 heap plus its image and stack, less 1024) on disk.
-psline=$(grep -E '^ +[0-9]+ +[rRB] +[0-9]+% +[0-9]+ +ring3 +[0-9]+ +[0-9]+ +[a-z]+ +lazy\.elf' "$LOG" | tail -1)
+psline=$(grep -E '^ +[0-9]+ +[rRB] +[0-9]+% +[0-9]+ +ring3 +[0-9]+ +[0-9]+ +[a-z]+ +proof\.elf' "$LOG" | tail -1)
 res=$(echo "$psline" | awk '{print $6}'); swp=$(echo "$psline" | awk '{print $7}')
 if [ "$res" = "1024" ] && [ -n "$swp" ] && [ "$swp" -ge 476 ] && [ "$swp" -le 500 ]; then
     echo "  ok    ps shows a program's memory (1024 resident, $swp swapped)"
     [ "$(echo "$psline" | awk '{print $8}')" = "headchef" ] && echo "  ok    ps shows the program's owner (headchef)" \
         || { echo "  FAIL  ps owner column: '$psline'"; fail=1; }
 else
-    echo "  FAIL  ps memory figures for lazy.elf hold: '${psline:-none}'"; fail=1
+    echo "  FAIL  ps memory figures for proof.elf hold: '${psline:-none}'"; fail=1
 fi
 check "the held pages all came back right" 'LAZY held 1500 pages ok'
 

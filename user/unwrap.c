@@ -1,6 +1,6 @@
-/* unhex.c - hex text to binary, so a player can materialise a crafted file.
+/* unwrap.c - hex text to binary, so a player can materialise a crafted file.
  *
- *   cook unhex.elf IN.HEX OUT.ELF
+ *   cook unwrap.elf IN.HEX OUT.ELF
  *
  * soupOS has no upload, and a soupyc script cannot emit the NUL bytes an ELF
  * header needs: its strings are a NUL-terminated char[48], so chr(0) is not
@@ -27,7 +27,7 @@ int main(void) {
     while (args[i] && args[i] != ' ') i++;
     if (args[i] == ' ') { args[i] = '\0'; out = &args[i + 1]; }
     if (!out || !out[0]) {
-        print("usage: cook unhex.elf IN.HEX OUT.ELF\n");
+        print("usage: cook unwrap.elf IN.HEX OUT.ELF\n");
         return 1;
     }
 

@@ -1,4 +1,4 @@
-/* lazy.c - memory the machine does not have, yet.
+/* proof.c - memory the machine does not have, yet.
  *
  * Asks sbrk for 16 MB, which is four times the per-process page cap and far
  * more than a program used to be able to get, then touches one page in
@@ -6,18 +6,18 @@
  * pages ever get a frame; every one of them must read as zero before the
  * write and hold the value after.
  *
- *   cook lazy.elf           64 pages touched out of 4096 claimed
- *   cook lazy.elf greedy    touches every page of the 16 MB: 1024 stay
+ *   cook proof.elf           64 pages touched out of 4096 claimed
+ *   cook proof.elf greedy    touches every page of the 16 MB: 1024 stay
  *                           resident and the rest go to swap and come back,
  *                           so it COMPLETES, slowly
- *   cook lazy.elf absurd    32 MB, more than the cap and the swap together:
+ *   cook proof.elf absurd    32 MB, more than the cap and the swap together:
  *                           killed when the swap is full, which is the
  *                           honest answer, and the shell must survive it
- *   cook lazy.elf hold      touches 1500 pages, then stays alive for 4 s
+ *   cook proof.elf hold      touches 1500 pages, then stays alive for 4 s
  *                           doing nothing, so `ps` can be asked what it
  *                           holds: 1024 resident (the cap) and the rest on
  *                           disk
- *   cook lazy.elf read      has the KERNEL touch the page first: a read()
+ *   cook proof.elf read      has the KERNEL touch the page first: a read()
  *                           into a buffer this program never wrote to, so
  *                           the fault is taken in ring 0 and must be
  *                           answered the same way rather than panicking
