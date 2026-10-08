@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.2
+Current version: v0.60.3
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,27 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.3 (2026-10-08)  — COMMAND SUBSTITUTION
+  Twenty-third queue, item 1.
+  - $(COMMAND) runs COMMAND (a program, a pipeline, a builtin: anything a
+    line can hold) with a capture terminal in place of the shell's and the
+    task's - every builtin writes through the one and every program
+    through the other, which a spawned program inherits - and puts what it
+    wrote in place: trailing newlines dropped, the rest become spaces, as
+    sh's splitting makes them of an unquoted $(...). Right after NAME= the
+    result is kept whole, as sh keeps an assignment's. Not inside '...'.
+    The status is COMMAND's.
+  - Found by the test: the shell's own "cooking X..." and "[X exited with
+    code N]" lines were captured; they are not printed into a capture. And
+    a program's stderr, which on a session's terminal goes to that
+    terminal, was captured too; a capture passes stderr to the terminal it
+    replaced, so only stdout is captured, as with sh.
+  - Written down: a Ctrl-C pressed while a $(...) runs is seen when it
+    ends; nesting stops at two.
+  - scripts/subst-test.sh, in check.sh: eight lines - in an argument, an
+    assignment kept whole, for over a $(...), wc -l < F, an empty result,
+    a pipeline, '$(...)' kept, the status after - leave what sh leaves.
 
 v0.60.2 (2026-10-08)  — SCRIPT ARGUMENTS
   Twenty-second queue, item 3.

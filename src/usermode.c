@@ -406,6 +406,10 @@ void syscall_dispatch(registers_t *r) {
                  * A program in an SSH session writes stderr to the session:
                  * the log is the console's, not every cook's. */
                 term_t *t = term_current();
+                /* Inside a $(...) the terminal is a capture: stdout only is
+                 * captured, as sh does, so stderr goes on to the terminal it
+                 * replaced (v0.60.3). */
+                if (t->name && strcmp(t->name, "subst") == 0 && t->ctx) t = (term_t *)t->ctx;
                 if (t != &term_vga) for (uint32_t i = 0; i < len; i++) t->putc(t, p[i]);
                 else                for (uint32_t i = 0; i < len; i++) serial_putc(p[i]);
                 r->eax = len;

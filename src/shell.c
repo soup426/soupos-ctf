@@ -110,6 +110,7 @@ static inline shell_t *cur_shell(void) {
  * Left on vga_* deliberately: the screen-only features that poke cells or
  * the serial mirror directly (bgclock, the boot logo, kitchen's mirror). */
 #define T (cur_shell()->term)
+static int subst_depth;          /* inside a $(...) capture (v0.60.3) */
 static inline void t_puts(const char *s)       { T->puts(T, s); }
 static inline void t_putc(char c)              { T->putc(T, c); }
 static inline void t_color(int fg, int bg)     { T->set_color(T, fg, bg); }
@@ -1511,7 +1512,7 @@ static void cmd_cook(const char *args) {
      * the shell against a pipe nobody is draining. */
     uint32_t last = pids[nst - 1];
     shell_set_fg(proc_by_pid(last));
-    if (nst == 1) {
+    if (nst == 1 && !subst_depth) {            /* not into a $(...)'s output */
         t_color(VGA_DARK_GREY, VGA_BLACK);
         t_printf("  cooking %s in ring 3...\n", st[0].path);
         t_color(VGA_LIGHT_GREY, VGA_BLACK);
@@ -1553,7 +1554,7 @@ static void cmd_cook(const char *args) {
     } else if (code == -1) {
         t_color(VGA_LIGHT_RED, VGA_BLACK);
         t_puts("  Not a runnable soupOS program (need a 32-bit i386 ET_EXEC ELF).\n");
-    } else {
+    } else if (!subst_depth) {                 /* not into a $(...)'s output */
         t_color(VGA_DARK_GREY, VGA_BLACK);
         t_printf("  [%s exited with code %d]\n", st[nst - 1].path, code);
     }
@@ -4503,8 +4504,58 @@ static long arith(const char *expr) {
     return v;
 }
 
-/* Expand one command's text: ~, $NAME / ${NAME}, $? and $((...)), quotes
- * left in for the parts that follow (v0.57.1-v0.60.0). */
+/* $(COMMAND) (v0.60.3): run COMMAND with its output going to a capture
+ * terminal - every builtin writes through the shell's terminal and every
+ * program through its task's, which a spawned program inherits - then put
+ * what it wrote in place of the $(...). Trailing newlines are dropped and
+ * the rest become spaces, as sh's word splitting makes them of an unquoted
+ * $(...). The status is COMMAND's. A Ctrl-C pressed while it runs is seen
+ * when it ends, not during (written down). */
+typedef struct { term_t t; char *buf; int len, cap; } capterm_t;
+static void cap_putc(term_t *t, char c) { capterm_t *k = (capterm_t *)t; if (k->len < k->cap - 1) k->buf[k->len++] = c; }
+static void cap_puts(term_t *t, const char *s) { while (*s) cap_putc(t, *s++); }
+static void cap_color(term_t *t, int f, int b) { (void)t; (void)f; (void)b; }
+static void cap_cursor(term_t *t, int r, int c) { (void)t; (void)r; (void)c; }
+static int  cap_zero(term_t *t) { (void)t; return 0; }
+static int  cap_cols(term_t *t) { (void)t; return 80; }
+static int  cap_rows(term_t *t) { (void)t; return 25; }
+static void cap_clear(term_t *t) { (void)t; }
+static int  cap_getc(term_t *t) { (void)t; return -1; }      /* no input: EOF */
+static void cap_flush(term_t *t) { (void)t; }
+
+static void run_line(const char *line);
+static int command_subst(const char *cmd, char *out, int max) {
+    if (subst_depth >= 2) return 0;
+    capterm_t cap;
+    cap.t.name = "subst"; cap.t.puts = cap_puts; cap.t.putc = cap_putc; cap.t.set_color = cap_color;
+    cap.t.set_cursor = cap_cursor; cap.t.row = cap_zero; cap.t.col = cap_zero; cap.t.cols = cap_cols;
+    cap.t.rows = cap_rows; cap.t.clear = cap_clear; cap.t.getc = cap_getc; cap.t.available = cap_zero;
+    cap.t.flush_in = cap_flush; cap.t.fg = 0;
+    cap.buf = kmalloc(4096); cap.len = 0; cap.cap = 4096;
+    if (!cap.buf) return 0;
+    shell_t *me = cur_shell();
+    task_t *tk = task_current();
+    term_t *was_sh = me->term, *was_tk = tk->term;
+    cap.t.intr = was_sh ? was_sh->intr : 0;
+    cap.t.ctx = was_tk ? was_tk : &term_vga;   /* stderr goes where it would have (usermode) */
+    me->term = &cap.t; tk->term = &cap.t;
+    subst_depth++;
+    run_line(cmd);
+    subst_depth--;
+    me->term = was_sh; tk->term = was_tk;
+    while (cap.len > 0 && (cap.buf[cap.len - 1] == '\n' || cap.buf[cap.len - 1] == '\r')) cap.len--;
+    int n = 0;
+    for (int i = 0; i < cap.len && n < max; i++) {
+        char c = cap.buf[i];
+        if (c == '\r') continue;
+        out[n++] = (c == '\n') ? ' ' : c;
+    }
+    kfree(cap.buf);
+    return n;
+}
+
+/* Expand one command's text: ~, $NAME / ${NAME}, $?, $((...)) and $(...),
+ * quotes left in for the parts that follow (v0.57.1-v0.60.3). */
 static void expand_seg(const char *seg, char *ex) {
     int  k = 0;
     char sq = 0;                     /* inside '...', $? is left alone */
@@ -4541,6 +4592,34 @@ static void expand_seg(const char *seg, char *ex) {
             if (v < 0) d[nd++] = '-';
             while (nd && k < INPUT_MAX - 1) ex[k++] = d[--nd];
             i = j + 1;
+            continue;
+        }
+        if (seg[i] == '$' && seg[i + 1] == '(' && seg[i + 2] != '(' && sq != '\'') {
+            int j = i + 2, depth = 0;
+            char q2 = 0;
+            while (seg[j] && !(depth == 0 && !q2 && seg[j] == ')')) {
+                if (q2) { if (seg[j] == q2) q2 = 0; }
+                else if (seg[j] == '\'' || seg[j] == '"') q2 = seg[j];
+                else if (seg[j] == '(') depth++;
+                else if (seg[j] == ')') depth--;
+                j++;
+            }
+            if (!seg[j]) { ex[k++] = seg[i]; continue; }       /* no ): leave it */
+            char inner[INPUT_MAX]; int il = j - (i + 2);
+            memcpy(inner, seg + i + 2, (uint32_t)il); inner[il] = '\0';
+            /* Right after NAME= the result is the value, kept whole as sh
+             * keeps an assignment's (quoted here); elsewhere its spaces
+             * separate words, as sh's splitting does. */
+            int assign = 0, a = 0;
+            while (a < k && ex[a] == ' ') a++;
+            if (a < k && (ex[a] == '_' || (ex[a] >= 'A' && ex[a] <= 'Z') || (ex[a] >= 'a' && ex[a] <= 'z'))) {
+                while (a < k && (ex[a] == '_' || (ex[a] >= 'A' && ex[a] <= 'Z') || (ex[a] >= 'a' && ex[a] <= 'z') || (ex[a] >= '0' && ex[a] <= '9'))) a++;
+                assign = (a == k - 1 && ex[a] == '=');
+            }
+            if (assign && k < INPUT_MAX - 1) ex[k++] = '"';
+            k += command_subst(inner, ex + k, INPUT_MAX - 2 - k);
+            if (assign && k < INPUT_MAX - 1) ex[k++] = '"';
+            i = j;
             continue;
         }
         /* $1..$9, $# and $@: a script's arguments (v0.60.2); not in '...'. */

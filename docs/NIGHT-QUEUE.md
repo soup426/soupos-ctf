@@ -33,7 +33,7 @@ cook's input, and gives each cook a profile.
 
 ---
 
-## 1. Command substitution
+## 1. Command substitution — DONE v0.60.3
 
 `$(COMMAND)` is replaced by what COMMAND (a program or pipeline, through
 the shell as usual) writes to stdout, trailing newlines removed, as sh
