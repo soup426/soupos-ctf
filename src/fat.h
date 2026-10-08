@@ -82,8 +82,8 @@ int fat_is_dir(const char *path);
 int fat_exists(const char *path);
 
 /* ── Permissions ───────────────────────────────────────────────────────────
- * soupOS stamps an owner uid and an rwx mode into two spare bytes of every
- * FAT directory entry. The mode byte's high bit (FAT_PERM_MARK) flags the
+ * soupOS stamps an owner uid and an rwx mode into the creation-time bytes of
+ * every FAT directory entry (bytes 13-14; see meta_get in fat.c, v0.41.0). The mode byte's high bit (FAT_PERM_MARK) flags the
  * metadata as present; entries without it (files written by other tools)
  * read back as owned by headchef (uid 0) with default permissions.
  * Enforcement is advisory - done by the shell, since soupOS runs in ring 0.

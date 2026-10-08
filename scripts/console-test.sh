@@ -19,15 +19,22 @@ QEMU_PID=""
 cleanup() {
     [ -n "$QEMU_PID" ] && kill "$QEMU_PID" 2>/dev/null
     if [ "${KEEP:-0}" = "1" ]; then echo "transcript kept at $LOG"; else rm -f "$LOG"; fi
+    rm -f "${TESTDISK:-}"
 }
 trap cleanup EXIT
 
 [ -f soupOS.iso ] || { echo "soupOS.iso missing — run 'make' first"; exit 1; }
 [ -f disk.img ]   || { echo "disk.img missing — run 'make disk' first"; exit 1; }
 
+# A copy, like every other script. Until v0.41.0 this one booted disk.img
+# itself, so every check run logged in on the canonical image and left
+# /etc/kitchen behind - which is how fsck.fat found an old-layout entry on a
+# "pristine" disk. check.sh now fails if disk.img changes during a run.
+TESTDISK=$(mktemp /tmp/soupos-consoledisk.XXXXXX.img)
+cp disk.img "$TESTDISK"
 echo "booting soupOS with COM1 on tcp/$PORT (no display, no keyboard)..."
 qemu-system-i386 \
-    -drive file=disk.img,format=raw,if=ide,index=0 \
+    -drive "file=$TESTDISK,format=raw,if=ide,index=0" \
     -cdrom soupOS.iso -boot d \
     -m 128M -no-reboot -no-shutdown \
     -display none \

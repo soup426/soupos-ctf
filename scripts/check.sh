@@ -32,6 +32,11 @@ if ! make >"$WORK/build-default.log" 2>&1; then
 fi
 echo "  ok    default build ($(now)s)"
 
+# Every test boots a COPY of disk.img; one that booted the original changed it
+# for every later run (console-test did, until v0.41.0). Fingerprint it now
+# and compare at the end.
+DISK_SUM=$(sha256sum disk.img | cut -d' ' -f1)
+
 # ── 1. everything else, at once ──────────────────────────────────────────────
 # A job writes its exit status to $WORK/<name>.status when done.
 run() {                                   # run <name> <command...>
@@ -59,7 +64,7 @@ run "gate"                      ./scripts/smoke-test.sh
 if [ "$MODE" = "full" ]; then
     for t in ssh-test pass-test hatch-test console-test fat-longname-test \
              random-test x25519-test sound-test mixer-test music-test \
-             framebuffer-test fullness-test lines-test; do
+             framebuffer-test fullness-test lines-test fsck-test; do
         run "$t" "./scripts/$t.sh"
     done
     # doom-fb-test rebuilds two ISOs, so it gets a tree of its own.
@@ -83,6 +88,13 @@ for st in "$WORK"/*.status; do
         fail=1
     fi
 done
+if [ "$(sha256sum disk.img | cut -d' ' -f1)" = "$DISK_SUM" ]; then
+    printf '  ok    %-28s %4ss\n' "disk.img untouched" 0 >>"$WORK/summary"
+else
+    printf '  FAIL  %-28s %4ss\n' "disk.img changed by a test" 0 >>"$WORK/summary"
+    echo "1 0" >"$WORK/disk.img changed by a test.status"; : >"$WORK/disk.img changed by a test.log"
+    fail=1
+fi
 sort -k3 -n "$WORK/summary"
 echo "  total ${MODE} check: $(now)s"
 

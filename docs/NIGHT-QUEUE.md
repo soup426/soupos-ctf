@@ -31,7 +31,7 @@ not by looking for it.
 
 ---
 
-## 1. The disk passes fsck after everything that writes to it
+## 1. The disk passes fsck after everything that writes to it — DONE v0.41.0 (it did not: the permission byte was FAT's case flags)
 
 Every filesystem test so far checks that soupOS reads back what it wrote, and
 fat-longname-test has mtools read names. Nothing checks the FAT as a whole:

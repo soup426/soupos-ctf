@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.40.0
+Current version: v0.41.0
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,37 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.41.0 (2026-10-07)  — FSCK: THE PERMISSION BYTE WAS FAT'S CASE FLAGS
+  Fifth queue, item 1. Nothing had ever checked the FAT as a whole.
+  - fsck.fat -n on images soupOS had written found, every time, a "bad
+    short file name" on every entry soupOS had created, which it would
+    rename to FSCK0000.000, then a "file of size 0 with a cluster chain"
+    and a lost cluster that both turned out to be consequences of the
+    rename. Clearing one byte on those entries in a copy made the volume
+    spotless, so the cause was proven before anything changed: soupOS kept
+    each file's mode in byte 12, which FAT reserves for case flags (bit 0
+    "no valid 8.3 name", bits 3-4 "lowercase"). A Linux machine mounting
+    the disk would have shown those names in lowercase.
+  - The owner and mode now live in the creation-time bytes: byte 13 holds
+    200 + uid (valid hundredths stop at 199, so no other tool writes it,
+    which also makes it the "soupOS metadata" mark) and byte 14 the mode;
+    byte 12 is always 0. Tested on a copy before any code changed: fsck
+    accepts that encoding on every entry, and mtools still reads the disk.
+    The old layout is still READ: a hand-made old entry reads back as
+    rw----, a permission change rewrites it in the new layout, and fsck is
+    then clean. users.h's limit is asserted against the byte at compile
+    time.
+  - A SECOND FINDING ON THE WAY: the "pristine" disk.img was not pristine.
+    console-test.sh booted disk.img itself rather than a copy, so every
+    check run logged in on the canonical image and left /etc/kitchen in it.
+    It boots a copy now, and check.sh fingerprints disk.img and fails the
+    run if anything changes it.
+  - scripts/fsck-test.sh (in check.sh): fsck must be clean before, then a
+    workload through every write path (login, hire, three scripts that
+    write, read and delete long- and short-named files, a bowl made,
+    filled, emptied and removed, two permission changes, fatstress), then
+    fsck must be clean after and mtools must read back a file soupOS wrote.
 
 v0.40.0 (2026-10-07)  — BYTES IN AND OUT, PER CONNECTION
   Fourth queue, item 7.

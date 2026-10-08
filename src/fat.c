@@ -1,4 +1,5 @@
 #include "fat.h"
+#include "users.h"
 #include "timer.h"
 #include "klog.h"
 #include "task.h"
@@ -101,6 +102,41 @@ static int      fat_cache_dirty = 0;
 /* Hint for fat_alloc_cluster - start the next probe from here instead of 2.
  * Reset to 2 if we wrap. Persisted across calls within a single fat_write. */
 static uint32_t fat_alloc_hint  = 2;
+
+/* ── Where soupOS keeps an owner and a mode in a FAT entry (v0.41.0) ─────────
+ * Until v0.41.0 the mode lived in byte 12, which FAT reserves for case flags
+ * (bit 0 "no valid 8.3 name", bits 3-4 "lowercase"): fsck.fat called every
+ * file soupOS made a bad name and renamed it, and Linux would have shown the
+ * names in lowercase. Now:
+ *   byte 13 (creation time, hundredths: valid 0-199) = 200 + owner uid, a
+ *           value no other tool writes, so it is also the "soupOS metadata"
+ *           mark;
+ *   byte 14 (low byte of the creation time, written once at creation by
+ *           everything and never validated) = the mode.
+ * Byte 12 is always written as 0. The old layout is still READ, so a disk
+ * made before this keeps its permissions until the entry is next written. */
+#define META_OWNER_BASE 200
+typedef char users_fit_the_owner_byte[(USERS_MAX < 256 - META_OWNER_BASE) ? 1 : -1];
+
+static int meta_get(const dirent_t *de, uint8_t *mode, uint8_t *owner) {
+    if (de->crt_time_tenth >= META_OWNER_BASE && (de->crt_time & FAT_PERM_MARK)) {
+        *owner = (uint8_t)(de->crt_time_tenth - META_OWNER_BASE);
+        *mode  = (uint8_t)(de->crt_time & 0xFF);
+        return 1;
+    }
+    if (de->reserved & FAT_PERM_MARK) {                  /* the pre-v0.41 layout */
+        *owner = de->crt_time_tenth;
+        *mode  = de->reserved;
+        return 1;
+    }
+    return 0;                                            /* another tool's file */
+}
+
+static void meta_put(dirent_t *de, uint8_t mode, uint8_t owner) {
+    de->reserved       = 0;
+    de->crt_time_tenth = (uint8_t)(META_OWNER_BASE + owner);
+    de->crt_time       = (uint16_t)((de->crt_time & 0xFF00) | (mode | FAT_PERM_MARK));
+}
 static uint32_t free_cached;        /* free clusters, kept by fat_set_entry */
 static int      free_known;         /* ...once the first fat_space has counted */
 
@@ -882,9 +918,10 @@ static int fat_write_impl(const char *path, const uint8_t *buf, uint32_t size) {
         if (de.attr & FAT_ATTR_DIR) return -1;     /* can't overwrite a bowl */
         uint32_t old = ((uint32_t)de.cluster_hi << 16) | de.cluster_lo;
         if (old >= 2 && fat_free_chain(old) < 0) return -1;
-        if (de.reserved & FAT_PERM_MARK) {         /* keep prior ownership */
-            ent_mode  = de.reserved;
-            ent_owner = de.crt_time_tenth;
+        uint8_t pm, po;
+        if (meta_get(&de, &pm, &po)) {             /* keep prior ownership */
+            ent_mode  = pm;
+            ent_owner = po;
         }
         dir_lba = e_lba;
         dir_idx = e_idx;
@@ -966,8 +1003,7 @@ static int fat_write_impl(const char *path, const uint8_t *buf, uint32_t size) {
     memcpy(ent->name, fname, 8);
     memcpy(ent->ext,  fext,  3);
     ent->attr           = FAT_ATTR_ARCHIVE;
-    ent->reserved       = ent_mode;            /* soupOS permission mode */
-    ent->crt_time_tenth = ent_owner;           /* soupOS owner uid       */
+    meta_put(ent, ent_mode, ent_owner);        /* soupOS owner and mode   */
     ent->cluster_lo     = (uint16_t)(first_cluster & 0xFFFF);
     ent->file_size      = size;
     /* Past this point the entry references the chain, so a failure here must
@@ -1066,8 +1102,7 @@ static int fat_mkdir_impl(const char *path) {
     memcpy(ent->name, fname, 8);
     memcpy(ent->ext,  fext,  3);
     ent->attr           = FAT_ATTR_DIR;
-    ent->reserved       = FAT_PERM_DEFAULT;    /* soupOS permission mode */
-    ent->crt_time_tenth = creator_now();         /* soupOS owner uid       */
+    meta_put(ent, FAT_PERM_DEFAULT, creator_now());   /* soupOS owner and mode */
     ent->cluster_lo     = (uint16_t)(newcl & 0xFFFF);
     ent->file_size      = 0;
     return ata_write_sector(slot_lba, sec_buf);
@@ -1162,9 +1197,8 @@ static int fat_stat_impl(const char *path, uint8_t *owner, uint8_t *mode) {
     dirent_t de;
     if (dir_find(parent_cl, leaf, &de, 0, 0) != 1) return -1;
 
-    uint8_t m = de.reserved;
-    uint8_t o = de.crt_time_tenth;
-    if (!(m & FAT_PERM_MARK)) {              /* foreign entry -> defaults */
+    uint8_t m, o;
+    if (!meta_get(&de, &m, &o)) {            /* foreign entry -> defaults */
         m = FAT_PERM_DEFAULT;
         o = 0;
     }
@@ -1185,8 +1219,7 @@ static int fat_set_meta(const char *path, uint8_t mode, uint8_t owner) {
     if (dir_find(parent_cl, leaf, &de, &e_lba, &e_idx) != 1) return -1;
     if (ata_read_sector(e_lba, sec_buf) < 0) return -1;
     dirent_t *ent = (dirent_t *)sec_buf + e_idx;
-    ent->reserved       = mode | FAT_PERM_MARK;
-    ent->crt_time_tenth = owner;
+    meta_put(ent, mode, owner);
     return ata_write_sector(e_lba, sec_buf);
 }
 

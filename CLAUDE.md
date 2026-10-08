@@ -874,6 +874,14 @@ how many, and the temporaries live in C locals where no collector can see them.
 If you add a builtin, allocate with `str_alloc` and return `mksval_ref`; never
 `kfree` a string. `SVAL_LEN` is now only the identifier length.
 
+## FAT metadata, and keeping disk.img pristine (v0.41.0)
+
+Owner and mode are in directory-entry bytes 13 (200 + uid) and 14 (mode), via
+`meta_get`/`meta_put` in fat.c; byte 12 is FAT's case flags and must stay 0.
+Never write soupOS data into a FAT field another tool interprets; check with
+`fsck.fat -n` (scripts/fsck-test.sh). Every script boots a COPY of disk.img;
+check.sh fails if disk.img changes during a run.
+
 ## `fat_read` reports the file's size, not the bytes it stored (v0.39.1)
 
 `*out_size` can exceed `bufsize`. Clamp it before using it as a byte count,
