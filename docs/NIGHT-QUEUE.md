@@ -52,7 +52,7 @@ Make /home/<cook> at hire, owned by the cook, and start every shell of theirs
 there (console login and SSH alike). fsck and mtools as judges; existing cooks
 without a home get one at their next login.
 
-## 4. Owners in ps and orders
+## 4. Owners in ps and orders — DONE v0.52.3
 
 Processes have owners since v0.51.0; show them. `ps` and `orders` gain an
 OWNER column, and kitchen's task table too.

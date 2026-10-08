@@ -126,10 +126,12 @@ fi
 # Memory per process in ps (v0.45.0). lazy.elf hold touches 1500 heap pages
 # and waits: it holds the cap, 1024, resident, and the rest of its pages
 # (1500 heap plus its image and stack, less 1024) on disk.
-psline=$(grep -E '^ +[0-9]+ +[rRB] +[0-9]+% +[0-9]+ +ring3 +[0-9]+ +[0-9]+ +lazy\.elf' "$LOG" | tail -1)
+psline=$(grep -E '^ +[0-9]+ +[rRB] +[0-9]+% +[0-9]+ +ring3 +[0-9]+ +[0-9]+ +[a-z]+ +lazy\.elf' "$LOG" | tail -1)
 res=$(echo "$psline" | awk '{print $6}'); swp=$(echo "$psline" | awk '{print $7}')
 if [ "$res" = "1024" ] && [ -n "$swp" ] && [ "$swp" -ge 476 ] && [ "$swp" -le 500 ]; then
     echo "  ok    ps shows a program's memory (1024 resident, $swp swapped)"
+    [ "$(echo "$psline" | awk '{print $8}')" = "headchef" ] && echo "  ok    ps shows the program's owner (headchef)" \
+        || { echo "  FAIL  ps owner column: '$psline'"; fail=1; }
 else
     echo "  FAIL  ps memory figures for lazy.elf hold: '${psline:-none}'"; fail=1
 fi

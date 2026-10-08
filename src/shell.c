@@ -2097,7 +2097,7 @@ static void cmd_orders(void) {
     int idx = 0, n = 0;
     proc_t *p;
     t_color(VGA_YELLOW, VGA_BLACK);
-    t_puts("  PID  ST  BG  CODE  PROGRAM\n");
+    t_puts("  PID  ST  BG  CODE  OWNER     PROGRAM\n");
     t_color(VGA_LIGHT_GREY, VGA_BLACK);
     while ((p = proc_next(&idx)) != 0) {
         n++;
@@ -2105,7 +2105,7 @@ static void cmd_orders(void) {
                    proc_state_letter(p->state), p->background ? 'y' : 'n');
         if (p->state == PROC_ZOMBIE) t_printf("  %4d", p->exit_code);
         else                         t_puts("     -");
-        t_printf("  %s%s\n", p->name, p->killed ? " (killing)" : "");
+        t_printf("  %-8s  %s%s\n", users_name_of(p->owner), p->name, p->killed ? " (killing)" : "");
     }
     if (!n) t_puts("  (no processes)\n");
 }
@@ -2115,7 +2115,7 @@ static void cmd_orders(void) {
 static void cmd_cd(const char *args) {
     while (*args == ' ') args++;
     char target[FAT_PATH_MAX];
-    if (!*args) { strcpy(cur_shell()->cwd, "/"); return; }    /* cd with no arg -> root */
+    if (!*args) { ensure_home(cur_shell()->uid, cur_shell()->cwd); return; }   /* cd alone -> home (v0.52.3) */
     resolve_path(args, target);
     if (!fat_is_dir(target)) {
         t_color(VGA_LIGHT_RED, VGA_BLACK);
@@ -2690,7 +2690,7 @@ static void cmd_ps(void) {
     task_t *head = task_list_head();
     if (!head) { t_puts("(no tasks)\n"); return; }
     t_color(VGA_YELLOW, VGA_BLACK);
-    t_puts("  ID  ST  CPU%  STACK  KIND    RES  SWAP  NAME\n");
+    t_puts("  ID  ST  CPU%  STACK  KIND    RES  SWAP  OWNER     NAME\n");
     t_color(VGA_LIGHT_GREY, VGA_BLACK);
     task_t *t = head;
     do {
@@ -2701,13 +2701,14 @@ static void cmd_ps(void) {
          * disk now. Kernel tasks live in the kernel's memory: no figure. */
         char res[8] = "    -", sw[8] = "    -";
         if (t->proc) { fmt_u5(res, t->proc->upages); fmt_u5(sw, t->proc->swapped); }
-        t_printf("  %2u   %c  %3u%%  %5u  %s  %s %s  %s%s\n",
+        t_printf("  %2u   %c  %3u%%  %5u  %s  %s %s  %-8s  %s%s\n",
                    t->id,
                    task_state_letter(t->state),
                    t->cpu_last > 100 ? 100 : t->cpu_last,
                    t->stack_size,
                    t->proc ? "ring3" : "task ",
                    res, sw,
+                   t->proc ? users_name_of(t->proc->owner) : "-",
                    t->name,
                    (t == task_current()) ? " *" : "");
         t = t->next;
@@ -2760,16 +2761,17 @@ static void kitchen_frame(uint32_t frames) {
     t_puts("\n\n");
 
     t_color(VGA_YELLOW, VGA_BLACK);
-    t_puts("  ID  ST  CPU%  STACK  KIND    RES  SWAP  NAME\n");
+    t_puts("  ID  ST  CPU%  STACK  KIND    RES  SWAP  OWNER     NAME\n");
     t_color(VGA_LIGHT_GREY, VGA_BLACK);
     task_t *head = task_list_head(), *t = head;
     if (head) do {
         if (t_row() >= rows - 1) break;              /* keep it on one screen */
         char res[8] = "    -", sw[8] = "    -";
         if (t->proc) { fmt_u5(res, t->proc->upages); fmt_u5(sw, t->proc->swapped); }
-        t_printf("  %2u   %c  %3u%%  %5u  %s  %s %s  %s%s\n", t->id, task_state_letter(t->state),
+        t_printf("  %2u   %c  %3u%%  %5u  %s  %s %s  %-8s  %s%s\n", t->id, task_state_letter(t->state),
                    t->cpu_last > 100 ? 100 : t->cpu_last, t->stack_size,
-                   t->proc ? "ring3" : "task ", res, sw, t->name, t == task_current() ? " *" : "");
+                   t->proc ? "ring3" : "task ", res, sw,
+                   t->proc ? users_name_of(t->proc->owner) : "-", t->name, t == task_current() ? " *" : "");
         t = t->next;
     } while (t != head);
 }

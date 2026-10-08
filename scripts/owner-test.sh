@@ -27,7 +27,7 @@ chef_pid=$(grep -oE '\[proc [0-9]+\] spawned /hog\.elf' "$LOG" | head -1 | grep 
 fbcon_id=$(sed -n 's/^\[fbcon\].*task \([0-9][0-9]*\).*/\1/p' "$LOG" | head -1); fbcon_id=${fbcon_id:-1}
 python3 scripts/qemu_keys.py "$MON" "clockout" "WAIT:1" "cook" "soup" "WAIT:2" \
     "kill $chef_pid" "WAIT:2" "kill $fbcon_id" "WAIT:1" \
-    "cook hog.elf &" "WAIT:2" "kill %" "WAIT:2" \
+    "cook hog.elf &" "WAIT:2" "orders" "WAIT:1" "kill %" "WAIT:2" \
     "clockout" "WAIT:1" "headchef" "rosemary" "WAIT:2" "kill $chef_pid" "WAIT:2" >/dev/null \
     || { echo "  FAIL  could not drive QEMU (second half)"; exit 1; }
 kill "$PID" 2>/dev/null; wait "$PID" 2>/dev/null; PID=""
@@ -42,4 +42,7 @@ grep -q "\[proc $cook_pid\] /hog.elf exited with code -137" "$LOG" && echo "  ok
 grep -q "\[proc $chef_pid\] /hog.elf exited with code -137" "$LOG" && echo "  ok    and the headchef may kill any" \
     || { echo "  FAIL  the headchef could not kill pid $chef_pid"; fail=1; }
 grep -qE '^\s+1\s+[RrB]' "$LOG" >/dev/null; grep -q "killed task $fbcon_id" "$LOG" && { echo "  FAIL  the kernel task was killed"; fail=1; }
+# orders shows whose each job is (v0.52.3).
+grep -qE '^ +[0-9]+ +R +y +- +headchef +/hog\.elf' "$LOG" && grep -qE '^ +[0-9]+ +R +y +- +cook +/hog\.elf' "$LOG" \
+    && echo "  ok    orders shows each job's owner" || { echo "  FAIL  orders owner column"; grep -A3 "PID  ST  BG" "$LOG" | head -4; fail=1; }
 exit $fail

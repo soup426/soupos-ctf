@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.52.2
+Current version: v0.52.3
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,16 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.52.3 (2026-10-08)  — OWNERS IN ps, kitchen AND orders
+  Eighth queue, item 4.
+  - Processes have had owners since v0.51.0; now they show. ps and
+    kitchen's task table gain an OWNER column (kernel tasks show a dash),
+    and orders shows whose each job is. A bare `cd` now goes home rather
+    than to the root, which the home bowls implied.
+  - The boot segment's ps check parses the new column and asserts the
+    owner of lazy.elf; owner-test asserts orders lists the headchef's and
+    the cook's hog.elf under their owners. Gate 100.
 
 v0.52.2 (2026-10-08)  — HOME BOWLS
   Eighth queue, item 3.
