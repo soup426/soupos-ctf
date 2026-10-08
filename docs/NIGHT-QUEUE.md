@@ -66,7 +66,7 @@ console), say why to the client, and log it. Test with a short timeout.
 Homes make it worth knowing what takes the space. `du [bowl]`: the bytes and
 clusters under each entry, with a total, checked against mtools.
 
-## 6. Tests type when the kernel is listening, not after a sleep
+## 6. Tests type when the kernel is listening, not after a sleep — DONE (scripts only, no version)
 
 console-test typed into the bootloader under load and lost a byte (fixed in
 5c3dc12 by waiting for the login prompt). Most other tests boot, `sleep 4`

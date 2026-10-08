@@ -891,6 +891,14 @@ the key-typer's exit status: an untypeable character ends the sequence silently.
 check.sh builds once at its start but reads each test script when that test
 starts: editing scripts mid-run tests new scripts against the old binary.
 
+## qemu_keys waits for the login banner (2026-10-08)
+
+scripts/qemu_keys.py finds the QEMU process on the other end of the monitor
+socket (SO_PEERCRED), reads its `-serial file:` argument, and waits for "clock
+in to start your shift" in that log before typing. `info chardev` does NOT
+show a file chardev's path. QEMU_KEYS_NOWAIT=1 opts out. Proof: freeze QEMU
+for 6 s at 0.3 s into the boot; the old driver garbled the login 3 of 3.
+
 ## Homes (v0.52.2)
 
 Ordinary cooks start in /home/<cook> (`ensure_home` in shell.c); the headchef in /.
