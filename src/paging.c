@@ -151,6 +151,19 @@ void paging_switch(uint32_t *dir) {
     __asm__ volatile ("mov %0, %%cr3" : : "r"((uint32_t)dir) : "memory");
 }
 
+/* The CPU sets a PTE's accessed bit (0x20) whenever the page is used. Read
+ * it and clear it, flushing the TLB entry so the next use sets it again:
+ * the "second chance" the clock algorithm gives a page in use. */
+int paging_test_and_clear_accessed(uint32_t virt) {
+    uint32_t pdi = virt >> 22, pti = (virt >> 12) & 0x3FF;
+    if (!(cur_dir[pdi] & PAGE_PRESENT)) return 0;
+    uint32_t *pt = (uint32_t *)(cur_dir[pdi] & ~0xFFFu);
+    if (!(pt[pti] & PAGE_PRESENT) || !(pt[pti] & 0x20)) return 0;
+    pt[pti] &= ~0x20u;
+    __asm__ volatile ("invlpg (%0)" : : "r"(virt) : "memory");
+    return 1;
+}
+
 int paging_is_mapped(uint32_t virt) {
     uint32_t pdi = virt >> 22;
     uint32_t pti = (virt >> 12) & 0x3FF;

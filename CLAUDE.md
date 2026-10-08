@@ -944,7 +944,10 @@ shell (queue item 2c).
 `ata_total_sectors()` by page slot; the Makefile's 48 MB image leaves 16 MB
 there (an old 32 MB disk.img has no swap: `rm disk.img && make disk`).
 `usermode_demand_page` tries `swap_in` first, then evicts with
-`swap_out_one` at `PROC_PAGE_CAP`. Eviction is FIFO over `pr->fifo`; only
+`swap_out_one` at `PROC_PAGE_CAP`. Eviction is approximate LRU (v0.43.0): accessed
+bits sampled every 32 evictions into `pr->last_ref`, oldest stamp goes; `pr->fifo`
+is now an unordered resident set. Before changing the policy, model it on the
+host against hotcold.elf - the model matched the kernel to the page; only
 heap pages are ever swapped. `swap_release` runs at process exit. Since v0.39.0 the ATA driver uses bus-master DMA
 (PIIX BAR4, bounce buffer `dma_buf`, PIO fallback): under KVM, PIO cost one VM
 exit per 16-bit word, which was 85% of swap's time.

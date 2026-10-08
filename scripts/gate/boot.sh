@@ -20,6 +20,7 @@ gate_drive \
     "cook lazy.elf read" "WAIT:2" \
     "cook crash.elf" "WAIT:2" \
     "cook deep.elf" "WAIT:3" \
+    "cook hotcold.elf" "WAIT:3" \
     "cook deep.elf forever" "WAIT:3" \
     "cook hello.elf" "WAIT:2" "cook hello.elf" "WAIT:2"
 
@@ -57,6 +58,18 @@ check "a wild fault still kills" '/crash\.elf exited with code'
 check "a deep stack grows on demand"        'DEEP reached 600 levels ok'
 check "the kernel counted the stack growth" '\[stack\] /deep\.elf grew its stack by [0-9]+ pages'
 check "running off the stack hits the guard" '\[user\] /deep\.elf: stack overflow at 0x'
+
+# The victim policy. hotcold.elf keeps a 400-page working set hot while
+# sweeping 400 new pages a round. FIFO evicts the hot set every round and
+# fetches back 1,200 pages; approximate LRU fetches back 400 (one round's
+# worth, at the start). The bound sits between them.
+check "a working set survives a sweep" 'HOTCOLD done ok'
+hc_in=$(grep -oE '\[swap\] /hotcold\.elf: [0-9]+ pages out, [0-9]+ back in' "$LOG" | grep -oE '[0-9]+ back in' | grep -oE '^[0-9]+')
+if [ -n "$hc_in" ] && [ "$hc_in" -lt 600 ]; then
+    echo "  ok    the victim policy keeps a working set ($hc_in pages back in; FIFO took 1200)"
+else
+    echo "  FAIL  the working set was evicted (${hc_in:-no} pages back in; FIFO's 1200 is the bar)"; fail=1
+fi
 # The kernel's own first touch, inside read(): a ring-0 page fault that has
 # to be answered the same way, not treated as a panic.
 check "a syscall can fault in an untouched page" 'LAZY kernel wrote [0-9]+ bytes into an untouched page ok'

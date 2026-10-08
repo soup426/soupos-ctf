@@ -51,7 +51,7 @@ four, the TCP table's size), keep the busy DISCONNECT for the fifth, and test
 two sessions side by side: separate cwds, separate users, Ctrl-C in one not
 touching the other, both surviving a rekey.
 
-## 3. Global memory pressure, and a better victim than FIFO
+## 3. Global memory pressure, and a better victim than FIFO — DONE v0.43.0 (pressure unreachable by arithmetic; approximate LRU, 3x fewer page-ins)
 
 Swap evicts only at the per-process cap; when the PMM itself runs out, the
 map simply fails. Evict from the faulting process when the PMM is empty too,

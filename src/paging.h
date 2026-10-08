@@ -28,5 +28,7 @@ uint32_t *paging_current_dir(void);
 
 /* 1 if virt has a present mapping in the current address space. */
 int       paging_is_mapped(uint32_t virt);
+/* 1 if the page was used since the last call (accessed bit), and clear it. */
+int       paging_test_and_clear_accessed(uint32_t virt);
 void paging_map(uint32_t virt, uint32_t phys, uint32_t flags);
 uint32_t paging_unmap(uint32_t virt);   /* returns freed phys frame, or 0 */

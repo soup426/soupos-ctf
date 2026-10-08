@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.42.0
+Current version: v0.43.0
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,36 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.43.0 (2026-10-07)  — SWAP KEEPS THE WORKING SET (APPROXIMATE LRU)
+  Fifth queue, item 3. A story of two wrong turns, both caught by measuring.
+  - GLOBAL PRESSURE has an arithmetic answer: eight processes at the
+    1,024-page cap is 32 MB against a PMM of about 120 MB, so user
+    processes cannot empty it. No mechanism built; recorded here.
+  - THE VICTIM. hotcold.elf keeps a hot set used every round and sweeps
+    new pages it never revisits. Under FIFO the hot set is always the
+    oldest mapped, so it is evicted every round and fetched straight back.
+  - Clock (second chance on the accessed bit) was tried first and changed
+    nothing - 3,584 page-ins either way - though it gave 8,152 second
+    chances, so the bits worked. It is the known weakness: the hot set is
+    used in one phase and the sweep runs in another, the hand laps the
+    resident set within a sweep, and a page cleared on one lap is evicted
+    on the next. Clock approximates LRU only within one revolution.
+  - Approximate LRU then: every 32 evictions each resident page's accessed
+    bit is read and cleared and a used page is stamped with the epoch; the
+    victim is the page with the oldest stamp. It first measured WORSE with
+    a sample before every eviction. A model of the exact algorithm on the
+    host matched the kernel to the page once given the heap's real cap
+    (1,017, not 1,024: the image and stack count too), which showed the
+    first workload was the bug - hot plus one sweep was 1,024 pages, a
+    hair over memory, and a loop just larger than memory is LRU's worst
+    case. Resized to 400 + 400, the model predicted and the kernel
+    measured: FIFO 1,200 page-ins in 45 ticks, approximate LRU 400 in 31
+    (clock, in the model, 800). Both sampling rates give the same result;
+    32 is kept as the cheaper.
+  - The boot segment runs hotcold and requires fewer than 600 page-ins:
+    FIFO's 1,200 would fail it. lazy.elf's sweep is unchanged (a sweep has
+    no working set to keep). Gate 95.
 
 v0.42.0 (2026-10-07)  — FOUR SSH SESSIONS AT ONCE
   Fifth queue, item 2.

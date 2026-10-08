@@ -50,7 +50,10 @@ typedef struct proc {
     uint32_t      stack_pages;         /* stack pages grown on demand (v0.37.0) */
     uint32_t      start_tick;          /* when it was spawned, for the exit line */
     uint16_t     *swap_slot;           /* heap page -> swap slot + 1, or 0 (swap.c) */
-    uint16_t     *fifo;                /* resident heap pages, oldest first    */
+    uint16_t     *fifo;                /* resident heap pages (a set; see swap.c) */
+    uint16_t     *last_ref;            /* per heap page: epoch it was last seen used */
+    uint16_t      epoch;               /* bumped by every accessed-bit sample        */
+    uint32_t      evicts_since_sample;
     uint32_t      fifo_head, fifo_len;
     uint32_t      swaps_out, swaps_in;
     uint32_t      esp0;                /* ring-0 stack while in ring 3      */
