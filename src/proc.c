@@ -97,7 +97,8 @@ static void proc_entry(void *arg) {
 }
 
 int proc_spawn(const char *path, const char *args, int background,
-               vfs_node_t *in, vfs_node_t *out, uint32_t *out_pid) {
+               vfs_node_t *in, vfs_node_t *out, vfs_node_t *err, int err_as_out,
+               uint32_t *out_pid) {
     if (!path || !*path) return -1;
 
     preempt_disable();      /* slot claim + linking must be indivisible */
@@ -133,6 +134,8 @@ int proc_spawn(const char *path, const char *args, int background,
      * descriptor unbound, which the syscall layer reads as "use the console". */
     p->ufds[0] = in;
     p->ufds[1] = out;
+    p->ufds[2] = err;
+    p->err_as_out = (uint8_t)(err_as_out != 0);
 
     task_t *t = task_spawn(basename_of(p->name), proc_entry, p);
     if (!t) {

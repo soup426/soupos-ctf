@@ -1391,6 +1391,8 @@ typedef struct {
     char prog[FAT_PATH_MAX];      /* as typed            */
     char path[FAT_PATH_MAX];      /* resolved            */
     char args[PROC_ARGS_MAX];
+    char err[FAT_PATH_MAX];       /* 2> file, or ""      (v0.60.21) */
+    uint8_t err_append, err_dup;  /* 2>>, 2>&1           */
 } stage_t;
 
 /* Next whitespace-delimited token, advancing *sp. The shell metacharacters
@@ -1401,6 +1403,14 @@ static int shell_token(const char **sp, char *out, int max) {
     while (*s == ' ' || *s == '\t') s++;
     if (!*s) { *sp = s; return 0; }
 
+    /* 2> 2>> 2>&1 (v0.60.21): only where a word would start, so `a2>x` is
+     * still the word a2 and a redirection, as in sh. */
+    if (s[0] == '2' && s[1] == '>') {
+        int n = (s[2] == '>') ? 3 : (s[2] == '&' && s[3] == '1') ? 4 : 2;
+        memcpy(out, s, (size_t)n); out[n] = '\0';
+        *sp = s + n;
+        return 1;
+    }
     if (s[0] == '>' && s[1] == '>') {             /* append (v0.56.0) */
         out[0] = '>'; out[1] = '>'; out[2] = '\0';
         *sp = s + 2;
@@ -1539,10 +1549,31 @@ static void cook_err(const char *msg) {
     t_color(VGA_LIGHT_GREY, VGA_BLACK);
 }
 
+/* Open a file a pipeline writes to (> >> 2> 2>>), with the checks SYS_OPEN
+ * makes: write on the file if it exists, write on its bowl if it does not
+ * (v0.56.0: until then `> /etc/EVIL.TXT` from an ordinary cook made the
+ * file in a bowl closed to cooks). Says why and returns 0 if not. */
+static vfs_node_t *open_for_writing(const char *name, int append, const char *fail) {
+    char path[FAT_PATH_MAX];
+    resolve_path(name, path);
+    if (fat_exists(path) && !may(path, 'w')) { deny(path); return 0; }
+    if (!fat_exists(path)) {
+        char parent[FAT_PATH_MAX];
+        strcpy(parent, path);
+        char *slash = parent + strlen(parent);
+        while (slash > parent && *slash != '/') slash--;
+        if (slash == parent) strcpy(parent, "/"); else *slash = '\0';
+        if (!may(parent, 'w')) { deny(parent); return 0; }
+    }
+    vfs_node_t *n = vfs_open(path, VFS_WRONLY | (append ? VFS_APPEND : VFS_CREATE));
+    if (!n) cook_err(fail);
+    return n;
+}
+
 static void cmd_cook(const char *args) {
     while (*args == ' ') args++;
     if (!*args) {
-        t_puts("Usage: cook <prog.elf> [args] [| prog.elf ...] [< in] [> out] [&]\n");
+        t_puts("Usage: cook <prog.elf> [args] [2> err] [| prog.elf ...] [< in] [> out] [&]\n");
         return;
     }
 
@@ -1551,11 +1582,22 @@ static void cmd_cook(const char *args) {
     char outfile[FAT_PATH_MAX]; outfile[0] = '\0';
     int  append = 0;                               /* >> (v0.56.0) */
     int  nst = 1, background = 0;
-    st[0].prog[0] = st[0].args[0] = '\0';
+    st[0].prog[0] = st[0].args[0] = st[0].err[0] = '\0';
+    st[0].err_append = st[0].err_dup = 0;
 
     char tok[FAT_PATH_MAX];
     const char *sp = args;
     while (shell_token(&sp, tok, sizeof(tok))) {
+        /* 2> 2>> 2>&1 belong to the stage they follow (v0.60.21). */
+        if (str_eq(tok, "2>") || str_eq(tok, "2>>")) {
+            stage_t *cs = &st[nst - 1];
+            if (!shell_token(&sp, cs->err, sizeof(cs->err))) { cook_err("No file after 2>."); return; }
+            unquote(cs->err);
+            cs->err_append = (tok[2] == '>');
+            cs->err_dup = 0;
+            continue;
+        }
+        if (str_eq(tok, "2>&1")) { st[nst - 1].err_dup = 1; st[nst - 1].err[0] = '\0'; continue; }
         if (str_eq(tok, ">>")) {
             if (!shell_token(&sp, outfile, sizeof(outfile))) { cook_err("No file after >>."); return; }
             unquote(outfile);
@@ -1569,7 +1611,8 @@ static void cmd_cook(const char *args) {
                 if (nst >= PIPE_MAX_STAGES) {
                     cook_err("Too many pipeline stages (max 4)."); return;
                 }
-                st[nst].prog[0] = st[nst].args[0] = '\0';
+                st[nst].prog[0] = st[nst].args[0] = st[nst].err[0] = '\0';
+                st[nst].err_append = st[nst].err_dup = 0;
                 nst++;
                 break;
             case '<':
@@ -1624,22 +1667,20 @@ static void cmd_cook(const char *args) {
         if (!fin) { cook_err("Cannot read the input file."); return; }
     }
     if (outfile[0]) {
-        char path[FAT_PATH_MAX];
-        resolve_path(outfile, path);
-        if (fat_exists(path) && !may(path, 'w')) { deny(path); if (fin) vfs_close(fin); return; }
-        /* A new file needs write on its bowl, as SYS_OPEN has always asked
-         * (v0.56.0). Until then `> /etc/EVIL.TXT` from an ordinary cook made
-         * the file in a bowl closed to cooks. */
-        if (!fat_exists(path)) {
-            char parent[FAT_PATH_MAX];
-            strcpy(parent, path);
-            char *slash = parent + strlen(parent);
-            while (slash > parent && *slash != '/') slash--;
-            if (slash == parent) strcpy(parent, "/"); else *slash = '\0';
-            if (!may(parent, 'w')) { deny(parent); if (fin) vfs_close(fin); return; }
+        fout = open_for_writing(outfile, append, "Cannot write the output file.");
+        if (!fout) { if (fin) vfs_close(fin); return; }
+    }
+    /* Each stage's 2> file, all opened before anything starts. */
+    vfs_node_t *ferr[PIPE_MAX_STAGES] = { 0 };
+    for (int i = 0; i < nst; i++) {
+        if (!st[i].err[0]) continue;
+        ferr[i] = open_for_writing(st[i].err, st[i].err_append, "Cannot write the 2> file.");
+        if (!ferr[i]) {
+            for (int k = 0; k < i; k++) if (ferr[k]) vfs_close(ferr[k]);
+            if (fout) vfs_close(fout);
+            if (fin) vfs_close(fin);
+            return;
         }
-        fout = vfs_open(path, VFS_WRONLY | (append ? VFS_APPEND : VFS_CREATE));
-        if (!fout) { cook_err("Cannot write the output file."); if (fin) vfs_close(fin); return; }
     }
 
     uint32_t pids[PIPE_MAX_STAGES];
@@ -1650,10 +1691,17 @@ static void cmd_cook(const char *args) {
         vfs_node_t *rd = 0, *wr = 0;
         vfs_node_t *out = fout;                 /* last stage writes here */
         if (i + 1 < nst) {
-            if (vfs_pipe(&rd, &wr) < 0) { cook_err("Out of pipes."); break; }
+            if (vfs_pipe(&rd, &wr) < 0) {
+                cook_err("Out of pipes.");
+                if (stage_in) vfs_close(stage_in);
+                for (int k = i; k < nst; k++) if (ferr[k]) vfs_close(ferr[k]);
+                if (fout) vfs_close(fout);
+                break;
+            }
             out = wr;
         }
-        int rc = proc_spawn(st[i].path, st[i].args, background, stage_in, out, &pids[i]);
+        int rc = proc_spawn(st[i].path, st[i].args, background, stage_in, out,
+                            ferr[i], st[i].err_dup, &pids[i]);
         if (rc < 0) {
             cook_err(rc == PROC_ERR_FULL     ? "Too many orders (try: orders)" :
                      rc == PROC_ERR_COOK_CAP ? "You already have 4 orders cooking (try: orders, kill)" :
@@ -1665,6 +1713,8 @@ static void cmd_cook(const char *args) {
             if (stage_in) vfs_close(stage_in);
             if (rd) vfs_close(rd);
             if (out) vfs_close(out);
+            for (int k = i; k < nst; k++) if (ferr[k]) vfs_close(ferr[k]);   /* never handed over */
+            if (fout && out != fout && i + 1 < nst) vfs_close(fout);
             break;
         }
         started++;

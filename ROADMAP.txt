@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.20
+Current version: v0.60.21
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,21 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.21 (2026-10-08)  — 2>
+  - `cook X.elf 2> ERR.TXT`, `2>> ERR.TXT` and `2>&1`, on any stage of a
+    pipeline: the redirection belongs to the stage it follows, as in sh.
+    A program's stderr used to go to the console (the serial log) or the
+    session whatever was asked. The file gets the checks > has (one shared
+    open_for_writing now), and every 2> file is opened before any stage
+    starts.
+  - 2>&1 sends stderr wherever stdout ends up, the pipe or the > file or
+    the screen: a flag on the process, not a second handle, so nothing is
+    closed twice. `2>&1 > f` therefore means what `> f 2>&1` means; sh
+    would leave stderr on the terminal there.
+  - scripts/stderr-test.sh runs ten lines with pair.elf (cmp) and compares
+    twelve files with bash's. The host side cannot send cmp's stdout to
+    /dev/null: GNU cmp goes silent, its EOF message included, when it does.
 
 v0.60.20 (2026-10-08)  — THE GATE FAILURE ITS OWN LOG SAID PASSED
   - A full check failed the gate's jobs check ("no ring-3 output after the

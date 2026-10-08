@@ -390,6 +390,7 @@ void syscall_dispatch(registers_t *r) {
             uint32_t fd = r->ebx, len = r->edx;
             const char *p = (const char *)r->ecx;
             if (!user_ok(r->ecx, len)) { r->eax = (uint32_t)-1; break; }
+            if (fd == FD_STDERR && pr && pr->err_as_out) fd = FD_STDOUT;   /* 2>&1 */
             /* A binding wins over the console default, which is what makes
              * `> file` and `| next` work at all. Nothing binds 0-2 for a
              * program run normally, so normal runs are unaffected. */

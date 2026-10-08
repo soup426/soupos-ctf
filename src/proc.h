@@ -68,6 +68,7 @@ typedef struct proc {
     uint32_t      swapped;             /* pages on disk right now (v0.45.0) */
     uint32_t      esp0;                /* ring-0 stack while in ring 3      */
     vfs_node_t   *ufds[PROC_UFD_MAX];
+    uint8_t       err_as_out;          /* 2>&1: fd 2 writes go where fd 1 does (v0.60.21) */
     char          args[PROC_ARGS_MAX];
     wait_queue_t  waiters;             /* the parent blocks here            */
     wait_queue_t  cont_wq;             /* the process itself parks here      */
@@ -87,9 +88,11 @@ proc_t  *proc_current(void);
  * leaves that descriptor on the console default. The process owns whatever is
  * passed and closes it when it exits, which is what signals EOF down a pipe,
  * so the caller must not close them or hand the same handle to two
- * processes. */
+ * processes. `err` binds stderr the same way (v0.60.21); `err_as_out` sends
+ * stderr wherever stdout goes instead (2>&1), with no second handle. */
 int      proc_spawn(const char *path, const char *args, int background,
-                    vfs_node_t *in, vfs_node_t *out, uint32_t *out_pid);
+                    vfs_node_t *in, vfs_node_t *out, vfs_node_t *err, int err_as_out,
+                    uint32_t *out_pid);
 
 /* Block until `pid` exits or stops.
  *   1  it exited: *code holds the exit code and the slot has been collected

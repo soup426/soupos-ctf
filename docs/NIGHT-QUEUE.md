@@ -34,7 +34,7 @@ environment and two more tools; the shell gets functions.
 
 ---
 
-## 1. 2> sends a program's complaints somewhere
+## 1. 2> sends a program's complaints somewhere — DONE v0.60.21
 
 `cook X.elf 2> ERR.TXT`, `2>> ERR.TXT` and `2>&1` for a program's stderr
 (fd 2), on any stage of a pipeline, as sh does. Today stderr always goes to
