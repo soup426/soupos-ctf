@@ -34,9 +34,9 @@ mcopy -n -i "$WORK/disk.img" ::/C.TXT "$WORK/C.TXT" 2>/dev/null
 cmp -s "$WORK/B.TXT" "$WORK/C.TXT" \
     && echo "  ok    a 5 MB output through > reaches the disk whole (cmp)" || { echo "  FAIL  the 5 MB copy: $(wc -c < "$WORK/C.TXT" 2>/dev/null) bytes"; fail=1; }
 L=$(tr -d '\r' < "$WORK/serial.log")
-echo "$L" | grep -q "the output to /D.TXT did not reach the disk whole" \
-    && echo "$L" | grep -qE "^\[proc [0-9]+\] /spoon.elf exited with code 1" \
-    && echo "$L" | grep -q "^\[vfs\] /D.TXT: the write to disk failed" \
+echo "$L" | grep "the output to /D.TXT did not reach the disk whole" >/dev/null \
+    && echo "$L" | grep -E "^\[proc [0-9]+\] /spoon.elf exited with code 1" >/dev/null \
+    && echo "$L" | grep "^\[vfs\] /D.TXT: the write to disk failed" >/dev/null \
     && echo "  ok    one that does not fit is reported on the terminal and in the log, and exits 1" \
     || { echo "  FAIL  the failed output was not reported"; fail=1; }
 [ "$(fsck.fat -n "$WORK/disk.img" 2>&1 | wc -l)" -le 2 ] && echo "  ok    fsck is clean after the failed write" \

@@ -29,7 +29,7 @@ val() { mcopy -n -i "$WORK/disk.img" "::$1" - 2>/dev/null; }
     || { echo "  FAIL  the counter: [$(val /A2.TXT)]"; fail=1; }
 # Division by zero: sh, non-interactive, would end the whole script here;
 # soupOS skips the command with status 1 and carries on (written down).
-! mdir -b -i "$WORK/disk.img" ::/ 2>/dev/null | grep -q "A3.TXT" && [ "$(val /A4.TXT | tr -d '\n')" = "1" ] \
-    && tr -d '\r' < "$WORK/serial.log" | grep -q "arithmetic: division by zero" \
+! mdir -b -i "$WORK/disk.img" ::/ 2>/dev/null | grep "A3.TXT" >/dev/null && [ "$(val /A4.TXT | tr -d '\n')" = "1" ] \
+    && tr -d '\r' < "$WORK/serial.log" | grep "arithmetic: division by zero" >/dev/null \
     && echo "  ok    division by zero: said, the command not run, status 1" || { echo "  FAIL  division by zero"; fail=1; }
 exit $fail

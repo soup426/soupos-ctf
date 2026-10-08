@@ -72,14 +72,14 @@ if echo "$got" | paste -d'|' - <(echo "$want") | awk -F'|' '{ if ($1 !~ "^"$2) b
 else
     echo "  FAIL  last after the reboot:"; echo "$L" | head -8 | sed 's/^/        /'; fail=1
 fi
-mtype -i "$WORK/disk.img" ::/etc/logins 2>/dev/null | grep -qE "refused +saucier +10\.0\.2\.2" \
+mtype -i "$WORK/disk.img" ::/etc/logins 2>/dev/null | grep -E "refused +saucier +10\.0\.2\.2" >/dev/null \
     && echo "  ok    mtools reads /etc/logins" || { echo "  FAIL  mtools could not read the record"; fail=1; }
 grep -q "owner: headchef" <(start "$WORK/three.log"; keys "headchef" "rosemary" "WAIT:2" "perms /etc/logins" "WAIT:1"; stop; tr -d '\r' < "$WORK/three.log") \
     && echo "  ok    the record stays the headchef's though saucier's logins wrote it" || { echo "  FAIL  /etc/logins owner"; fail=1; }
 R=$(mtype -i "$WORK/disk.img" ::/etc/logins 2>/dev/null)
 nok=$(echo "$R" | grep -cE "^[0-9-]+ [0-9:]+  ok "); nbad=$(echo "$R" | grep -cE "^[0-9-]+ [0-9:]+  refused ")
-if [ "$nok" = 48 ] && [ "$nbad" = 48 ] && ! echo "$R" | grep -qE "seed1 " && ! echo "$R" | grep -qE "bad1 " \
-   && echo "$R" | grep -qE "seed48 " && echo "$R" | grep -qE "bad48 "; then
+if [ "$nok" = 48 ] && [ "$nbad" = 48 ] && ! echo "$R" | grep -E "seed1 " >/dev/null && ! echo "$R" | grep -E "bad1 " >/dev/null \
+   && echo "$R" | grep -E "seed48 " >/dev/null && echo "$R" | grep -E "bad48 " >/dev/null; then
     echo "  ok    48 successes and 48 refusals kept; the oldest of each kind went"
 else
     echo "  FAIL  trimming: $nok successes, $nbad refusals"; fail=1

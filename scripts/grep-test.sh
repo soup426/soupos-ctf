@@ -47,6 +47,6 @@ check 4 "-i"                                          -i soup "$G"
 check 5 "-c -i"                                       -c -i soup "$G"
 check 6 "-v -i"                                       -v -i soup "$G"
 check 7 "sift.elf as a pipe stage"                    soup "$G"
-tr -d '\r' < "$WORK/serial.log" | grep -q "/sift.elf exited with code 1" \
+tr -d '\r' < "$WORK/serial.log" | grep "/sift.elf exited with code 1" >/dev/null \
     && echo "  ok    no match exits 1, as grep does" || { echo "  FAIL  exit code for no match"; fail=1; }
 exit $fail

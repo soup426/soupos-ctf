@@ -38,8 +38,8 @@ done
 [ "$bad" = 0 ] && echo "  ok    all ${#CASES[@]} forms list what the host's find lists (sorted): the tree, -name, -type d, -type f, a sub-bowl" \
     || { echo "  FAIL  forage.elf differs from the host's find"; fail=1; }
 FH=$(val /home/cook/FH.OUT)
-echo "$FH" | grep -qx "/home/saucier" && echo "$FH" | grep -qx "/home/cook" && [ "$(val /home/cook/FHS.OUT | tr -d '\n')" = "1" ] \
-    && tr -d '\r' < "$WORK/serial.log" | grep -q "forage: cannot list /home/saucier" \
+echo "$FH" | grep -x "/home/saucier" >/dev/null && echo "$FH" | grep -x "/home/cook" >/dev/null && [ "$(val /home/cook/FHS.OUT | tr -d '\n')" = "1" ] \
+    && tr -d '\r' < "$WORK/serial.log" | grep "forage: cannot list /home/saucier" >/dev/null \
     && echo "  ok    for the cook, a closed home is listed but not entered: reported, exit 1, the rest carries on" \
     || { echo "  FAIL  find /home as the cook: [$(echo "$FH" | tr '\n' ' ')] status $(val /home/cook/FHS.OUT)"; fail=1; }
 exit $fail

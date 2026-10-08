@@ -64,9 +64,9 @@ python3 scripts/qemu_keys.py "$MON" "headchef" "rosemary" "WAIT:1" "hire saucier
     || { echo "  FAIL  could not drive QEMU"; fail=1; }
 kill "$PID" 2>/dev/null; wait "$PID" 2>/dev/null; PID=""
 L=$(tr -d '\r' < "$LOG")
-[ "$(echo "$L" | grep -c "You already have 4 orders cooking")" = 1 ] && echo "$L" | grep -q "^\[proc\] cook refused a process: their limit" \
+[ "$(echo "$L" | grep -c "You already have 4 orders cooking")" = 1 ] && echo "$L" | grep "^\[proc\] cook refused a process: their limit" >/dev/null \
     && echo "  ok    a cook's fifth process is refused: four each" || { echo "  FAIL  the per-cook limit"; fail=1; }
-[ "$(echo "$L" | grep -c "The last orders are kept for the headchef")" = 1 ] && echo "$L" | grep -q "^\[proc\] saucier refused a process: the headchef's reserve" \
+[ "$(echo "$L" | grep -c "The last orders are kept for the headchef")" = 1 ] && echo "$L" | grep "^\[proc\] saucier refused a process: the headchef's reserve" >/dev/null \
     && echo "  ok    a second cook stops at six between them, two kept for the headchef" || { echo "  FAIL  the headchef's reserve"; fail=1; }
 [ "$(echo "$L" | grep -c "hello from ring 3")" = 2 ] \
     && echo "  ok    with the cooks at their limits, the headchef still cooks (twice)" || { echo "  FAIL  the headchef could not cook"; fail=1; }

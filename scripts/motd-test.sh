@@ -46,8 +46,8 @@ PY
 kill "$PID" 2>/dev/null; wait "$PID" 2>/dev/null; PID=""
 L=$(tr -d '\r' < "$WORK/serial.log")
 # The ESC byte is dropped; what followed it prints as plain text.
-echo "$L" | grep -q "^  Inspection at noon\.$" && echo "$L" | grep -q "^  Wash your hands\.\[2J$" && ! grep -q $'\x1b\[2J' "$WORK/serial.log" \
+echo "$L" | grep "^  Inspection at noon\.$" >/dev/null && echo "$L" | grep "^  Wash your hands\.\[2J$" >/dev/null && ! grep -q $'\x1b\[2J' "$WORK/serial.log" \
     && echo "  ok    a console login shows the message, line by line" || { echo "  FAIL  console motd"; fail=1; }
-echo "$L" | grep -q "owner: headchef   perms: rw-r--" \
+echo "$L" | grep "owner: headchef   perms: rw-r--" >/dev/null \
     && echo "  ok    /etc/motd is pinned to the headchef, rw-r--" || { echo "  FAIL  /etc/motd's owner or mode"; fail=1; }
 exit $fail

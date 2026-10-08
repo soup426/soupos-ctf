@@ -44,7 +44,7 @@ out=$(mdir -i "$TESTDISK" 2>/dev/null)
 echo "$out" | grep -iE "my long" | sed 's/^/  /'
 
 for want in "My Long Note.txt" "My Long Novel.txt"; do
-    if echo "$out" | grep -qF "$want"; then
+    if echo "$out" | grep -F "$want" >/dev/null; then
         echo "  ok    mtools reads '$want'"
     else
         echo "  FAIL  mtools cannot see '$want'"; fail=1

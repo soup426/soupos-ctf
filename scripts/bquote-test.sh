@@ -27,17 +27,17 @@ L=$(tr -d '\r' < "$WORK/serial.log")
 D=$(mdir -b -i "$WORK/disk.img" ::/ 2>/dev/null)
 after() { echo "$L" | grep -A1 -F "> $1" | tail -1; }
 [ "$(after 'pour "/my file.txt"')" = "hi" ] && echo "  ok    pour reads a quoted name with a space" || { echo "  FAIL  pour: [$(after 'pour "/my file.txt"')]"; fail=1; }
-echo "$L" | grep -q "Stirred: /two words.txt" \
+echo "$L" | grep "Stirred: /two words.txt" >/dev/null \
     && echo "  ok    stir writes a quoted name, its quoted text kept with two spaces" || { echo "  FAIL  stir"; fail=1; }
-echo "$D" | grep -q "::/moved one.txt" && ! echo "$D" | grep -q "::/copy of.txt" \
+echo "$D" | grep "::/moved one.txt" >/dev/null && ! echo "$D" | grep "::/copy of.txt" >/dev/null \
     && [ "$(mcopy -n -i "$WORK/disk.img" "::/moved one.txt" - 2>/dev/null)" = "hi" ] \
     && echo "  ok    decant then relabel, quoted with both kinds" || { echo "  FAIL  decant/relabel"; fail=1; }
-echo "$L" | grep -A2 -F 'perms "/moved one.txt"' | grep -q "owner: headchef" \
+echo "$L" | grep -A2 -F 'perms "/moved one.txt"' | grep "owner: headchef" >/dev/null \
     && echo "  ok    perms finds a quoted name" || { echo "  FAIL  perms"; fail=1; }
 # Bowls named with spaces work since v0.57.6 (lname-test.sh); quoting
 # itself is tested here with an 8.3 name.
-[ "$(after 'pwd')" = "  /QBOWL" ] && ! echo "$D" | grep -q "::/QBOWL" \
+[ "$(after 'pwd')" = "  /QBOWL" ] && ! echo "$D" | grep "::/QBOWL" >/dev/null \
     && echo "  ok    mkbowl, cd and rmbowl take a quoted bowl" || { echo "  FAIL  bowls: pwd [$(after 'pwd')]"; fail=1; }
-! echo "$D" | grep -q "::/two words.txt" && echo "  ok    strain removes a quoted name" || { echo "  FAIL  strain"; fail=1; }
-echo "$L" | grep -qx "two  spaces" && echo "  ok    slurp prints its quoted text, spaces kept" || { echo "  FAIL  slurp"; fail=1; }
+! echo "$D" | grep "::/two words.txt" >/dev/null && echo "  ok    strain removes a quoted name" || { echo "  FAIL  strain"; fail=1; }
+echo "$L" | grep -x "two  spaces" >/dev/null && echo "  ok    slurp prints its quoted text, spaces kept" || { echo "  FAIL  slurp"; fail=1; }
 exit $fail

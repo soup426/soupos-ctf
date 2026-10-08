@@ -31,16 +31,16 @@ python3 scripts/qemu_keys.py "$WORK/mon.sock" "headchef" "rosemary" "WAIT:1" "cl
 kill "$PID" 2>/dev/null; wait "$PID" 2>/dev/null; PID=""
 L=$(tr -d '\r' < "$WORK/serial.log")
 left=$(echo "$L" | grep -oE "^\[larder\] free=[0-9]+" | grep -oE "[0-9]+$")
-if [ -n "$left" ] && [ "$left" -ge 124 ] && [ "$left" -le 132 ] && echo "$L" | grep -q "Write failed" \
-   && echo "$L" | grep -q "^\[fat\] only the reserve is left: refused a cluster to uid 1"; then
+if [ -n "$left" ] && [ "$left" -ge 124 ] && [ "$left" -le 132 ] && echo "$L" | grep "Write failed" >/dev/null \
+   && echo "$L" | grep "^\[fat\] only the reserve is left: refused a cluster to uid 1" >/dev/null; then
     echo "  ok    the cook's writes stop at the reserve ($left clusters left, refusal logged)"
 else
     echo "  FAIL  the cook was not stopped at the reserve (left: ${left:-?})"; fail=1
 fi
-echo "$L" | grep -q "vault open on port 22" && echo "$L" | grep -q "new host key written" \
+echo "$L" | grep "vault open on port 22" >/dev/null && echo "$L" | grep "new host key written" >/dev/null \
     && echo "  ok    the headchef still opens the vault, writing its host key" || { echo "  FAIL  vault 22"; fail=1; }
-echo "$L" | grep -q "Hired: saucier now has a place in the kitchen, and a home at /home/saucier" \
-    && mtype -i "$WORK/disk.img" ::/etc/kitchen | grep -q "^saucier:" \
+echo "$L" | grep "Hired: saucier now has a place in the kitchen, and a home at /home/saucier" >/dev/null \
+    && mtype -i "$WORK/disk.img" ::/etc/kitchen | grep "^saucier:" >/dev/null \
     && echo "  ok    and hires a cook, who gets a home, with the roster saved" || { echo "  FAIL  hire after the cook filled the disk"; fail=1; }
 [ "$(fsck.fat -n "$WORK/disk.img" 2>&1 | wc -l)" -le 2 ] \
     && echo "  ok    fsck is clean" || { echo "  FAIL  fsck"; fsck.fat -n "$WORK/disk.img" | head; fail=1; }

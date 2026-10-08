@@ -56,7 +56,7 @@ if [ "$(echo "$post" | wc -l)" -le 2 ]; then
 else
     echo "  FAIL  fsck.fat found problems after soupOS wrote:"; echo "$post" | sed 's/^/        /' | head -14; fail=1
 fi
-mtype -i "$TESTDISK" ::KEEP.TXT 2>/dev/null | grep -q "this one stays" \
+mtype -i "$TESTDISK" ::KEEP.TXT 2>/dev/null | grep "this one stays" >/dev/null \
     && echo "  ok    a file soupOS wrote reads back through mtools" \
     || { echo "  FAIL  mtools could not read KEEP.TXT"; fail=1; }
 # Timestamps (v0.47.1): a file soupOS just wrote is dated now, not 1980.

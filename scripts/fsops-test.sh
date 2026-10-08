@@ -44,7 +44,7 @@ if [ $keys_rc -ne 0 ]; then echo "  FAIL  could not type the whole sequence:"; t
 rm -f "$LOG.keys"
 ok()  { echo "  ok    $1"; }
 bad() { echo "  FAIL  $1"; fail=1; }
-grep -q "MKDIR made /PANTRY/SHELF" "$LOG" && mdir -i "$TESTDISK" ::/PANTRY 2>/dev/null | grep -q SHELF \
+grep -q "MKDIR made /PANTRY/SHELF" "$LOG" && mdir -i "$TESTDISK" ::/PANTRY 2>/dev/null | grep SHELF >/dev/null \
     && ok "newbowl.elf made a bowl inside a bowl, and mtools sees it" || bad "newbowl.elf"
 grep -q "RM removed /GONE.TXT" "$LOG" && ! mdir -i "$TESTDISK" ::/GONE.TXT >/dev/null 2>&1 \
     && ok "toss.elf removed a file, and mtools agrees it is gone" || bad "toss.elf removing a file"

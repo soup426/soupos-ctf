@@ -22,7 +22,7 @@ PID=$!
 python3 scripts/qemu_keys.py "$MON" "cook" "soup" "WAIT:2" "pour /etc/kitchen" "WAIT:1" "perms /etc/kitchen" "WAIT:1" >/dev/null 2>&1 \
     || { echo "  FAIL  could not drive QEMU"; fail=1; }
 kill "$PID" 2>/dev/null; wait "$PID" 2>/dev/null; PID=""
-tr -d '\r' < "$LOG" | grep -qE '^headchef:0:[0-9a-f]{8}$' \
+tr -d '\r' < "$LOG" | grep -E '^headchef:0:[0-9a-f]{8}$' >/dev/null \
     && echo "  ok    stage 2: an ordinary cook reads the headchef's unsalted AlphaSOUP-32 hash" \
     || { echo "  FAIL  stage 2 is closed: the cook could not read the roster's hashes"; fail=1; }
 grep -q "owner: headchef   perms: rwxr-x" "$LOG" \

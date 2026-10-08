@@ -46,7 +46,7 @@ want=$(cd "$WORK/host" && ls C*.TXT | sort | tr '\n' ' ')
 [ "$got" = "$want" ] && echo "  ok    nine chains left the same files as sh: $want" \
     || { echo "  FAIL  chains: soupOS [$got]  sh [$want]"; fail=1; }
 H=$(mdir -b -i "$WORK/disk.img" ::/home/cook 2>/dev/null)
-! echo "$H" | grep -q "D1.TXT" && echo "$H" | grep -q "D2.TXT" \
+! echo "$H" | grep "D1.TXT" >/dev/null && echo "$H" | grep "D2.TXT" >/dev/null \
     && echo "  ok    a refused builtin is a failure: && skips after it, || runs" || { echo "  FAIL  a refusal's status"; fail=1; }
 mcopy -n -i "$WORK/disk.img" ::/C8A.TXT "$WORK/c8a" 2>/dev/null
 [ "$(cat "$WORK/c8a" 2>/dev/null)" = "$(cat "$WORK/host/C8A.TXT")" ] \

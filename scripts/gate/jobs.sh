@@ -31,7 +31,7 @@ else echo "  FAIL  Ctrl-C did not kill the foreground program (only $kills IRQ k
 # The shell has to survive killing a program: a ring-3 program run AFTER the
 # first kill must still produce output.
 kill_line=$(line_of 'killed \(irq\)')
-if [ -n "$kill_line" ] && after "$kill_line" | grep -qE 'TESTOUT'; then
+if [ -n "$kill_line" ] && after "$kill_line" | grep -E 'TESTOUT' >/dev/null; then
     echo "  ok    shell still runs programs after a kill"
 else
     echo "  FAIL  no ring-3 output after the kill: the shell did not survive it"; fail=1
@@ -61,13 +61,13 @@ if [ -n "$stop_line" ] && [ -n "$cont_line" ]; then
 else
     echo "  FAIL  job control markers missing (stopped=${stop_line:-none} continued=${cont_line:-none})"; fail=1
 fi
-if [ -n "${stop_line:-}" ] && after "$stop_line" | grep -qE '\[proc [0-9]+\] spawned /ticket\.elf K'; then
+if [ -n "${stop_line:-}" ] && after "$stop_line" | grep -E '\[proc [0-9]+\] spawned /ticket\.elf K' >/dev/null; then
     echo "  ok    shell took commands again after Ctrl-Z"
 else echo "  FAIL  shell did not come back after Ctrl-Z"; fail=1; fi
 # A stopped job is parked on a wait queue and would never reach a safe point
 # on its own, so kill has to wake it to let it die.
 last_stop=$(line_of '/ticket\.elf stopped' last)
-if [ -n "$last_stop" ] && after "$last_stop" | grep -qE '\[proc [0-9]+\] killed'; then
+if [ -n "$last_stop" ] && after "$last_stop" | grep -E '\[proc [0-9]+\] killed' >/dev/null; then
     echo "  ok    a stopped job can still be killed"
 else echo "  FAIL  killing a stopped job did not end it"; fail=1; fi
 

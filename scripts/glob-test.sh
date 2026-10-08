@@ -36,6 +36,6 @@ done
 [ "$(val /O8.OUT)" = "/G/c.dat" ] || { echo "        echo /G/*.dat: [$(val /O8.OUT)]"; bad=1; }
 [ "$bad" = 0 ] && echo "  ok    globs expand as sh does: *.txt ?.txt a* * (byte order), no match kept, quoted kept, case kept, a bowl in front" \
     || { echo "  FAIL  globs differ from sh"; fail=1; }
-tr -d '\r' < "$WORK/serial.log" | grep -q "The arguments are too long" && [ "$(val /O9S.OUT)" = "1" ] && [ -z "$(val /O9.OUT)" ] \
+tr -d '\r' < "$WORK/serial.log" | grep "The arguments are too long" >/dev/null && [ "$(val /O9S.OUT)" = "1" ] && [ -z "$(val /O9.OUT)" ] \
     && echo "  ok    an expansion past 128 bytes is refused with status 1, not cut short" || { echo "  FAIL  the overlong expansion"; fail=1; }
 exit $fail

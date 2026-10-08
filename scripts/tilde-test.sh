@@ -24,7 +24,7 @@ val() { mcopy -n -i "$WORK/disk.img" "::$1" - 2>/dev/null; }
     && echo "  ok    > ~/H.TXT and spoon.elf ~/H.TXT land in the cook's home" || { echo "  FAIL  ~/ paths"; fail=1; }
 L=$(tr -d '\r' < "$WORK/serial.log")
 pwdline=$(echo "$L" | grep -A1 "> pwd" | tail -1)
-[ "$pwdline" = "  /home/cook" ] && echo "$L" | grep -A1 "> pour ~/H.TXT" | tail -1 | grep -qx "hi" \
+[ "$pwdline" = "  /home/cook" ] && echo "$L" | grep -A1 "> pour ~/H.TXT" | tail -1 | grep -x "hi" >/dev/null \
     && echo "  ok    cd ~ goes home and pour ~/H.TXT reads there (builtins too)" || { echo "  FAIL  cd ~ or pour ~/ ($pwdline)"; fail=1; }
 want=$(HOME=/home/cook sh -c "echo ~ '~' \"~/x\" a~b ~x ~/")
 [ "$(val /home/cook/Q.TXT)" = "$want" ] && echo "  ok    as sh with HOME=/home/cook: [$want]" \

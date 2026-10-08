@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.19
+Current version: v0.60.20
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,21 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.20 (2026-10-08)  — THE GATE FAILURE ITS OWN LOG SAID PASSED
+  - A full check failed the gate's jobs check ("no ring-3 output after the
+    kill") though the kept log passes it. The check was
+    `after N | grep -qE TESTOUT` under pipefail: grep -q stops at its first
+    match, awk dies of SIGPIPE writing the rest, and pipefail fails the
+    pipeline. Replayed on that log: 39 false failures in 2000 runs on an
+    idle host, none without pipefail. 96 piped greps (81 lines, 31 scripts) had the
+    shape, and the negated ones (`! ... | grep -q X`) could pass while X was
+    there. They now pipe into `grep ... >/dev/null`, which reads to the end
+    (0 of 2000 either way), and scripts/lint-test.sh fails on any new one.
+  - The same run's desk failure ("services are not busy", fbcon at 55%)
+    did not come back: 12 desk segments at once, and 12 more beside a full
+    check that took 425 s instead of 150, measured fbcon at 2% at most. The
+    threshold stays; both logs are in docs/flakes/.
 
 v0.60.19 (2026-10-08)  — CASE
   - `case WORD in PAT|PAT) ... ;; (PAT) ... ;; *) ... ;; esac` on one line,

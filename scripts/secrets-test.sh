@@ -34,18 +34,18 @@ python3 scripts/qemu_keys.py "$WORK/mon.sock" "headchef" "rosemary" "WAIT:1" \
 O="-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o IdentitiesOnly=yes -o PasswordAuthentication=no -o KbdInteractiveAuthentication=no -o ConnectTimeout=10 -p $PORT"
 try() { timeout 30 ssh $O -i "$1" "$2@127.0.0.1" whoami 2>&1 | tr -d '\r'; }
 out=$(try "$WORK/sk" saucier)
-echo "$out" | grep -q "Permission denied" && ! echo "$out" | grep -q "saucier  (uid" \
+echo "$out" | grep "Permission denied" >/dev/null && ! echo "$out" | grep "saucier  (uid" >/dev/null \
     && echo "  ok    the fired saucier's key does not open the new saucier's account" \
     || { echo "  FAIL  the fired cook's key logged in as the new saucier"; echo "$out" | head -3 | sed 's/^/        /'; fail=1; }
-try "$WORK/ck" cook | grep -q "cook  (uid 1)" \
+try "$WORK/ck" cook | grep "cook  (uid 1)" >/dev/null \
     && echo "  ok    another cook's key still works" || { echo "  FAIL  cook's key stopped working"; fail=1; }
-try "$WORK/hk" headchef | grep -q "headchef  (uid 0)" \
+try "$WORK/hk" headchef | grep "headchef  (uid 0)" >/dev/null \
     && echo "  ok    a bare (headchef) line still works" || { echo "  FAIL  the headchef's bare key stopped working"; fail=1; }
 kill "$PID" 2>/dev/null; wait "$PID" 2>/dev/null; PID=""
-tr -d '\r' < "$WORK/serial.log" | grep -q "1 SSH key for saucier removed from /AUTHKEYS" \
+tr -d '\r' < "$WORK/serial.log" | grep "1 SSH key for saucier removed from /AUTHKEYS" >/dev/null \
     && echo "  ok    fire says how many keys it removed" || { echo "  FAIL  fire did not report the key"; fail=1; }
 left=$(mtype -i "$WORK/disk.img" ::/AUTHKEYS 2>/dev/null)
-! echo "$left" | grep -q "^saucier " && [ "$(echo "$left" | grep -c ssh-ed25519)" = "2" ] \
+! echo "$left" | grep "^saucier " >/dev/null && [ "$(echo "$left" | grep -c ssh-ed25519)" = "2" ] \
     && echo "  ok    /AUTHKEYS keeps the other two lines and loses saucier's (mtools)" || { echo "  FAIL  /AUTHKEYS after fire:"; echo "$left" | sed 's/^/        /'; fail=1; }
 # ── every system file has a known owner and mode (v0.54.2) ──
 # Proven on v0.54.1: /HOSTKEY.ED, the vault's private host key, was rwxr-x
@@ -93,7 +93,7 @@ want='/etc rwxr-x
 /etc/kitchen rw----'
 bad=0
 while read -r path mode; do
-    awk -v p="  $path" 'f && /owner:/ {print; exit} $0 == p {f=1}' "$WORK/s2" | grep -q "owner: headchef   perms: $mode" || { echo "        $path is not headchef $mode"; bad=1; }
+    awk -v p="  $path" 'f && /owner:/ {print; exit} $0 == p {f=1}' "$WORK/s2" | grep "owner: headchef   perms: $mode" >/dev/null || { echo "        $path is not headchef $mode"; bad=1; }
 done <<< "$want"
 [ "$bad" = 0 ] && echo "  ok    every system file is the headchef's with its pinned mode, after a session of use" \
     || { echo "  FAIL  system file owners and modes"; fail=1; }

@@ -35,6 +35,6 @@ val() { mcopy -n -i "$WORK/disk.img" "::$1" - 2>/dev/null; }
     && echo "  ok    the profile ran at the console login and the interactive SSH login, not for ssh host cmd" \
     || { echo "  FAIL  the profile ran $(val /home/cook/P1.TXT | grep -c ran) times, wanted 2"; fail=1; }
 [ "$(val /home/cook/P2.TXT)" = "x=7" ] && echo "  ok    a variable the profile set is there for the session" || { echo "  FAIL  \$X after login: [$(val /home/cook/P2.TXT)]"; fail=1; }
-tr -d '\r' < "$WORK/serial.log" | grep -q "No soup for you: 'nosuchthing'" && tr -d '\r' < "$WORK/serial.log" | grep -qE "cook  \(uid 1\)" \
+tr -d '\r' < "$WORK/serial.log" | grep "No soup for you: 'nosuchthing'" >/dev/null && tr -d '\r' < "$WORK/serial.log" | grep -E "cook  \(uid 1\)" >/dev/null \
     && echo "  ok    an error in the profile is said, and the login goes on" || { echo "  FAIL  the profile's error"; fail=1; }
 exit $fail

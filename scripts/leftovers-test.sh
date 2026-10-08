@@ -56,7 +56,7 @@ if grep -Eq 'first-one|hire saucier|last-of-boot-one' "$WORK/sauc.txt"; then
     echo "  FAIL  the saucier saw the headchef's history:"; grep -En 'first-one|hire saucier|last-of-boot-one' "$WORK/sauc.txt" | sed 's/^/        /'; fail=1
 else echo "  ok    the saucier never sees the headchef's lines (leftovers, pour, a ring-3 read)"; fi
 grep -q 'spoon.elf' "$WORK/sauc.txt" || { echo "  FAIL  the ring-3 read never ran"; fail=1; }
-if mtype -i "$WORK/disk.img" ::/home/saucier/LEFTOVER 2>/dev/null | grep -qx 'slurp saucier-line'; then
+if mtype -i "$WORK/disk.img" ::/home/saucier/LEFTOVER 2>/dev/null | grep -x 'slurp saucier-line' >/dev/null; then
     echo "  ok    the saucier's file is /home/saucier/LEFTOVER on the disk"
 else echo "  FAIL  /home/saucier/LEFTOVER does not hold the saucier's line"; fail=1; fi
 exit $fail

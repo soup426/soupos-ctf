@@ -74,8 +74,8 @@ grep -q "\[ssh\] headchef idle for 5 s: session ended" "$LOG" \
     && echo "  ok    the ending is logged" || { echo "  FAIL  no idle log line"; fail=1; }
 # The console, idle through all of it, still answers, and lists no session.
 whoat=$(grep -n "COOK  *WHERE  *UP  *IDLE" "$LOG" | tail -1 | cut -d: -f1)
-if [ -n "$whoat" ] && awk -v a="$whoat" 'NR>a' "$LOG" | grep -q "headchef  *console" \
-   && ! awk -v a="$whoat" 'NR>a' "$LOG" | grep -q "10\.0\.2\.2"; then
+if [ -n "$whoat" ] && awk -v a="$whoat" 'NR>a' "$LOG" | grep "headchef  *console" >/dev/null \
+   && ! awk -v a="$whoat" 'NR>a' "$LOG" | grep "10\.0\.2\.2" >/dev/null; then
     echo "  ok    the console never timed out, and no ended session is left in who"
 else
     echo "  FAIL  who after the sessions ended"; fail=1

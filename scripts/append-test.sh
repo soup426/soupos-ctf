@@ -37,7 +37,7 @@ head -3 "$WORK/got.txt" | cmp -s - "$WORK/want.txt" \
     && echo "  ok    >> makes a file that is not there" || { echo "  FAIL  >> to a new file"; fail=1; }
 [ "$(mtype -i "$WORK/disk.img" ::/home/cook/M.TXT 2>/dev/null | tr '\n' ' ')" = "mine again " ] \
     && echo "  ok    a cook appends in their own home" || { echo "  FAIL  the cook's own >>"; fail=1; }
-! mdir -b -i "$WORK/disk.img" ::/etc 2>/dev/null | grep -qi evil && [ "$(tr -d '\r' < "$WORK/serial.log" | grep -c "Permission denied: /etc$")" = 2 ] \
+! mdir -b -i "$WORK/disk.img" ::/etc 2>/dev/null | grep -i evil >/dev/null && [ "$(tr -d '\r' < "$WORK/serial.log" | grep -c "Permission denied: /etc$")" = 2 ] \
     && echo "  ok    neither > nor >> makes a file in a bowl the cook may not write" || { echo "  FAIL  a cook made a file in /etc"; fail=1; }
 [ "$(fsck.fat -n "$WORK/disk.img" 2>&1 | wc -l)" -le 2 ] && echo "  ok    fsck is clean" || { echo "  FAIL  fsck"; fail=1; }
 exit $fail

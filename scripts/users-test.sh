@@ -72,14 +72,14 @@ grep -q "door stays locked" "$WORK/old.log" && echo "  ok    an old-format entry
 grep -q "headchef: secret upgraded to pbkdf2" "$WORK/old.log" && echo "  ok    an old-format entry logs in, and is upgraded at that login" \
     || { echo "  FAIL  old-format login or upgrade"; fail=1; }
 kitchen=$(mtype -i "$WORK/old.img" ::/etc/kitchen 2>/dev/null)
-echo "$kitchen" | grep -q '^headchef:0:\$p\$20000\$' && echo "$kitchen" | grep -q "^cook:1:$(soup32 soup)$" \
+echo "$kitchen" | grep '^headchef:0:\$p\$20000\$' >/dev/null && echo "$kitchen" | grep "^cook:1:$(soup32 soup)$" >/dev/null \
     && echo "  ok    only the cook who logged in was rewritten (cook still old until they do)" \
     || { echo "  FAIL  after upgrade the kitchen reads:"; echo "$kitchen" | sed 's/^/        /'; fail=1; }
 boot "$WORK/old.img" "$WORK/old2.log" "headchef" "rosemary" "WAIT:2" "whoami" "WAIT:1"
 grep -q "headchef: pbkdf2 check took" "$WORK/old2.log" && grep -qE "headchef  \(uid 0\)" "$WORK/old2.log" \
     && echo "  ok    the upgraded entry logs in on the next boot ($(grep -oE 'took [0-9]+ ticks' "$WORK/old2.log" | head -1))" \
     || { echo "  FAIL  the upgraded entry did not log in on the next boot"; fail=1; }
-fsck.fat -n "$WORK/old.img" 2>&1 | wc -l | grep -qx 2 && echo "  ok    fsck is clean after the kitchen was rewritten" \
+fsck.fat -n "$WORK/old.img" 2>&1 | wc -l | grep -x 2 >/dev/null && echo "  ok    fsck is clean after the kitchen was rewritten" \
     || { echo "  FAIL  fsck after the rewrite:"; fsck.fat -n "$WORK/old.img" 2>&1 | head -5; fail=1; }
 # ── changing a secret (v0.52.1) ──
 cp disk.img "$WORK/sec.img"
@@ -96,6 +96,6 @@ grep -q "secret change refused (wrong current secret)" "$WORK/sec.log" \
     && echo "  ok    a cook changed their own, and the headchef set it again" || { echo "  FAIL  secret changes"; fail=1; }
 [ "$(grep -c "door stays locked" "$WORK/sec.log")" -ge 1 ] && [ "$(grep -cE "saucier  \(uid [0-9]+\)" "$WORK/sec.log")" = "2" ] \
     && echo "  ok    the old secret stops working and each new one logs in" || { echo "  FAIL  logins after the changes"; fail=1; }
-mtype -i "$WORK/sec.img" ::/etc/kitchen 2>/dev/null | grep -q '^saucier:[0-9]*:\$p\$20000\$' \
+mtype -i "$WORK/sec.img" ::/etc/kitchen 2>/dev/null | grep '^saucier:[0-9]*:\$p\$20000\$' >/dev/null \
     && echo "  ok    the changed secret is stored as PBKDF2" || { echo "  FAIL  saucier's stored secret"; fail=1; }
 exit $fail

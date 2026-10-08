@@ -37,13 +37,13 @@ session=$( (sleep 1; printf 'headchef\n'; sleep 1; printf 'rosemary\n'; sleep 3;
            | timeout 35 nc 127.0.0.1 "$PORT" 2>/dev/null | tr -d '\r')
 
 fail=0
-echo "$session" | grep -q "You share the local keyboard" \
+echo "$session" | grep "You share the local keyboard" >/dev/null \
     && echo "  ok    the pass greeted the session" \
     || { echo "  FAIL  no greeting came back"; fail=1; }
-echo "$session" | grep -q "headchef  (uid 0)" \
+echo "$session" | grep "headchef  (uid 0)" >/dev/null \
     && echo "  ok    a command typed over the network ran and answered" \
     || { echo "  FAIL  whoami's output did not come back"; fail=1; }
-echo "$session" | grep -q "clusters used" \
+echo "$session" | grep "clusters used" >/dev/null \
     && echo "  ok    a second command in the same session also answered" \
     || { echo "  FAIL  larder's output did not come back"; fail=1; }
 grep -qE "^\[pass\] session open" "$LOG" \
@@ -109,11 +109,11 @@ say("console is in use" not in got and "share the local keyboard" in got,
 sys.exit(fail)
 PY
 L=$(tr -d '\r' < "$LOG")
-echo "$L" | grep -q "^\[pass\] refused a caller: the console is logged in" \
-    && echo "$L" | grep -q "^\[pass\] the caller left logged in as cook: clocking the console out" \
+echo "$L" | grep "^\[pass\] refused a caller: the console is logged in" >/dev/null \
+    && echo "$L" | grep "^\[pass\] the caller left logged in as cook: clocking the console out" >/dev/null \
     && echo "  ok    the refusal and the clock-out are logged" || { echo "  FAIL  pass log lines"; fail=1; }
 sleep 1
-mtype -i "$TESTDISK" ::/etc/logins 2>/dev/null | grep -qE "refused +headchef +10\.0\.2\.2" \
-    && mtype -i "$TESTDISK" ::/etc/logins | grep -qE "ok +cook +10\.0\.2\.2" \
+mtype -i "$TESTDISK" ::/etc/logins 2>/dev/null | grep -E "refused +headchef +10\.0\.2\.2" >/dev/null \
+    && mtype -i "$TESTDISK" ::/etc/logins | grep -E "ok +cook +10\.0\.2\.2" >/dev/null \
     && echo "  ok    the login record names the caller's address, not the console" || { echo "  FAIL  /etc/logins after pass logins"; fail=1; }
 exit $fail

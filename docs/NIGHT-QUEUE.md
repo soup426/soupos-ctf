@@ -67,7 +67,7 @@ Ctrl+C gives the line back. Test by typing.
 patterns the shell already has. Compare with bash's results for the same
 script.
 
-## 8. A gate failure that its own log says passed
+## 8. A gate failure that its own log says passed — DONE v0.60.20 (grep -q under pipefail; desk did not recur)
 
 2026-10-08 10:34, one full check (the run before v0.60.16's commit) failed
 two gate checks; the rerun passed. Both logs are in docs/flakes/.

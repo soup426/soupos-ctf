@@ -42,10 +42,10 @@ for f in $want; do [ "$(mcopy -n -i "$WORK/disk.img" "::/$f" - 2>/dev/null)" = "
 [ "$bad" = 0 ] && echo "  ok    the script left what sh leaves: $want(comment skipped, && || quotes ~ \$?, status 42)" \
     || { echo "  FAIL  the script differs from sh: soupOS [$got] sh [$want]"; fail=1; }
 val() { mcopy -n -i "$WORK/disk.img" "::$1" - 2>/dev/null; }
-[ "$(val /home/cook/M.TXT)" = "mine" ] && ! mdir -b -i "$WORK/disk.img" ::/etc 2>/dev/null | grep -q X.TXT && [ "$(val /home/cook/RS.TXT)" = "1" ] \
+[ "$(val /home/cook/M.TXT)" = "mine" ] && ! mdir -b -i "$WORK/disk.img" ::/etc 2>/dev/null | grep X.TXT >/dev/null && [ "$(val /home/cook/RS.TXT)" = "1" ] \
     && echo "  ok    a cook's script runs as the cook: ~ is their home, /etc is closed, status 1" || { echo "  FAIL  the cook's script"; fail=1; }
 [ "$(val /home/cook/RK.TXT)" = "1" ] && echo "  ok    a script the cook may not read is refused" || { echo "  FAIL  follow /etc/kitchen as a cook"; fail=1; }
 L=$(tr -d '\r' < "$WORK/serial.log")
-echo "$L" | grep -q "nested eight deep" && echo "$L" | grep -q "headchef  (uid 0)" \
+echo "$L" | grep "nested eight deep" >/dev/null && echo "$L" | grep "headchef  (uid 0)" >/dev/null \
     && echo "  ok    a script that runs itself stops eight deep, and the shell carries on" || { echo "  FAIL  recursion"; fail=1; }
 exit $fail

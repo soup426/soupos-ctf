@@ -35,9 +35,9 @@ for f in O1 O2 O3 T1 A B; do cmp -s "$WORK/got_$f" "$WORK/host/$f.TXT" || { echo
     || { echo "  FAIL  divvy.elf differs from the host's tee"; fail=1; }
 L=$(tr -d '\r' < "$WORK/serial.log")
 cmp -s "$WORK/got_O4" "$WORK/T2.TXT" && cmp -s "$WORK/got_M" "$WORK/T2.TXT" \
-    && ! mdir -b -i "$WORK/disk.img" ::/etc 2>/dev/null | grep -qi "X.TXT" \
-    && echo "$L" | grep -q "/divvy.elf: open /etc/X.TXT for writing refused" \
-    && echo "$L" | grep -qE "^\[proc [0-9]+\] /divvy.elf exited with code 1" \
+    && ! mdir -b -i "$WORK/disk.img" ::/etc 2>/dev/null | grep -i "X.TXT" >/dev/null \
+    && echo "$L" | grep "/divvy.elf: open /etc/X.TXT for writing refused" >/dev/null \
+    && echo "$L" | grep -E "^\[proc [0-9]+\] /divvy.elf exited with code 1" >/dev/null \
     && echo "  ok    the cook cannot tee into /etc (refused, logged, exit 1), and the rest still flows" \
     || { echo "  FAIL  tee's permissions or carrying on"; fail=1; }
 exit $fail

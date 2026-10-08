@@ -69,7 +69,7 @@ for want in "pepper.txt peppercorn.txt " "pantry/ paprika.txt " "whistle whoami 
     if grep -Fxq -- "$want" "$WORK/out.log"; then echo "  ok    a second Tab listed: $want"
     else echo "  FAIL  no listing '$want'"; fail=1; fi
 done
-if grep 'ROUX' "$WORK/out.log" | grep -vq '> /home/saucier/ROUX.TXT'; then
+if grep 'ROUX' "$WORK/out.log" | grep -v '> /home/saucier/ROUX.TXT' >/dev/null; then
     echo "  FAIL  Tab gave away a name in another cook's home"; fail=1
 else echo "  ok    nothing from another cook's home was shown"; fi
 exit $fail

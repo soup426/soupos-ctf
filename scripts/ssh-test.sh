@@ -52,15 +52,15 @@ client=$(timeout 40 ssh -vvv -p "$PORT" -o StrictHostKeyChecking=no -o UserKnown
 kfp1=$(grep -oE "^\[ssh\] host key SHA256:[A-Za-z0-9+/]+" "$LOG" | awk '{print $4}')
 cfp=$(echo "$client" | grep -oE "Server host key: ssh-ed25519 SHA256:[A-Za-z0-9+/]+" | awk '{print $5}')
 fail=0
-echo "$client" | grep -q "kex: algorithm: curve25519-sha256" \
+echo "$client" | grep "kex: algorithm: curve25519-sha256" >/dev/null \
     && echo "  ok    curve25519-sha256 negotiated" || { echo "  FAIL  kex not negotiated"; fail=1; }
-echo "$client" | grep -q "cipher: chacha20-poly1305@openssh.com" \
+echo "$client" | grep "cipher: chacha20-poly1305@openssh.com" >/dev/null \
     && echo "  ok    chacha20-poly1305 negotiated" || { echo "  FAIL  cipher not negotiated"; fail=1; }
-echo "$client" | grep -q "SSH2_MSG_NEWKEYS received" \
+echo "$client" | grep "SSH2_MSG_NEWKEYS received" >/dev/null \
     && echo "  ok    NEWKEYS both ways" || { echo "  FAIL  no NEWKEYS from the server"; fail=1; }
-echo "$client" | grep -q "SSH2_MSG_SERVICE_ACCEPT received" \
+echo "$client" | grep "SSH2_MSG_SERVICE_ACCEPT received" >/dev/null \
     && echo "  ok    the first encrypted packet decrypted on the client" || { echo "  FAIL  no SERVICE_ACCEPT"; fail=1; }
-echo "$client" | grep -q "Permission denied (publickey,password)" \
+echo "$client" | grep "Permission denied (publickey,password)" >/dev/null \
     && echo "  ok    refused with publickey and password offered" || { echo "  FAIL  did not end at Permission denied"; fail=1; }
 [ -n "$cfp" ] && [ "$cfp" = "$kfp1" ] \
     && echo "  ok    client saw the kernel's fingerprint ($cfp)" || { echo "  FAIL  fingerprint mismatch ('$cfp' vs '$kfp1')"; fail=1; }

@@ -3,7 +3,7 @@
 ## What this is
 
 soupOS is a 32-bit x86 hobby OS written in C and NASM assembly (currently
-**v0.60.19**; ROADMAP.txt is the authority on the version). It boots via GRUB and runs in protected mode with paging, a
+**v0.60.20**; ROADMAP.txt is the authority on the version). It boots via GRUB and runs in protected mode with paging, a
 physical/heap allocator, and a cooperative scheduler. On top of that:
 
 - **Filesystem**: FAT16 read/write with subdirectories ("bowls") and a VFS shim
@@ -742,6 +742,11 @@ both sounds in one command.
 
 An interactive QEMU window write-locks the image, so a test sharing it fails
 with "Failed to get write lock". The copy also keeps runs hermetic.
+
+**Never pipe into `grep -q` in a test (v0.60.20).** Every test runs under
+pipefail; grep -q exits at its first match, the writer dies of SIGPIPE, and
+the pipeline fails though it matched (a negated one passes when it should
+fail). Pipe into `grep ... >/dev/null`. scripts/lint-test.sh enforces it.
 
 ## The framebuffer console (`src/fbcon.c`, v0.12.1)
 

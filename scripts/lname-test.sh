@@ -30,17 +30,17 @@ python3 scripts/qemu_keys.py "$WORK/mon.sock" "headchef" "rosemary" "WAIT:1" \
     || { echo "  FAIL  could not drive QEMU"; fail=1; }
 kill "$PID" 2>/dev/null; wait "$PID" 2>/dev/null; PID=""
 L=$(tr -d '\r' < "$WORK/serial.log")
-echo "$L" | grep -A1 "> pwd" | tail -1 | grep -qx "  /a bowl" && echo "$L" | grep -A1 -F 'pour "/a bowl/inside file.txt"' | tail -1 | grep -qx "hi" \
+echo "$L" | grep -A1 "> pwd" | tail -1 | grep -x "  /a bowl" >/dev/null && echo "$L" | grep -A1 -F 'pour "/a bowl/inside file.txt"' | tail -1 | grep -x "hi" >/dev/null \
     && echo "  ok    a bowl named with a space can be entered and written in" || { echo "  FAIL  inside /a bowl"; fail=1; }
 D=$(mdir -b -i "$WORK/disk.img" ::/ 2>/dev/null)
-! echo "$D" | grep -qi "a bowl" && ! echo "$D" | grep -qi "a rather long" \
+! echo "$D" | grep -i "a bowl" >/dev/null && ! echo "$D" | grep -i "a rather long" >/dev/null \
     && echo "  ok    rmbowl and strain remove a long-named bowl and file" || { echo "  FAIL  something was not removed"; fail=1; }
-mdir -i "$WORK/disk.img" "::/kept long bowl name" 2>/dev/null | grep -q "a long file inside.txt" \
+mdir -i "$WORK/disk.img" "::/kept long bowl name" 2>/dev/null | grep "a long file inside.txt" >/dev/null \
     && [ "$(mcopy -n -i "$WORK/disk.img" "::/kept long bowl name/a long file inside.txt" - 2>/dev/null)" = "kept" ] \
     && echo "  ok    mtools finds the long-named bowl and the long-named file in it" || { echo "  FAIL  mtools and the kept bowl"; fail=1; }
 out=$(fsck.fat -n "$WORK/disk.img" 2>&1)
-! echo "$out" | grep -qiE "orphan|bad|wrong|invalid" && [ "$(echo "$out" | wc -l)" -le 2 ] \
+! echo "$out" | grep -iE "orphan|bad|wrong|invalid" >/dev/null && [ "$(echo "$out" | wc -l)" -le 2 ] \
     && echo "  ok    fsck is clean: no orphaned long names, no bad 8.3 names" || { echo "  FAIL  fsck:"; echo "$out" | head -6 | sed 's/^/        /'; fail=1; }
-mcopy -n -i "$WORK/disk.img" ::/LS.OUT - 2>/dev/null | grep -qE "^lc\.txt " \
+mcopy -n -i "$WORK/disk.img" ::/LS.OUT - 2>/dev/null | grep -E "^lc\.txt " >/dev/null \
     && echo "  ok    a lowercase 8.3 name from mtools is shown lowercase (byte 12's case flags)" || { echo "  FAIL  lc.txt shown as: $(mcopy -n -i "$WORK/disk.img" ::/LS.OUT - 2>/dev/null | grep -i lc)"; fail=1; }
 exit $fail
