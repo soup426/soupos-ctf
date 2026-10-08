@@ -25,7 +25,12 @@ qemu-system-i386 -accel kvm -cpu host \
     -netdev "user,id=n0,hostfwd=tcp:127.0.0.1:$PORT-:22" -device rtl8139,netdev=n0 \
     -serial "file:$LOG" >/dev/null 2>&1 &
 PID=$!
-sleep 8                                   # boot; nothing is typed, ever
+# Nothing is typed, ever. Wait for the login prompt, which comes after
+# /etc/rc has run, rather than a fixed 8 s: under the full check's load
+# that once was not long enough (2026-10-08), the same blind wait that
+# qemu_keys stopped making.
+for i in $(seq 1 120); do grep -q "clock in to start your shift" "$LOG" 2>/dev/null && break; sleep 0.5; done
+sleep 1
 
 fail=0
 grep -q "IP 10.0.2.15 (dhcp)" "$LOG" && echo "  ok    the kernel leased an address by itself" \
