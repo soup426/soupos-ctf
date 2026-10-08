@@ -20,6 +20,7 @@
 #include "pmm.h"
 #include "heap.h"
 #include "fat.h"
+#include "users.h"
 #include "str.h"
 #include "vga.h"
 #include "serial.h"
@@ -74,6 +75,19 @@ static int user_ok(uint32_t ptr, uint32_t len) {
     if (ptr < USER_LO || ptr >= USER_HI) return 0;
     if (len > USER_HI - ptr) return 0;
     return 1;
+}
+
+/* A NUL-terminated path out of user memory, each byte checked. 0, or -1 for
+ * a bad pointer. Too long is cut at FAT_PATH_MAX - 1. */
+static int copy_user_path(uint32_t up, char path[FAT_PATH_MAX]) {
+    uint32_t i = 0;
+    for (; i < FAT_PATH_MAX - 1; i++) {
+        if (!user_ok(up + i, 1)) return -1;
+        path[i] = *(const char *)(up + i);
+        if (!path[i]) return 0;
+    }
+    path[i] = '\0';
+    return 0;
 }
 
 /* ---- ring-0 resume point (called from usermode_asm.asm) ------------------
@@ -410,9 +424,36 @@ void syscall_dispatch(registers_t *r) {
         }
 
         case SYS_OPEN: {
-            const char *path = (const char *)r->ebx;
-            if (!pr || !user_ok(r->ebx, 1)) { r->eax = (uint32_t)-1; break; }
+            /* The path is copied out a byte at a time, each checked: until
+             * v0.48.0 only its first byte was, and vfs_open read the rest
+             * wherever it ran. */
+            char path[FAT_PATH_MAX];
+            if (!pr || copy_user_path(r->ebx, path) < 0) { r->eax = (uint32_t)-1; break; }
             int flags = (r->ecx == O_WRITE) ? (VFS_WRONLY | VFS_CREATE) : VFS_RDONLY;
+#ifdef NO_CHALLENGE
+            /* The shell's rule (users_may), applied to a program's open. Only
+             * in the ordinary build: in the CHALLENGE build an unchecked open
+             * is part of what the challenge teaches, and stays. */
+            {
+                int writing = (r->ecx == O_WRITE), ok;
+                if (!writing)                 ok = users_may(path, 'r');
+                else if (fat_exists(path))    ok = users_may(path, 'w');
+                else {
+                    char parent[FAT_PATH_MAX];
+                    int n = (int)strlen(path);
+                    while (n > 1 && path[n - 1] != '/') n--;
+                    if (n > 1) n--;
+                    if (n < 1) n = 1;
+                    memcpy(parent, path, (uint32_t)n); parent[n] = '\0';
+                    if (path[0] != '/') strcpy(parent, "/");
+                    ok = users_may(parent, 'w');
+                }
+                if (!ok) {
+                    klog("[user] %s: open %s for %s refused\n", pr->name, path, writing ? "writing" : "reading");
+                    r->eax = (uint32_t)-1; break;
+                }
+            }
+#endif
             int slot = -1;
             for (int i = 3; i < PROC_UFD_MAX; i++) if (!pr->ufds[i]) { slot = i; break; }
             if (slot < 0) { r->eax = (uint32_t)-1; break; }
@@ -481,6 +522,43 @@ void syscall_dispatch(registers_t *r) {
             r->eax = 0;
             break;
 
+        case SYS_UNLINK: {
+            /* A program calls the FAT directly, so the check the shell would
+             * make is made here, by the same rule (users_may): write
+             * permission on the file, as `strain` asks. The caller's user is
+             * its shell's (users.c resolves it through the task). A bowl is
+             * not a file: -1. */
+            char path[FAT_PATH_MAX];
+            uint8_t owner = 0, mode = 0;
+            if (copy_user_path(r->ebx, path) < 0 || !path[0] || fat_is_dir(path) ||
+                fat_stat(path, &owner, &mode) < 0) { r->eax = (uint32_t)-1; break; }
+            if (!users_may(path, 'w')) {               /* what `strain` asks */
+                klog("[user] %s: unlink %s refused (owner %u)\n", pr ? pr->name : "?", path, owner);
+                r->eax = (uint32_t)-1; break;
+            }
+            r->eax = (uint32_t)(fat_delete(path) < 0 ? -1 : 0);
+            break;
+        }
+
+        case SYS_MKDIR: {
+            char path[FAT_PATH_MAX];
+            if (copy_user_path(r->ebx, path) < 0 || !path[0]) { r->eax = (uint32_t)-1; break; }
+            /* What `mkbowl` asks: may the caller write in the parent? */
+            char parent[FAT_PATH_MAX];
+            int n = (int)strlen(path);
+            while (n > 1 && path[n - 1] != '/') n--;
+            if (n > 1) n--;
+            if (n < 1) n = 1;
+            memcpy(parent, path, (uint32_t)n); parent[n] = '\0';
+            if (path[0] != '/') strcpy(parent, "/");
+            if (!users_may(parent, 'w')) {
+                klog("[user] %s: mkdir %s refused (no write in %s)\n", pr ? pr->name : "?", path, parent);
+                r->eax = (uint32_t)-1; break;
+            }
+            r->eax = (uint32_t)(fat_mkdir(path) < 0 ? -1 : 0);
+            break;
+        }
+
         case SYS_READDIR: {
             /* Entry `index` of a directory. The path is copied out of user
              * memory a byte at a time, each byte checked, and the listing is
@@ -488,13 +566,7 @@ void syscall_dispatch(registers_t *r) {
              * be listing at once. Index past the end gives 0, so a program
              * loops until it sees that. */
             char path[FAT_PATH_MAX];
-            uint32_t up = r->ebx, i = 0;
-            for (; i < sizeof(path) - 1; i++) {
-                if (!user_ok(up + i, 1)) { r->eax = (uint32_t)-1; goto rd_done; }
-                path[i] = *(const char *)(up + i);
-                if (!path[i]) break;
-            }
-            path[i] = '\0';
+            if (copy_user_path(r->ebx, path) < 0) { r->eax = (uint32_t)-1; break; }
             if (!user_ok(r->edx, sizeof(udirent_t))) { r->eax = (uint32_t)-1; break; }
             fat_entry_t *list = kmalloc(FAT_LS_MAX * sizeof(fat_entry_t));
             if (!list) { r->eax = (uint32_t)-1; break; }
@@ -513,7 +585,7 @@ void syscall_dispatch(registers_t *r) {
                 r->eax = 1;
             }
             kfree(list);
-            rd_done: break;
+            break;
         }
         case SYS_TICKS:                   /* uptime in 100 Hz PIT ticks */
             r->eax = timer_get_ticks();

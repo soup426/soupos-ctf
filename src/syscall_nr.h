@@ -12,6 +12,8 @@
 #define SYS_TICKS  8   /* (no args) -> uptime in 100 Hz PIT ticks           */
 #define SYS_READDIR 9  /* ebx = path, ecx = index, edx = udirent_t*;
                         * -> 1 entry written, 0 past the end, -1 error     */
+#define SYS_UNLINK 10  /* ebx = path; -> 0, or -1 (missing, a bowl, not yours) */
+#define SYS_MKDIR  11  /* ebx = path; -> 0, or -1                               */
 
 /* One directory entry for SYS_READDIR (v0.44.0): the long name when the
  * entry has one, else the 8.3 name. Shared by the kernel and ulib. */

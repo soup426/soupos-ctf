@@ -294,3 +294,17 @@ void        users_set_current(uint8_t uid) { cur_uid = uid; }
 uint8_t     users_current_uid(void)        { return eff_uid(); }
 const char *users_current_name(void)       { return users_name_of(eff_uid()); }
 int         users_is_headchef(void)        { return eff_uid() == 0; }
+
+int users_may(const char *path, char need) {
+    if (users_is_headchef()) return 1;
+    uint8_t owner, mode;
+    if (fat_stat(path, &owner, &mode) < 0) return 1;     /* no such path */
+    uint8_t bits;
+    if (users_current_uid() == owner)
+        bits = (need == 'r') ? FAT_PERM_OR :
+               (need == 'w') ? FAT_PERM_OW : FAT_PERM_OX;
+    else
+        bits = (need == 'r') ? FAT_PERM_AR :
+               (need == 'w') ? FAT_PERM_AW : FAT_PERM_AX;
+    return (mode & bits) ? 1 : 0;
+}

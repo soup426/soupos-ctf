@@ -45,3 +45,8 @@ void        users_set_resolver(int (*resolve)(void));
 uint8_t     users_current_uid(void);
 const char *users_current_name(void);
 int         users_is_headchef(void);          /* 1 if current uid == 0 */
+/* May the current cook do `need` ('r','w','x') to `path`? The headchef always
+ * may; otherwise the owner or the all-cooks bits decide; a missing path is
+ * allowed (the operation fails on its own). One rule for the shell and for
+ * programs' syscalls (v0.48.0). */
+int         users_may(const char *path, char need);

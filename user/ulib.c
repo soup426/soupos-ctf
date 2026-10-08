@@ -53,6 +53,18 @@ int sys_readdir(const char *path, int index, udirent_t *out) {
     return ret;
 }
 
+int sys_unlink(const char *path) {
+    int ret;
+    __asm__ volatile ("int $0x80" : "=a"(ret) : "a"(SYS_UNLINK), "b"(path) : "memory");
+    return ret;
+}
+
+int sys_mkdir(const char *path) {
+    int ret;
+    __asm__ volatile ("int $0x80" : "=a"(ret) : "a"(SYS_MKDIR), "b"(path) : "memory");
+    return ret;
+}
+
 unsigned sys_ticks(void) {
     unsigned ret;
     __asm__ volatile ("int $0x80" : "=a"(ret) : "a"(SYS_TICKS));

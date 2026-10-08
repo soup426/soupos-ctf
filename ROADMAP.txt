@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.47.1
+Current version: v0.48.0
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,34 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.48.0 (2026-10-07)  — PROGRAMS REMOVE FILES AND MAKE BOWLS, BY THE SHELL'S RULES
+  Sixth queue, item 4, and a permission gap it uncovered.
+  - SYS_UNLINK (10) and SYS_MKDIR (11), with rm.elf and mkdir.elf on the
+    disk. Paths are copied out of user memory a byte at a time by one
+    helper, now also used by readdir.
+  - ONE RULE. The shell's may() moved to users.c as users_may(), and the
+    syscalls ask exactly what the shell's own commands ask: unlink needs
+    write permission on the file (as `strain` does), mkdir write
+    permission on the parent (as `mkbowl` does). A bowl cannot be
+    unlinked.
+  - WHILE THERE: a program's open() checked nothing. Any cook's program
+    could read or overwrite a file only the headchef may touch. In the
+    ordinary build it now applies the same rule (read needs 'r'; write
+    needs 'w' on the file, or on the parent to create it). In the
+    CHALLENGE build an unchecked open is part of what the challenge
+    teaches, so there it stays as it was. And in every build, open's path
+    was only checked at its first byte before the kernel read the rest;
+    it now goes through the same copier.
+  - scripts/fsops-test.sh, in check.sh, judged by mtools and fsck: nested
+    bowls made, a file removed and gone, a missing file and a bowl
+    refused; as the ordinary cook, the headchef's file can be neither
+    removed nor read, no bowl can be made in the root, but the cook's own
+    file in a bowl opened to all cooks can be removed and a permitted file
+    read; fsck clean. Its first two runs failed on the TEST: an apostrophe
+    the key-typer cannot type silently ended the sequence (its error was
+    discarded; the test now fails loudly when typing fails), and the
+    cook's file was set up where the cook may not write. Gate 99.
 
 v0.47.1 (2026-10-07)  — FILES ARE DATED
   Sixth queue, item 3.

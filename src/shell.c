@@ -257,19 +257,7 @@ static void parent_of(const char *path, char *out) {
 
 /* May the current cook do `need` ('r','w','x') to `path`? The headchef
  * always may; a missing path is allowed (the operation fails on its own). */
-static int may(const char *path, char need) {
-    if (users_is_headchef()) return 1;
-    uint8_t owner, mode;
-    if (fat_stat(path, &owner, &mode) < 0) return 1;     /* no such path */
-    uint8_t bits;
-    if (users_current_uid() == owner)
-        bits = (need == 'r') ? FAT_PERM_OR :
-               (need == 'w') ? FAT_PERM_OW : FAT_PERM_OX;
-    else
-        bits = (need == 'r') ? FAT_PERM_AR :
-               (need == 'w') ? FAT_PERM_AW : FAT_PERM_AX;
-    return (mode & bits) ? 1 : 0;
-}
+static int may(const char *path, char need) { return users_may(path, need); }
 
 /* Print the standard "access denied" line. */
 static void deny(const char *path) {

@@ -874,6 +874,15 @@ how many, and the temporaries live in C locals where no collector can see them.
 If you add a builtin, allocate with `str_alloc` and return `mksval_ref`; never
 `kfree` a string. `SVAL_LEN` is now only the identifier length.
 
+## Permissions are one rule (v0.48.0)
+
+`users_may(path, need)` in users.c is THE check, used by the shell's `may()` and
+by the open/unlink/mkdir syscalls. A new syscall that touches a file asks it
+too, the way the matching shell command does. The open check is
+`#ifdef NO_CHALLENGE`: the challenge build's unchecked open is deliberate. Copy
+any user path with `copy_user_path`, never read it in place. In tests, check
+the key-typer's exit status: an untypeable character ends the sequence silently.
+
 ## Boot (v0.47.0)
 
 The kernel leases an address at boot (kernel.c); tests do not need `plumbing dhcp`.

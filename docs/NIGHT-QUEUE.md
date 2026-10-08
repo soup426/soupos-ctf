@@ -59,7 +59,7 @@ every write, in the standard write-time/date fields (bytes 22-25; 13-14 now
 hold the owner and mode). Check with mdir that a file written now is dated
 now, and that fsck stays clean.
 
-## 4. Programs can remove files and make directories
+## 4. Programs can remove files and make directories — DONE v0.48.0 (and open() now checks permissions)
 
 Ring-3 programs can create and read files and now list directories, but not
 remove anything or make a directory. SYS_UNLINK and SYS_MKDIR, and rm.elf and
