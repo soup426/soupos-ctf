@@ -2607,8 +2607,10 @@ static void kitchen_frame(uint32_t frames) {
     for (int i = 0; i < TCP_MAX_CONNS; i++) {
         tcp_state_t st; uint32_t pip; uint16_t pport, lport;
         if (!tcp_conn_at(i, &st, &pip, &pport, &lport)) continue;
-        t_printf("\n          %s %u.%u.%u.%u:%u -> :%u", tcp_state_name(st),
-                   (pip >> 24) & 255, (pip >> 16) & 255, (pip >> 8) & 255, pip & 255, pport, lport);
+        uint32_t tx, rx;
+        tcp_conn_bytes(i, &tx, &rx);
+        t_printf("\n          %s %u.%u.%u.%u:%u -> :%u   sent %u, received %u", tcp_state_name(st),
+                   (pip >> 24) & 255, (pip >> 16) & 255, (pip >> 8) & 255, pip & 255, pport, lport, tx, rx);
     }
     t_puts("\n\n");
 

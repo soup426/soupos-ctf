@@ -22,4 +22,7 @@ check "TCP carried data and got a reply" '\[tcp\] sent 7 bytes'
 check "TCP received the echo"            '\[tcp\] rx 7 bytes'
 check "an HTTP page was fetched over TCP" '\[tcp\] takeout 3[0-9] bytes'
 check "the connection closed gracefully"  '\[tcp\] closed cleanly'
+# Bytes carried each way, counted per connection: holler sends "souptcp" and
+# the listener echoes it upper-cased, so exactly 7 each way.
+check "a connection counts the bytes it carried" 'closed cleanly \(sent 7, received 7\)'
 gate_finish

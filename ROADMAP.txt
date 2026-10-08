@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.39.2
+Current version: v0.40.0
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,21 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.40.0 (2026-10-07)  — BYTES IN AND OUT, PER CONNECTION
+  Fourth queue, item 7.
+  - Every TCP connection counts the data it carries each way (reset when a
+    slot is taken). kitchen's net section shows them beside each
+    connection, so a stuck transfer is visible as a number that stops
+    moving, and the close line says them: "[tcp] closed cleanly (sent 7,
+    received 7)". The net segment asserts exactly that for holler, which
+    sends "souptcp" and gets it back upper-cased. Gate 93.
+  - That closes the fourth queue but for the deferred Doom item: swap,
+    a shell of its own per SSH session (in three stages), the stack guard,
+    rekeying, the IRQ-log question (closed by measurement), DMA (58x), the
+    TCP waits (closed by measurement), and these counters. On the way it
+    also found and fixed hatch leaking kernel memory and five fat_read
+    callers overrunning their buffers.
 
 v0.39.2 (2026-10-07)  — TCP WAITS HALT; THE CPU THEY WERE BLAMED FOR IS NOT THEIRS
   Fourth queue, item 6, closed with the premise measured false.

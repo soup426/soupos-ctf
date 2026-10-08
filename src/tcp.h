@@ -98,6 +98,8 @@ tcp_state_t tcp_state(void);
  * of the listener table (0 if the slot is free). */
 int         tcp_conn_at(int i, tcp_state_t *st, uint32_t *peer_ip, uint16_t *peer_port, uint16_t *local_port);
 uint16_t    tcp_listener_at(int i);
+/* Data bytes carried by connection slot i so far, each way. */
+void        tcp_conn_bytes(int i, uint32_t *tx, uint32_t *rx);
 const char *tcp_state_name(tcp_state_t st);
 
 /* Fed by the IP layer. Interrupt context. */

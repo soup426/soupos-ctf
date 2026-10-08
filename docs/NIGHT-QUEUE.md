@@ -138,7 +138,7 @@ the receive side polls. With honest cpu figures (v0.31.0) this shows: watch
 `kitchen` during an `ssh` session and the ssh task reads busy while idle.
 Wait on a queue the input path wakes, or at least halt between polls.
 
-## 7. Bytes in and out, per connection
+## 7. Bytes in and out, per connection — DONE v0.40.0
 
 `kitchen`'s net section lists connections by state and peer; add bytes sent
 and received (two counters in tcp_conn_t) so a stuck transfer is visible. Ten

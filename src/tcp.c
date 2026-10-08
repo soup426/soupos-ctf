@@ -58,6 +58,7 @@ typedef struct {
      * interrupts for the memmove rather than trying to be clever. */
     uint8_t           rx[TCP_RX_MAX];
     volatile uint16_t rx_len;
+    uint32_t  tx_bytes, rx_bytes;   /* data carried, for kitchen and the close line */
 } tcp_conn_t;
 
 static tcp_conn_t conns[TCP_MAX_CONNS];
@@ -82,7 +83,7 @@ static tcp_conn_t *conn_at(int h) {
 
 static int conn_alloc(void) {
     for (int i = 0; i < TCP_MAX_CONNS; i++)
-        if (conns[i].state == TCP_CLOSED) return i;
+        if (conns[i].state == TCP_CLOSED) { conns[i].tx_bytes = conns[i].rx_bytes = 0; return i; }
     return -1;
 }
 
@@ -251,6 +252,7 @@ void tcp_input(uint32_t src_ip, const uint8_t *seg, uint16_t len) {
             uint16_t take = (dlen < room) ? dlen : room;
             memcpy(c->rx + c->rx_len, seg + hlen, take);
             c->rx_len      = (uint16_t)(c->rx_len + take);
+            c->rx_bytes   += take;
             c->rcv_nxt = seq + take;      /* only what we actually kept */
         }
         /* Either way, tell them where we are. An out-of-order segment gets the
@@ -324,6 +326,7 @@ int tcp_send_on(int h, const void *data, uint16_t len) {
             return (int)sent ? (int)sent : -1;
         }
         sent = (uint16_t)(sent + chunk);
+        c->tx_bytes += chunk;
     }
 
     /* Only the outbound connection logs its bytes: the services carry a
@@ -474,7 +477,7 @@ void tcp_close_on(int h) {
         uint32_t linger = timer_get_ticks() + 20;
         while (timer_get_ticks() < linger) net_wait();
         c->state = TCP_CLOSED;
-        klog("[tcp] closed cleanly\n");
+        klog("[tcp] closed cleanly (sent %u, received %u)\n", c->tx_bytes, c->rx_bytes);
         return;
     }
 
@@ -486,11 +489,16 @@ void tcp_close_on(int h) {
     if (c->state != TCP_CLOSED) {
         tcp_send_flags(c, TCP_RST | TCP_ACK, c->snd_nxt, c->rcv_nxt);
         c->state = TCP_CLOSED;
-        klog("[tcp] closed (peer never finished; reset)\n");
+        klog("[tcp] closed (peer never finished; reset) (sent %u, received %u)\n", c->tx_bytes, c->rx_bytes);
         return;
     }
 
-    klog("[tcp] closed cleanly\n");
+    klog("[tcp] closed cleanly (sent %u, received %u)\n", c->tx_bytes, c->rx_bytes);
+}
+
+void tcp_conn_bytes(int i, uint32_t *tx, uint32_t *rx) {
+    if (i < 0 || i >= TCP_MAX_CONNS) { *tx = *rx = 0; return; }
+    *tx = conns[i].tx_bytes; *rx = conns[i].rx_bytes;
 }
 
 int tcp_conn_at(int i, tcp_state_t *st, uint32_t *peer_ip, uint16_t *peer_port, uint16_t *local_port) {
