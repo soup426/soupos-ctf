@@ -1,253 +1,129 @@
 # Night queue
 
-Third queue. The first (nine items) is in `docs/queue-archive-2026-10-07.md`,
-the second (eight) in `docs/queue-archive-2026-10-07b.md`. Both notes sections
-are worth reading before starting here: most of what they record is about how
-to measure this machine, which is the part that keeps being the hard bit.
+Fourth queue. The first three are in `docs/queue-archive-2026-10-07.md`,
+`...b.md` and `...c.md`. The third one's notes are the ones to read first: it
+is where the gate was split into parallel segments, where the "flaky"
+job-control check turned out to be a torn log line, and where every crypto
+primitive got its vectors before anything was built on it.
 
 ## Standing rules
 
 1. **One item, one commit**, and split when an item splits naturally.
-2. **The gate must pass before every commit, and the configuration check must
-   GATE the commit, not merely precede it.** Five configurations: default,
-   `FB=0`, `DOOM=0`, `CHALLENGE=1 DOOM=0`, `PROFILE=1`. `-Werror` is on.
-3. **Run the test scripts an item could break.** `framebuffer`, `doom-fb`,
-   `mixer`, `music`, `sound`, `hatch`, `fullness`, `console`, and
-   `doom-profile` for anything performance-shaped.
-4. **Verify before believing.** Four of five entries on the first queue's
-   known-bugs list were stale or mis-described.
+2. **`scripts/check.sh` must pass before every commit.** It builds the five
+   configurations in parallel copies and runs the gate and every test script
+   at once; about two minutes. `check.sh quick` is configs + gate. `-Werror`.
+3. **A test script per subsystem, and the gate asserts on serial markers
+   only.** Anything measured (audio, pixels, bytes on disk) lives in its own
+   script that boots its own QEMU. New scripts go in check.sh's list.
+4. **Verify before believing.** Twice now a "known" bug was something else:
+   the job-control flake was the klog race; the 8% kitchen cost was a FAT scan.
 5. **Measure the property you care about, in a capture containing nothing
-   else.** Duration could not tell a mixed sound from a dropped one; a
-   contiguous audio capture made a 513 ms effect read as 853; a span that
-   included a later sound read 4251 ms.
-6. **When a test fails, find out why before changing the test.** The mixer's
-   correlation fell to 0.9384 and the answer was a 63 ms ring latency, not a
-   bad threshold. Lowering the number would have hidden a real property.
-7. **Kitchen names** for new shell commands: `larder`, `whistle`, `sizzle`,
-   `hum`, `hush`, `hatch`, `skewer`, `sample`.
-8. **Gitea only.** Never GitHub, never the `cdctf-release` branch.
-9. If an item is blocked or needs a decision that is not written down, leave a
-   note at the bottom and move on.
+   else**, and when a test fails, find out why before changing the test.
+6. **Reproduce under load.** Six QEMUs at once surfaced in eight runs what
+   twenty-four quiet runs never did. `scripts/jobcontrol-soak.sh` six-wide is
+   the pattern for any switch-timing suspicion.
+7. **Crypto gets published vectors from an independent implementation before
+   it is used for anything**, and says "not constant-time, private network"
+   wherever it is advertised.
+8. **Kitchen names** for new shell commands: `larder`, `whistle`, `sizzle`,
+   `hum`, `hush`, `hatch`, `skewer`, `sample`, `kitchen`, `pass`, `vault`.
+9. **Gitea only.** Never GitHub, never the `cdctf-release` branch.
+10. **`make clean` leaves disk.img alone.** After changing anything the
+    Makefile embeds in the disk, `rm disk.img && make disk`.
+11. If an item is blocked or needs a decision that is not written down, leave
+    a note at the bottom and move on.
 
 ---
 
-## 1. The flaky job-control check — CLOSED v0.31.0: it was item 6, the klog race
+## 1. Swap: memory the machine does not have, kept on disk
 
-One gate run failed on `stopped job kept running: 1 lines while parked`; the
-next passed, and nothing in that commit touched job control.
+v0.33.0 made the heap lazy and kills a process at the page cap. The honest
+next step is to keep going instead of killing.
 
-- The check asserts a Ctrl+Z'd process prints nothing while parked. One line
-  escaping suggests the stop is taken at a safe point that arrives *after* the
-  process has already queued a write, which would make it a real (if harmless)
-  latency rather than a test artefact.
-- Find out which. Instrument the stop path, run the check in a loop until it
-  fails, and look at where the escaping line came from.
-- **Do not loosen the check until that is known.** A gate that is adjusted to
-  accept what it caught stops being worth running.
+- A swap area: a fixed file on the FAT volume (`/SWAP.IMG`, 16 MB, made at
+  first use) addressed by page slot, read and written through the ATA layer
+  by cluster chain, so it needs no new on-disk format.
+- When `map_user_page` finds the process at its cap (and, separately, when
+  the PMM is empty), pick one of that process's resident heap pages, write it
+  to a free slot, unmap it, and record the slot in a per-process table
+  keyed by virtual page. A not-present fault on a page with a slot reads it
+  back. Victim choice: oldest-mapped first is enough; the accessed bit can
+  come later.
+- `lazy.elf greedy` must then COMPLETE (every page written and read back
+  right), slowly, and the exit line must say how many pages went out and
+  came back. `kitchen` shows swap in use. The kill stays for a process past
+  the swap area too: that is still memory the machine does not have.
+- Care: the swap write happens inside a page-fault handler, which may be a
+  ring-0 fault from a syscall holding the FAT mutex. Take the swap I/O out
+  of the fault path (a request the ssh/fat task pattern can serve) or prove
+  the lock order; do not discover it by deadlock.
 
-**2026-10-07, later: reproduced and fixed.** Six soaks in parallel failed
-five streams of six within eight runs; the saved logs showed the kernel's
-"[proc 5] /marker.elf continued" line torn by the resumed process's
-"[p:Z] step 15". Not a job-control fault: a klog line written a byte at a time
-from the shell task, interleaved by the task it had just woken. klog lines are
-now written whole; 48 runs under the same load were clean. The earlier note:
+## 2. A shell of its own for the SSH session
 
-**2026-10-07: not reproduced in 24 runs, so this stays open.** Ten in isolation
-and fourteen under the gate's conditions. Below about 4%. The check is
-unchanged; its failure now prints the surrounding log lines, and
-scripts/jobcontrol-soak.sh drives the sequence in bulk. Worth knowing before
-the next attempt: proc_take_stop logs "stopped" when it parks, not when the
-stop is requested, so stop latency alone does not explain a line landing after
-it. A second anomaly appeared once in fourteen - the job never logged
-"continued" - which may or may not be the same bug seen from the other side.
+Today an SSH login drives THE local shell: it shares the keyboard and the
+screen, and the person authenticated over SSH is not the person logged into
+the shell. The pass has the same shape. Fixing it is the biggest structural
+change on this list, so it is staged:
 
-## 2. Doom at the framebuffer's own resolution — DEFERRED (user asked to keep to OS work)
+- (a) Audit `shell.c`'s file-scope state (the line editor, history, cwd,
+  prompt_row, the foreground job) and group it into one `shell_t`. No
+  behaviour change; the gate is the proof.
+- (b) A terminal abstraction under the shell: `term_puts`/`term_getc` on a
+  `term_t`, with the VGA console as one terminal and a byte-sink/source
+  pair as another. The shell stops calling `vga_*` and `keyboard_*`
+  directly. Still one shell, still the gate.
+- (c) `vault` spawns a shell task on a socket-backed terminal per session,
+  logged in as the authenticated user, with its own cwd and history. The
+  pass can do the same or be retired. `kitchen` lists both shells.
+- Per-process ownership of a terminal follows (a program's stdout goes to
+  the terminal of the shell that cooked it), which is what makes `exec`
+  honest: a real exit status and no echoed prompt.
 
-Doom renders 320x200 and the scaler blows it up 3x. The framebuffer is
-1024x768 and `doom-profile` says there is 33x headroom at the 50 fps cap, so
-the pixels are available.
+## 3. A guard page under the user stack, and lazy stack growth
 
-- Render at 640x400 natively (a 2x of the original geometry, which keeps the
-  aspect and the fixed-point maths honest) and blit 1:1 centred, or at 960x600
-  if the renderer's fixed-point survives it.
-- `VGA13_W`/`VGA13_H` are compile-time and spread through doom.c, so expect the
-  same shape of work as the console resize: generalise first, change second.
-- Verify with `doom-profile` (the frame cost will rise; check it still clears
-  the cap) and with a screendump compared against the 3x-scaled version for
-  the same scene - the picture should be the same picture, more finely drawn.
+The stack is mapped eagerly at exec and overflow walks silently into
+whatever is below. One unmapped page below the stack turns that into a kill
+with a clear "[user] stack overflow" line, and with demand paging already in
+place the stack can grow down on fault up to a limit instead of being fixed
+at USTACK_PAGES. A test program that recurses until it dies.
 
-**2026-10-07: set aside at the user's request, to keep this queue on the
-operating system rather than the game.** The survey is worth keeping for
-whenever it is picked up: 41 references to VGA13_W/H in doom.c, four
-width-sized scratch arrays, two full-screen buffers, and - the real one -
-`PROJ_DIST 160`, which is the projection distance for a 90 degree field of
-view and is therefore VGA13_W/2. Doom's internal resolution also has to become
-independent of mode 13h's, because the hardware mode cannot be 640x400, so the
-buffers want sizing by a maximum with the live dimensions as runtime values.
-Same shape as the console resize: generalise in its own commit, then change.
+## 4. SSH rekeying
 
-## 3. Writing long filenames — DONE (v0.20.0)
+RFC 4253 says rekey after a gigabyte or an hour; the vault never does, and
+would silently carry on with the same keys forever. Initiate KEXINIT from the
+server after N packets (small for the test), run the exchange again under the
+current keys, switch at NEWKEYS. The real client does this on its own too,
+so the server must also ACCEPT a client-initiated rekey. Test: a session
+that stays up through a forced rekey (`ssh -o RekeyLimit=` on the client).
 
-Reading them landed in v0.16.0; a file created with a long name still gets a
-mangled 8.3 name, which is an asymmetry that will bite someone.
+## 5. klog from interrupt context
 
-- Generating the 8.3 alias is the fiddly half: strip spaces and dots, upper
-  case, and a `~N` tail that has to be unique in the directory.
-- The LFN chain is written in reverse with the checksum of the alias in every
-  entry, so `fat_write` must allocate the right number of directory slots
-  before it starts.
-- Verify by writing a long name from soupyc, then reading the image with
-  `mdir` on the host: mtools is an independent implementation, so it agreeing
-  is real evidence.
+The task-vs-task half of the klog race is fixed (v0.31.0). An interrupt
+handler's klog still lands inside a task's line. The fix is to make IRQ-side
+klog ring-only, with the serial mirror drained by whoever next logs from task
+context (or a service task), so the serial stream is always whole lines.
+Verify with a soak: a network-heavy run (hatch under load) while a script
+prints, and no torn line in the capture.
 
-**2026-10-07: done, v0.20.0, gate 72.** mtools reads both written names with
-distinct aliases. The consecutive-slot requirement was the part the item did not
-mention and the old allocator could not meet. Noted while there: soupOS's
-permission byte is VFAT's case-flags byte, so other tools display our aliases in
-lower case - cosmetic, pre-existing, now documented.
+## 6. The TCP waits burn the cpu
 
-## 4. More than one connection at a time — DONE (v0.21.0)
+`tcp_send_on` waits for the ack in a `task_yield()` loop with no halt, and
+the receive side polls. With honest cpu figures (v0.31.0) this shows: watch
+`kitchen` during an `ssh` session and the ssh task reads busy while idle.
+Wait on a queue the input path wakes, or at least halt between polls.
 
-`hatch` serves one request, then listens again, because the listener IS the
-connection - one block of state.
+## 7. Bytes in and out, per connection
 
-- A small table of connections (four is plenty), with the listener separate
-  from the accepted ones, so a SYN arriving mid-request is queued rather than
-  refused.
-- `tcp_input`'s four-tuple match becomes a lookup. That is the whole change;
-  the state machine itself does not move.
-- Verify with two `curl`s in parallel against `hatch`, both getting their own
-  file intact.
+`kitchen`'s net section lists connections by state and peer; add bytes sent
+and received (two counters in tcp_conn_t) so a stuck transfer is visible. Ten
+lines, mostly in tcp.c.
 
-**2026-10-07: done, v0.21.0, gate 72.** Three in parallel, each with its real
-size, across three different slots - the slot numbers being what proves they
-overlapped rather than queued. The item's prediction held exactly: the lookup
-was the whole change and the state machine did not move. Lesson for the next
-script: a bare `wait` also waits for QEMU, which never exits, and that looked
-like a slow server until the fetches were timed at 4-21 ms each.
+## 8. Doom at the framebuffer's own resolution — DEFERRED
 
----
-
-## SSH, in stages (asked for 2026-10-07; takes priority over 5-8 below)
-
-The pass (v0.22.0) gives clear-text access today. SSH replaces it with the
-real thing. Every stage is its own commit, and every primitive is checked
-against PUBLISHED test vectors before anything is built on it - a hand-rolled
-cipher that "looks right" is the one thing worse than no cipher, because it
-convinces people to trust it.
-
-Two honest notes up front. This is crypto written from scratch in a hobby
-kernel: it is for learning and for a private network, and it should say so
-wherever it is advertised. And soupOS has no entropy source worth the name,
-which matters more than any of the ciphers, so that comes early.
-
-### S1. SHA-256 and HMAC-SHA256  — DONE v0.23.0
-FIPS 180-4 vectors for the hash ("abc", the 448-bit and million-'a' cases),
-RFC 4231 vectors for HMAC. `sample` runs them.
-
-### S2. Entropy  — DONE v0.24.0
-A `random.c` that mixes RDRAND when CPUID says it exists, timer and keyboard
-timing jitter, and the RTC, through SHA-256 into a pool. The check is not a
-test vector - there is none - but that two boots produce different output and
-that a megabyte of it passes a simple monobit and runs test.
-
-### S3. ChaCha20 and Poly1305  — DONE v0.25.0
-RFC 8439 vectors, including the AEAD construction (section 2.8.2), because
-SSH's chacha20-poly1305@openssh.com uses it in a particular way.
-
-### S4. Curve25519  — DONE v0.26.0
-RFC 7748 vectors: the two scalar-multiplication cases and the iterated one
-(1, 1000 iterations; the million is optional). Needs 255-bit field
-arithmetic in 32-bit limbs, which is the bulk of the work and where a bug
-hides silently - the iterated vector is what catches it.
-
-### S4b. kill cannot reach a process blocked in a pipe read  — DONE v0.27.0 (gate 74; Makefile header deps added)
-`cook hog.elf | wc.elf &` then `kill %`: the kill flags wc.elf, which is
-blocked in `vfs_read` on the pipe and never returns to the point that checks
-the flag, so it neither dies nor stops being the "most recent" process. The
-hog is never targeted and runs at 90% for the rest of the gate, which is why
-the x25519 chain measured 12x slower there and may be the real cause of the
-flaky job-control check (queue item 1). Fix: a kill must wake a blocked
-reader (and writer) so the unwind runs; `kill %` on a pipeline should take
-the whole pipeline. Gate check: after the two kills, `ps` must show no
-hog.elf, and the smoke run's back half should get faster.
-
-### S5. Ed25519  — DONE v0.28.0 (signing/verify; host key persistence folded into S6)
-RFC 8032 vectors, for the host key. Shares the field arithmetic with S4.
-Generate the host key once at first boot with S2 and keep it on the FAT
-volume, so the host fingerprint is stable across reboots.
-
-### S6. SSH transport and key exchange  — DONE v0.29.0 (`vault`, scripts/ssh-test.sh)
-Version string exchange, the binary packet protocol, and
-curve25519-sha256 kex with an ssh-ed25519 host key. Verify by connecting
-with the real `ssh` client with -vvv: it must reach "SSH2_MSG_NEWKEYS sent"
-and report the expected fingerprint, even before auth exists.
-
-### S7. Userauth and the session channel  — DONE v0.30.0
-Password auth against users.c; then a session channel with pty-req and shell,
-attached to the same console sink and byte translator the pass uses. The
-acceptance test is `ssh headchef@localhost -p <port>` from the host giving a
-working shell, with `pass` then retired or left disabled by default.
-
-### S8. SSH loose ends — DONE v0.34.0 except rekeying (busy DISCONNECT, exec, publickey via /AUTHKEYS, byte log demoted)
-- A second client while a session is open hangs until its banner timeout,
-  because the vault accepts one session and the TCP table holds the other
-  un-accepted. Accept it, send a one-line "busy" banner and disconnect.
-- `exec` requests (`ssh soupOS whoami`) are refused; only interactive
-  shells work. Worth taking: run the line through the console and close.
-- Public-key auth: `ssh-ed25519` client keys against /AUTHKEYS on the FAT
-  volume, so nobody types `rosemary` over the air.
-- No rekeying; a very long session would eventually need it.
-- `[tcp] sent 1 bytes` is logged per character over the pass and the vault;
-  demote it or batch the sink.
-
-## 5. A live view of the machine — DONE v0.31.0 (`kitchen`; fat_space cached, idle counted)
-
-`ps` has CPU% now but it is a snapshot you have to keep re-typing.
-
-- A `kitchen` command (kitchen-appropriate: it is the whole room) that redraws
-  tasks, their CPU share, memory and the disk's free space once a second until
-  a key is pressed. The console is 128x48 now, so there is room to show it
-  properly.
-- The thing to be careful about: the renderer must not become a task that
-  spends its time redrawing itself. Check its own CPU share in its own output.
-
-## 6. The klog ring's race — DONE v0.31.0 for task-vs-task (lines whole under preempt_disable); IRQ-vs-task tearing remains, unasserted
-
-`docs/preemption-audit.md` records this as knowingly left: `ring`, `head` and
-`count` are written from task and interrupt context with no guard, so two
-lines can interleave. It cannot corrupt memory, only the log.
-
-- The audit's reason for leaving it was that guarding it meant interrupts off
-  around a serial write at 38400 baud. A per-line staging buffer with one
-  guarded commit would avoid that entirely.
-- Verify by logging hard from a task while an interrupt handler logs too, and
-  checking every line in the ring is whole.
-
-## 7. soupyc writes files properly — DONE v0.32.0 (`lines`, `write_lines`, scripts/lines-test.sh)
-
-The language can create, read and now delete, but a script still cannot do the
-one thing scripts are for: produce a file from another file.
-
-- A `lines(path)` returning an array, and a `write_lines(path, array)`, both of
-  which the heap-backed strings and arrays already support.
-- Then the obvious test: a script that reads a file, transforms it and writes
-  it back, verified byte for byte against the same transformation on the host.
-
-## 8. Memory the machine does not have — DONE v0.33.0 (heap demand-paged, cap at touch; swap is the next item)
-
-The PMM is a bitmap over physical pages and every process gets its own page
-directory, which is most of the machinery for demand paging already.
-
-- Start with the honest small version: a page fault handler that distinguishes
-  "not mapped and never will be" (kill the process) from "not mapped yet"
-  (allocate and continue), and grow the user heap lazily instead of up front.
-- Swapping to disk is the item after that, not part of this one.
-- Verify with a program that touches far more memory than it allocates up
-  front, and with `larder`/`memory` showing the pages arriving as it runs.
+Carried from the third queue; the user asked to keep to OS work. Unchanged.
 
 ---
 
 ## Notes left by unattended runs
 
-Append here rather than editing the items above.
+(none yet)
