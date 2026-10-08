@@ -308,8 +308,15 @@ static void test_random(void) {
         prev = bit;
     }
     klog("[sample] random 64KB: %u ones, %u runs\n", ones, runs);
-    check("random monobit", ones > 262144 - 1086 && ones < 262144 + 1086);
-    check("random runs",    runs > 262144 - 1086 && runs < 262144 + 1086);
+    /* Bounds at 5 sigma (sigma = sqrt(524288)/2 = 362). They were 3 sigma
+     * (1086), which a perfect generator fails 0.27% of the time per check,
+     * about one boot in 185 for the pair - and the gate boots many times: it
+     * failed once, 2026-10-08, at 3.14 sigma. 36 boots measured then: ones
+     * mean 262167 sd 374, runs mean 262142 sd 379, none past 3 sigma. 5 sigma
+     * fails a fair source about once in two million and still catches any
+     * bias above about 0.35%. */
+    check("random monobit", ones > 262144 - 1810 && ones < 262144 + 1810);
+    check("random runs",    runs > 262144 - 1810 && runs < 262144 + 1810);
 }
 
 /* ── ChaCha20-Poly1305 ────────────────────────────────────────────────────
