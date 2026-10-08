@@ -883,6 +883,15 @@ seen in the output (`watch_for_prompt`); change the prompt format and update
 that matcher. A second client gets a plain DISCONNECT(12) from
 `refuse_others()`, which runs at the packet-wait point. No rekeying.
 
+## The shell writes to a terminal (v0.35.2)
+
+In shell.c, use `t_puts`/`t_printf`/`t_color`/`t_cursor`/`t_getc`/... (they go
+to `cur_shell()->term`), never `vga_*`/`keyboard_*` directly, unless the code is
+about the physical screen (cells, the serial mirror). `term_vga` in `term.c` is
+the console. All printf-style formatting is `kvformat` in str.c; do not grow a
+second formatter. Other modules (soupyc, selftest, ring-3 stdout) still print
+via vga_* and must be routed before a shell runs on a non-console terminal.
+
 ## Per-shell state is `shell_t` (v0.35.1)
 
 `cwd`, history, `prompt_row`/`prompt_len` and the pager rows live in

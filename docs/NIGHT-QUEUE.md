@@ -67,10 +67,10 @@ change on this list, so it is staged:
 
 - (a) DONE v0.35.1: `shell_t` behind `cur_shell()`; the user and the
   foreground job stay global until (c).
-- (b) A terminal abstraction under the shell: `term_puts`/`term_getc` on a
-  `term_t`, with the VGA console as one terminal and a byte-sink/source
-  pair as another. The shell stops calling `vga_*` and `keyboard_*`
-  directly. Still one shell, still the gate.
+- (b) DONE v0.35.2: `term_t`, `term_vga`, 690 calls routed, one formatter
+  (`kvformat`); output proven byte-identical. The byte-stream terminal is
+  built in (c), where something exercises it. Still to route for (c):
+  soupyc's, the self-test's and ring-3 programs' output.
 - (c) `vault` spawns a shell task on a socket-backed terminal per session,
   logged in as the authenticated user, with its own cwd and history. The
   pass can do the same or be retired. `kitchen` lists both shells.

@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.35.1
+Current version: v0.35.2
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,32 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.35.2 (2026-10-07)  — term_t: THE SHELL TALKS TO A TERMINAL
+  Fourth queue, item 2, stage (b) of three. No behaviour change.
+  - The shell made 690 direct calls to vga_* and keyboard_*: 225 puts,
+    198 set_color, 164 printf, 49 putchar and the rest. Every one now goes
+    through the term_t in its shell_t (t_puts, t_printf, t_color, t_getc
+    and so on), and the local console is the first terminal, term_vga,
+    which forwards to vga_* and keyboard_* exactly as before. Left direct
+    on purpose: vga_fill_row and vga_set_mirror, which are about the
+    screen itself, not about a terminal.
+  - ONE FORMATTER. vga_printf's formatter moved to str.c as kvformat,
+    which takes an emit callback; vga_printf and term_printf both use it,
+    so a terminal that is not the console gets the same bytes, quirks and
+    all (a negative %d prints its '-' before the padding; %p is always
+    eight digits). A trailing '%' no longer walks past the end of the
+    format string. term_printf formats into a 512-byte buffer on the stack
+    and hands the terminal one string, which keeps a line together the way
+    vga_printf's preempt_disable did.
+  - PROVEN BYTE-IDENTICAL, not just gate-green: the previous commit and
+    this one were each booted and typed twenty output-heavy commands
+    (menu, pantry's %-10s table, roster, two soupyc programs, an unknown
+    command, ...). 225 lines each; the three that differ are the kernel
+    being 8 KB larger (twice, in free-memory figures) and `fortune`.
+  - Still not per-terminal, and stage (c) has to deal with them: output
+    that other modules print on the shell's behalf (soupyc, the self-test,
+    ring-3 programs' stdout) goes to vga_* directly. Gate 88.
 
 v0.35.1 (2026-10-07)  — shell_t: WHAT BELONGS TO ONE SHELL
   Fourth queue, item 2, stage (a) of three. No behaviour change.

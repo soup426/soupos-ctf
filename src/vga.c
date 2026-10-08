@@ -239,101 +239,13 @@ static void vga_puts_impl(const char *s) {
 
 /* printf subset: %[0][width]s/c/d/u/x/X/p/%
    Supports zero-padding and minimum field width, e.g. %08x, %02u. */
+static void vga_emit(char c, void *ctx) { (void)ctx; vga_putchar_impl(c); }
+
 void vga_printf(const char *fmt, ...) {
     preempt_disable();   /* keep a whole formatted line together */
     va_list args;
     va_start(args, fmt);
-
-    for (const char *p = fmt; *p; p++) {
-        if (*p != '%') { vga_putchar_impl(*p); continue; }
-        p++;
-
-        /* Flags: left-align then zero-pad. Without the '-' case a format
-         * like "%-10s" fell through the switch and printed literally, which
-         * is how `pantry` ended up listing every PCI device as "%-10s". */
-        int left_align = 0;
-        if (*p == '-') { left_align = 1; p++; }
-        int zero_pad = 0;
-        if (*p == '0') { zero_pad = 1; p++; }
-
-        /* Width */
-        int width = 0;
-        while (*p >= '0' && *p <= '9') { width = width * 10 + (*p - '0'); p++; }
-
-        /* Helper: emit a reversed digit buffer with padding */
-        /* (buf[0..len-1] holds digits in reverse order) */
-        #define EMIT_NUM(buf, len, pad_char) do {           \
-            int _l = (len), _w = width;                     \
-            char _pc = (pad_char);                          \
-            if (!left_align)                                \
-                for (int _k = _l; _k < _w; _k++) vga_putchar_impl(_pc); \
-            for (int _j = _l - 1; _j >= 0; _j--) vga_putchar_impl((buf)[_j]); \
-            if (left_align)                                 \
-                for (int _k = _l; _k < _w; _k++) vga_putchar_impl(' '); \
-        } while (0)
-
-        switch (*p) {
-            case 's': {
-                const char *s = va_arg(args, const char *);
-                if (!s) s = "(null)";
-                int slen = 0;
-                while (s[slen]) slen++;
-                if (!left_align)
-                    for (int k = slen; k < width; k++) vga_putchar_impl(' ');
-                vga_puts(s);
-                if (left_align)
-                    for (int k = slen; k < width; k++) vga_putchar_impl(' ');
-                break;
-            }
-            case 'c':
-                vga_putchar_impl((char)va_arg(args, int));
-                break;
-            case 'd': {
-                int val = va_arg(args, int);
-                int neg = (val < 0);
-                unsigned uval = neg ? (unsigned)(-(val + 1)) + 1u : (unsigned)val;
-                char buf[12]; int len = 0;
-                if (uval == 0) { buf[len++] = '0'; }
-                else { while (uval) { buf[len++] = '0' + (uval % 10); uval /= 10; } }
-                if (neg) vga_putchar_impl('-');
-                EMIT_NUM(buf, len, zero_pad ? '0' : ' ');
-                break;
-            }
-            case 'u': {
-                unsigned val = va_arg(args, unsigned);
-                char buf[12]; int len = 0;
-                if (val == 0) { buf[len++] = '0'; }
-                else { while (val) { buf[len++] = '0' + (val % 10); val /= 10; } }
-                EMIT_NUM(buf, len, zero_pad ? '0' : ' ');
-                break;
-            }
-            case 'x': case 'X': case 'p': {
-                unsigned val;
-                if (*p == 'p') {
-                    val = (unsigned)(uintptr_t)va_arg(args, void *);
-                    zero_pad = 1; width = 8;   /* always show full pointer */
-                } else {
-                    val = va_arg(args, unsigned);
-                }
-                const char *hex = (*p == 'X') ? "0123456789ABCDEF"
-                                               : "0123456789abcdef";
-                char buf[9]; int len = 0;
-                if (val == 0) { buf[len++] = '0'; }
-                else { while (val) { buf[len++] = hex[val & 0xF]; val >>= 4; } }
-                EMIT_NUM(buf, len, zero_pad ? '0' : ' ');
-                break;
-            }
-            case '%':
-                vga_putchar_impl('%');
-                break;
-            default:
-                vga_putchar_impl('%');
-                vga_putchar_impl(*p);
-                break;
-        }
-        #undef EMIT_NUM
-    }
-
+    kvformat(vga_emit, 0, fmt, args);
     va_end(args);
     flush_cursor();
     preempt_enable();
