@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.56.0
+Current version: v0.56.1
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,19 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.56.1 (2026-10-08)  — grep.elf
+  Fourteenth queue, item 2.
+  - user/grep.c: lines containing a fixed string, from a file or stdin,
+    with -v, -c and -i (ASCII folding), like grep -F. Lines of any length
+    are matched whole (the line buffer grows); a last line without a
+    newline is still a line and is printed with one; exit 0 if anything
+    was selected, 1 if not, 2 for usage or an unreadable file.
+  - scripts/grep-test.sh, in check.sh: one input with mixed case, an empty
+    line, a 3000-byte line and no final newline; seven forms (plain, -v,
+    -c, -i, -c -i, -v -i, as a pipe stage) each written to a file inside
+    soupOS and compared byte for byte with LC_ALL=C grep -F on the host;
+    and no match exits 1.
 
 v0.56.0 (2026-10-08)  — >> APPENDS, AND REDIRECTION ASKS THE BOWL
   Fourteenth queue, item 1.

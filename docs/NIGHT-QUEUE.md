@@ -38,7 +38,7 @@ make pipes worth having. Each is checked against the same tool on the host.
 redirection (the cook's write permission rules as for `>`), and check the
 result against the host shell doing the same with the same input.
 
-## 2. grep.elf
+## 2. grep.elf — DONE v0.56.1
 
 A fixed-string filter for pipes and files: `grep.elf [-v] [-c] [-i] word
 [file]`. Compare its output with `grep -F` on the host over the same files,
