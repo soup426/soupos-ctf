@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.56.6
+Current version: v0.56.7
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,21 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.56.7 (2026-10-08)  — tee.elf, AND O_APPEND FOR PROGRAMS
+  Fifteenth queue, item 3.
+  - SYS_OPEN gains O_APPEND (2), mapped to VFS_APPEND and checked like
+    O_WRITE (write on the file, or on its bowl for a new one).
+  - user/tee.c: stdin to stdout and to up to six files, -a to append.
+    A file that cannot be opened is reported on stderr (so stdout stays
+    exactly the data, as GNU tee keeps it) and the rest carry on; the
+    exit code is then 1.
+  - scripts/tee-test.sh, in check.sh: one file, -a appending (onto a file
+    with no final newline) and two files, stdout and every file compared
+    byte for byte with the host's tee doing the same steps; the ordinary
+    cook's tee into /etc is refused and logged and exits 1 while their own
+    home's file and stdout still get the data. The first run caught tee
+    printing its complaint into stdout; fixed before commit.
 
 v0.56.6 (2026-10-08)  — wc.elf LEARNS -l, -w AND -c, IN THE HOST'S FORMAT
   Fifteenth queue, item 2.

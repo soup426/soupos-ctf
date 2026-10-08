@@ -31,3 +31,4 @@ typedef struct {
 /* open() modes */
 #define O_READ     0
 #define O_WRITE    1
+#define O_APPEND   2   /* write after what the file holds (v0.56.7) */

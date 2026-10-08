@@ -441,13 +441,14 @@ void syscall_dispatch(registers_t *r) {
              * wherever it ran. */
             char path[FAT_PATH_MAX];
             if (!pr || copy_user_path(r->ebx, path) < 0) { r->eax = (uint32_t)-1; break; }
-            int flags = (r->ecx == O_WRITE) ? (VFS_WRONLY | VFS_CREATE) : VFS_RDONLY;
+            int flags = (r->ecx == O_WRITE)  ? (VFS_WRONLY | VFS_CREATE) :
+                        (r->ecx == O_APPEND) ? (VFS_WRONLY | VFS_APPEND) : VFS_RDONLY;
 #ifdef NO_CHALLENGE
             /* The shell's rule (users_may), applied to a program's open. Only
              * in the ordinary build: in the CHALLENGE build an unchecked open
              * is part of what the challenge teaches, and stays. */
             {
-                int writing = (r->ecx == O_WRITE), ok;
+                int writing = (r->ecx == O_WRITE || r->ecx == O_APPEND), ok;
                 if (!writing)                 ok = users_may(path, 'r');
                 else if (fat_exists(path))    ok = users_may(path, 'w');
                 else {

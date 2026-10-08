@@ -45,7 +45,7 @@ wc.elf prints its own format. Give it the host's: the counts it is asked
 for, in the host's column widths, from a file (with its name) or stdin.
 Compare with the host's wc for each flag.
 
-## 3. tee.elf
+## 3. tee.elf — DONE v0.56.7
 
 stdin to stdout and to a file, -a to append; the file follows the cook's
 permissions like any other write. Compare the stdout and the file with the
