@@ -39,7 +39,6 @@ typedef struct {
  *
  * Four is plenty for a machine serving files one page at a time, and each slot
  * carries its own 4 KB of received data, so the table costs 16 KB. */
-#define TCP_MAX_CONNS 4
 
 typedef struct {
     volatile tcp_state_t state;
@@ -474,6 +473,21 @@ void tcp_close_on(int h) {
     klog("[tcp] closed cleanly\n");
 }
 
+int tcp_conn_at(int i, tcp_state_t *st, uint32_t *peer_ip, uint16_t *peer_port, uint16_t *local_port) {
+    if (i < 0 || i >= TCP_MAX_CONNS || conns[i].state == TCP_CLOSED) return 0;
+    if (st)         *st         = conns[i].state;
+    if (peer_ip)    *peer_ip    = conns[i].peer_ip;
+    if (peer_port)  *peer_port  = conns[i].peer_port;
+    if (local_port) *local_port = conns[i].local_port;
+    return 1;
+}
+uint16_t tcp_listener_at(int i) { return (i >= 0 && i < TCP_MAX_LISTEN) ? listen_ports[i] : 0; }
+const char *tcp_state_name(tcp_state_t st) {
+    static const char *names[] = { "closed", "listen", "syn-rcvd", "syn-sent", "established",
+        "fin-wait-1", "fin-wait-2", "close-wait", "last-ack", "time-wait" };
+    return (unsigned)st < sizeof(names) / sizeof(names[0]) ? names[st] : "?";
+}
+
 int tcp_listen(uint16_t port) {
     if (!port || port_listening(port)) return port ? 0 : -1;
     for (int i = 0; i < TCP_MAX_LISTEN; i++) {
@@ -508,7 +522,7 @@ int tcp_accept(uint16_t port, uint32_t ticks) {
             }
         }
         task_yield();
-        __asm__ volatile ("hlt");
+        cpu_halt();
     }
     return -1;
 }

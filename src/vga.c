@@ -35,10 +35,12 @@ int  vga_rows(void) { return v_rows; }
  * through the pointer; so do the editor and the stress test, via vga_cells().
  */
 static uint16_t *vga_buffer = (uint16_t *)0xB8000;
+static int hw_cursor = 1;        /* cleared by vga_set_backing: no ports on a RAM store */
+static int cursor_dirty;
 #define VGA_BUFFER  vga_buffer
 
 uint16_t *vga_cells(void) { return vga_buffer; }
-void vga_set_backing(uint16_t *cells) { vga_buffer = cells; }
+void vga_set_backing(uint16_t *cells) { vga_buffer = cells; hw_cursor = 0; }
 
 /* I/O port helpers */
 static inline void outb(uint16_t port, uint8_t val) {
@@ -67,7 +69,15 @@ static uint16_t make_entry(char c, uint8_t attr) {
     return (uint16_t)((uint16_t)attr << 8 | (uint8_t)c);
 }
 
+/* The hardware cursor is four port writes, and under a hypervisor every port
+ * write is a VM exit, so doing it per character made a screenful of text cost
+ * tens of milliseconds. It is now done once per string (the public wrappers
+ * flush it), and not at all on a framebuffer boot, where the cell store is RAM
+ * and fbcon draws the cursor itself from vga_get_row/col. */
+
 static void update_hw_cursor(void) {
+    cursor_dirty = 0;
+    if (!hw_cursor) return;
     uint16_t pos = (uint16_t)(vga_row * VGA_WIDTH + vga_col);
     outb(0x3D4, 0x0F);
     outb(0x3D5, (uint8_t)(pos & 0xFF));
@@ -194,7 +204,7 @@ static void vga_putchar_impl(char c) {
             vga_col = VGA_WIDTH - 1;
         } else {
             /* At top-left - nothing to erase */
-            update_hw_cursor();
+            cursor_dirty = 1;
             return;
         }
         VGA_BUFFER[vga_row * VGA_WIDTH + vga_col] = make_entry(' ', vga_attr);
@@ -217,8 +227,10 @@ static void vga_putchar_impl(char c) {
     if (vga_row >= VGA_HEIGHT)
         scroll();
 
-    update_hw_cursor();
+    cursor_dirty = 1;
 }
+
+static inline void flush_cursor(void) { if (cursor_dirty) update_hw_cursor(); }
 
 static void vga_puts_impl(const char *s) {
     while (*s)
@@ -233,7 +245,7 @@ void vga_printf(const char *fmt, ...) {
     va_start(args, fmt);
 
     for (const char *p = fmt; *p; p++) {
-        if (*p != '%') { vga_putchar(*p); continue; }
+        if (*p != '%') { vga_putchar_impl(*p); continue; }
         p++;
 
         /* Flags: left-align then zero-pad. Without the '-' case a format
@@ -254,10 +266,10 @@ void vga_printf(const char *fmt, ...) {
             int _l = (len), _w = width;                     \
             char _pc = (pad_char);                          \
             if (!left_align)                                \
-                for (int _k = _l; _k < _w; _k++) vga_putchar(_pc); \
-            for (int _j = _l - 1; _j >= 0; _j--) vga_putchar((buf)[_j]); \
+                for (int _k = _l; _k < _w; _k++) vga_putchar_impl(_pc); \
+            for (int _j = _l - 1; _j >= 0; _j--) vga_putchar_impl((buf)[_j]); \
             if (left_align)                                 \
-                for (int _k = _l; _k < _w; _k++) vga_putchar(' '); \
+                for (int _k = _l; _k < _w; _k++) vga_putchar_impl(' '); \
         } while (0)
 
         switch (*p) {
@@ -267,14 +279,14 @@ void vga_printf(const char *fmt, ...) {
                 int slen = 0;
                 while (s[slen]) slen++;
                 if (!left_align)
-                    for (int k = slen; k < width; k++) vga_putchar(' ');
+                    for (int k = slen; k < width; k++) vga_putchar_impl(' ');
                 vga_puts(s);
                 if (left_align)
-                    for (int k = slen; k < width; k++) vga_putchar(' ');
+                    for (int k = slen; k < width; k++) vga_putchar_impl(' ');
                 break;
             }
             case 'c':
-                vga_putchar((char)va_arg(args, int));
+                vga_putchar_impl((char)va_arg(args, int));
                 break;
             case 'd': {
                 int val = va_arg(args, int);
@@ -283,7 +295,7 @@ void vga_printf(const char *fmt, ...) {
                 char buf[12]; int len = 0;
                 if (uval == 0) { buf[len++] = '0'; }
                 else { while (uval) { buf[len++] = '0' + (uval % 10); uval /= 10; } }
-                if (neg) vga_putchar('-');
+                if (neg) vga_putchar_impl('-');
                 EMIT_NUM(buf, len, zero_pad ? '0' : ' ');
                 break;
             }
@@ -312,17 +324,18 @@ void vga_printf(const char *fmt, ...) {
                 break;
             }
             case '%':
-                vga_putchar('%');
+                vga_putchar_impl('%');
                 break;
             default:
-                vga_putchar('%');
-                vga_putchar(*p);
+                vga_putchar_impl('%');
+                vga_putchar_impl(*p);
                 break;
         }
         #undef EMIT_NUM
     }
 
     va_end(args);
+    flush_cursor();
     preempt_enable();
 }
 
@@ -357,19 +370,24 @@ void vga_fill_row(int row, char c) {
 void vga_putchar(char c) {
     preempt_disable();
     vga_putchar_impl(c);
+    flush_cursor();
     preempt_enable();
 }
 
 void vga_puts(const char *s) {
     preempt_disable();
     vga_puts_impl(s);
+    flush_cursor();
     preempt_enable();
 }
+
+void vga_set_mirror(int on) { mirror_suppressed = !on; }
 
 void vga_puts_screen_only(const char *s) {
     preempt_disable();
     mirror_suppressed = 1;
     vga_puts_impl(s);
     mirror_suppressed = 0;
+    flush_cursor();
     preempt_enable();
 }

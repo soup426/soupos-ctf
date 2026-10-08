@@ -31,7 +31,7 @@ to measure this machine, which is the part that keeps being the hard bit.
 
 ---
 
-## 1. The flaky job-control check — INVESTIGATED (v0.19.1), still open
+## 1. The flaky job-control check — CLOSED v0.31.0: it was item 6, the klog race
 
 One gate run failed on `stopped job kept running: 1 lines while parked`; the
 next passed, and nothing in that commit touched job control.
@@ -44,6 +44,13 @@ next passed, and nothing in that commit touched job control.
   fails, and look at where the escaping line came from.
 - **Do not loosen the check until that is known.** A gate that is adjusted to
   accept what it caught stops being worth running.
+
+**2026-10-07, later: reproduced and fixed.** Six soaks in parallel failed
+five streams of six within eight runs; the saved logs showed the kernel's
+"[proc 5] /marker.elf continued" line torn by the resumed process's
+"[p:Z] step 15". Not a job-control fault: a klog line written a byte at a time
+from the shell task, interleaved by the task it had just woken. klog lines are
+now written whole; 48 runs under the same load were clean. The earlier note:
 
 **2026-10-07: not reproduced in 24 runs, so this stays open.** Ten in isolation
 and fourteen under the gate's conditions. Below about 4%. The check is
@@ -194,7 +201,7 @@ working shell, with `pass` then retired or left disabled by default.
 - `[tcp] sent 1 bytes` is logged per character over the pass and the vault;
   demote it or batch the sink.
 
-## 5. A live view of the machine
+## 5. A live view of the machine — DONE v0.31.0 (`kitchen`; fat_space cached, idle counted)
 
 `ps` has CPU% now but it is a snapshot you have to keep re-typing.
 
@@ -205,7 +212,7 @@ working shell, with `pass` then retired or left disabled by default.
 - The thing to be careful about: the renderer must not become a task that
   spends its time redrawing itself. Check its own CPU share in its own output.
 
-## 6. The klog ring's race
+## 6. The klog ring's race — DONE v0.31.0 for task-vs-task (lines whole under preempt_disable); IRQ-vs-task tearing remains, unasserted
 
 `docs/preemption-audit.md` records this as knowingly left: `ring`, `head` and
 `count` are written from task and interrupt context with no guard, so two

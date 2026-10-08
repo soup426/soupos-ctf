@@ -457,6 +457,7 @@ static void cmd_menu(void) {
         {0, "    freeze             - halt the CPU"},
         {0, "    reheat             - reboot"},
         {0, "    ps                 - list running tasks"},
+        {0, "    kitchen            - the whole room, live, until a key"},
         {0, "    kill <id>          - stop a background task"},
         {0, "    bgclock            - spawn a clock in the top-right corner"},
         {0, "    yieldbg            - bg task logging [bg] to serial (pairs with cook spin.elf)"},
@@ -2406,7 +2407,7 @@ static void cmd_clock(void) {
         /* Yield so background tasks run, then park until the next IRQ. */
         task_yield();
         if (!keyboard_available())
-            __asm__ volatile ("hlt");
+            cpu_halt();
     }
     keyboard_flush();
     vga_set_color(VGA_LIGHT_GREY, VGA_BLACK);
@@ -2436,6 +2437,79 @@ static void cmd_ps(void) {
                    (t == task_current()) ? " *" : "");
         t = t->next;
     } while (t != head);
+    vga_printf("  idle %u%% of the last second\n", task_idle_last());
+}
+
+/* kitchen - the whole room, redrawn in place once a second until a key.
+ *
+ * Draws with the serial mirror off, so neither the log nor a remote session
+ * is fed a frame per second; one summary line goes to klog on the way out,
+ * with this task's own share in it. That number is the thing to watch: a
+ * viewer that spends its time redrawing itself is measuring itself. It
+ * sleeps a whole second between frames, so it should read 0%. */
+static void kitchen_frame(uint32_t frames) {
+    int w = vga_cols(), rows = vga_rows();
+    uint32_t up = timer_get_seconds(), ip = net_ip();
+
+    vga_clear();
+    vga_set_color(VGA_YELLOW, VGA_BLACK);
+    vga_printf("  soupOS kitchen   up %u:%02u:%02u   ip %u.%u.%u.%u   console %dx%d   frame %u   (any key to leave)\n",
+               up / 3600, (up / 60) % 60, up % 60,
+               (ip >> 24) & 255, (ip >> 16) & 255, (ip >> 8) & 255, ip & 255, w, rows, frames);
+    vga_set_color(VGA_LIGHT_GREY, VGA_BLACK);
+
+    uint32_t idle = task_idle_last();
+    vga_printf("\n  cpu     idle %u%%  busy %u%%        tasks %u alive, %u yours        processes %u of %d\n",
+               idle > 100 ? 100 : idle, idle > 100 ? 0 : 100 - idle,
+               task_count_alive(), task_count_users(), proc_count_live(), PROC_MAX);
+    vga_printf("  memory  %u of %u KB in pages      heap %u of %u KB\n",
+               pmm_used_kb(), pmm_total_kb(), heap_used_bytes() / 1024, heap_total_bytes() / 1024);
+    uint32_t dfree = 0, dtotal = 0, dcl = 0;
+    fat_space(&dfree, &dtotal, &dcl);
+    vga_printf("  disk    %u of %u KB free\n", (dfree * dcl) / 1024, (dtotal * dcl) / 1024);
+
+    vga_puts("  net     listening");
+    int any = 0;
+    for (int i = 0; i < TCP_MAX_LISTEN; i++)
+        if (tcp_listener_at(i)) { vga_printf(" %u", tcp_listener_at(i)); any = 1; }
+    if (!any) vga_puts(" (nothing)");
+    for (int i = 0; i < TCP_MAX_CONNS; i++) {
+        tcp_state_t st; uint32_t pip; uint16_t pport, lport;
+        if (!tcp_conn_at(i, &st, &pip, &pport, &lport)) continue;
+        vga_printf("\n          %s %u.%u.%u.%u:%u -> :%u", tcp_state_name(st),
+                   (pip >> 24) & 255, (pip >> 16) & 255, (pip >> 8) & 255, pip & 255, pport, lport);
+    }
+    vga_puts("\n\n");
+
+    vga_set_color(VGA_YELLOW, VGA_BLACK);
+    vga_puts("  ID  ST  CPU%  STACK  KIND   NAME\n");
+    vga_set_color(VGA_LIGHT_GREY, VGA_BLACK);
+    task_t *head = task_list_head(), *t = head;
+    if (head) do {
+        if (vga_get_row() >= rows - 1) break;              /* keep it on one screen */
+        vga_printf("  %2u   %c  %3u%%  %5u  %s   %s%s\n", t->id, task_state_letter(t->state),
+                   t->cpu_last > 100 ? 100 : t->cpu_last, t->stack_size,
+                   t->proc ? "ring3" : "task ", t->name, t == task_current() ? " *" : "");
+        t = t->next;
+    } while (t != head);
+}
+
+static void cmd_kitchen(void) {
+    uint32_t frames = 0;
+    keyboard_flush();
+    while (!keyboard_available()) {
+        vga_set_mirror(0);
+        kitchen_frame(frames);
+        vga_set_mirror(1);
+        frames++;
+        task_sleep(1000);
+    }
+    keyboard_getchar();
+    vga_clear();
+    klog("[kitchen] %u frames, idle %u%%, self %u%%\n",
+         frames, task_idle_last(), task_current()->cpu_last);
+    vga_printf("  left the kitchen after %u frames (idle %u%%, this shell %u%%).\n",
+               frames, task_idle_last(), task_current()->cpu_last);
 }
 
 static void cmd_kill(const char *args) {
@@ -2863,7 +2937,7 @@ static void cmd_cat(void) {
         if (escaped) break;
         /* Yield so background tasks keep ticking, then park for an IRQ. */
         task_yield();
-        __asm__ volatile ("hlt");
+        cpu_halt();
     }
     vga_set_color(VGA_LIGHT_GREY, VGA_BLACK);
     vga_clear();
@@ -3121,7 +3195,7 @@ static void cmd_fatstress(void) {
     if (!bg) { vga_puts("fatstress: out of memory\n"); return; }
 
     int fg = fs_cycle("/FSA.TXT", 'A');
-    while (!fs_bg_done) { task_yield(); __asm__ volatile ("hlt"); }
+    while (!fs_bg_done) { task_yield(); cpu_halt(); }
 
     vga_printf("  foreground mismatches: %d\n", fg);
     vga_printf("  background mismatches: %d\n", fs_bg_errors);
@@ -3158,7 +3232,7 @@ static void cmd_vgastress(void) {
     task_t *bg = task_spawn("vgastress", vs_bg, 0);
     if (!bg) { vga_puts("vgastress: out of memory\n"); return; }
     vs_emit('A', VS_LINES);
-    while (!vs_done) { task_yield(); __asm__ volatile ("hlt"); }
+    while (!vs_done) { task_yield(); cpu_halt(); }
     klog("[vgastress] end\n");
     vga_puts("  vgastress done - check the transcript for mixed lines\n");
 }
@@ -3236,7 +3310,7 @@ static const char *const cmd_names[] = {
     "jot", "ai", "cook", "soup", "hash",
     "beep", "mandelbrot", "vgademo", "uname", "cal",
     "clock", "wipe", "fortune", "bounce", "recipe", "leftovers", "spill",
-    "freeze", "reheat", "ps", "orders", "plate", "steep", "kill", "scraps", "sample", "skewer", "larder", "whistle", "hatch", "hush", "pass", "vault",
+    "freeze", "reheat", "ps", "kitchen", "orders", "plate", "steep", "kill", "scraps", "sample", "skewer", "larder", "whistle", "hatch", "hush", "pass", "vault",
 #ifndef NO_DOOM
     "sizzle", "hum",
 #endif
@@ -3473,6 +3547,7 @@ static void dispatch(const char *buf) {
 #endif
     else if (str_eq(p, "cat"))       cmd_cat();  /* hidden */
     else if (str_eq(p, "ps"))          cmd_ps();
+    else if (str_eq(p, "kitchen"))     cmd_kitchen();
     else if (str_eq(p, "orders"))      cmd_orders();
     else if (str_eq(p, "scraps"))      cmd_scraps();
     else if (str_startswith(p, "sample")) cmd_sample(p + 6);

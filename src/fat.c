@@ -98,6 +98,8 @@ static int      fat_cache_dirty = 0;
 /* Hint for fat_alloc_cluster - start the next probe from here instead of 2.
  * Reset to 2 if we wrap. Persisted across calls within a single fat_write. */
 static uint32_t fat_alloc_hint  = 2;
+static uint32_t free_cached;        /* free clusters, kept by fat_set_entry */
+static int      free_known;         /* ...once the first fat_space has counted */
 
 /* uid stamped as owner on files/bowls created from here on (set via login). */
 static uint8_t  creator_uid     = 0;
@@ -473,6 +475,7 @@ int fat_init(void) {
     else                            fs_type_val = 32;
 
     initialized = 1;
+    free_known  = 0;            /* a fresh mount: count again on first ask */
     return 0;
 }
 
@@ -579,6 +582,12 @@ static int fat_flush_cache(void) {
 
 /* Update a FAT entry in the cached sector. Marks the cache dirty - caller
  * MUST eventually call fat_flush_cache() before returning to the user. */
+/* The free-cluster count, kept up to date here so fat_space does not have to
+ * read the whole FAT from disk to answer. Counting 16K entries was 60-70 ms
+ * of PIO per call, which made `larder` sluggish and `kitchen` cost 7% of the
+ * cpu to watch. The first fat_space after a mount still scans once; every
+ * cluster change after that goes through fat_set_entry and adjusts it. */
+
 static int fat_set_entry(uint32_t cluster, uint32_t value) {
     uint32_t fat_offset = (fs_type_val == 32) ? cluster * 4 : cluster * 2;
     uint32_t lba = fat_start + fat_offset / bps;
@@ -590,11 +599,20 @@ static int fat_set_entry(uint32_t cluster, uint32_t value) {
         fat_cache_lba = lba;
     }
 
+    uint32_t old, now;
     if (fs_type_val == 32) {
         uint32_t existing = *(uint32_t *)(fat_buf + off);
-        *(uint32_t *)(fat_buf + off) = (existing & 0xF0000000u) | (value & 0x0FFFFFFFu);
+        old = existing & 0x0FFFFFFFu;
+        now = value & 0x0FFFFFFFu;
+        *(uint32_t *)(fat_buf + off) = (existing & 0xF0000000u) | now;
     } else {
-        *(uint16_t *)(fat_buf + off) = (uint16_t)value;
+        old = *(uint16_t *)(fat_buf + off);
+        now = (uint16_t)value;
+        *(uint16_t *)(fat_buf + off) = (uint16_t)now;
+    }
+    if (free_known) {
+        if (old == 0 && now != 0)      free_cached--;
+        else if (old != 0 && now == 0) free_cached++;
     }
     fat_cache_dirty = 1;
     return 0;
@@ -966,10 +984,14 @@ fail:
  * write path unnoticed. */
 static uint32_t fat_free_clusters_impl(void) {
     if (!initialized) return 0;
-    uint32_t last = cluster_count + 1, n = 0;
-    for (uint32_t c = 2; c <= last; c++)
-        if (fat_get_entry(c) == 0) n++;
-    return n;
+    if (!free_known) {
+        uint32_t last = cluster_count + 1, n = 0;
+        for (uint32_t c = 2; c <= last; c++)
+            if (fat_get_entry(c) == 0) n++;
+        free_cached = n;
+        free_known  = 1;
+    }
+    return free_cached;
 }
 
 void fat_space(uint32_t *out_free, uint32_t *out_total, uint32_t *out_cluster_bytes) {

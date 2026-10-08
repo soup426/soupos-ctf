@@ -62,6 +62,7 @@ int         tcp_connect(uint32_t dst_ip, uint16_t dst_port);
  * tcp_stop_listening removes it, and tcp_accept takes the port it is
  * accepting for, so each service only ever collects its own clients. */
 #define TCP_MAX_LISTEN 4
+#define TCP_MAX_CONNS 4
 int         tcp_listen(uint16_t port);
 void        tcp_stop_listening(uint16_t port);
 int         tcp_accept(uint16_t port, uint32_t ticks);
@@ -92,6 +93,12 @@ void        tcp_abort(void);
 int         tcp_peer_done(void);
 
 tcp_state_t tcp_state(void);
+
+/* For a viewer: slot i of the connection table (0 if the slot is closed) and
+ * of the listener table (0 if the slot is free). */
+int         tcp_conn_at(int i, tcp_state_t *st, uint32_t *peer_ip, uint16_t *peer_port, uint16_t *local_port);
+uint16_t    tcp_listener_at(int i);
+const char *tcp_state_name(tcp_state_t st);
 
 /* Fed by the IP layer. Interrupt context. */
 void        tcp_input(uint32_t src_ip, const uint8_t *seg, uint16_t len);

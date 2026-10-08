@@ -28,6 +28,6 @@ int ai_getc(uint32_t timeout_ticks) {
         /* Yield so background tasks run, then park until the next timer IRQ
          * (~10 ms) instead of busy-spinning on the UART. */
         task_yield();
-        __asm__ volatile ("hlt");
+        cpu_halt();
     }
 }

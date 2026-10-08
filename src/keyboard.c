@@ -197,7 +197,7 @@ int keyboard_getchar(void) {
         /* If nothing else was runnable we just spun back here. Park the
          * CPU until the next IRQ (keyboard or 100 Hz timer) wakes us. */
         if (!keyboard_available())
-            __asm__ volatile ("hlt");
+            cpu_halt();
     }
     int c = kb_buf[kb_read];
     kb_read = (kb_read + 1) % KB_BUF_SIZE;

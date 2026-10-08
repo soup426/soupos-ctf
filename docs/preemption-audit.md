@@ -73,6 +73,13 @@ respectively, both from the v0.7.x work. `vga.c` serialises text output.
 
 ### Known and deliberately left
 
+**`klog.c`** — FIXED for task-vs-task 2026-10-07 in v0.31.0: `klog()` and
+`klog_puts()` now hold preempt_disable for the whole line, after the "cosmetic"
+interleaving below turned out to be the gate's flaky job-control check (the
+kernel's "continued" line torn by the process it had just resumed). An
+interrupt handler's klog can still land inside a task's line. Original
+finding follows.
+
 **`klog.c`** — `ring`, `head` and `count` are written from task context and
 from interrupt handlers with no guard. The indices are kept in range by the
 modulo, so this cannot corrupt memory or escape the buffer; what it can do is

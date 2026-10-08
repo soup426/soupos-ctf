@@ -125,6 +125,12 @@ char     task_state_letter(task_state_t s);
  * Safe to call before task_init() - falls back to busy-hlt. */
 void     task_sleep(uint32_t ms);
 
+/* Halt until the next interrupt, and have the timer charge that time to IDLE
+ * rather than to whoever was waiting. Every wait loop in the kernel ends in
+ * this; a bare `hlt` makes the shell "use" 90% of the cpu at a prompt. */
+void     cpu_halt(void);
+uint32_t task_idle_last(void);     /* idle ticks in the last second: a percentage */
+
 /* Wait-queue primitives. task_block_on marks the current task BLOCKED,
  * links it onto wq, and yields. task_wake / task_wake_one move tasks
  * back to READY. */

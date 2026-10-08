@@ -269,7 +269,7 @@ static int user_stdin_getchar(proc_t *pr) {
         if (pr->killed) return -1;
         task_yield();
         if (!keyboard_available() && !pr->killed)
-            __asm__ volatile ("hlt");
+            cpu_halt();
     }
     return keyboard_getchar();
 }

@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.30.2
+Current version: v0.31.0
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,47 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.31.0 (2026-10-07)  — kitchen, HONEST CPU FIGURES, AND THE FLAKE EXPLAINED
+  Queue item 5, which on the way closed items 1 and 6.
+  - `kitchen`: the whole room redrawn in place once a second until a key.
+    Uptime, address, console size; cpu idle/busy; tasks alive; memory in
+    pages and heap; disk free; the TCP listeners and connections; then the
+    task table. It draws with the serial mirror off (vga_set_mirror), so
+    neither the log nor an SSH session is fed a frame a second, and logs
+    one summary line on the way out with ITS OWN share in it.
+  - That share is where the work was. The queue said to watch it, and the
+    first version read 8%. Not the drawing: 2560 characters cost 0 ticks.
+    It was fat_space, which read all 16K FAT entries from disk on every
+    call, 60-70 ms of PIO. The free-cluster count is now kept by
+    fat_set_entry, every cluster change goes through it, and the first
+    fat_space after a mount counts once. `larder` is instant too. The
+    `sample` write-then-delete balance check guards the cache. kitchen
+    now reads idle 100%, self 0%.
+  - CPU% WAS A LIE BEFORE: a tick that landed while the cpu was halted was
+    charged to whichever task had halted, so the shell "used" 33-90% at a
+    prompt. Every wait loop now halts through cpu_halt(), and the timer
+    charges those ticks to idle. `ps` prints the idle figure; the shell
+    reads 0-1% at a prompt.
+  - Also found on the way: the hardware cursor was four port writes PER
+    CHARACTER, each a VM exit under a hypervisor, even on a framebuffer
+    boot where the VGA ports go nowhere. It is now written once per
+    string, and not at all on a RAM-backed cell store.
+  - THE FLAKY JOB-CONTROL CHECK (ITEM 1) IS THE KLOG RACE (ITEM 6). With
+    the new parallel soak (six QEMUs at once, which is the load the
+    gate's own parallel segments put on the machine) five streams of six
+    failed within eight runs, and the saved logs show both shapes of the
+    failure are one thing: the kernel's "[proc 5] /marker.elf continued",
+    written to the serial port a byte at a time from the shell task, torn
+    in two by the "[p:Z] step 15" line of the process it had just woken.
+    Torn after "[proc", the grep sees a step "while parked"; torn after
+    "cont", the word "continued" never matches. The process printed after
+    it was resumed, exactly as it should. klog lines are now written
+    whole under preempt_disable (interrupts stay on; an interrupt
+    handler's own klog can still land inside a task's line, which is
+    noted in the audit). 48 soak runs under the same load: 48 clean.
+  - The gate's desk segment runs kitchen and asserts self <= 5% and
+    idle >= 50%. Gate 76.
 
 v0.30.2 (2026-10-07)  — THE GATE IN SEGMENTS: 410 s TO 98 s
   The second half of "make the gates go faster".

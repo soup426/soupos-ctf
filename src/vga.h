@@ -60,6 +60,11 @@ void vga_set_geometry(int cols, int rows);
  * terminal would show noise. Send the log its own encoding separately. */
 void vga_puts_screen_only(const char *s);
 
+/* Turn the serial mirror off for a stretch of ordinary vga_printf output: a
+ * screen redrawn in place every second would otherwise pour whole frames into
+ * the log and down every remote session. Always turn it back on. */
+void vga_set_mirror(int on);
+
 /* The cell store: the hardware text buffer on an ordinary boot, a RAM array
  * on a framebuffer boot (where the legacy window is dead). Anything that
  * pokes cells directly must go through this rather than 0xB8000. */

@@ -874,6 +874,25 @@ how many, and the temporaries live in C locals where no collector can see them.
 If you add a builtin, allocate with `str_alloc` and return `mksval_ref`; never
 `kfree` a string. `SVAL_LEN` is now only the identifier length.
 
+## Idle is counted, klog lines are whole, the FAT knows its free count (v0.31.0)
+
+- Every wait loop halts through `cpu_halt()`, never a bare `hlt`: the timer
+  charges a halted tick to idle (`task_idle_last()`), which is what makes
+  `ps`/`kitchen` CPU% true. A new `hlt` anywhere else makes its caller look busy.
+- `klog()`/`klog_puts()` hold preempt_disable for the whole line. That is what
+  fixed the "flaky" job-control check: it was the kernel's "continued" line
+  torn by the resumed process's output. An IRQ handler's klog can still tear a
+  task's line; nothing asserts on that today.
+- `fat_space()` returns a count maintained in `fat_set_entry`; the first call
+  after a mount scans. Anything that writes the FAT must go through
+  `fat_set_entry` or the count drifts (the `sample` balance check would catch it).
+- The hardware cursor is written once per string (`flush_cursor` in the public
+  vga wrappers) and never on a RAM-backed cell store. `vga_set_mirror(0)` turns
+  the serial mirror off for a frame drawn in place; always turn it back on.
+- `scripts/jobcontrol-soak.sh` run six at a time is how to reproduce
+  switch-timing bugs; the serial-load that parallel QEMUs put on the host
+  surfaces them, the single-boot gate never did.
+
 ## The gate is segments (v0.30.2)
 
 `scripts/gate/*.sh` each boot their own QEMU and run at once; `gate.sh` is

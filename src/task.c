@@ -241,7 +241,7 @@ void task_exit(void) {
         task_yield();
         /* If nothing else is runnable, park until the next IRQ wakes
          * a blocked task. Without this we would spin burning CPU. */
-        __asm__ volatile ("hlt");
+        cpu_halt();
     }
 }
 
@@ -261,15 +261,30 @@ uint32_t task_count(void) {
  * next yield swept it up. */
 void task_set_service(void) { if (current) current->service = 1; }
 
+static volatile int halting;
+static uint32_t idle_window, idle_last;
+
+void cpu_halt(void) {
+    halting = 1;
+    __asm__ volatile ("hlt");
+    halting = 0;
+}
+uint32_t task_idle_last(void) { return idle_last; }
+
 void task_cpu_tick(void) {
     static uint32_t in_second;
-    if (current) current->cpu_window++;
+    /* A tick that lands while the cpu is halted belongs to nobody. Without
+     * this the task that halted is charged for it, and a shell waiting at a
+     * prompt reads as the busiest thing on the machine. */
+    if (halting)      idle_window++;
+    else if (current) current->cpu_window++;
 
     if (++in_second < 100) return;          /* 100 Hz timer, so one second */
     in_second = 0;
 
     /* Roll every task's window at once, so the figures in a listing all
      * describe the same second rather than drifting apart. */
+    idle_last = idle_window; idle_window = 0;
     if (!list_head) return;
     task_t *t = list_head;
     do {
@@ -348,7 +363,7 @@ void task_sleep(uint32_t ms) {
         uint32_t ticks = (ms + 9) / 10;
         uint32_t start = timer_get_ticks();
         while ((timer_get_ticks() - start) < ticks)
-            __asm__ volatile ("hlt");
+            cpu_halt();
         return;
     }
 
@@ -367,7 +382,7 @@ void task_sleep(uint32_t ms) {
         /* If we're still blocked after yielding, hlt until the next
          * timer IRQ fires (same pattern as keyboard_getchar). */
         if (current->state == TASK_BLOCKED)
-            __asm__ volatile ("hlt");
+            cpu_halt();
     }
 }
 
@@ -433,7 +448,7 @@ void task_block_on(wait_queue_t *wq) {
     while (current->state == TASK_BLOCKED) {
         task_yield();
         if (current->state == TASK_BLOCKED)
-            __asm__ volatile ("hlt");
+            cpu_halt();
     }
     current->blocked_on = 0;
 }
