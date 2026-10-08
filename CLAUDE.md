@@ -874,6 +874,15 @@ how many, and the temporaries live in C locals where no collector can see them.
 If you add a builtin, allocate with `str_alloc` and return `mksval_ref`; never
 `kfree` a string. `SVAL_LEN` is now only the identifier length.
 
+## SSH keys, exec, busy (v0.34.0)
+
+`/AUTHKEYS` on the disk holds `.pub`-shaped lines; `key_authorized()` in
+`ssh.c` matches the client's blob and `ed25519_verify` checks the request
+signature. `exec` runs through the shared shell and ends when the prompt is
+seen in the output (`watch_for_prompt`); change the prompt format and update
+that matcher. A second client gets a plain DISCONNECT(12) from
+`refuse_others()`, which runs at the packet-wait point. No rekeying.
+
 ## The heap is demand-paged (v0.33.0)
 
 `SYS_SBRK` only moves `pr->brk`. `usermode_demand_page()` (called first thing

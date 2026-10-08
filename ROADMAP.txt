@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.33.0
+Current version: v0.34.0
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,36 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.34.0 (2026-10-07)  — SSH: KEYS, ONE-SHOT COMMANDS, AND A POLITE "BUSY"
+  Queue item S8, the loose ends noticed in the first real logins.
+  - PUBLIC-KEY LOGIN. `publickey` userauth with ssh-ed25519: the client's
+    key blob is looked up in /AUTHKEYS on the disk (one "ssh-ed25519
+    <base64> comment" line each, the shape of a .pub file, so
+    `mcopy -i disk.img ~/.ssh/id_ed25519.pub ::AUTHKEYS` installs one),
+    the signature over the session id and the request is checked with
+    ed25519_verify, and the question form (no signature) gets PK_OK as
+    RFC 4252 wants. No password crosses the wire. The server now offers
+    "publickey,password".
+  - EXEC. `ssh soupOS whoami` types the line into the same shell, streams
+    what comes back, and closes when the shell's prompt returns, which it
+    spots in the output stream ("@soupOS:" then "> "). The shell's echo and
+    its prompt come along, because it is the shell. Exit status is 0: the
+    shell does not report one.
+  - BUSY. A second client while a session is open used to hang until its
+    banner timeout. The vault now polls for newcomers at its wait point,
+    and sends each a version line and a plain DISCONNECT with reason 12,
+    "too many connections", and the words: the client prints "Received
+    disconnect from ...: 12: the vault is busy with another session, try
+    again later". A line before the version string was tried first and is
+    only shown by `ssh -v`; a DISCONNECT is what the client shows.
+  - The per-byte "[tcp] sent 1 bytes" is gone from the services; only the
+    outbound connection logs its bytes, which is the one the net segment
+    asserts on.
+  - Rekeying is still not implemented; a session that moves gigabytes
+    would need it. scripts/ssh-test.sh covers exec, key login (a key
+    made by ssh-keygen on the host and authorised before the first boot)
+    and the busy refusal. Gate 85.
 
 v0.33.0 (2026-10-07)  — MEMORY THE MACHINE DOES NOT HAVE, YET
   Queue item 8, the honest small version: demand paging for the heap.

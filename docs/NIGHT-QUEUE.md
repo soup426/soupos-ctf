@@ -189,7 +189,7 @@ attached to the same console sink and byte translator the pass uses. The
 acceptance test is `ssh headchef@localhost -p <port>` from the host giving a
 working shell, with `pass` then retired or left disabled by default.
 
-### S8. SSH loose ends (noted 2026-10-07 after the first real logins)
+### S8. SSH loose ends — DONE v0.34.0 except rekeying (busy DISCONNECT, exec, publickey via /AUTHKEYS, byte log demoted)
 - A second client while a session is open hangs until its banner timeout,
   because the vault accepts one session and the TCP table holds the other
   un-accepted. Accept it, send a one-line "busy" banner and disconnect.

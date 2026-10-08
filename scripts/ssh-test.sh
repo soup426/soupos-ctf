@@ -15,9 +15,14 @@ cd "$(dirname "$0")/.."
 PORT=18023
 TESTDISK=$(mktemp /tmp/soupos-sshdisk.XXXXXX.img)
 LOG=""; MON=""; PID=""
-cleanup() { [ -n "$PID" ] && kill "$PID" 2>/dev/null; rm -f "$MON" "$LOG" "$TESTDISK"; }
+cleanup() { [ -n "$PID" ] && kill "$PID" 2>/dev/null; rm -f "$MON" "$LOG" "$TESTDISK"; rm -rf "${KEYDIR:-}"; }
 trap cleanup EXIT
 cp disk.img "$TESTDISK"
+# A client key, authorised by putting its public line on the disk as
+# /AUTHKEYS before the first boot. soupOS never sees the private half.
+KEYDIR=$(mktemp -d /tmp/soupos-sshkey.XXXXXX)
+ssh-keygen -q -t ed25519 -N '' -f "$KEYDIR/id" >/dev/null 2>&1
+mcopy -i "$TESTDISK" "$KEYDIR/id.pub" ::AUTHKEYS
 
 boot() {
     LOG=$(mktemp /tmp/soupos-ssh.XXXXXX.log)
@@ -50,8 +55,8 @@ echo "$client" | grep -q "SSH2_MSG_NEWKEYS received" \
     && echo "  ok    NEWKEYS both ways" || { echo "  FAIL  no NEWKEYS from the server"; fail=1; }
 echo "$client" | grep -q "SSH2_MSG_SERVICE_ACCEPT received" \
     && echo "  ok    the first encrypted packet decrypted on the client" || { echo "  FAIL  no SERVICE_ACCEPT"; fail=1; }
-echo "$client" | grep -q "Permission denied (password)" \
-    && echo "  ok    refused with password offered" || { echo "  FAIL  did not end at Permission denied"; fail=1; }
+echo "$client" | grep -q "Permission denied (publickey,password)" \
+    && echo "  ok    refused with publickey and password offered" || { echo "  FAIL  did not end at Permission denied"; fail=1; }
 [ -n "$cfp" ] && [ "$cfp" = "$kfp1" ] \
     && echo "  ok    client saw the kernel's fingerprint ($cfp)" || { echo "  FAIL  fingerprint mismatch ('$cfp' vs '$kfp1')"; fail=1; }
 python3 scripts/ssh-login.py "$PORT" good \
@@ -60,6 +65,17 @@ python3 scripts/ssh-login.py "$PORT" good \
 python3 scripts/ssh-login.py "$PORT" bad \
     && echo "  ok    a wrong password is refused" \
     || { echo "  FAIL  wrong password was not refused"; fail=1; }
+python3 scripts/ssh-login.py "$PORT" exec \
+    && echo "  ok    'ssh host whoami' ran one command and closed" \
+    || { echo "  FAIL  exec did not run and close"; fail=1; }
+python3 scripts/ssh-login.py "$PORT" key "$KEYDIR/id" \
+    && echo "  ok    an ed25519 key in /AUTHKEYS logs in without a password" \
+    || { echo "  FAIL  key login failed"; fail=1; }
+python3 scripts/ssh-login.py "$PORT" busy \
+    && echo "  ok    a second client is told the vault is busy" \
+    || { echo "  FAIL  second client was not told busy"; fail=1; }
+grep -q "authenticated by key" "$LOG" && echo "  ok    the kernel logged the key login" \
+    || { echo "  FAIL  no key login in the kernel log"; fail=1; }
 halt; rm -f "$LOG" "$MON"
 
 boot

@@ -308,7 +308,9 @@ int tcp_send_on(int h, const void *data, uint16_t len) {
         sent = (uint16_t)(sent + chunk);
     }
 
-    klog("[tcp] sent %u bytes\n", sent);
+    /* Only the outbound connection logs its bytes: the services carry a
+     * terminal, and a line per keystroke was most of the log. */
+    if (h == client_h) klog("[tcp] sent %u bytes\n", sent);
     return (int)sent;
 }
 
@@ -337,7 +339,7 @@ int tcp_recv_on(int h, uint8_t *out, uint16_t max, uint32_t ticks) {
     c->rx_len = (uint16_t)(c->rx_len - n);
     __asm__ volatile ("push %0; popf" :: "r"(flags) : "memory", "cc");
 
-    klog("[tcp] rx %u bytes\n", n);
+    if (h == client_h) klog("[tcp] rx %u bytes\n", n);
     return (int)n;
 }
 
@@ -508,7 +510,7 @@ void tcp_stop_listening(uint16_t port) {
 
 int tcp_accept(uint16_t port, uint32_t ticks) {
     uint32_t start = timer_get_ticks();
-    while (timer_get_ticks() - start < ticks) {
+    for (;;) {                      /* at least one scan: ticks=0 is a poll */
         for (int i = 0; i < TCP_MAX_CONNS; i++) {
             tcp_conn_t *c = &conns[i];
             if (c->state == TCP_ESTABLISHED && !c->accepted &&
@@ -521,10 +523,10 @@ int tcp_accept(uint16_t port, uint32_t ticks) {
                 return i;
             }
         }
+        if (timer_get_ticks() - start >= ticks) return -1;
         task_yield();
         cpu_halt();
     }
-    return -1;
 }
 
 /* ── The single-connection API ──────────────────────────────────────────────

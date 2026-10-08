@@ -42,6 +42,7 @@
 #define MSG_USERAUTH_REQUEST 50
 #define MSG_USERAUTH_FAILURE 51
 #define MSG_USERAUTH_SUCCESS 52
+#define MSG_USERAUTH_PK_OK   60
 #define MSG_GLOBAL_REQUEST   80
 #define MSG_REQUEST_FAILURE  82
 #define MSG_CHANNEL_OPEN     90
@@ -55,7 +56,7 @@
 #define MSG_CHANNEL_SUCCESS  99
 #define MSG_CHANNEL_FAILURE 100
 
-static const char VERSION[] = "SSH-2.0-soupOS_0.29";
+static const char VERSION[] = "SSH-2.0-soupOS_0.34";
 static const char HOSTKEY_PATH[] = "/HOSTKEY.ED";
 
 static volatile int running, want_stop;
@@ -70,6 +71,10 @@ typedef struct {
     int      crypt;                 /* after NEWKEYS both ways */
     uint32_t hdr_have;              /* length bytes read so far (poll-safe) */
     int      chan_open;
+    int      exec_mode;             /* one command, then close */
+    int      exec_done;             /* the prompt came back */
+    int      prompt_state;          /* matcher for "@soupOS:" ... "> " */
+    int      close_sent;
     uint32_t chan_peer;             /* the client's channel number */
     uint32_t win_out;               /* bytes the client will still take */
     uint32_t win_in_used;           /* bytes we have taken since the last adjust */
@@ -155,6 +160,33 @@ static int namelist_has(const uint8_t *list, uint32_t len, const char *name) {
     return 0;
 }
 
+/* One session at a time, and a second client should be told so rather than
+ * left to time out. Lines before the version string are allowed by RFC 4253
+ * and OpenSSH prints them, so the reason reaches the person's terminal. */
+static void refuse_others(void) {
+    int other = tcp_accept(port_in_use, 0);
+    if (other < 0) return;
+    /* A line before the version string is only shown by `ssh -v`. What the
+     * client prints unprompted is a DISCONNECT, so: our version line, then a
+     * plain (pre-key-exchange) DISCONNECT with reason 12, "too many
+     * connections", and the words. The client shows "Received disconnect
+     * from ...: 12: the vault is busy ...". */
+    static const char ver[] = "SSH-2.0-soupOS_0.34\r\n";
+    static const char why[] = "the vault is busy with another session, try again later";
+    uint8_t pkt[128]; wbuf_t b; w_init(&b, pkt + 5, sizeof(pkt) - 5);
+    w_u8(&b, MSG_DISCONNECT); w_u32(&b, 12); w_cstr(&b, why); w_cstr(&b, "");
+    uint32_t len = b.len, pad = 8 - ((5 + len) % 8);
+    if (pad < 4) pad += 8;
+    uint32_t plen = 1 + len + pad;
+    pkt[0] = (uint8_t)(plen >> 24); pkt[1] = (uint8_t)(plen >> 16); pkt[2] = (uint8_t)(plen >> 8); pkt[3] = (uint8_t)plen;
+    pkt[4] = (uint8_t)pad;
+    memset(pkt + 5 + len, 0, pad);
+    tcp_send_on(other, ver, sizeof(ver) - 1);
+    tcp_send_on(other, pkt, (uint16_t)(4 + plen));
+    tcp_close_on(other);
+    klog("[ssh] refused a second client: busy\n");
+}
+
 /* ── packets ────────────────────────────────────────────────────────────── */
 
 /* OpenSSH's chacha20-poly1305: see the file comment. `seq` is the nonce. */
@@ -211,6 +243,7 @@ static int read_packet_wait(uint32_t wait) {
     uint32_t start = timer_get_ticks();
     while (S.hdr_have < 4) {
         if (want_stop) return -1;
+        refuse_others();
         int r = tcp_recv_on(S.h, i + S.hdr_have, (uint16_t)(4 - S.hdr_have), 2);
         if (r < 0) return -1;
         if (r == 0) {
@@ -400,8 +433,19 @@ static void oring_push(char c) {
     ohead = next;
 }
 
+/* For exec: the shell's prompt coming back is the end of the command. The
+ * prompt is "<user>@soupOS:<cwd>> ", so "@soupOS:" followed by "> " is it. */
+static void watch_for_prompt(char c) {
+    static const char lead[] = "@soupOS:";
+    int st = S.prompt_state;
+    if (st < 8) { S.prompt_state = (c == lead[st]) ? st + 1 : (c == '@' ? 1 : 0); return; }
+    if (st == 8) { if (c == '>') S.prompt_state = 9; return; }
+    if (st == 9) { if (c == ' ') S.exec_done = 1; else S.prompt_state = 8; }
+}
+
 static void ssh_sink(char c) {
     if (!S.chan_open) return;
+    if (S.exec_mode && !S.exec_done) watch_for_prompt(c);
     preempt_disable();
     if (c == '\n')      { oring_push('\r'); oring_push('\n'); }
     else if (c == '\b') { oring_push('\b'); oring_push(' '); oring_push('\b'); }
@@ -427,7 +471,54 @@ static int flush_output(void) {
     return 0;
 }
 
-/* ── userauth: password against the roster ──────────────────────────────── */
+/* ── public keys: /AUTHKEYS on the disk, one "ssh-ed25519 <base64> ..." a line ── */
+static int b64val(char c) {
+    if (c >= 'A' && c <= 'Z') return c - 'A';
+    if (c >= 'a' && c <= 'z') return c - 'a' + 26;
+    if (c >= '0' && c <= '9') return c - '0' + 52;
+    if (c == '+') return 62;
+    if (c == '/') return 63;
+    return -1;
+}
+static int b64dec(const char *in, uint32_t n, uint8_t *out, uint32_t cap) {
+    uint32_t acc = 0, bits = 0, o = 0;
+    for (uint32_t i = 0; i < n; i++) {
+        if (in[i] == '=') break;
+        int v = b64val(in[i]);
+        if (v < 0) return -1;
+        acc = (acc << 6) | (uint32_t)v; bits += 6;
+        if (bits >= 8) { bits -= 8; if (o >= cap) return -1; out[o++] = (uint8_t)(acc >> bits); }
+    }
+    return (int)o;
+}
+
+/* Is this exact key blob in /AUTHKEYS? */
+static int key_authorized(const uint8_t *blob, uint32_t blob_len) {
+    static uint8_t file[4096];
+    uint32_t got = 0;
+    if (fat_read("/AUTHKEYS", file, sizeof(file) - 1, &got) < 0 || got == 0) return 0;
+    file[got] = 0;
+    uint32_t i = 0;
+    while (i < got) {
+        uint32_t e = i;
+        while (e < got && file[e] != '\n') e++;
+        /* second field of the line */
+        uint32_t a = i;
+        while (a < e && file[a] != ' ') a++;
+        while (a < e && file[a] == ' ') a++;
+        uint32_t b = a;
+        while (b < e && file[b] != ' ' && file[b] != '\r') b++;
+        if (b > a) {
+            uint8_t dec[128];
+            int n = b64dec((const char *)file + a, b - a, dec, sizeof(dec));
+            if (n == (int)blob_len && memcmp(dec, blob, blob_len) == 0) return 1;
+        }
+        i = e + 1;
+    }
+    return 0;
+}
+
+/* ── userauth: password against the roster, or an ed25519 key on the disk ── */
 static int userauth(void) {
     for (int attempts = 0; attempts < 6; attempts++) {
         int n = read_packet();
@@ -444,7 +535,36 @@ static int userauth(void) {
         memcpy(m, method, mn); m[mn] = '\0';
 
         int ok = 0;
-        if ((strcmp(m, "password") == 0)) {
+        if ((strcmp(m, "publickey") == 0)) {
+            /* RFC 4252 section 7: without a signature it is a question
+             * ("would you take this key?"), with one it is the login. */
+            int has_sig = r_u8(&r) != 0;
+            uint32_t al, bl; const uint8_t *alg = r_str(&r, &al); const uint8_t *blob = r_str(&r, &bl);
+            if (!r.bad && al == 11 && memcmp(alg, "ssh-ed25519", 11) == 0 && key_authorized(blob, bl)) {
+                rbuf_t kb; r_init(&kb, blob, bl);
+                uint32_t kl, pl2; r_str(&kb, &kl); const uint8_t *pk = r_str(&kb, &pl2);
+                if (!has_sig) {
+                    uint8_t mem[128]; wbuf_t b; w_init(&b, mem, sizeof(mem));
+                    w_u8(&b, MSG_USERAUTH_PK_OK); w_str(&b, alg, al); w_str(&b, blob, bl);
+                    if (write_packet(b.p, b.len) < 0) return -1;
+                    attempts--;
+                    continue;
+                }
+                uint32_t sl2; const uint8_t *sigblob = r_str(&r, &sl2);
+                rbuf_t sb; r_init(&sb, sigblob, sl2);
+                uint32_t xl, sgl; r_str(&sb, &xl); const uint8_t *sig = r_str(&sb, &sgl);
+                if (!r.bad && !kb.bad && !sb.bad && pl2 == 32 && sgl == 64) {
+                    /* The signed data: the session id, then the request as sent. */
+                    static uint8_t signed_mem[512]; wbuf_t sd; w_init(&sd, signed_mem, sizeof(signed_mem));
+                    w_str(&sd, S.session_id, 32);
+                    w_u8(&sd, MSG_USERAUTH_REQUEST);
+                    w_str(&sd, user, ul); w_str(&sd, "ssh-connection", 14); w_cstr(&sd, "publickey");
+                    w_u8(&sd, 1); w_str(&sd, alg, al); w_str(&sd, blob, bl);
+                    ok = ed25519_verify(sig, sd.p, sd.len, pk) == 0;
+                }
+            }
+            if (ok) klog("[ssh] %s authenticated by key\n", u);
+        } else if ((strcmp(m, "password") == 0)) {
             r_u8(&r);                                /* FALSE: not a change request */
             const uint8_t *pass = r_str(&r, &pl);
             if (!r.bad && pl < sizeof(pw)) {
@@ -454,13 +574,13 @@ static int userauth(void) {
             }
         }
         if (ok) {
-            klog("[ssh] %s authenticated by password\n", u);
+            if (strcmp(m, "password") == 0) klog("[ssh] %s authenticated by password\n", u);
             uint8_t ok_msg = MSG_USERAUTH_SUCCESS;
             return write_packet(&ok_msg, 1);
         }
         klog("[ssh] userauth %s by %s: refused\n", u, m);
         uint8_t mem[64]; wbuf_t b; w_init(&b, mem, sizeof(mem));
-        w_u8(&b, MSG_USERAUTH_FAILURE); w_cstr(&b, "password"); w_u8(&b, 0);
+        w_u8(&b, MSG_USERAUTH_FAILURE); w_cstr(&b, "publickey,password"); w_u8(&b, 0);
         if (write_packet(b.p, b.len) < 0) return -1;
     }
     return -1;
@@ -479,7 +599,22 @@ static int handle_channel_request(rbuf_t *r) {
     if (r->bad) return -1;
     char t[32]; uint32_t tn = tl < 31 ? tl : 31; memcpy(t, type, tn); t[tn] = '\0';
 
-    int ok = (strcmp(t, "pty-req") == 0) || (strcmp(t, "shell") == 0) || (strcmp(t, "env") == 0) || (strcmp(t, "window-change") == 0);
+    int ok = (strcmp(t, "pty-req") == 0) || (strcmp(t, "shell") == 0) || (strcmp(t, "env") == 0) ||
+             (strcmp(t, "window-change") == 0) || (strcmp(t, "exec") == 0);
+    if ((strcmp(t, "exec") == 0)) {
+        /* One command through the same shell: type it, stream what comes
+         * back until the prompt returns, then close. The shell's echo and
+         * its prompt come along, because it IS the shell. */
+        uint32_t cl; const uint8_t *cmd = r_str(r, &cl);
+        if (r->bad || cl > 200) return -1;
+        if (want_reply && reply_status(MSG_CHANNEL_SUCCESS) < 0) return -1;
+        S.exec_mode = 1; S.exec_done = 0; S.prompt_state = 0;
+        console_set_sink(ssh_sink);
+        klog("[ssh] exec attached to the console\n");
+        for (uint32_t i = 0; i < cl; i++) console_rx_byte(cmd[i]);
+        console_rx_byte('\r');
+        return 0;
+    }
     if ((strcmp(t, "shell") == 0)) {
         console_set_sink(ssh_sink);
         klog("[ssh] shell attached to the console\n");
@@ -491,9 +626,24 @@ static int handle_channel_request(rbuf_t *r) {
     return 0;
 }
 
+static int finish_exec(void) {
+    /* EOF, the exit status (the shell does not report one: 0), close. */
+    uint8_t mem[64]; wbuf_t b;
+    if (reply_status(MSG_CHANNEL_EOF) < 0) return -1;
+    w_init(&b, mem, sizeof(mem));
+    w_u8(&b, MSG_CHANNEL_REQUEST); w_u32(&b, S.chan_peer); w_cstr(&b, "exit-status"); w_u8(&b, 0); w_u32(&b, 0);
+    if (write_packet(b.p, b.len) < 0) return -1;
+    S.close_sent = 1;
+    return reply_status(MSG_CHANNEL_CLOSE);
+}
+
 static void connection_loop(void) {
     for (;;) {
         if (flush_output() < 0) return;
+        if (S.exec_done && !S.close_sent) {
+            console_set_sink(0);
+            if (finish_exec() < 0) return;
+        }
         int n = read_packet_wait(2);
         if (n == -2) continue;
         if (n < 1) return;
@@ -541,7 +691,7 @@ static void connection_loop(void) {
         case MSG_CHANNEL_EOF: break;
         case MSG_CHANNEL_CLOSE:
             flush_output();
-            reply_status(MSG_CHANNEL_CLOSE);
+            if (!S.close_sent) reply_status(MSG_CHANNEL_CLOSE);
             return;
         default: {
             uint8_t mem[8]; wbuf_t b; w_init(&b, mem, sizeof(mem));
