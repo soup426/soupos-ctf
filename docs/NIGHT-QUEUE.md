@@ -1,10 +1,10 @@
 # Night queue
 
-Twenty-first queue. The first twenty are in `docs/queue-archive-2026-10-0*.md`.
+Twenty-second queue. The first twenty-one are in `docs/queue-archive-2026-10-0*.md`.
 Two items wait on a person, with notes in their archives: the seventh's
-syscall-pointer item and the thirteenth's swap-shares item. The twentieth
-gave programs SYS_STAT and added ls -l and find; this one gives scripts
-control flow, now that they have variables, test.elf and globs.
+syscall-pointer item and the thirteenth's swap-shares item. The
+twenty-first gave scripts for and if and added cmp; this one adds
+arithmetic, while loops (and a way out of them), and script arguments.
 
 ## Standing rules
 
@@ -32,24 +32,24 @@ control flow, now that they have variables, test.elf and globs.
 
 ---
 
-## 1. for loops — DONE v0.59.3
+## 1. Arithmetic
 
-`for NAME in WORDS ; do COMMANDS ; done` on one line (and in a script): the
-words expanded first (globs, $vars), NAME set to each in turn, COMMANDS run
-through run_line each time; the loop's status is the last command's.
-Compare what a loop leaves behind with sh running the same line.
+$(( EXPR )) with integers: + - * / % and parentheses, unary -, the
+comparisons < <= > >= == != (1 or 0), $NAME and bare NAME for variables,
+division by zero an error. Compare with sh over a table of expressions.
 
-## 2. if blocks — DONE v0.59.3
+## 2. while loops, and Ctrl-C stops a loop
 
-`if COMMANDS ; then COMMANDS ; [else COMMANDS ;] fi` on one line: the
-branch by the exit status of the condition's last command, as sh does.
-Nested inside for, and for inside if. Compare with sh.
+`while COMMANDS ; do COMMANDS ; done`, as sh does. A shell loop runs no
+program between some commands, so Ctrl-C must also be noticed by the loop
+itself: pressing it stops a for or while (and the rest of its line), and
+the shell carries on. Compare a counting loop with sh; test Ctrl-C on
+`while cook test.elf 1 = 1 ; do cook echo.elf x > /dev/null ; done`.
 
-## 3. cmp.elf — DONE v0.59.4
+## 3. Script arguments
 
-`cmp.elf F1 F2`: exit 0 when the same, 1 with "F1 F2 differ: byte N, line
-M" when not, "cmp: EOF on F1" when one is a prefix of the other, 2 on a
-missing file, as GNU cmp does. Compare messages and codes with the host.
+`run FILE a b c`: $1 to $9, $# and $@ inside the script, as sh gives them
+to `sh FILE a b c`. Compare a script's results with sh's.
 
 ## 4. Doom at the framebuffer's own resolution — DEFERRED
 
