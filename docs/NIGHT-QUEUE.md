@@ -32,7 +32,7 @@ programs a stat call, which test.elf has had to do without.
 
 ---
 
-## 1. SYS_STAT
+## 1. SYS_STAT — DONE v0.59.0
 
 Programs can open and list but not ask about a path. Add a stat call:
 size, bowl or not, owner, mode, for a path the cook may reach (search on

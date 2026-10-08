@@ -14,6 +14,7 @@
                         * -> 1 entry written, 0 past the end, -1 error     */
 #define SYS_UNLINK 10  /* ebx = path; -> 0, or -1 (missing, a bowl, not yours) */
 #define SYS_MKDIR  11  /* ebx = path; -> 0, or -1                               */
+#define SYS_STAT   12  /* ebx = path, ecx = ustat_t*; -> 0, or -1 (v0.59.0)   */
 
 /* One directory entry for SYS_READDIR (v0.44.0): the long name when the
  * entry has one, else the 8.3 name. Shared by the kernel and ulib. */
@@ -22,6 +23,15 @@ typedef struct {
     unsigned size;
     unsigned is_dir;
 } udirent_t;
+
+/* What SYS_STAT says about a path (v0.59.0). Reaching the path needs search
+ * on every bowl above it; reading the file itself does not, as with stat. */
+typedef struct {
+    unsigned size;      /* bytes; 0 for a bowl                 */
+    unsigned is_dir;
+    unsigned owner;     /* uid                                 */
+    unsigned mode;      /* FAT_PERM_* bits: OR OW OX AR AW AX  */
+} ustat_t;
 
 /* Reserved file descriptors. fd >= 3 are returned by open(). */
 #define FD_STDIN   0   /* keyboard                                          */

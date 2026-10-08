@@ -383,6 +383,21 @@ int users_public(const char *path) {
     return fat_stat(path, &owner, &mode) == 0 && (mode & FAT_PERM_AR);
 }
 
+/* May the cook reach this path - search (x) on every bowl above it - without
+ * needing anything on the path itself? What stat asks (v0.59.0). */
+int users_reach(const char *path) {
+    if (users_is_headchef()) return 1;
+    char up[FAT_PATH_MAX];
+    size_t n = strlen(path);
+    if (n >= sizeof(up)) return 0;
+    for (size_t i = 1; i < n; i++) {
+        if (path[i] != '/') continue;
+        memcpy(up, path, i); up[i] = '\0';
+        if (!mode_allows(up, 'x')) return 0;
+    }
+    return 1;
+}
+
 int users_may(const char *path, char need) {
     if (users_is_headchef()) return 1;
     char up[FAT_PATH_MAX];

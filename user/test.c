@@ -7,22 +7,15 @@
  * As test does: one argument is true if it is not empty; ! in front
  * negates; -e -f -d FILE; -z -n STRING; S1 = S2, S1 != S2; and -eq -ne -lt
  * -le -gt -ge on integers. Exit 2 for a usage error or a bad integer.
- * Programs have no stat call, so -f is "opens for reading and is not a
- * bowl" and -d is "can be listed": a file the cook may not read counts as
- * absent for -f and -e, where test would say it exists. -a and -o are not
- * supported (use && and ||).
+ * -e -f -d ask SYS_STAT (v0.59.0), so a file the cook may not read still
+ * exists, as with test; a path behind a bowl the cook may not search does
+ * not. -a and -o are not supported (use && and ||).
  */
 #include "ulib.h"
 
 static int streq(const char *a, const char *b) { while (*a && *a == *b) { a++; b++; } return *a == *b; }
-static int is_dir(const char *p)  { udirent_t e; return sys_readdir(p, 0, &e) >= 0; }
-static int is_file(const char *p) {
-    if (is_dir(p)) return 0;
-    int fd = sys_open(p, O_READ);
-    if (fd < 0) return 0;
-    sys_close(fd);
-    return 1;
-}
+static int is_dir(const char *p)  { ustat_t st; return sys_stat(p, &st) == 0 && st.is_dir; }
+static int is_file(const char *p) { ustat_t st; return sys_stat(p, &st) == 0 && !st.is_dir; }
 static int to_int(const char *s, long *out) {
     int neg = 0, any = 0; long v = 0;
     while (*s == ' ') s++;

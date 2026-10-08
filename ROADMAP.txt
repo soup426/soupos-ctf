@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.58.3
+Current version: v0.59.0
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,21 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.59.0 (2026-10-08)  — SYS_STAT
+  Twentieth queue, item 1.
+  - Programs could open and list but not ask about a path. SYS_STAT (12)
+    fills a ustat_t: size (0 for a bowl), bowl or not, owner, mode. It
+    needs search on every bowl above the path (users_reach) and nothing
+    on the path itself, as stat does; the CHALLENGE build leaves it
+    unchecked, like its open.
+  - test.elf's -e -f -d use it, so the difference written down in v0.58.1
+    is gone: a file the cook may not read exists for them, as with test.
+  - scripts/stat-test.sh, in check.sh: the ordinary cook's test -f sees
+    /etc/kitchen (rw----, unreadable to them); nothing inside saucier's
+    closed home exists for them, though the home is still a bowl; the
+    headchef reaches the file inside. testcmd-test's 21 cases still match
+    the host's test.
 
 v0.58.3 (2026-10-08)  — GLOBS
   Nineteenth queue, item 3.

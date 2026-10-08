@@ -53,6 +53,12 @@ int sys_readdir(const char *path, int index, udirent_t *out) {
     return ret;
 }
 
+int sys_stat(const char *path, ustat_t *out) {
+    int ret;
+    __asm__ volatile ("int $0x80" : "=a"(ret) : "a"(SYS_STAT), "b"(path), "c"(out) : "memory");
+    return ret;
+}
+
 int sys_unlink(const char *path) {
     int ret;
     __asm__ volatile ("int $0x80" : "=a"(ret) : "a"(SYS_UNLINK), "b"(path) : "memory");

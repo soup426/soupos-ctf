@@ -26,6 +26,7 @@ unsigned sys_ticks(void);            /* uptime in 100 Hz PIT ticks */
 int  sys_readdir(const char *path, int index, udirent_t *out);
 int  sys_unlink(const char *path);      /* 0, or -1 (missing, a bowl, not yours) */
 int  sys_mkdir (const char *path);
+int  sys_stat  (const char *path, ustat_t *out);   /* 0, or -1 (v0.59.0) */
 __attribute__((noreturn)) void sys_exit(int code);
 
 /* conveniences */

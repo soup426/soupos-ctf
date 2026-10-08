@@ -572,6 +572,28 @@ void syscall_dispatch(registers_t *r) {
             break;
         }
 
+        case SYS_STAT: {
+            /* What a path is (v0.59.0): size, bowl or not, owner, mode. The
+             * cook needs search on the bowls above it, not read on it, as
+             * with stat - so test.elf -f sees a file it may not read. */
+            char path[FAT_PATH_MAX];
+            if (copy_user_path(r->ebx, path) < 0) { r->eax = (uint32_t)-1; break; }
+            if (!user_ok(r->ecx, sizeof(ustat_t))) { r->eax = (uint32_t)-1; break; }
+#ifdef NO_CHALLENGE
+            if (!users_reach(path)) { r->eax = (uint32_t)-1; break; }
+#endif
+            uint8_t owner, mode;
+            if (!fat_exists(path) || fat_stat(path, &owner, &mode) < 0) { r->eax = (uint32_t)-1; break; }
+            ustat_t st;
+            st.is_dir = fat_is_dir(path) ? 1u : 0u;
+            st.size   = 0;
+            if (!st.is_dir) { int fd = fat_fopen(path); if (fd >= 0) { st.size = fat_fsize(fd); fat_fclose(fd); } }
+            st.owner  = owner;
+            st.mode   = mode & 0x3F;
+            memcpy((void *)r->ecx, &st, sizeof(st));
+            r->eax = 0;
+            break;
+        }
         case SYS_READDIR: {
             /* Entry `index` of a directory. The path is copied out of user
              * memory a byte at a time, each byte checked, and the listing is

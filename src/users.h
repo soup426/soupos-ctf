@@ -43,6 +43,8 @@ void users_sys_begin(void);
 void users_sys_end(void);
 /* Could every cook read this path? (hatch serves only these, v0.55.0) */
 int  users_public(const char *path);
+/* Search on every bowl above the path (stat's rule, v0.59.0). */
+int  users_reach(const char *path);
 int  users_remove(const char *name);
 
 /* The logged-in session. */
