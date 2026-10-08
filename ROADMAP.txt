@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.11
+Current version: v0.60.12
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,19 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.12 (2026-10-08)  — THE NEXT COOK STARTS CLEAN
+  - The console's shell outlives the cook at it, and clockout left three
+    things behind for whoever clocked in next: the history (`leftovers`
+    listed the headchef's `hire` lines, and the up arrow brought them
+    back), shell variables ($SAUCE still set) and the clipboard (Ctrl+V
+    pasted what the last cook cut with Ctrl+U). Clockout now wipes all
+    three, and $1..$9, before the next login.
+  - scripts/clockout-test.sh leaves one of each as the headchef and looks
+    for them as the next cook; it failed on all three before the change.
+  - The gate's boot segment gave proof.elf's hold 7.5 s and it needs
+    6.5-7 s; it failed about one run in three, on the last commit's build
+    too. The drive now waits for the hold's result line (UNTIL).
 
 v0.60.11 (2026-10-08)  — DREGS KEEPS ONLY THE DREGS
   - dregs.elf read its whole input into a buffer that doubled, and the bump

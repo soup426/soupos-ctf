@@ -2663,6 +2663,20 @@ static void cmd_clockout(void) {
     }
     t_printf("  %s clocks out. The kitchen is yours, next cook.\n",
                users_current_name());
+    /* The next cook starts clean (v0.60.12): the console's shell outlives
+     * the cook, so what they typed (leftovers and the up arrow), set
+     * (variables, $1..$9) and cut (Ctrl+U, Ctrl+W) would pass to whoever
+     * clocks in next. Wiped, not just forgotten: a secret typed at the
+     * wrong prompt sits in the history. */
+    shell_t *sh = cur_shell();
+    memset(sh->hist, 0, sizeof(sh->hist));
+    sh->hist_head = sh->hist_size = 0;
+    memset(sh->vname, 0, sizeof(sh->vname));
+    memset(sh->vval, 0, sizeof(sh->vval));
+    sh->nvars = 0;
+    memset(sh->parg, 0, sizeof(sh->parg));
+    sh->npargs = 0;
+    clip_clear();
     do_login();
 }
 

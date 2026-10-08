@@ -24,7 +24,7 @@ gate_drive \
     "cook peek.elf /" "WAIT:2" \
     "cook stockpot.elf forever" "WAIT:3" \
     "cook greet.elf" "WAIT:2" "cook greet.elf" "WAIT:2" \
-    "cook proof.elf hold &" "WAIT:2" "ps" "WAIT:5"
+    "cook proof.elf hold &" "WAIT:2" "ps" "UNTIL:LAZY held"
 
 check "boot reaches the scheduler"   '\[boot\] scheduler ok'
 check "preemption armed"             '\[boot\] preemption enabled'
@@ -135,6 +135,9 @@ if [ "$res" = "1024" ] && [ -n "$swp" ] && [ "$swp" -ge 476 ] && [ "$swp" -le 50
 else
     echo "  FAIL  ps memory figures for proof.elf hold: '${psline:-none}'"; fail=1
 fi
+# The hold takes 6.5-7 s from its start (4 s asleep, then 481 pages back from
+# swap), and the gate used to give it 7.5 s: it failed about one run in three
+# on an idle host (2026-10-08). The drive now waits for its line instead.
 check "the held pages all came back right" 'LAZY held 1500 pages ok'
 
 # The point of preemption: the [bg] sleeper must keep ticking while a ring-3

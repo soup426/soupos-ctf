@@ -59,13 +59,21 @@ only the last N lines (a ring of line starts over a bounded buffer, or
 reading a regular file from its end) so any size works; compare with the
 host's tail at that size.
 
-## 6. A cook who clocks in sees the last cook's history
+## 6. A cook who clocks in sees the last cook's history — DONE v0.60.12
 
 Seen 2026-10-08 in tab-test: after headchef clocks out and intern clocks
 in on the console, `leftovers` lists headchef's commands (including the
 `hire` lines). The history belongs to the console's shell, not the cook.
 Clear it at clockout (or keep one per cook); check that the up arrow
 shows nothing from before, too.
+
+## 7. One clipboard for every terminal
+
+Found with item 6: the clipboard (src/clip.c) is one for the whole
+kernel, so text an SSH session's cook cuts with Ctrl+U can be pasted by
+the cook at the console, and the other way round. Clockout clears it now,
+but two cooks logged in at once still share it. Give each terminal (or
+each cook) its own, and test across a session and the console.
 
 ## 4. Doom at the framebuffer's own resolution — DEFERRED
 
