@@ -1,9 +1,9 @@
 # Night queue
 
-Tenth queue. The first nine are in `docs/queue-archive-2026-10-0*.md`. The
-seventh's notes still hold the set-aside syscall item for a person to decide
-on. The ninth closed holes in how cooks come and go; this one looks at the
-files that hold the kitchen's secrets.
+Eleventh queue. The first ten are in `docs/queue-archive-2026-10-0*.md`.
+The seventh's notes still hold the set-aside syscall item for a person to
+decide on. The tenth sealed the files that hold secrets; this one looks at
+what a cook may DO, and at the other door into the kitchen.
 
 ## Standing rules
 
@@ -31,27 +31,27 @@ files that hold the kitchen's secrets.
 
 ---
 
-## 1. The roster is readable by every cook — DONE v0.54.0
+## 1. Which commands a cook may run
 
-/etc/kitchen is rwxr-x (checked 2026-10-08), so any cook can read every
-cook's PBKDF2 secret and attack it offline. Close it to the headchef in the
-ordinary build. FIRST read what the CHALLENGE build's stages need: stage 2
-is the AlphaSOUP-32 hash, and if reading the roster is part of it, that
-build must keep it readable. Prove the read on the old kernel, and check
-that login, `secret` and `hire` still work for a cook who cannot read it.
+Only kill, hire, fire and secret have been looked at for who may run them.
+Go through every shell command for actions that belong to the headchef:
+opening or closing the vault or the pass door, rekey and idle settings,
+network changes, anything that writes the disk wholesale or reboots. Prove
+each one an ordinary cook can wrongly run on the current kernel before
+gating it, and test them together.
 
-## 2. fire leaves the cook's SSH keys — DONE v0.54.1
+## 2. The pass door gets the same rules as the vault
 
-/AUTHKEYS lines name a cook. Firing removes the cook but not the lines, so a
-cook later hired under the same name logs in with the fired one's key.
-Prove it, then remove a fired cook's lines (and say how many).
+`pass` is the clear-text door (telnet-style). The vault records logins in
+/etc/logins, slows guessing and locks out an address, ends idle sessions.
+Find out which of those apply to pass sessions (measure, do not assume),
+and give it the ones it lacks.
 
-## 3. Every system file has a known owner and mode — DONE v0.54.2
+## 3. The full check waits on cooks-test
 
-/etc/kitchen, /etc/logins, /etc/rc, /AUTHKEYS, the host key, /home: list
-every file the kernel writes or trusts, pin each one's owner and mode, set
-them where the kernel writes them, and add a test that checks all of them
-after a session of cooks doing ordinary things.
+cooks-test is 226 of the full check's 237 s. Split it so the check is no
+slower than its next-longest test plus a little, and record the before and
+after.
 
 ## 4. Doom at the framebuffer's own resolution — DEFERRED
 
