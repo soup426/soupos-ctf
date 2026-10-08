@@ -333,6 +333,19 @@ static int is_valid(const dirent_t *de) {
 
 static void fill_entry(const dirent_t *de, fat_entry_t *out) {
     format_83(de->name, de->ext, out->name);
+    /* Byte 12's case flags (v0.58.2): Linux and mtools store a lowercase
+     * name that fits 8.3 (a.txt) as A.TXT with bit 3 "base is lowercase"
+     * and bit 4 "extension is lowercase", and no long name. soupOS showed
+     * them in capitals. A byte with FAT_PERM_MARK set is soupOS's own
+     * pre-v0.41.0 mode, not case flags. */
+    uint8_t cf = de->reserved;
+    if (!(cf & FAT_PERM_MARK) && (cf & 0x18)) {
+        int in_ext = 0;
+        for (char *c = out->name; *c; c++) {
+            if (*c == '.') { in_ext = 1; continue; }
+            if (*c >= 'A' && *c <= 'Z' && (in_ext ? (cf & 0x10) : (cf & 0x08))) *c = (char)(*c + 32);
+        }
+    }
     out->lfn[0]  = '\0';
     out->attr    = de->attr;
     out->cluster = ((uint32_t)de->cluster_hi << 16) | de->cluster_lo;
