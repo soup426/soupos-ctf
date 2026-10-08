@@ -4999,6 +4999,7 @@ static int  cap_getc(term_t *t) { (void)t; return -1; }      /* no input: EOF */
 static void cap_flush(term_t *t) { (void)t; }
 
 static void run_line(const char *line);
+static int subst_cut;     /* the last $(...) did not fit (v0.60.30) */
 static int command_subst(const char *cmd, char *out, int max) {
     if (subst_depth >= 2) return 0;
     capterm_t cap;
@@ -5006,7 +5007,8 @@ static int command_subst(const char *cmd, char *out, int max) {
     cap.t.set_cursor = cap_cursor; cap.t.row = cap_zero; cap.t.col = cap_zero; cap.t.cols = cap_cols;
     cap.t.rows = cap_rows; cap.t.clear = cap_clear; cap.t.getc = cap_getc; cap.t.available = cap_zero;
     cap.t.flush_in = cap_flush; cap.t.fg = 0;
-    cap.buf = kmalloc(4096); cap.len = 0; cap.cap = 4096; cap.limit = 4096;
+    cap.buf = kmalloc(4096); cap.len = 0; cap.cap = 4096;
+    cap.limit = max + 2 > 4096 ? (max + 2 < 65536 ? max + 2 : 65536) : 4096;   /* v0.60.30 */
     if (!cap.buf) return 0;
     shell_t *me = cur_shell();
     task_t *tk = task_current();
@@ -5019,6 +5021,7 @@ static int command_subst(const char *cmd, char *out, int max) {
     subst_depth--;
     me->term = was_sh; tk->term = was_tk;
     while (cap.len > 0 && (cap.buf[cap.len - 1] == '\n' || cap.buf[cap.len - 1] == '\r')) cap.len--;
+    subst_cut = (cap.len > max || cap.len >= cap.limit - 1);
     int n = 0;
     for (int i = 0; i < cap.len && n < max; i++) {
         char c = cap.buf[i];
@@ -5031,7 +5034,11 @@ static int command_subst(const char *cmd, char *out, int max) {
 
 /* Expand one command's text: ~, $NAME / ${NAME}, $?, $((...)) and $(...),
  * quotes left in for the parts that follow (v0.57.1-v0.60.3). */
-static void expand_seg(const char *seg, char *ex) {
+/* Into ex, at most max bytes with the NUL (v0.60.30: was always INPUT_MAX).
+ * 1 if the expansion did not fit and was cut, which callers must not run
+ * as if it had: a command cut short can name a different file. */
+static int expand_into(const char *seg, char *ex, int max) {
+    int cut = 0;
     int  k = 0;
     char sq = 0;                     /* inside '...', $? is left alone */
     /* ~ is the cook's home (v0.57.3): a word that is ~ or starts
@@ -5041,7 +5048,7 @@ static void expand_seg(const char *seg, char *ex) {
     char home[FAT_PATH_MAX];
     if (cur_shell()->uid == 0) strcpy(home, "/");
     else { strcpy(home, "/home/"); strncpy(home + 6, users_name_of(cur_shell()->uid), sizeof(home) - 7); home[sizeof(home) - 1] = '\0'; }
-    for (int i = 0; seg[i] && k < INPUT_MAX - 1; i++) {
+    for (int i = 0; seg[i] && k < max - 1; i++) {
         if (seg[i] == '\'' && sq != '"') sq = sq ? 0 : '\'';
         else if (seg[i] == '"' && sq != '\'') sq = sq ? 0 : '"';
         char prev = i ? seg[i - 1] : ' ';
@@ -5049,7 +5056,7 @@ static void expand_seg(const char *seg, char *ex) {
             && (seg[i + 1] == '\0' || seg[i + 1] == ' ' || seg[i + 1] == '/')) {
             const char *h = home;
             if (seg[i + 1] == '/' && h[0] == '/' && h[1] == '\0') h = "";   /* ~/X with home / */
-            while (*h && k < INPUT_MAX - 1) ex[k++] = *h++;
+            while (*h && k < max - 1) ex[k++] = *h++;
             continue;
         }
         if (seg[i] == '$' && seg[i + 1] == '(' && seg[i + 2] == '(' && sq != '\'') {
@@ -5065,7 +5072,7 @@ static void expand_seg(const char *seg, char *ex) {
             char d[24]; int nd = 0; unsigned long u = v < 0 ? (unsigned long)(-v) : (unsigned long)v;
             do { d[nd++] = (char)('0' + u % 10); u /= 10; } while (u);
             if (v < 0) d[nd++] = '-';
-            while (nd && k < INPUT_MAX - 1) ex[k++] = d[--nd];
+            while (nd && k < max - 1) ex[k++] = d[--nd];
             i = j + 1;
             continue;
         }
@@ -5091,9 +5098,10 @@ static void expand_seg(const char *seg, char *ex) {
                 while (a < k && (ex[a] == '_' || (ex[a] >= 'A' && ex[a] <= 'Z') || (ex[a] >= 'a' && ex[a] <= 'z') || (ex[a] >= '0' && ex[a] <= '9'))) a++;
                 assign = (a == k - 1 && ex[a] == '=');
             }
-            if (assign && k < INPUT_MAX - 1) ex[k++] = '"';
-            k += command_subst(inner, ex + k, INPUT_MAX - 2 - k);
-            if (assign && k < INPUT_MAX - 1) ex[k++] = '"';
+            if (assign && k < max - 1) ex[k++] = '"';
+            k += command_subst(inner, ex + k, max - 2 - k);
+            if (subst_cut) cut = 1;
+            if (assign && k < max - 1) ex[k++] = '"';
             i = j;
             continue;
         }
@@ -5104,14 +5112,14 @@ static void expand_seg(const char *seg, char *ex) {
             if (c == '#') {
                 char d[4]; int nd = 0; int v = me->npargs;
                 do { d[nd++] = (char)('0' + v % 10); v /= 10; } while (v);
-                while (nd && k < INPUT_MAX - 1) ex[k++] = d[--nd];
+                while (nd && k < max - 1) ex[k++] = d[--nd];
             } else if (c == '@') {
                 for (int a = 0; a < me->npargs; a++) {
-                    if (a && k < INPUT_MAX - 1) ex[k++] = ' ';
-                    for (const char *v = me->parg[a]; *v && k < INPUT_MAX - 1; v++) ex[k++] = *v;
+                    if (a && k < max - 1) ex[k++] = ' ';
+                    for (const char *v = me->parg[a]; *v && k < max - 1; v++) ex[k++] = *v;
                 }
             } else if (c - '1' < me->npargs) {
-                for (const char *v = me->parg[c - '1']; *v && k < INPUT_MAX - 1; v++) ex[k++] = *v;
+                for (const char *v = me->parg[c - '1']; *v && k < max - 1; v++) ex[k++] = *v;
             }
             i++;
             continue;
@@ -5130,7 +5138,7 @@ static void expand_seg(const char *seg, char *ex) {
             shell_t *me = cur_shell();
             for (int v = 0; v < me->nvars; v++)
                 if (str_eq(me->vname[v], name)) {
-                    for (const char *val = me->vval[v]; *val && k < INPUT_MAX - 1; val++) ex[k++] = *val;
+                    for (const char *val = me->vval[v]; *val && k < max - 1; val++) ex[k++] = *val;
                     break;
                 }
             i = j - 1;
@@ -5139,12 +5147,14 @@ static void expand_seg(const char *seg, char *ex) {
         if (seg[i] == '$' && seg[i + 1] == '?' && sq != '\'') {
             char d[12]; int nd = 0; unsigned v = (unsigned)cur_shell()->last_status;
             do { d[nd++] = (char)('0' + v % 10); v /= 10; } while (v);
-            while (nd && k < INPUT_MAX - 1) ex[k++] = d[--nd];
+            while (nd && k < max - 1) ex[k++] = d[--nd];
             i++;
         } else ex[k++] = seg[i];
     }
     ex[k] = '\0';
+    return cut || k >= max - 1;
 }
+static void expand_seg(const char *seg, char *ex) { expand_into(seg, ex, INPUT_MAX); }
 
 /* A function's name as the first word runs its body (v0.60.22), with the
  * words after it as $1..$9 for the body and the caller's given back after,
@@ -5273,7 +5283,12 @@ static void run_one(const char *seg) {
     }
     char ex[INPUT_MAX];
     arith_err = 0;
-    expand_seg(seg, ex);
+    if (expand_into(seg, ex, INPUT_MAX) && !arith_err) {
+        /* v0.60.30: it used to run cut short, which can name another file */
+        t_printf("  The command is too long once expanded (%d bytes at most); not run.\n", INPUT_MAX - 1);
+        cur_shell()->last_status = 1;
+        return;
+    }
     if (arith_err) {
         t_puts(arith_err == 2 ? "  arithmetic: division by zero\n" : "  arithmetic: not an expression\n");
         cur_shell()->last_status = 1;
@@ -5453,14 +5468,19 @@ static int match_end(lseg_t *sg, int from, int to, const char *open, const char 
 
 static void set_var(const char *name, const char *value);
 
-typedef struct { char words[INPUT_MAX * 2]; int used, n; const char *list[64]; } wordlist_t;
+/* A for loop's words (v0.60.30: 32 KB and 8192 words; were 512 bytes and 64,
+ * after an expansion cut at 256, so `for i in $(cook tally.elf 6000)` ran
+ * 64 times). */
+#define FOR_TEXT   (32 * 1024)
+#define FOR_WORDS  8192
+typedef struct { char words[FOR_TEXT + 8192]; int used, n, cut; const char *list[FOR_WORDS]; } wordlist_t;
 static void wl_add(void *ctx, const char *raw) {
     wordlist_t *wl = (wordlist_t *)ctx;
     char w[INPUT_MAX];
     strncpy(w, raw, sizeof(w) - 1); w[sizeof(w) - 1] = '\0';
     unquote(w);                                   /* a loop's values have no quotes */
     int len = (int)strlen(w);
-    if (wl->n >= 64 || wl->used + len + 1 > (int)sizeof(wl->words)) return;
+    if (wl->n >= FOR_WORDS || wl->used + len + 1 > (int)sizeof(wl->words)) { wl->cut = 1; return; }
     memcpy(wl->words + wl->used, w, (uint32_t)len + 1);
     wl->list[wl->n++] = wl->words + wl->used;
     wl->used += len + 1;
@@ -5500,15 +5520,15 @@ static void exec_range(lseg_t *sg, int from, int to, int depth) {
                 cur_shell()->last_status = 2; return;
             }
             if (run) {
-                char ex[INPUT_MAX];
-                expand_seg(sg[i].text + 3, ex);
+                char *ex = kmalloc(FOR_TEXT);
+                wordlist_t *wl = kmalloc(sizeof(wordlist_t));
+                if (!ex || !wl) { if (ex) kfree(ex); if (wl) kfree(wl); t_puts("  for: out of memory.\n"); cur_shell()->last_status = 1; return; }
+                wl->used = wl->n = wl->cut = 0;
+                if (expand_into(sg[i].text + 3, ex, FOR_TEXT)) wl->cut = 1;
                 /* NAME in WORDS */
                 char name[16]; const char *r = first_word(ex, name, sizeof(name));
                 char inw[8]; r = first_word(r, inw, sizeof(inw));
-                if (!name[0] || !str_eq(inw, "in")) { t_puts("  for: expected `for NAME in WORDS`.\n"); cur_shell()->last_status = 2; return; }
-                wordlist_t *wl = kmalloc(sizeof(wordlist_t));
-                if (!wl) return;
-                wl->used = wl->n = 0;
+                if (!name[0] || !str_eq(inw, "in")) { kfree(ex); kfree(wl); t_puts("  for: expected `for NAME in WORDS`.\n"); cur_shell()->last_status = 2; return; }
                 while (*r) {
                     /* a word as written (quotes kept), then globbed or unquoted */
                     char raw[INPUT_MAX]; int k = 0; char q = 0;
@@ -5520,6 +5540,8 @@ static void exec_range(lseg_t *sg, int from, int to, int depth) {
                     raw[k] = '\0';
                     if (k) glob_expand(raw, wl_add, wl);
                 }
+                kfree(ex);
+                if (wl->cut) t_printf("  for: the word list was cut (%d bytes, %d words at most); %d words kept.\n", FOR_TEXT, FOR_WORDS, wl->n);
                 cur_shell()->last_status = 0;
                 for (int w = 0; w < wl->n && !cur_shell()->exiting && !interrupted(); w++) {
                     set_var(name, wl->list[w]);

@@ -96,7 +96,7 @@ pieces and write it as it is (CLAUDE.md and the tests that read pour's
 output may lean on the extra newline: check). Add the pour case back to
 bpipe-test.
 
-## 11. Long word lists
+## 11. Long word lists — DONE v0.60.30
 
 Found with item 8: `for i in $(cook tally.elf 6000)` loops 64 times, not
 6000: a command is expanded into INPUT_MAX (256) bytes, so the $(...)'s
