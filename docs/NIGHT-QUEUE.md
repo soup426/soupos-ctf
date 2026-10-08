@@ -55,7 +55,7 @@ login and each refused one (cook, console or address, time) in a file that
 does, and add `last` to show them, newest first. Check the record survives a
 reboot and that mtools can read it.
 
-## 4. Idle sessions end
+## 4. Idle sessions end — DONE v0.53.3
 
 An SSH session left open holds one of four slots forever. End sessions with
 no input for a set time (a setting in /etc/rc, off by default on the

@@ -78,6 +78,7 @@ typedef struct {
     uint8_t  uid;                   /* who authenticated */
     uint32_t peer_ip;               /* for the failed-login count (v0.50.0) */
     uint32_t pw_fails;              /* failed passwords on this connection */
+    uint32_t last_data;             /* ticks of the client's last keystrokes (v0.53.3) */
     int      pty_cols, pty_rows;    /* from pty-req, for the terminal */
     term_stream_t term;             /* the channel, as a terminal (v0.36.0) */
     void    *shell;                 /* the session shell on it, once started */
@@ -469,6 +470,13 @@ static int rekey(uint32_t n, const char *who) {
 static uint32_t rekey_packets;
 void ssh_set_rekey_packets(uint32_t n) { rekey_packets = n; }
 
+/* A session with no keystrokes from its client for this long is ended
+ * (v0.53.3); 0, the default, is never. Four slots are all there are, and a
+ * forgotten session would hold one forever. */
+static uint32_t idle_limit_s;
+void ssh_set_idle(uint32_t seconds) { idle_limit_s = seconds; }
+uint32_t ssh_idle(void) { return idle_limit_s; }
+
 static int maybe_start_rekey(void) {
     if (S.kexinit_sent) return 0;
     int due = (timer_get_ticks() - S.kex_tick > 360000u) ||
@@ -824,7 +832,22 @@ static void connection_loop(void) {
             if (finish_session(status) < 0) return;
         }
         int n = read_packet_wait(2);
-        if (n == -2) continue;
+        if (n == -2) {
+            uint32_t lim = idle_limit_s;
+            if (lim && S.chan_open && timer_get_ticks() - S.last_data >= lim * 100u) {
+                char why[96], num[11]; int k = 0;
+                uint32_t v = lim; do { num[k++] = (char)('0' + v % 10); v /= 10; } while (v);
+                strcpy(why, "idle for ");
+                size_t w = strlen(why);
+                while (k) why[w++] = num[--k];
+                why[w] = '\0';
+                strcat(why, " seconds: the vault ended this session");
+                klog("[ssh] %s idle for %u s: session ended\n", users_name_of(S.uid), lim);
+                send_disconnect(11, why);           /* 11: by application */
+                return;
+            }
+            continue;
+        }
         if (n < 1) return;
         rbuf_t r; r_init(&r, S.payload + 1, (uint32_t)n - 1);
         switch (S.payload[0]) {
@@ -860,6 +883,7 @@ static void connection_loop(void) {
             uint32_t dl; const uint8_t *d = r_str(&r, &dl);
             if (r.bad) return;
             if (S.shell) term_stream_feed(&S.term, d, dl);
+            S.last_data = timer_get_ticks();
             S.win_in_used += dl;
             if (S.win_in_used > 32768) {
                 uint8_t mem[16]; wbuf_t b; w_init(&b, mem, sizeof(mem));
@@ -946,6 +970,7 @@ static void run_session(int h) {
 
     if (userauth() < 0) return;
     S.ohead = S.otail = 0;
+    S.last_data = timer_get_ticks();
     connection_loop();
     S.chan_open = 0;
     if (S.shell) {

@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.53.2
+Current version: v0.53.3
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,20 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.53.3 (2026-10-08)  — IDLE SESSIONS END
+  Ninth queue, item 4.
+  - The vault has four session slots, and a forgotten session held one
+    forever. `vault idle <seconds>` ends a session whose client has sent
+    no keystrokes for that long (0, the default, is never; /etc/rc can set
+    it). The client is told why in a DISCONNECT it prints ("idle for 5
+    seconds: the vault ended this session"), the ending is logged, and the
+    session leaves the way a hang-up does, so its slot and shell are freed.
+    The console never times out.
+  - scripts/idle-test.sh, in check.sh: by default a session idle 7 s
+    survives; with `vault idle 5` a silent one ends in 4.5-8 s with the
+    reason shown; one that keeps typing outlives the limit; the ending is
+    logged; the console still answers and `who` lists no ended session.
 
 v0.53.2 (2026-10-08)  — last
   Ninth queue, item 3.
@@ -27,13 +41,15 @@ v0.53.2 (2026-10-08)  — last
     shows all of them newest first, mtools reads the file, the oldest
     seeded line is gone with 64 kept, the file is the headchef's, and fsck
     is clean.
-  - console-test's last check ("arrows not leaked") failed once in the
-    full check. It passed 9 of 9 runs under gate load, on this kernel and
-    the previous one; the test read the socket in fixed windows, and the
-    last command alone has no later window to catch slow output. It now
-    waits for that answer (up to 10 s), and keeps its transcript on a
-    failure. (A six-wide run of console-test proves nothing: it has one
-    fixed port, so copies collide.)
+  - console-test failed twice in full checks. The first explanation given
+    here (a slow last answer) was wrong; the kept transcript of the second
+    showed "cook: eadchef". The test's boot wait stopped at the first 2 s
+    of silence, so under load it typed into the bootloader, which ate the
+    first byte. Measured: a byte sent once the kernel runs reaches the
+    login; one sent before it exists is lost. Reproduced by freezing QEMU
+    3 s during the bootloader: the old test failed 2 of 2 with
+    "eadchef", the fixed one (which waits for the login prompt) passed
+    2 of 2. Committed after v0.53.3's work began; see that commit.
 
 v0.53.1 (2026-10-08)  — A CLOSED BOWL CLOSES WHAT IS INSIDE IT
   Ninth queue, item 2 (found while proving item 1).

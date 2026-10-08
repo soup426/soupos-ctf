@@ -1990,7 +1990,15 @@ static void cmd_vault(const char *args) {
     while (*args == ' ') args++;
     if (!*args) {
         if (ssh_running()) t_printf("  vault open on port %u, host key %s\n", ssh_port(), ssh_fingerprint());
-        else               t_puts("  vault closed. Usage: vault <port> | vault off\n");
+        else               t_puts("  vault closed. Usage: vault <port> | vault off | vault idle <seconds> | vault rekey <packets>\n");
+        return;
+    }
+    if (str_startswith(args, "idle")) {             /* vault idle <seconds>, 0 = never */
+        const char *a = args + 4;
+        while (*a == ' ') a++;
+        if (*a) ssh_set_idle((uint32_t)(parse_num(a) > 0 ? parse_num(a) : 0));
+        if (ssh_idle()) t_printf("  the vault ends a session after %u idle seconds.\n", ssh_idle());
+        else            t_puts("  the vault never ends an idle session.\n");
         return;
     }
     if (str_startswith(args, "rekey")) {

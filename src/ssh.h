@@ -36,3 +36,6 @@ const char *ssh_fingerprint(void);
 /* Rekey after this many packets out as well as after an hour; 0 means only
  * the hour. `vault rekey <packets>`, which is for testing it. */
 void ssh_set_rekey_packets(uint32_t n);
+/* End sessions with no client input for `seconds` (0: never, the default). */
+void     ssh_set_idle(uint32_t seconds);
+uint32_t ssh_idle(void);
