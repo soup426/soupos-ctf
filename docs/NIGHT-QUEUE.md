@@ -1,9 +1,9 @@
 # Night queue
 
-Twenty-fifth queue. The first twenty-four are in `docs/queue-archive-2026-10-0*.md`.
+Twenty-sixth queue. The first twenty-five are in `docs/queue-archive-2026-10-0*.md`.
 Items wait on a person in three archives (the seventh, the thirteenth and
-the twenty-fourth). Every command now has a kitchen name; this queue adds
-two more tools and makes the prompt finish words for you.
+the twenty-fourth). Three more tools, and the shell and its history grow up
+a little.
 
 ## Standing rules
 
@@ -32,50 +32,42 @@ two more tools and makes the prompt finish words for you.
 
 ---
 
-## 1. flip.elf — DONE v0.60.8
+## 1. mince.elf
 
-Each line reversed, character by character, as rev does; a last line with
-no newline keeps none. Compare with the host's rev.
+A hex dump in `hexdump -C` form: offset, sixteen bytes in two groups of
+eight, the printable ones between bars, a `*` for repeated lines and the
+final offset. Compare with the host's hexdump -C byte for byte.
 
-## 2. label.elf — DONE v0.60.9
+## 2. knead.elf
 
-Lines numbered as `nl -ba` numbers them (every line, empty ones included,
-the number right-aligned in six columns and a tab). Compare with the host.
+Lines folded at a width, as `fold -w N` does (default 80), and with -s at
+the last space. Compare with the host's fold.
 
-## 3. Tab finishes a word at the prompt — DONE v0.60.10
+## 3. layer.elf
 
-Tab after part of the first word finishes it to a command name when only
-one fits (a builtin, or a program on the disk); after a later word it
-finishes a path in its bowl. More than one fit: complete the part they
-share, and a second Tab lists them. Test by typing.
+Lines of two or more files side by side, as `paste` does (tab between,
+-d to choose), files of different lengths included. Compare with the
+host's paste.
 
-## 5. dregs keeps only the lines it will print — DONE v0.60.11
+## 4. A cook's leftovers outlive the shift
 
-Measured 2026-10-08: `cook tally.elf 1000000 | label.elf | dregs.elf -n 1`
-(about 8 MB through the pipe) fills swap ("[swap] full: 4096 pages") and
-dregs dies ("could not swap ... back in"). It reads the whole input and its
-doubling buffer leaves every old copy behind in the bump allocator. Keep
-only the last N lines (a ring of line starts over a bounded buffer, or
-reading a regular file from its end) so any size works; compare with the
-host's tail at that size.
+History is per shell and wiped at clockout (v0.60.12). Keep each cook's
+in their home (a file only they can read), load it at login, so the up
+arrow and `leftovers` survive a clockout and a reboot. Test across both.
 
-## 6. A cook who clocks in sees the last cook's history — DONE v0.60.12
+## 5. Ctrl+R finds an old line
 
-Seen 2026-10-08 in tab-test: after headchef clocks out and intern clocks
-in on the console, `leftovers` lists headchef's commands (including the
-`hire` lines). The history belongs to the console's shell, not the cook.
-Clear it at clockout (or keep one per cook); check that the up arrow
-shows nothing from before, too.
+A reverse search through the history at the prompt, as in bash: type and
+the newest match is shown; Ctrl+R again for the one before; Enter runs it,
+Ctrl+C gives the line back. Test by typing.
 
-## 7. One clipboard for every terminal — DONE v0.60.13 (one per cook)
+## 6. case ... esac
 
-Found with item 6: the clipboard (src/clip.c) is one for the whole
-kernel, so text an SSH session's cook cuts with Ctrl+U can be pasted by
-the cook at the console, and the other way round. Clockout clears it now,
-but two cooks logged in at once still share it. Give each terminal (or
-each cook) its own, and test across a session and the console.
+`case WORD in pat) ... ;; pat|pat) ... ;; *) ... ;; esac`, with the glob
+patterns the shell already has. Compare with bash's results for the same
+script.
 
-## 4. Doom at the framebuffer's own resolution — DEFERRED
+## 7. Doom at the framebuffer's own resolution — DEFERRED
 
 Carried; the user asked to keep to OS work.
 
