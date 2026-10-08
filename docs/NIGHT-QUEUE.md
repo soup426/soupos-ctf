@@ -61,12 +61,21 @@ An SSH session left open holds one of four slots forever. End sessions with
 no input for a set time (a setting in /etc/rc, off by default on the
 console), say why to the client, and log it. Test with a short timeout.
 
-## 5. du
+## 5. du — DONE v0.53.4
 
 Homes make it worth knowing what takes the space. `du [bowl]`: the bytes and
 clusters under each entry, with a total, checked against mtools.
 
-## 6. Doom at the framebuffer's own resolution — DEFERRED
+## 6. Tests type when the kernel is listening, not after a sleep
+
+console-test typed into the bootloader under load and lost a byte (fixed in
+5c3dc12 by waiting for the login prompt). Most other tests boot, `sleep 4`
+or 5, then type through the QEMU monitor: the same blind wait. Give
+qemu_keys.py a way to wait for a line in the serial log (the login banner)
+before typing, use it everywhere, and prove it with the freeze-QEMU-in-the-
+bootloader reproduction that caught console-test.
+
+## 7. Doom at the framebuffer's own resolution — DEFERRED
 
 Carried; the user asked to keep to OS work.
 

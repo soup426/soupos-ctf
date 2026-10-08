@@ -580,6 +580,7 @@ static void cmd_menu(void) {
         {0, "    kitchen            - the whole room, live, until a key"},
         {0, "    who                - every shell: its cook, where, up, idle"},
         {0, "    last               - who clocked in, and who was refused, newest first"},
+        {0, "    du [bowl]          - clusters and bytes under each entry, and the total"},
         {0, "    kill <id>          - stop a background task"},
         {0, "    bgclock            - spawn a clock in the top-right corner"},
         {0, "    yieldbg            - bg task logging [bg] to serial (pairs with cook spin.elf)"},
@@ -2028,6 +2029,72 @@ static void cmd_vault(const char *args) {
         t_printf("  host key %s\n", ssh_fingerprint());
         t_color(VGA_LIGHT_GREY, VGA_BLACK);
     }
+}
+
+/* du [bowl] - what takes the space (v0.53.4). Each entry of the bowl with
+ * the clusters and bytes under it, then the total, which also counts the
+ * bowl's own clusters - the way mtools' mdu counts, so the two can be
+ * compared. Clusters are the chains' real lengths, walked through the FAT,
+ * not sizes rounded up. A bowl the cook may not read is shown, not entered. */
+typedef struct { uint32_t clusters, bytes; int hidden; } du_t;
+
+static void du_walk(const char *dir, du_t *acc, int depth) {
+    if (depth > 16) return;
+    if (!may(dir, 'r')) { acc->hidden++; return; }
+    fat_entry_t *e = kmalloc(sizeof(fat_entry_t) * FAT_LS_MAX);
+    if (!e) return;
+    int n = fat_ls(dir, e, FAT_LS_MAX);
+    for (int i = 0; i < n; i++) {
+        acc->clusters += fat_chain_clusters(e[i].cluster);
+        if (e[i].attr & FAT_ATTR_DIR) {
+            char path[FAT_PATH_MAX];
+            const char *nm = fat_display_name(&e[i]);
+            size_t dl = strlen(dir);
+            if (dl + 1 + strlen(nm) + 1 > sizeof(path)) continue;
+            strcpy(path, dir); if (dl > 1) path[dl++] = '/'; strcpy(path + dl, nm);
+            du_walk(path, acc, depth + 1);
+        } else {
+            acc->bytes += e[i].size;
+        }
+    }
+    kfree(e);
+}
+
+static void cmd_du(const char *args) {
+    while (*args == ' ') args++;
+    char dir[FAT_PATH_MAX];
+    if (*args) resolve_path(args, dir); else strcpy(dir, cur_shell()->cwd);
+    if (!fat_is_dir(dir)) { t_printf("  No such bowl: %s\n", *args ? args : dir); return; }
+    if (!may(dir, 'r')) { deny(dir); return; }
+    fat_entry_t *e = kmalloc(sizeof(fat_entry_t) * FAT_LS_MAX);
+    if (!e) return;
+    int n = fat_ls(dir, e, FAT_LS_MAX);
+    uint32_t cb = fat_cluster_bytes();
+    t_color(VGA_YELLOW, VGA_BLACK);
+    t_printf("  CLUSTERS        BYTES  NAME            (a cluster is %u bytes)\n", cb);
+    t_color(VGA_LIGHT_GREY, VGA_BLACK);
+    du_t total = {0, 0, 0};
+    for (int i = 0; i < n; i++) {
+        du_t one = {fat_chain_clusters(e[i].cluster), 0, 0};
+        const char *nm = fat_display_name(&e[i]);
+        if (e[i].attr & FAT_ATTR_DIR) {
+            char path[FAT_PATH_MAX];
+            size_t dl = strlen(dir);
+            if (dl + 1 + strlen(nm) + 1 > sizeof(path)) continue;
+            strcpy(path, dir); if (dl > 1) path[dl++] = '/'; strcpy(path + dl, nm);
+            du_walk(path, &one, 1);
+        } else {
+            one.bytes = e[i].size;
+        }
+        t_printf("  %8u  %11u  %s%s%s\n", one.clusters, one.bytes, nm,
+                 (e[i].attr & FAT_ATTR_DIR) ? "/" : "", one.hidden ? "  (some not yours to read)" : "");
+        total.clusters += one.clusters; total.bytes += one.bytes; total.hidden += one.hidden;
+    }
+    kfree(e);
+    /* The bowl's own clusters (the root of a FAT16 volume has none). */
+    uint32_t own = fat_chain_clusters(fat_first_cluster(dir));
+    t_printf("  %8u  %11u  total for %s%s\n", total.clusters + own, total.bytes, dir,
+             total.hidden ? " (some bowls not yours to read)" : "");
 }
 
 /* who - every shell on the machine: its cook, where it is, how long it has
@@ -3709,7 +3776,7 @@ static const char *const cmd_names[] = {
     "jot", "ai", "cook", "soup", "hash",
     "beep", "mandelbrot", "vgademo", "uname", "cal",
     "clock", "wipe", "fortune", "bounce", "recipe", "leftovers", "spill",
-    "freeze", "reheat", "ps", "kitchen", "who", "last", "orders", "plate", "steep", "kill", "scraps", "sample", "skewer", "larder", "whistle", "hatch", "hush", "pass", "vault",
+    "freeze", "reheat", "ps", "kitchen", "who", "last", "du", "orders", "plate", "steep", "kill", "scraps", "sample", "skewer", "larder", "whistle", "hatch", "hush", "pass", "vault",
 #ifndef NO_DOOM
     "sizzle", "hum",
 #endif
@@ -3950,6 +4017,7 @@ static void dispatch(const char *buf) {
     else if (str_eq(p, "ps"))          cmd_ps();
     else if (str_eq(p, "who"))         cmd_who();
     else if (str_eq(p, "last"))        cmd_last();
+    else if (str_eq(p, "du") || str_startswith(p, "du ")) cmd_du(p + 2);
     else if (str_eq(p, "kitchen"))     cmd_kitchen();
     else if (str_eq(p, "orders"))      cmd_orders();
     else if (str_eq(p, "scraps"))      cmd_scraps();

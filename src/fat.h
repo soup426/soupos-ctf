@@ -66,6 +66,9 @@ void fat_space(uint32_t *out_free, uint32_t *out_total, uint32_t *out_cluster_by
 /* Sectors the volume occupies from the start of the disk; what lies past it
  * belongs to nobody on the FAT side, which is where swap lives. 0 if unmounted. */
 uint32_t fat_volume_sectors(void);
+uint32_t fat_cluster_bytes(void);              /* bytes per cluster */
+uint32_t fat_chain_clusters(uint32_t first);   /* clusters in a chain (du) */
+uint32_t fat_first_cluster(const char *path);   /* 0 for the root or missing */
 
 /* Create a directory ("bowl"). FAT16 only. Fails if it already exists,
    the parent is missing, or the disk is full. Returns 0=ok, -1=error. */

@@ -1083,6 +1083,20 @@ static uint32_t fat_free_clusters_impl(void) {
 
 uint32_t fat_volume_sectors(void) { return initialized ? volume_sectors : 0; }
 
+/* For du (v0.53.4): the bytes in one cluster, and how many clusters a chain
+ * starting at `first` holds, walked through the FAT as mdu does. A chain
+ * longer than the volume is a loop; the count stops there. */
+uint32_t fat_cluster_bytes(void) { return initialized ? (uint32_t)spc * bps : 0; }
+
+uint32_t fat_chain_clusters(uint32_t first) {
+    if (!initialized || first < 2) return 0;
+    mutex_lock(&fat_mtx);
+    uint32_t n = 0, c = first, cap = volume_sectors / (spc ? spc : 1) + 2;
+    while (c >= 2 && !is_eoc(c) && n < cap) { n++; c = fat_get_entry(c); }
+    mutex_unlock(&fat_mtx);
+    return n;
+}
+
 void fat_space(uint32_t *out_free, uint32_t *out_total, uint32_t *out_cluster_bytes) {
     mutex_lock(&fat_mtx);
     if (out_free)  *out_free  = fat_free_clusters_impl();
@@ -1486,6 +1500,20 @@ int fat_exists(const char *path) {
     int _r = fat_exists_impl(path);
     mutex_unlock(&fat_mtx);
     return _r;
+}
+
+/* The first cluster of a path's chain; 0 for the root (FAT16 keeps it in a
+ * fixed region, not a chain) or a missing path. For du (v0.53.4). */
+uint32_t fat_first_cluster(const char *path) {
+    mutex_lock(&fat_mtx);
+    uint32_t cl = 0, parent_cl;
+    char leaf[FAT_LFN_MAX];
+    dirent_t de;
+    if (initialized && path_split(path, &parent_cl, leaf) == 0 && leaf[0]
+        && dir_find(parent_cl, leaf, &de, 0, 0) == 1)
+        cl = ((uint32_t)de.cluster_hi << 16) | de.cluster_lo;
+    mutex_unlock(&fat_mtx);
+    return cl;
 }
 
 int fat_stat(const char *path, uint8_t *owner, uint8_t *mode) {

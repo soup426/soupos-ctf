@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.53.3
+Current version: v0.53.4
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,23 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.53.4 (2026-10-08)  — du
+  Ninth queue, item 5.
+  - `du [bowl]`: each entry with the clusters and bytes under it, then the
+    total, which also counts the bowl's own clusters. Clusters are the
+    chains' real lengths walked through the FAT (fat_chain_clusters,
+    fat_first_cluster), not sizes rounded up. A bowl the cook may not read
+    is marked, not entered.
+  - mtools' mdu turned out not to be a usable judge: it never counts a
+    bowl's own cluster and does count each `..` entry as a file (::/etc
+    reports 2 for two one-cluster files; a bowl holding one one-cluster
+    file reports 2). The judges are the FAT and fsck instead.
+  - scripts/du-test.sh, in check.sh: du / equals the clusters in use in the
+    FAT and fsck.fat's count; its bytes equal the image's files; a home's
+    and /home's clusters and bytes equal a walk of the image; a cook sees
+    another's closed home marked. The first run was off by 52 bytes, one
+    login line written after du ran; the test now measures last.
 
 v0.53.3 (2026-10-08)  — IDLE SESSIONS END
   Ninth queue, item 4.
