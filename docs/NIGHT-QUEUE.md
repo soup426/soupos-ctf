@@ -119,7 +119,7 @@ context (or a service task), so the serial stream is always whole lines.
 Verify with a soak: a network-heavy run (hatch under load) while a script
 prints, and no torn line in the capture.
 
-## 5b. ATA under KVM: polling costs the hypervisor dearly
+## 5b. ATA under KVM — DONE v0.39.0: not polling but PIO itself (one VM exit per word); bus-master DMA, 58x
 
 Found measuring swap. The same greedy run that takes 296 ticks (3 s) under
 the gate's emulated boot takes 5601 ticks (56 s) under KVM, nineteen times

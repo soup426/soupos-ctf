@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.38.0
+Current version: v0.39.0
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,34 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.39.0 (2026-10-07)  — BUS-MASTER DMA: SWAP UNDER KVM 58x FASTER
+  Fourth queue, item 5b, which turned out not to be what it said.
+  - The queue blamed polling: a vCPU hammering the status port while the
+    host does the I/O. Two hypotheses were tested in a copy of the tree
+    before anything was built. Dropping the cache flush after each write:
+    4786 ticks to 4682, 2%. Halting until the drive's IRQ 14 instead of
+    spinning, with interrupts turned on in the fault path: 4801, nothing.
+  - THEN IT WAS MEASURED. TSC timestamps around each phase of every
+    multi-sector command during the greedy swap run, under KVM: issue
+    0.9 G cycles, BSY wait 16 G, DRQ wait 0.7 G, flush 3.4 G, and the data
+    transfer itself 120.7 G - 85% of the run. 23 million words at about
+    5,200 cycles each: KVM takes one VM exit per 16-bit word on this port,
+    `rep insw` or not. Under TCG the same transfer is 3.8 G.
+  - So the fix is not to wait better but to stop moving data with the
+    CPU. The PIIX IDE function (8086:7010, class 01:01) has bus-master
+    registers at BAR4; the driver now finds it, enables bus mastering,
+    and moves every read and write by DMA through a 4 KB, 4 KB-aligned
+    bounce buffer with a one-entry PRD table (kernel memory is identity-
+    mapped, so its address is its physical address). Completion is the
+    engine stopping and the drive not busy: a dozen port accesses per
+    request instead of 2,048 per page. PIO remains the fallback.
+  - The greedy run under KVM: 4872 ticks to 84, with all 7173 page-outs
+    and 4096 page-ins verified by the program. Every FAT test, mtools'
+    reading of what soupOS wrote, and the self-test's write/read/delete
+    balance all pass on the DMA path. Gate 91.
+  - Not done, and now a small matter: interrupt-driven completion. The
+    remaining poll is per request, not per word.
 
 v0.38.0 (2026-10-07)  — SSH REKEYING
   Fourth queue, item 4. RFC 4253 says rekey after a gigabyte or an hour;

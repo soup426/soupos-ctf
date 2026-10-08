@@ -922,8 +922,9 @@ shell (queue item 2c).
 there (an old 32 MB disk.img has no swap: `rm disk.img && make disk`).
 `usermode_demand_page` tries `swap_in` first, then evicts with
 `swap_out_one` at `PROC_PAGE_CAP`. Eviction is FIFO over `pr->fifo`; only
-heap pages are ever swapped. `swap_release` runs at process exit. The ATA
-driver's polling makes swap slow under KVM; the gate boots under TCG.
+heap pages are ever swapped. `swap_release` runs at process exit. Since v0.39.0 the ATA driver uses bus-master DMA
+(PIIX BAR4, bounce buffer `dma_buf`, PIO fallback): under KVM, PIO cost one VM
+exit per 16-bit word, which was 85% of swap's time.
 
 ## The heap is demand-paged (v0.33.0)
 
