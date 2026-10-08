@@ -18,7 +18,7 @@ QEMU_PID=""
 
 cleanup() {
     [ -n "$QEMU_PID" ] && kill "$QEMU_PID" 2>/dev/null
-    if [ "${KEEP:-0}" = "1" ]; then echo "transcript kept at $LOG"; else rm -f "$LOG"; fi
+    if [ "${KEEP:-0}" = "1" ] || [ "${fail:-0}" != "0" ]; then echo "transcript kept at $LOG"; else rm -f "$LOG"; fi
     rm -f "${TESTDISK:-}"
 }
 trap cleanup EXIT
@@ -83,6 +83,14 @@ send(b"\x7f\x7f", 0.5)                    # terminal backspace
 send(b"r\r", 2.0)
 # ANSI arrows must not leak raw escape bytes into the command line.
 send(b"pwd\x1b[D\x1b[C\r", 2.0)
+# The last command has no later command whose reads would catch its output
+# if it is slow, so wait for the answer itself (up to 10 s) rather than a
+# fixed window. Under the full check's load the fixed 2 s once missed it
+# (2026-10-08); every earlier check passed in that run.
+import re
+end = time.time() + 10
+while time.time() < end and not re.search(rb"(?m)^\s*/\s*$", b"".join(chunks)):
+    drain(1.0)
 
 open(logpath, 'wb').write(b''.join(chunks))
 s.close()
