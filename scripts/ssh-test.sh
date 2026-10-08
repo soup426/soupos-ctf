@@ -74,6 +74,24 @@ python3 scripts/ssh-login.py "$PORT" key "$KEYDIR/id" \
 python3 scripts/ssh-login.py "$PORT" busy \
     && echo "  ok    a second client is told the vault is busy" \
     || { echo "  FAIL  second client was not told busy"; fail=1; }
+python3 scripts/ssh-login.py "$PORT" execfail \
+    && echo "  ok    an unknown command over exec exits 127" \
+    || { echo "  FAIL  exec status for an unknown command"; fail=1; }
+python3 scripts/ssh-login.py "$PORT" isolate \
+    && echo "  ok    a session has its own cwd, and clockout ends it" \
+    || { echo "  FAIL  session isolation"; fail=1; }
+grep -q "zebracake" "$LOG" \
+    && { echo "  FAIL  the session's output reached the console"; fail=1; } \
+    || echo "  ok    none of the session's output reached the console"
+python3 scripts/ssh-login.py "$PORT" ctrlc \
+    && echo "  ok    Ctrl-C over the wire kills the session's program" \
+    || { echo "  FAIL  Ctrl-C over SSH"; fail=1; }
+before=$(grep -cE '/hog\.elf exited with code -137' "$LOG")
+python3 scripts/ssh-login.py "$PORT" hangup
+after=$(grep -cE '/hog\.elf exited with code -137' "$LOG")
+[ "$after" -gt "$before" ] \
+    && echo "  ok    hanging up kills the session's background job" \
+    || { echo "  FAIL  a hung-up session's job survived ($before -> $after)"; fail=1; }
 grep -q "authenticated by key" "$LOG" && echo "  ok    the kernel logged the key login" \
     || { echo "  FAIL  no key login in the kernel log"; fail=1; }
 halt; rm -f "$LOG" "$MON"

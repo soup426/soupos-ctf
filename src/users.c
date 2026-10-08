@@ -200,7 +200,13 @@ int users_remove(const char *name) {
     return users_save();
 }
 
+static int (*resolver)(void);
+void        users_set_resolver(int (*fn)(void)) { resolver = fn; }
+static uint8_t eff_uid(void) {
+    int r = resolver ? resolver() : -1;
+    return r >= 0 ? (uint8_t)r : cur_uid;
+}
 void        users_set_current(uint8_t uid) { cur_uid = uid; }
-uint8_t     users_current_uid(void)        { return cur_uid; }
-const char *users_current_name(void)       { return users_name_of(cur_uid); }
-int         users_is_headchef(void)        { return cur_uid == 0; }
+uint8_t     users_current_uid(void)        { return eff_uid(); }
+const char *users_current_name(void)       { return users_name_of(eff_uid()); }
+int         users_is_headchef(void)        { return eff_uid() == 0; }

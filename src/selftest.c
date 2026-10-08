@@ -19,6 +19,7 @@
 #include "net.h"
 #include "str.h"
 #include "vga.h"
+#include "term.h"
 #include "fb.h"
 #include "task.h"
 #include "klog.h"
@@ -35,9 +36,9 @@ static int t_run, t_fail, t_slow;
 static void check(const char *name, int ok) {
     t_run++;
     if (!ok) t_fail++;
-    vga_set_color(ok ? VGA_LIGHT_GREEN : VGA_LIGHT_RED, VGA_BLACK);
-    vga_printf("  %-28s %s\n", name, ok ? "ok" : "FAIL");
-    vga_set_color(VGA_LIGHT_GREY, VGA_BLACK);
+    term_color(term_current(), ok ? VGA_LIGHT_GREEN : VGA_LIGHT_RED, VGA_BLACK);
+    term_printf(term_current(), "  %-28s %s\n", name, ok ? "ok" : "FAIL");
+    term_color(term_current(), VGA_LIGHT_GREY, VGA_BLACK);
     klog("[sample] %s %s\n", name, ok ? "ok" : "FAIL");
 }
 
@@ -467,9 +468,9 @@ int selftest_run(int slow) {
     t_run = t_fail = 0;
     t_slow = slow;
 
-    vga_set_color(VGA_YELLOW, VGA_BLACK);
-    vga_puts("  tasting the soup...\n");
-    vga_set_color(VGA_LIGHT_GREY, VGA_BLACK);
+    term_color(term_current(), VGA_YELLOW, VGA_BLACK);
+    term_puts(term_current(), "  tasting the soup...\n");
+    term_color(term_current(), VGA_LIGHT_GREY, VGA_BLACK);
 
     test_heap();
     test_vfs_table();
@@ -485,9 +486,9 @@ int selftest_run(int slow) {
     test_x25519();
     test_ed25519();
 
-    vga_set_color(t_fail ? VGA_LIGHT_RED : VGA_LIGHT_GREEN, VGA_BLACK);
-    vga_printf("  %d tests, %d failed\n", t_run, t_fail);
-    vga_set_color(VGA_LIGHT_GREY, VGA_BLACK);
+    term_color(term_current(), t_fail ? VGA_LIGHT_RED : VGA_LIGHT_GREEN, VGA_BLACK);
+    term_printf(term_current(), "  %d tests, %d failed\n", t_run, t_fail);
+    term_color(term_current(), VGA_LIGHT_GREY, VGA_BLACK);
 
     /* One line, fixed shape, for the gate. */
     klog("[sample] %d tests, %d failed\n", t_run, t_fail);

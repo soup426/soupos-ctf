@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.35.2
+Current version: v0.36.0
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,45 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.36.0 (2026-10-07)  — A SHELL OF ITS OWN FOR EVERY SSH SESSION
+  Fourth queue, item 2, stage (c), the last. Until now an SSH login drove
+  THE local shell: it shared the keyboard and the screen, and whoever
+  authenticated was not whoever the shell thought was logged in.
+  - TERMINALS FOLLOW TASKS. task_t gained a terminal and a shell, and every
+    task inherits both from the one that spawned it. term_current() is the
+    calling task's terminal, so a program's stdout and stderr, a script's
+    `pour` and `input`, the self-test and the "[program killed]" message
+    all reach the session that caused them with no plumbing of their own.
+    Services drop both when they declare themselves.
+  - A BYTE-STREAM TERMINAL (term_stream_t): VT100 output with the VGA
+    palette mapped to SGR (light grey on black is the user's own default),
+    a cursor it tracks itself so the line editor's absolute moves become
+    relative ones, its own hard wrap so tracker and far end never disagree,
+    and input through the console's translator, now a reusable object
+    (keyxlate_t) rather than file-scope state. Its write makes the WRITER
+    wait when the vault's 16 KB ring is full, instead of dropping output.
+  - PER SHELL: the user (users.c and fat.c ask a resolver, so `whoami`,
+    permissions and new files' owners are the session's), the cwd and
+    history (shell_t, v0.35.1), the foreground program (a property of the
+    terminal now, so Ctrl-C over SSH kills the session's program and
+    stdin belongs to it), and the jobs `kill %`, `plate` and the prompt's
+    reports see (only those cooked on the same terminal).
+  - THE VAULT starts a session shell per channel. `shell` is interactive;
+    `exec` runs the one line with no prompt and no echo and returns a real
+    exit status (the program's code, 126 not runnable, 127 unknown, 137
+    killed). `clockout` ends a session. Hanging up kills the session's
+    programs, as SIGHUP would, and waits for the session to end before its
+    terminal is reused. Screen-only commands (jot, doom, vgademo, wipe,
+    bounce, skewer, bgclock) refuse politely over the network.
+  - It worked on the first boot. ssh-test.sh now also checks: exec exits
+    127 for an unknown command; a session has its own cwd and clockout
+    ends it; NONE of a session's output reaches the console's serial log;
+    Ctrl-C over the wire kills the session's program and the shell carries
+    on; hanging up with `hog.elf &` running kills it. 19 checks.
+  - `pass` still shares the console, deliberately: it is the clear-text
+    door, and a shell of its own there would be a login prompt in clear
+    text to a stranger. Gate 88.
 
 v0.35.2 (2026-10-07)  — term_t: THE SHELL TALKS TO A TERMINAL
   Fourth queue, item 2, stage (b) of three. No behaviour change.

@@ -38,6 +38,9 @@ typedef struct task {
      * ring 3. task_yield keeps tss.esp0 in step with it. */
     uint32_t      user_resume_esp;
     struct proc  *proc;          /* ring-3 process this task runs, or NULL  */
+    struct term  *term;          /* where it prints and reads; NULL = the console.
+                                  * Inherited by every task it spawns (v0.36.0) */
+    void         *shell;         /* the shell it belongs to (shell_t), inherited */
     void         *soupyc;        /* soupyc_ctx_t while this task interprets  */
     int           service;       /* a background service (fbcon, mixer): it
                                   * is alive, but it is not another program

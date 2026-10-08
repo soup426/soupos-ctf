@@ -66,10 +66,23 @@ typedef struct {
     int  prompt_len;             /* width of the printed prompt (includes cwd)   */
     int  page_rows;              /* rows per page for the pager              */
     term_t *term;                /* where this shell reads and writes (v0.35.2) */
+    /* v0.36.0: a shell of its own for every SSH session. */
+    uint8_t uid;                 /* who is logged in to THIS shell               */
+    int     last_status;         /* of the last command line: exec's exit status */
+    int     exiting;             /* clockout in a session: leave the loop        */
+    volatile int done;           /* the session task has finished                */
+    char    exec_line[INPUT_MAX];/* a session that runs one line (ssh host cmd)  */
 } shell_t;
 
+/* The console's shell. A session's shell_t is kmalloc'd by
+ * shell_session_start, and every task that belongs to it (the session task,
+ * and through inheritance every program and script it starts) points at it,
+ * so cur_shell() answers for whoever is asking. */
 static shell_t the_shell = { .cwd = "/", .prompt_len = 8, .term = &term_vga };
-static inline shell_t *cur_shell(void) { return &the_shell; }
+static inline shell_t *cur_shell(void) {
+    task_t *me = task_current();
+    return (me && me->shell) ? (shell_t *)me->shell : &the_shell;
+}
 
 /* Every console call the shell makes goes through its terminal. The local
  * console is term_vga, which forwards to vga_* and keyboard_*, so nothing
@@ -90,6 +103,27 @@ static inline int  t_getc(void)                { return T->getc(T); }
 static inline int  t_avail(void)               { return T->available(T); }
 static inline void t_flush_in(void)            { T->flush_in(T); }
 #define t_printf(...) term_printf(T, __VA_ARGS__)
+
+/* How a process records its terminal: NULL for the console. */
+#define TERM_KEY ((void *)(T == &term_vga ? 0 : T))
+static inline int on_console(void) { return T == &term_vga; }
+
+/* A command that draws on the physical screen, reads the mouse or takes over
+ * the display cannot run in a session on another terminal. */
+static int needs_console(const char *what) {
+    if (on_console()) return 0;
+    t_printf("  %s needs the kitchen's own screen; it cannot run over the network.\n", what);
+    cur_shell()->last_status = 1;
+    return 1;
+}
+
+/* The foreground program of this shell's terminal: where Ctrl-C goes and who
+ * may read stdin. The console also keeps proc.c's global, which the keyboard
+ * IRQ reads. */
+static void shell_set_fg(proc_t *p) {
+    if (on_console()) proc_set_foreground(p);
+    T->fg = p;
+}
 
 /* ---- string helpers ---- */
 static int str_eq(const char *a, const char *b) {
@@ -178,6 +212,7 @@ static int read_line(char *buf, int max, char mask) {
     int len = 0;
     for (;;) {
         int c = t_getc();
+        if (c < 0) break;                          /* the terminal hung up */
         if (c == '\n') { t_putc('\n'); break; }
         if (c == '\b') {
             if (len > 0) { len--; t_putc('\b'); }
@@ -194,9 +229,21 @@ static int read_line(char *buf, int max, char mask) {
 
 /* Switch the active session - both the user layer and the FAT owner stamp. */
 static void set_session_uid(uint8_t uid) {
-    users_set_current(uid);
-    fat_set_creator(uid);
+    cur_shell()->uid = uid;
+    if (cur_shell() == &the_shell) {      /* the console's user is the global one */
+        users_set_current(uid);
+        fat_set_creator(uid);
+    }
 }
+
+/* Registered with users.c and fat.c: a session task answers with its own
+ * shell's user; the console (and every task with no shell) with -1, meaning
+ * the global. */
+static int shell_uid_resolver(void) {
+    task_t *me = task_current();
+    return (me && me->shell) ? ((shell_t *)me->shell)->uid : -1;
+}
+static uint8_t shell_creator(void) { return users_current_uid(); }
 
 /* Write the parent bowl of an absolute path into out: "/a/b" -> "/a". */
 static void parent_of(const char *path, char *out) {
@@ -415,7 +462,7 @@ static int page_line(int header, const char *text) {
     t_puts("  -- more -- (q to stop, any other key for next page)");
     t_color(VGA_LIGHT_GREY, VGA_BLACK);
     int c = t_getc();
-    if (c == 'q' || c == 'Q' || c == 27) { t_putc('\n'); return 0; }
+    if (c < 0 || c == 'q' || c == 'Q' || c == 27) { t_putc('\n'); return 0; }
     t_clear();
     cur_shell()->page_rows = 0;
     return 1;
@@ -930,6 +977,7 @@ static void cmd_relabel(const char *args) {
  * Editing implies the right to save, so an existing file needs read+write;
  * a new file needs write on its parent bowl. */
 static void cmd_jot(const char *args) {
+    if (needs_console("jot")) return;
     while (*args == ' ') args++;
     if (!*args) { t_puts("Usage: jot <file>\n"); return; }
     char path[FAT_PATH_MAX];
@@ -1168,7 +1216,7 @@ static void cmd_cook(const char *args) {
      * FIRST: if it stops or is killed, waiting on an earlier stage would block
      * the shell against a pipe nobody is draining. */
     uint32_t last = pids[nst - 1];
-    proc_set_foreground(proc_by_pid(last));
+    shell_set_fg(proc_by_pid(last));
     if (nst == 1) {
         t_color(VGA_DARK_GREY, VGA_BLACK);
         t_printf("  cooking %s in ring 3...\n", st[0].path);
@@ -1177,7 +1225,7 @@ static void cmd_cook(const char *args) {
 
     int code = 0;
     int done = proc_wait(last, &code);
-    proc_set_foreground(0);
+    shell_set_fg(0);
 
     if (done == 0) {
         /* Stopped. Leave the rest of the pipeline alone; mark the earlier
@@ -1199,6 +1247,9 @@ static void cmd_cook(const char *args) {
         proc_wait(pids[i], &c);
     }
 
+    /* The shell's own status, for `ssh host cmd`: the program's code, 126
+     * for something that would not run, 128+9 for a kill, as sh does. */
+    cur_shell()->last_status = (code == PROC_EXIT_KILLED) ? 137 : (code == -1) ? 126 : (code & 0xFF);
     if (code == PROC_EXIT_KILLED) {
         t_color(VGA_YELLOW, VGA_BLACK);
         t_printf("  [%s killed]\n", st[nst - 1].path);
@@ -1215,7 +1266,7 @@ static void cmd_cook(const char *args) {
 /* Resolve a job argument: a pid, or empty for the newest job. */
 static proc_t *job_arg(const char *args) {
     while (*args == ' ') args++;
-    if (!*args) return proc_most_recent();
+    if (!*args) return proc_most_recent_on(TERM_KEY);
     return proc_by_pid((uint32_t)parse_num(args));
 }
 
@@ -1233,12 +1284,12 @@ static void cmd_plate(const char *args) {
     t_printf("  %s\n", p->name);
     t_color(VGA_LIGHT_GREY, VGA_BLACK);
 
-    proc_set_foreground(p);
+    shell_set_fg(p);
     proc_continue(p);
 
     int code = 0;
     int done = proc_wait(pid, &code);
-    proc_set_foreground(0);
+    shell_set_fg(0);
 
     if (done == 0) {
         t_color(VGA_YELLOW, VGA_BLACK);
@@ -1822,6 +1873,7 @@ static void cmd_larder(void) {
 
 /* skewer - what the pointer is pointing at. */
 static void cmd_skewer(void) {
+    if (needs_console("skewer")) return;
     if (!mouse_present()) {
         t_puts("  No mouse. QEMU has one by default; check IRQ 12.\n");
         return;
@@ -2068,6 +2120,11 @@ static void cmd_roster(void) {
 }
 
 static void cmd_clockout(void) {
+    if (cur_shell() != &the_shell) {           /* a session: clocking out leaves */
+        t_printf("  %s clocks out. Goodbye.\n", users_current_name());
+        cur_shell()->exiting = 1;
+        return;
+    }
     t_printf("  %s clocks out. The kitchen is yours, next cook.\n",
                users_current_name());
     do_login();
@@ -2268,6 +2325,7 @@ static void cmd_mandelbrot(void) {
 }
 
 static void cmd_vgademo(void) {
+    if (needs_console("vgademo")) return;
     vga13h_enter();
     vga13h_defpal();
 
@@ -2339,6 +2397,7 @@ static void tick_delay(uint32_t ticks) {
 }
 
 static void cmd_wipe(void) {
+    if (needs_console("wipe")) return;
     /* Sweep a colored bar top->bottom, then clear. */
     t_color(VGA_BLACK, VGA_LIGHT_CYAN);
     for (int row = 0; row < 25; row++) {
@@ -2553,7 +2612,7 @@ static void cmd_kill(const char *args) {
      * Saves reading `jobs` for a pid, and lets a script kill what it just
      * started without knowing the number. */
     if (*args == '%') {
-        proc_t *last = proc_most_recent();
+        proc_t *last = proc_most_recent_on(TERM_KEY);
         if (!last) { t_puts("kill: no live process\n"); return; }
         proc_kill(last->pid);
         t_printf("killing process %u (%s)\n", last->pid, last->name);
@@ -2605,6 +2664,7 @@ static void bgclock_task(void *arg) {
 }
 
 static void cmd_bgclock(void) {
+    if (needs_console("bgclock")) return;
     task_t *t = task_spawn("bgclock", bgclock_task, 0);
     if (!t) { t_puts("bgclock: out of memory\n"); return; }
     t_printf("bgclock running as task %u - stop with: kill %u\n", t->id, t->id);
@@ -2982,6 +3042,7 @@ static void cmd_cat(void) {
 }
 
 static void cmd_bounce(void) {
+    if (needs_console("bounce")) return;
     /* Screensaver: four colored balls ricochet around mode 13h. */
     #define BALLS 4
     int bx[BALLS], by[BALLS], vx[BALLS], vy[BALLS];
@@ -3109,6 +3170,7 @@ static void cmd_reheat(void) {
  * would leak the lock into an unrelated task the first time a player paused on
  * a menu. See docs/doom-reenable-plan.md. */
 static void cmd_doom(void) {
+    if (needs_console("doom")) return;
     if (task_count_users() > 1) {
         t_color(VGA_YELLOW, VGA_BLACK);
         t_puts("  Doom needs the machine to itself.\n");
@@ -3440,7 +3502,7 @@ static void report_finished_job(const proc_t *p) {
 static void prompt(void) {
     /* Collect background jobs that finished while we were away. Done before
      * cur_shell()->prompt_row is recorded, so the report cannot desync the line editor. */
-    proc_report_finished(report_finished_job);
+    proc_report_finished_on(TERM_KEY, report_finished_job);
 
     const char *u = users_current_name();
     cur_shell()->prompt_row = t_row();
@@ -3459,6 +3521,7 @@ static void dispatch(const char *buf) {
     const char *p = buf;
     while (*p == ' ') p++;
     if (!*p) return;
+    cur_shell()->last_status = 0;
 
     if      (str_eq(p, "menu"))       cmd_menu();
     else if (str_eq(p, "wash"))       t_clear();
@@ -3619,11 +3682,14 @@ static void dispatch(const char *buf) {
     else {
         t_color(VGA_LIGHT_RED, VGA_BLACK);
         t_printf("No soup for you: '%s'\n", p);
+        cur_shell()->last_status = 127;
         t_color(VGA_LIGHT_GREY, VGA_BLACK);
     }
 }
 
 /* ---- main shell loop ---- */
+
+static void shell_loop(char *input, char *saved, int *pos_p, int *len_p, int *hb_p);
 
 void shell_run(void) {
     char input[INPUT_MAX];
@@ -3632,11 +3698,23 @@ void shell_run(void) {
     int  hist_browse = 0;
 
     input[0] = saved[0] = '\0';
+    users_set_resolver(shell_uid_resolver);
+    fat_set_creator_hook(shell_creator);
     do_login();                 /* clock in before the kitchen opens */
     prompt();
+    shell_loop(input, saved, &pos, &len, &hist_browse);
+}
 
+/* The read-edit-dispatch loop, on cur_shell(). Returns when the terminal
+ * hangs up (getc gives -1) or the shell clocks out of a session; the
+ * console's never does either. */
+static void shell_loop(char *input, char *saved, int *pos_p, int *len_p, int *hb_p) {
+    #define pos (*pos_p)
+    #define len (*len_p)
+    #define hist_browse (*hb_p)
     while (1) {
         int c = t_getc();
+        if (c < 0) break;
 
         if (c == '\n') {
             cursor_to(len);
@@ -3644,6 +3722,7 @@ void shell_run(void) {
             input[len] = '\0';
             hist_push(input);
             dispatch(input);
+            if (cur_shell()->exiting) break;
             pos = len = hist_browse = 0;
             input[0] = saved[0] = '\0';
             prompt();
@@ -3716,3 +3795,69 @@ void shell_run(void) {
         }
     }
 }
+#undef pos
+#undef len
+#undef hist_browse
+
+/* ── Sessions: a shell of its own on another terminal (v0.36.0) ───────────
+ * The SSH server starts one per channel. The session task points its task at
+ * the session's shell_t and terminal, so everything it runs inherits both:
+ * output, input, the user, the foreground job and `kill %` all stay inside
+ * the session. */
+static void session_task(void *arg) {
+    shell_t *sh = arg;
+    task_t  *me = task_current();
+    me->shell = sh;
+    me->term  = sh->term;
+
+    if (sh->exec_line[0]) {
+        /* One command, no prompt and no echo: what `ssh host cmd` means. */
+        dispatch(sh->exec_line);
+    } else {
+        char input[INPUT_MAX], saved[INPUT_MAX];
+        int  pos = 0, len = 0, hb = 0;
+        input[0] = saved[0] = '\0';
+        t_color(VGA_LIGHT_CYAN, VGA_BLACK);
+        t_printf("\n  soupOS over SSH: a shell of your own. Welcome to the kitchen, %s.\n\n",
+                 users_current_name());
+        t_color(VGA_LIGHT_GREY, VGA_BLACK);
+        prompt();
+        shell_loop(input, saved, &pos, &len, &hb);
+    }
+    t_color(VGA_LIGHT_GREY, VGA_BLACK);
+    klog("[shell] session for %s ended, status %d\n", users_current_name(), sh->last_status);
+    sh->done = 1;
+    task_exit();
+}
+
+void *shell_session_start(term_t *t, int uid, const char *exec_line) {
+    shell_t *sh = kmalloc(sizeof(shell_t));
+    if (!sh) return 0;
+    memset(sh, 0, sizeof(*sh));
+    strcpy(sh->cwd, "/");
+    sh->prompt_len = 8;
+    sh->term = t;
+    sh->uid  = (uint8_t)uid;
+    if (exec_line) {
+        strncpy(sh->exec_line, exec_line, INPUT_MAX - 1);
+        sh->exec_line[INPUT_MAX - 1] = '\0';
+    }
+    task_t *tk = task_spawn(exec_line ? "sh:exec" : "sh:session", session_task, sh);
+    if (!tk) { kfree(sh); return 0; }
+    klog("[shell] session for uid %d started as task %u\n", uid, tk->id);
+    return sh;
+}
+
+int shell_session_done(void *s, int *status) {
+    shell_t *sh = s;
+    if (!sh->done) return 0;
+    if (status) *status = sh->last_status;
+    return 1;
+}
+
+void shell_session_hangup(void *s) {
+    shell_t *sh = s;
+    proc_kill_by_term(sh->term);        /* its programs die with it, like SIGHUP */
+}
+
+void shell_session_free(void *s) { kfree(s); }

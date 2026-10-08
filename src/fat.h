@@ -99,6 +99,9 @@ int fat_exists(const char *path);
 
 /* uid stamped as owner on files/bowls created from here on. */
 void fat_set_creator(uint8_t uid);
+/* If set, consulted instead of the fat_set_creator value: the uid of the
+ * task creating the file, so a file made from an SSH session is that cook's. */
+void fat_set_creator_hook(uint8_t (*hook)(void));
 
 /* Read a path's owner uid and permission mode. Returns 0=ok, -1=missing. */
 int  fat_stat (const char *path, uint8_t *owner, uint8_t *mode);

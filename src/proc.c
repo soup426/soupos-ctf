@@ -132,6 +132,7 @@ int proc_spawn(const char *path, const char *args, int background,
     }
     t->proc = p;
     p->task = t;
+    p->term = t->term;               /* inherited from the cooking task */
     p->pid  = t->id;
     if (out_pid) *out_pid = p->pid;
 
@@ -296,6 +297,22 @@ int proc_kill(uint32_t pid) {
 /* The newest job: what a bare `fg`, `bg` and `kill %` target. Stopped counts
  * as live, since resuming one is the whole point of job control. Highest pid
  * wins, because task ids only ever increase. */
+proc_t *proc_most_recent_on(void *term) {
+    proc_t *best = 0;
+    for (int i = 0; i < PROC_MAX; i++)
+        if ((procs[i].state == PROC_RUNNING || procs[i].state == PROC_STOPPED) &&
+            procs[i].term == term && (!best || procs[i].pid > best->pid))
+            best = &procs[i];
+    return best;
+}
+
+void proc_kill_by_term(void *term) {
+    for (int i = 0; i < PROC_MAX; i++)
+        if ((procs[i].state == PROC_RUNNING || procs[i].state == PROC_STOPPED) &&
+            procs[i].term == term)
+            proc_kill(procs[i].pid);
+}
+
 proc_t *proc_most_recent(void) {
     proc_t *best = 0;
     for (int i = 0; i < PROC_MAX; i++)
@@ -303,6 +320,19 @@ proc_t *proc_most_recent(void) {
             (!best || procs[i].pid > best->pid))
             best = &procs[i];
     return best;
+}
+
+int proc_report_finished_on(void *term, void (*report)(const proc_t *p)) {
+    int n = 0;
+    for (int i = 0; i < PROC_MAX; i++) {
+        proc_t *p = &procs[i];
+        if (p->state != PROC_ZOMBIE || !p->background || p->reported || p->term != term) continue;
+        p->reported = 1;
+        if (report) report(p);
+        p->state = PROC_FREE;
+        n++;
+    }
+    return n;
 }
 
 int proc_report_finished(void (*report)(const proc_t *p)) {

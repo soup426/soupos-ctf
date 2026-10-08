@@ -26,6 +26,8 @@
 #include "ed25519.h"
 #include "users.h"
 #include "console.h"
+#include "term.h"
+#include "shell.h"
 #include "str.h"
 #include "klog.h"
 
@@ -71,10 +73,11 @@ typedef struct {
     int      crypt;                 /* after NEWKEYS both ways */
     uint32_t hdr_have;              /* length bytes read so far (poll-safe) */
     int      chan_open;
-    int      exec_mode;             /* one command, then close */
-    int      exec_done;             /* the prompt came back */
-    int      prompt_state;          /* matcher for "@soupOS:" ... "> " */
     int      close_sent;
+    uint8_t  uid;                   /* who authenticated */
+    int      pty_cols, pty_rows;    /* from pty-req, for the terminal */
+    term_stream_t term;             /* the channel, as a terminal (v0.36.0) */
+    void    *shell;                 /* the session shell on it, once started */
     uint32_t chan_peer;             /* the client's channel number */
     uint32_t win_out;               /* bytes the client will still take */
     uint32_t win_in_used;           /* bytes we have taken since the last adjust */
@@ -422,8 +425,8 @@ static int read_client_version(void) {
     return -1;
 }
 
-/* ── output ring: console sink (any task) -> SSH task ────────────────────── */
-static uint8_t  oring[4096];
+/* ── output ring: the session's terminal (its tasks) -> the SSH task ─────── */
+static uint8_t  oring[16384];
 static volatile uint32_t ohead, otail;
 
 static void oring_push(char c) {
@@ -433,24 +436,25 @@ static void oring_push(char c) {
     ohead = next;
 }
 
-/* For exec: the shell's prompt coming back is the end of the command. The
- * prompt is "<user>@soupOS:<cwd>> ", so "@soupOS:" followed by "> " is it. */
-static void watch_for_prompt(char c) {
-    static const char lead[] = "@soupOS:";
-    int st = S.prompt_state;
-    if (st < 8) { S.prompt_state = (c == lead[st]) ? st + 1 : (c == '@' ? 1 : 0); return; }
-    if (st == 8) { if (c == '>') S.prompt_state = 9; return; }
-    if (st == 9) { if (c == ' ') S.exec_done = 1; else S.prompt_state = 8; }
-}
-
-static void ssh_sink(char c) {
-    if (!S.chan_open) return;
-    if (S.exec_mode && !S.exec_done) watch_for_prompt(c);
-    preempt_disable();
-    if (c == '\n')      { oring_push('\r'); oring_push('\n'); }
-    else if (c == '\b') { oring_push('\b'); oring_push(' '); oring_push('\b'); }
-    else                  oring_push(c);
-    preempt_enable();
+/* The session terminal's write: whatever task prints in the session pushes
+ * here and the SSH task drains it. A full ring makes the WRITER wait, which
+ * is what a slow terminal should do to a program, rather than losing output;
+ * a writer that cannot wait (interrupts off) or a hung-up channel drops. */
+static void stream_write(const char *z, uint32_t n, void *ctx) {
+    (void)ctx;
+    for (uint32_t i = 0; i < n; i++) {
+        uint32_t start = timer_get_ticks();
+        while (((ohead + 1) % sizeof(oring)) == otail) {
+            uint32_t fl;
+            __asm__ volatile ("pushf; pop %0" : "=r"(fl));
+            if (S.term.closed || !(fl & 0x200) || timer_get_ticks() - start > 500) return;
+            task_yield();
+            if (((ohead + 1) % sizeof(oring)) == otail) cpu_halt();
+        }
+        preempt_disable();
+        oring_push(z[i]);
+        preempt_enable();
+    }
 }
 
 static int flush_output(void) {
@@ -560,7 +564,10 @@ static int userauth(void) {
                     w_u8(&sd, MSG_USERAUTH_REQUEST);
                     w_str(&sd, user, ul); w_str(&sd, "ssh-connection", 14); w_cstr(&sd, "publickey");
                     w_u8(&sd, 1); w_str(&sd, alg, al); w_str(&sd, blob, bl);
-                    ok = ed25519_verify(sig, sd.p, sd.len, pk) == 0;
+                    /* A key in /AUTHKEYS may log in as any cook that exists. */
+                    int uid = users_uid_of(u);
+                    ok = uid >= 0 && ed25519_verify(sig, sd.p, sd.len, pk) == 0;
+                    if (ok) S.uid = (uint8_t)uid;
                 }
             }
             if (ok) klog("[ssh] %s authenticated by key\n", u);
@@ -569,7 +576,9 @@ static int userauth(void) {
             const uint8_t *pass = r_str(&r, &pl);
             if (!r.bad && pl < sizeof(pw)) {
                 memcpy(pw, pass, pl); pw[pl] = '\0';
-                ok = users_check(u, pw) >= 0;
+                int uid = users_check(u, pw);
+                ok = uid >= 0;
+                if (ok) S.uid = (uint8_t)uid;
                 memset(pw, 0, sizeof(pw));
             }
         }
@@ -593,45 +602,53 @@ static int reply_status(uint8_t msg) {
     return write_packet(b.p, b.len);
 }
 
+static int start_session(const char *exec_line) {
+    if (S.shell) return -1;                          /* one per channel */
+    term_stream_init(&S.term, S.pty_cols, S.pty_rows, stream_write, 0);
+    S.shell = shell_session_start(&S.term.t, S.uid, exec_line);
+    if (!S.shell) return -1;
+    klog("[ssh] %s: a shell of its own for uid %u\n", exec_line ? "exec" : "shell", S.uid);
+    return 0;
+}
+
 static int handle_channel_request(rbuf_t *r) {
     uint32_t tl; const uint8_t *type = r_str(r, &tl);
     int want_reply = r_u8(r) != 0;
     if (r->bad) return -1;
     char t[32]; uint32_t tn = tl < 31 ? tl : 31; memcpy(t, type, tn); t[tn] = '\0';
 
-    int ok = (strcmp(t, "pty-req") == 0) || (strcmp(t, "shell") == 0) || (strcmp(t, "env") == 0) ||
-             (strcmp(t, "window-change") == 0) || (strcmp(t, "exec") == 0);
-    if ((strcmp(t, "exec") == 0)) {
-        /* One command through the same shell: type it, stream what comes
-         * back until the prompt returns, then close. The shell's echo and
-         * its prompt come along, because it IS the shell. */
+    int ok = 1;
+    if (strcmp(t, "pty-req") == 0) {
+        uint32_t el; r_str(r, &el);                  /* TERM: we speak VT100 to all */
+        S.pty_cols = (int)r_u32(r);
+        S.pty_rows = (int)r_u32(r);
+    } else if (strcmp(t, "window-change") == 0) {
+        int c = (int)r_u32(r), rw = (int)r_u32(r);
+        if (S.shell) term_stream_resize(&S.term, c, rw);
+        else { S.pty_cols = c; S.pty_rows = rw; }
+    } else if (strcmp(t, "shell") == 0) {
+        ok = start_session(0) == 0;
+    } else if (strcmp(t, "exec") == 0) {
         uint32_t cl; const uint8_t *cmd = r_str(r, &cl);
-        if (r->bad || cl > 200) return -1;
-        if (want_reply && reply_status(MSG_CHANNEL_SUCCESS) < 0) return -1;
-        S.exec_mode = 1; S.exec_done = 0; S.prompt_state = 0;
-        console_set_sink(ssh_sink);
-        klog("[ssh] exec attached to the console\n");
-        for (uint32_t i = 0; i < cl; i++) console_rx_byte(cmd[i]);
-        console_rx_byte('\r');
-        return 0;
-    }
-    if ((strcmp(t, "shell") == 0)) {
-        console_set_sink(ssh_sink);
-        klog("[ssh] shell attached to the console\n");
-        static const char hello[] = "\r\nsoupOS over SSH. You share the local keyboard.\r\n";
-        for (uint32_t i = 0; i < sizeof(hello) - 1; i++) oring_push(hello[i]);
-        console_rx_byte('\r');               /* a fresh prompt for the new arrival */
+        if (r->bad) return -1;
+        char line[256];
+        uint32_t n = cl < sizeof(line) - 1 ? cl : sizeof(line) - 1;
+        memcpy(line, cmd, n); line[n] = '\0';
+        ok = start_session(line) == 0;
+    } else if (strcmp(t, "env") != 0) {
+        ok = 0;                                      /* subsystems, x11, agent: no */
     }
     if (want_reply) return reply_status(ok ? MSG_CHANNEL_SUCCESS : MSG_CHANNEL_FAILURE);
     return 0;
 }
 
-static int finish_exec(void) {
-    /* EOF, the exit status (the shell does not report one: 0), close. */
+static int finish_session(int status) {
+    /* EOF, the session's exit status, close. */
     uint8_t mem[64]; wbuf_t b;
     if (reply_status(MSG_CHANNEL_EOF) < 0) return -1;
     w_init(&b, mem, sizeof(mem));
-    w_u8(&b, MSG_CHANNEL_REQUEST); w_u32(&b, S.chan_peer); w_cstr(&b, "exit-status"); w_u8(&b, 0); w_u32(&b, 0);
+    w_u8(&b, MSG_CHANNEL_REQUEST); w_u32(&b, S.chan_peer); w_cstr(&b, "exit-status"); w_u8(&b, 0);
+    w_u32(&b, (uint32_t)status);
     if (write_packet(b.p, b.len) < 0) return -1;
     S.close_sent = 1;
     return reply_status(MSG_CHANNEL_CLOSE);
@@ -640,9 +657,9 @@ static int finish_exec(void) {
 static void connection_loop(void) {
     for (;;) {
         if (flush_output() < 0) return;
-        if (S.exec_done && !S.close_sent) {
-            console_set_sink(0);
-            if (finish_exec() < 0) return;
+        int status;
+        if (S.shell && !S.close_sent && ohead == otail && shell_session_done(S.shell, &status)) {
+            if (finish_session(status) < 0) return;
         }
         int n = read_packet_wait(2);
         if (n == -2) continue;
@@ -677,7 +694,7 @@ static void connection_loop(void) {
             r_u32(&r);
             uint32_t dl; const uint8_t *d = r_str(&r, &dl);
             if (r.bad) return;
-            for (uint32_t i = 0; i < dl; i++) console_rx_byte(d[i]);
+            if (S.shell) term_stream_feed(&S.term, d, dl);
             S.win_in_used += dl;
             if (S.win_in_used > 32768) {
                 uint8_t mem[16]; wbuf_t b; w_init(&b, mem, sizeof(mem));
@@ -703,7 +720,6 @@ static void connection_loop(void) {
 }
 
 static void session(void) {
-    console_set_sink(0);
     memset(&S, 0, sizeof(S));
     S.h = -1;
     ohead = otail = 0;
@@ -760,8 +776,22 @@ static void run_session(int h) {
     if (userauth() < 0) return;
     ohead = otail = 0;
     connection_loop();
-    console_set_sink(0);
     S.chan_open = 0;
+    if (S.shell) {
+        /* Hang up: the terminal reads as gone, the session's programs are
+         * killed, and the session task notices and ends. Wait for it, so the
+         * terminal it points at (inside S) is not reused under it. */
+        term_stream_close(&S.term);
+        shell_session_hangup(S.shell);
+        uint32_t start = timer_get_ticks();
+        while (!shell_session_done(S.shell, 0) && timer_get_ticks() - start < 500) {
+            task_yield();
+            cpu_halt();
+        }
+        if (shell_session_done(S.shell, 0)) shell_session_free(S.shell);
+        else klog("[ssh] session did not end within 5 s; leaving it\n");
+        S.shell = 0;
+    }
     klog("[ssh] session over\n");
 }
 

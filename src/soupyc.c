@@ -52,6 +52,7 @@
 #include "challenge.h"
 #endif
 #include "vga.h"
+#include "term.h"
 #include "keyboard.h"
 #include "str.h"
 #include "alphasoup.h"
@@ -943,19 +944,19 @@ static int call_builtin(node_t *n, val_t *out);
 
 /* Print a value - recurses into arrays as [e1, e2, ...]. */
 static void print_val(val_t v) {
-    if (v.type == VAL_STR) { vga_puts(v.sval); return; }
+    if (v.type == VAL_STR) { term_puts(term_current(), v.sval); return; }
     if (v.type == VAL_ARR) {
-        if (!arr_valid(v.ival)) { vga_puts("[?]"); return; }
+        if (!arr_valid(v.ival)) { term_puts(term_current(), "[?]"); return; }
         arr_t *a = &arrays[v.ival];
-        vga_putchar('[');
+        term_putc(term_current(), '[');
         for (int i = 0; i < a->len; i++) {
-            if (i) vga_puts(", ");
+            if (i) term_puts(term_current(), ", ");
             print_val(a->elems[i]);
         }
-        vga_putchar(']');
+        term_putc(term_current(), ']');
         return;
     }
-    vga_printf("%d", v.ival);
+    term_printf(term_current(), "%d", v.ival);
 }
 
 static void int_to_str(int v, char *buf, int cap) {
@@ -1128,7 +1129,7 @@ static val_t eval_node(node_t *n) {
             val_t v = eval_node(n->body);
             if (err_flag) return v;
             print_val(v);
-            vga_putchar('\n');
+            term_putc(term_current(), '\n');
             return v;
         }
 
@@ -1140,16 +1141,18 @@ static val_t eval_node(node_t *n) {
             #define INPUT_MAX 1024u
             static char ibuf[INPUT_MAX + 1];
             uint32_t i = 0; int c;
-            while ((c = keyboard_getchar()) != '\n') {
+            /* -1 is a terminal that has gone away (an SSH session hung up):
+             * end the line rather than spin on it. */
+            while ((c = term_current()->getc(term_current())) != '\n' && c >= 0) {
                 if (c == '\b') {
-                    if (i > 0) { i--; vga_putchar('\b'); }
+                    if (i > 0) { i--; term_putc(term_current(), '\b'); }
                 } else if (c >= ' ' && c < 127 && i < INPUT_MAX) {
                     ibuf[i++] = (char)c;
-                    vga_putchar((char)c);
+                    term_putc(term_current(), (char)c);
                 }
             }
             ibuf[i] = '\0';
-            vga_putchar('\n');
+            term_putc(term_current(), '\n');
             return mksvaln(ibuf, i);
         }
 
@@ -1802,9 +1805,9 @@ static int soupyc_exec(const char *source) {
     }
 
     if (err_flag) {
-        vga_set_color(VGA_LIGHT_RED, VGA_BLACK);
-        vga_printf("soupyc: parse error (line %d): %s\n", err_line, err_msg);
-        vga_set_color(VGA_LIGHT_GREY, VGA_BLACK);
+        term_color(term_current(), VGA_LIGHT_RED, VGA_BLACK);
+        term_printf(term_current(), "soupyc: parse error (line %d): %s\n", err_line, err_msg);
+        term_color(term_current(), VGA_LIGHT_GREY, VGA_BLACK);
         return -1;
     }
 
@@ -1812,9 +1815,9 @@ static int soupyc_exec(const char *source) {
     eval_block(head.next);
 
     if (err_flag) {
-        vga_set_color(VGA_LIGHT_RED, VGA_BLACK);
-        vga_printf("soupyc: runtime error (line %d): %s\n", err_line, err_msg);
-        vga_set_color(VGA_LIGHT_GREY, VGA_BLACK);
+        term_color(term_current(), VGA_LIGHT_RED, VGA_BLACK);
+        term_printf(term_current(), "soupyc: runtime error (line %d): %s\n", err_line, err_msg);
+        term_color(term_current(), VGA_LIGHT_GREY, VGA_BLACK);
         return -1;
     }
 
@@ -1883,10 +1886,10 @@ static void soupyc_child(void *arg) {
     eval_block(funcs[ctx->m_entry_func].body);
 
     if (err_flag) {
-        vga_set_color(VGA_LIGHT_RED, VGA_BLACK);
-        vga_printf("\nsoupyc: spawned %s failed (line %d): %s\n",
+        term_color(term_current(), VGA_LIGHT_RED, VGA_BLACK);
+        term_printf(term_current(), "\nsoupyc: spawned %s failed (line %d): %s\n",
                    funcs[ctx->m_entry_func].name, err_line, err_msg);
-        vga_set_color(VGA_LIGHT_GREY, VGA_BLACK);
+        term_color(term_current(), VGA_LIGHT_GREY, VGA_BLACK);
     }
 
     release_ctx(ctx);
@@ -1931,9 +1934,9 @@ int soupyc_run(const char *source) {
 
     soupyc_ctx_t *ctx = (soupyc_ctx_t *)kmalloc(sizeof *ctx);
     if (!ctx) {
-        vga_set_color(VGA_LIGHT_RED, VGA_BLACK);
-        vga_puts("soupyc: not enough memory for an interpreter context\n");
-        vga_set_color(VGA_LIGHT_GREY, VGA_BLACK);
+        term_color(term_current(), VGA_LIGHT_RED, VGA_BLACK);
+        term_puts(term_current(), "soupyc: not enough memory for an interpreter context\n");
+        term_color(term_current(), VGA_LIGHT_GREY, VGA_BLACK);
         return -1;
     }
     memset(ctx, 0, sizeof *ctx);

@@ -2,6 +2,7 @@
 #include "usermode.h"
 #include "proc.h"
 #include "vga.h"
+#include "term.h"
 #include "klog.h"
 #include "task.h"
 
@@ -86,13 +87,16 @@ void isr_handler(registers_t *regs) {
         uint32_t cr2 = 0;
         if (regs->int_no == 14)
             __asm__ volatile ("mov %%cr2, %0" : "=r"(cr2));
-        vga_set_color(VGA_LIGHT_RED, VGA_BLACK);
-        vga_printf("\n  [program killed] exception %u: %s\n",
-                   regs->int_no, name);
-        vga_printf("  eip=0x%x err=0x%x", regs->eip, regs->err_code);
-        if (regs->int_no == 14) vga_printf(" cr2=0x%x", cr2);
-        vga_puts("\n");
-        vga_set_color(VGA_LIGHT_GREY, VGA_BLACK);
+        /* To the terminal the program was cooked on, which for a program
+         * run over SSH is not this screen. */
+        term_t *tt = term_current();
+        term_color(tt, VGA_LIGHT_RED, VGA_BLACK);
+        term_printf(tt, "\n  [program killed] exception %u: %s\n",
+                    regs->int_no, name);
+        term_printf(tt, "  eip=0x%x err=0x%x", regs->eip, regs->err_code);
+        if (regs->int_no == 14) term_printf(tt, " cr2=0x%x", cr2);
+        term_puts(tt, "\n");
+        term_color(tt, VGA_LIGHT_GREY, VGA_BLACK);
         klog("[user] fault exc=%u err=0x%x eip=0x%x cr2=0x%x -> program killed\n",
              regs->int_no, regs->err_code, regs->eip, cr2);
         usermode_fault(regs->int_no, regs->err_code, regs->eip, cr2);

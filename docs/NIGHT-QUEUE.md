@@ -58,7 +58,7 @@ next step is to keep going instead of killing.
   of the fault path (a request the ssh/fat task pattern can serve) or prove
   the lock order; do not discover it by deadlock.
 
-## 2. A shell of its own for the SSH session
+## 2. A shell of its own for the SSH session — DONE v0.36.0 (stages a, b, c)
 
 Today an SSH login drives THE local shell: it shares the keyboard and the
 screen, and the person authenticated over SSH is not the person logged into

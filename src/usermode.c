@@ -12,6 +12,7 @@
  * fd table, heap break, args and exit code.
  */
 #include "usermode.h"
+#include "term.h"
 #include "swap.h"
 #include "syscall_nr.h"
 #include "isr.h"
@@ -289,7 +290,21 @@ int usermode_run(proc_t *pr) {
  *
  * Returns the character, or -1 for EOF. */
 static int user_stdin_getchar(proc_t *pr) {
-    if (!pr || pr != proc_foreground()) return -1;      /* not ours: EOF */
+    if (!pr) return -1;
+    /* A program cooked on another terminal (an SSH session) reads that
+     * terminal, and only while it is that terminal's foreground program. */
+    term_t *t = (term_t *)pr->term;
+    if (t && t != &term_vga) {
+        if (t->fg != pr) return -1;
+        __asm__ volatile ("sti");
+        while (!t->available(t)) {
+            if (pr->killed) return -1;
+            task_yield();
+            if (!t->available(t) && !pr->killed) cpu_halt();
+        }
+        return pr->killed ? -1 : t->getc(t);
+    }
+    if (pr != proc_foreground()) return -1;             /* not ours: EOF */
 
     /* int 0x80 is a DPL-3 *interrupt* gate, so IF is clear in here. Waiting
      * for a key with interrupts off would wait forever: the keyboard IRQ that
@@ -336,10 +351,17 @@ void syscall_dispatch(registers_t *r) {
                 int w = vfs_write(pr->ufds[fd], p, len);
                 r->eax = (uint32_t)(w < 0 ? -1 : w);
             } else if (fd == FD_STDOUT) {
-                for (uint32_t i = 0; i < len; i++) vga_putchar(p[i]);
+                /* The terminal it was cooked on: the console, or a session. */
+                term_t *t = term_current();
+                for (uint32_t i = 0; i < len; i++) t->putc(t, p[i]);
                 r->eax = len;
             } else if (fd == FD_STDERR) {
-                for (uint32_t i = 0; i < len; i++) serial_putc(p[i]);
+                /* The console's stderr is the serial log (the gate reads it).
+                 * A program in an SSH session writes stderr to the session:
+                 * the log is the console's, not every cook's. */
+                term_t *t = term_current();
+                if (t != &term_vga) for (uint32_t i = 0; i < len; i++) t->putc(t, p[i]);
+                else                for (uint32_t i = 0; i < len; i++) serial_putc(p[i]);
                 r->eax = len;
             } else {
                 r->eax = (uint32_t)-1;

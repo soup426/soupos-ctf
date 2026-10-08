@@ -58,6 +58,7 @@ typedef struct proc {
     wait_queue_t  waiters;             /* the parent blocks here            */
     wait_queue_t  cont_wq;             /* the process itself parks here      */
     struct task  *task;                /* NULL once the process has exited  */
+    void         *term;                /* the terminal it was cooked on (v0.36.0) */
 } proc_t;
 
 /* The process the calling task is running, or NULL for a plain kernel task. */
@@ -111,6 +112,11 @@ proc_t  *proc_by_pid(uint32_t pid);
 
 /* Most recently spawned live process, or NULL. Backs the shell's `kill %`. */
 proc_t  *proc_most_recent(void);
+/* The same, among the processes cooked on terminal `term` only, so `kill %`
+ * in one shell never reaches another shell's job. */
+proc_t  *proc_most_recent_on(void *term);
+/* A terminal hung up: kill every live process cooked on it. */
+void     proc_kill_by_term(void *term);
 
 /* Iterate every non-free slot: start with *idx = 0, stop when NULL. */
 proc_t  *proc_next(int *idx);
@@ -133,3 +139,5 @@ int      proc_kill_pending(void);
  * frees their slots, and returns how many were reported. Called by the shell
  * just before it draws a prompt, the way a real shell does it. */
 int      proc_report_finished(void (*report)(const proc_t *p));
+/* The same, for the jobs cooked on one terminal only. */
+int      proc_report_finished_on(void *term, void (*report)(const proc_t *p));

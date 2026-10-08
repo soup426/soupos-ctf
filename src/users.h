@@ -37,6 +37,11 @@ int  users_remove(const char *name);
 
 /* The logged-in session. */
 void        users_set_current(uint8_t uid);
+/* The current user is per shell since v0.36.0: an SSH session is logged in as
+ * whoever authenticated, not as whoever sits at the console. The shell
+ * registers this; it returns the asking task's shell uid, or -1 for "the
+ * console's user" (users_set_current). */
+void        users_set_resolver(int (*resolve)(void));
 uint8_t     users_current_uid(void);
 const char *users_current_name(void);
 int         users_is_headchef(void);          /* 1 if current uid == 0 */

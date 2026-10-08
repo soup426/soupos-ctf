@@ -883,6 +883,19 @@ seen in the output (`watch_for_prompt`); change the prompt format and update
 that matcher. A second client gets a plain DISCONNECT(12) from
 `refuse_others()`, which runs at the packet-wait point. No rekeying.
 
+## Sessions: a terminal and a shell per task (v0.36.0)
+
+`task_t.term` and `task_t.shell` are inherited by every spawned task (and
+cleared by `task_set_service`). Print on a task's behalf with
+`term_current()`, never `vga_*`, unless it is about the physical screen; read
+with `term_current()->getc` and treat -1 as "hung up". `cur_shell()` is the
+asking task's shell_t; users.c/fat.c resolve the current uid through it. A
+process remembers its terminal in `proc_t.term` (NULL = console); job lookups
+are per terminal (`proc_most_recent_on`, `proc_report_finished_on`), and
+`term_t.fg` is the terminal's foreground program. `shell_session_start` is the
+API the vault uses; anything new that runs a shell elsewhere should use it too.
+Commands that draw on the physical screen start with `needs_console("name")`.
+
 ## The shell writes to a terminal (v0.35.2)
 
 In shell.c, use `t_puts`/`t_printf`/`t_color`/`t_cursor`/`t_getc`/... (they go

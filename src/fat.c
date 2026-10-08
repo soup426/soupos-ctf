@@ -108,6 +108,9 @@ static int      free_known;         /* ...once the first fat_space has counted *
 static uint8_t  creator_uid     = 0;
 
 void fat_set_creator(uint8_t uid) { creator_uid = uid; }
+static uint8_t (*creator_hook)(void);
+void fat_set_creator_hook(uint8_t (*hook)(void)) { creator_hook = hook; }
+static uint8_t creator_now(void) { return creator_hook ? creator_hook() : creator_uid; }
 
 /* The cluster number that represents "the root directory" in this module.
  * On FAT16 the root is a fixed sector range, not a cluster - we use 0 as a
@@ -871,7 +874,7 @@ static int fat_write_impl(const char *path, const uint8_t *buf, uint32_t size) {
     uint32_t lfn_slot   = 0;
     int      lfn_count  = 0;
     uint8_t  ent_mode   = FAT_PERM_DEFAULT;
-    uint8_t  ent_owner  = creator_uid;
+    uint8_t  ent_owner  = creator_now();
     dirent_t de;
     uint32_t e_lba;
     int      e_idx;
@@ -1064,7 +1067,7 @@ static int fat_mkdir_impl(const char *path) {
     memcpy(ent->ext,  fext,  3);
     ent->attr           = FAT_ATTR_DIR;
     ent->reserved       = FAT_PERM_DEFAULT;    /* soupOS permission mode */
-    ent->crt_time_tenth = creator_uid;         /* soupOS owner uid       */
+    ent->crt_time_tenth = creator_now();         /* soupOS owner uid       */
     ent->cluster_lo     = (uint16_t)(newcl & 0xFFFF);
     ent->file_size      = 0;
     return ata_write_sector(slot_lba, sec_buf);

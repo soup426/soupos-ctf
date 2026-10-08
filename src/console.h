@@ -1,4 +1,5 @@
 #pragma once
+#include <stdint.h>
 
 /* console.h - serial console.
  *
@@ -38,6 +39,18 @@ void console_out_char(char c);
  * poll uses it, and so does a network session: the handling of CR, DEL and
  * ANSI escapes is the same whatever carried the byte. */
 void console_rx_byte(int c);
+
+/* The terminal-convention translator itself (CR/LF, DEL, ANSI arrows and
+ * Home/End/Delete, a lone ESC after a short grace period), as an object, so
+ * a byte-stream terminal translates exactly as the serial console does.
+ * out(key, ctx) receives each resulting key code. Zero-initialise, set out. */
+typedef struct {
+    int      state, csi_num, last_was_cr;
+    uint32_t esc_tick;
+    void   (*out)(int key, void *ctx);
+    void    *ctx;
+} keyxlate_t;
+void keyxlate_byte(keyxlate_t *x, int c);
 
 /* A second destination for console output, so a network session sees the same
  * stream the serial one does. NULL to detach. */
