@@ -65,9 +65,8 @@ screen, and the person authenticated over SSH is not the person logged into
 the shell. The pass has the same shape. Fixing it is the biggest structural
 change on this list, so it is staged:
 
-- (a) Audit `shell.c`'s file-scope state (the line editor, history, cwd,
-  prompt_row, the foreground job) and group it into one `shell_t`. No
-  behaviour change; the gate is the proof.
+- (a) DONE v0.35.1: `shell_t` behind `cur_shell()`; the user and the
+  foreground job stay global until (c).
 - (b) A terminal abstraction under the shell: `term_puts`/`term_getc` on a
   `term_t`, with the VGA console as one terminal and a byte-sink/source
   pair as another. The shell stops calling `vga_*` and `keyboard_*`
@@ -107,8 +106,9 @@ prints, and no torn line in the capture.
 
 ## 5b. ATA under KVM: polling costs the hypervisor dearly
 
-Found measuring swap. The same greedy run that takes 3 s under the gate's
-emulated boot takes far longer under KVM: every status poll, every settle
+Found measuring swap. The same greedy run that takes 296 ticks (3 s) under
+the gate's emulated boot takes 5601 ticks (56 s) under KVM, nineteen times
+slower: every status poll, every settle
 read and every command byte is a VM exit, and a polled driver issues
 hundreds per sector. String PIO (v0.34.1) only halved it. The fix is the
 classic one: issue the command, block the task on a wait queue, let IRQ 14

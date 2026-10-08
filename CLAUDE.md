@@ -883,6 +883,14 @@ seen in the output (`watch_for_prompt`); change the prompt format and update
 that matcher. A second client gets a plain DISCONNECT(12) from
 `refuse_others()`, which runs at the packet-wait point. No rekeying.
 
+## Per-shell state is `shell_t` (v0.35.1)
+
+`cwd`, history, `prompt_row`/`prompt_len` and the pager rows live in
+`shell_t`, reached by `cur_shell()` (one instance today). New per-shell state
+goes in the struct, not in a file-scope static; the logged-in user and the
+foreground job are still global and move when the SSH session gets its own
+shell (queue item 2c).
+
 ## Swap lives past the FAT volume (v0.35.0)
 
 `swap.c` addresses the sectors between `fat_volume_sectors()` and

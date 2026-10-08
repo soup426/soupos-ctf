@@ -52,6 +52,23 @@
 #define INPUT_MAX   256
 #define HIST_MAX     16
 
+/* Everything that belongs to ONE shell rather than to the kernel: where it
+ * is, what it typed before, where its prompt sits. Fourth queue, item 2a:
+ * grouped here so a second shell (an SSH session's own) can have its own,
+ * reached through cur_shell(). Today there is one. */
+typedef struct {
+    char cwd[FAT_PATH_MAX];
+    char hist[HIST_MAX][INPUT_MAX];
+    int  hist_head;              /* ring-buffer write position           */
+    int  hist_size;              /* entries stored (0..HIST_MAX)          */
+    int  prompt_row;             /* VGA row where the current prompt was printed */
+    int  prompt_len;             /* width of the printed prompt (includes cwd)   */
+    int  page_rows;              /* rows per page for the pager              */
+} shell_t;
+
+static shell_t the_shell = { .cwd = "/", .prompt_len = 8 };
+static inline shell_t *cur_shell(void) { return &the_shell; }
+
 /* ---- string helpers ---- */
 static int str_eq(const char *a, const char *b) {
     while (*a && *b) { if (*a != *b) return 0; a++; b++; }
@@ -74,8 +91,7 @@ static inline void outb(uint16_t port, uint8_t val) {
 
 /* ---- current bowl (working directory) ---------------------------------- */
 /* The shell tracks one absolute, normalised path. fat_* takes absolute
- * paths, so every file command resolves its argument against `cwd` first. */
-static char cwd[FAT_PATH_MAX] = "/";
+ * paths, so every file command resolves its argument against `cur_shell()->cwd` first. */
 
 /* Normalise an absolute path: collapse "//", ".", and ".." into a clean
  * "/a/b/c" form (or "/"). `out` must be >= FAT_PATH_MAX bytes. */
@@ -114,15 +130,15 @@ static void normalize_path(const char *in, char *out) {
     }
 }
 
-/* Resolve `arg` (absolute or relative to cwd) into a clean absolute path. */
+/* Resolve `arg` (absolute or relative to cur_shell()->cwd) into a clean absolute path. */
 static void resolve_path(const char *arg, char *out) {
     char joined[FAT_PATH_MAX * 2];
     int j = 0;
     if (arg && arg[0] == '/') {
         joined[j++] = '/';
     } else {
-        for (int i = 0; cwd[i] && j < (int)sizeof(joined) - 2; i++)
-            joined[j++] = cwd[i];
+        for (int i = 0; cur_shell()->cwd[i] && j < (int)sizeof(joined) - 2; i++)
+            joined[j++] = cur_shell()->cwd[i];
         joined[j++] = '/';
     }
     if (arg)
@@ -225,23 +241,20 @@ static void do_login(void) {
 }
 
 /* ---- command history ---- */
-static char hist[HIST_MAX][INPUT_MAX];
-static int  hist_head = 0;   /* ring-buffer write position */
-static int  hist_size = 0;   /* entries stored (0..HIST_MAX) */
 
 static void hist_push(const char *cmd) {
     if (!cmd || !cmd[0]) return;
-    strncpy(hist[hist_head % HIST_MAX], cmd, INPUT_MAX - 1);
-    hist[hist_head % HIST_MAX][INPUT_MAX - 1] = '\0';
-    hist_head++;
-    if (hist_size < HIST_MAX) hist_size++;
+    strncpy(cur_shell()->hist[cur_shell()->hist_head % HIST_MAX], cmd, INPUT_MAX - 1);
+    cur_shell()->hist[cur_shell()->hist_head % HIST_MAX][INPUT_MAX - 1] = '\0';
+    cur_shell()->hist_head++;
+    if (cur_shell()->hist_size < HIST_MAX) cur_shell()->hist_size++;
 }
 
 /* offset=1 -> most recent, offset=2 -> one before that, etc. */
 static const char *hist_get(int offset) {
-    if (offset <= 0 || offset > hist_size) return (void *)0;
-    int idx = ((hist_head - offset) % HIST_MAX + HIST_MAX) % HIST_MAX;
-    return hist[idx];
+    if (offset <= 0 || offset > cur_shell()->hist_size) return (void *)0;
+    int idx = ((cur_shell()->hist_head - offset) % HIST_MAX + HIST_MAX) % HIST_MAX;
+    return cur_shell()->hist[idx];
 }
 
 /* ---- Line editing with proper cursor positioning ---- */
@@ -249,13 +262,11 @@ static const char *hist_get(int offset) {
  * editor wraps on it, so a stale 80 would wrap in the wrong place. */
 #define VGA_W      (vga_cols())
 
-static int prompt_row = 0;   /* VGA row where current prompt was printed */
-static int prompt_len = 8;   /* width of the printed prompt (includes cwd) */
 
 /* Move the hardware cursor to buffer position buf_pos */
 static void cursor_to(int buf_pos) {
-    int abs = prompt_len + buf_pos;
-    vga_set_cursor(prompt_row + abs / VGA_W, abs % VGA_W);
+    int abs = cur_shell()->prompt_len + buf_pos;
+    vga_set_cursor(cur_shell()->prompt_row + abs / VGA_W, abs % VGA_W);
 }
 
 /* Reprint input[from..len-1], then optionally one trailing space.
@@ -372,20 +383,19 @@ static void line_replace(char *input, int *pos, int *len, const char *new_str) {
  * caller breaks on a 0 return), any other key clears the screen and continues
  * with the next page. */
 #define PAGE_ROWS 22
-static int g_page_rows;
-static void page_begin(void) { g_page_rows = 0; }
+static void page_begin(void) { cur_shell()->page_rows = 0; }
 static int page_line(int header, const char *text) {
     vga_set_color(header ? VGA_YELLOW : VGA_LIGHT_GREY, VGA_BLACK);
     vga_puts(text);
     vga_putchar('\n');
-    if (++g_page_rows < PAGE_ROWS) return 1;
+    if (++cur_shell()->page_rows < PAGE_ROWS) return 1;
     vga_set_color(VGA_DARK_GREY, VGA_BLACK);
     vga_puts("  -- more -- (q to stop, any other key for next page)");
     vga_set_color(VGA_LIGHT_GREY, VGA_BLACK);
     int c = keyboard_getchar();
     if (c == 'q' || c == 'Q' || c == 27) { vga_putchar('\n'); return 0; }
     vga_clear();
-    g_page_rows = 0;
+    cur_shell()->page_rows = 0;
     return 1;
 }
 
@@ -585,17 +595,17 @@ static void perm_str(uint8_t mode, char *s) {
 }
 
 static void cmd_serve(void) {
-    if (!may(cwd, 'r')) { deny(cwd); return; }
+    if (!may(cur_shell()->cwd, 'r')) { deny(cur_shell()->cwd); return; }
 
     static fat_entry_t entries[FAT_LS_MAX];
-    int n = fat_ls(cwd, entries, FAT_LS_MAX);
+    int n = fat_ls(cur_shell()->cwd, entries, FAT_LS_MAX);
     if (n < 0) {
         vga_puts("  No filesystem mounted. (need FAT16/32 disk on primary master)\n");
         return;
     }
     vga_set_color(VGA_YELLOW, VGA_BLACK);
     vga_printf("  Serving %s  -  %d item%s  [FAT%d  %s]:\n",
-               cwd, n, n == 1 ? "" : "s", fat_get_type(), fat_label());
+               cur_shell()->cwd, n, n == 1 ? "" : "s", fat_get_type(), fat_label());
     vga_set_color(VGA_DARK_GREY, VGA_BLACK);
     vga_puts("  PERMS   OWNER     NAME             SIZE\n");
     vga_puts("  ------------------------------------------------\n");
@@ -1907,7 +1917,7 @@ static void cmd_orders(void) {
 static void cmd_cd(const char *args) {
     while (*args == ' ') args++;
     char target[FAT_PATH_MAX];
-    if (!*args) { strcpy(cwd, "/"); return; }    /* cd with no arg -> root */
+    if (!*args) { strcpy(cur_shell()->cwd, "/"); return; }    /* cd with no arg -> root */
     resolve_path(args, target);
     if (!fat_is_dir(target)) {
         vga_set_color(VGA_LIGHT_RED, VGA_BLACK);
@@ -1916,12 +1926,12 @@ static void cmd_cd(const char *args) {
         return;
     }
     if (!may(target, 'x')) { deny(target); return; }
-    strncpy(cwd, target, FAT_PATH_MAX - 1);
-    cwd[FAT_PATH_MAX - 1] = '\0';
+    strncpy(cur_shell()->cwd, target, FAT_PATH_MAX - 1);
+    cur_shell()->cwd[FAT_PATH_MAX - 1] = '\0';
 }
 
 static void cmd_pwd(void) {
-    vga_printf("  %s\n", cwd);
+    vga_printf("  %s\n", cur_shell()->cwd);
 }
 
 static void cmd_mkbowl(const char *args) {
@@ -1947,7 +1957,7 @@ static void cmd_rmbowl(const char *args) {
     if (!*args) { vga_puts("Usage: rmbowl <name>\n"); return; }
     char path[FAT_PATH_MAX];
     resolve_path(args, path);
-    if (str_eq(path, cwd)) {
+    if (str_eq(path, cur_shell()->cwd)) {
         vga_puts("  Cannot rmbowl the bowl you are standing in.\n");
         return;
     }
@@ -3022,12 +3032,12 @@ static void cmd_recipe(void) {
 }
 
 static void cmd_leftovers(void) {
-    if (hist_size == 0) { vga_puts("  No leftovers yet.\n"); return; }
+    if (cur_shell()->hist_size == 0) { vga_puts("  No leftovers yet.\n"); return; }
     vga_set_color(VGA_YELLOW, VGA_BLACK); vga_puts("  Leftovers (history):\n");
     vga_set_color(VGA_LIGHT_GREY, VGA_BLACK);
-    for (int i = hist_size; i >= 1; i--) {
+    for (int i = cur_shell()->hist_size; i >= 1; i--) {
         const char *h = hist_get(i);
-        if (h) vga_printf("    %2d  %s\n", hist_size - i + 1, h);
+        if (h) vga_printf("    %2d  %s\n", cur_shell()->hist_size - i + 1, h);
     }
 }
 
@@ -3362,7 +3372,7 @@ static void shell_tab_complete(char *input, int *pos, int *len) {
     }
 
     static fat_entry_t entries[FAT_LS_MAX];
-    int n = fat_ls(cwd, entries, FAT_LS_MAX);
+    int n = fat_ls(cur_shell()->cwd, entries, FAT_LS_MAX);
     for (int i = 0; i < n && nmatches < max_matches; i++) {
         if (prefix_match_ci(entries[i].name, input + word_start, word_len)) {
             /* Offer the long name: completing to an 8.3 name a person never
@@ -3387,7 +3397,7 @@ static void shell_tab_complete(char *input, int *pos, int *len) {
             vga_putchar(' ');
         }
         vga_putchar('\n');
-        prompt();   /* updates prompt_row */
+        prompt();   /* updates cur_shell()->prompt_row */
         for (int i = 0; i < *len; i++) vga_putchar(input[i]);
         cursor_to(*pos);
     }
@@ -3407,20 +3417,20 @@ static void report_finished_job(const proc_t *p) {
 
 static void prompt(void) {
     /* Collect background jobs that finished while we were away. Done before
-     * prompt_row is recorded, so the report cannot desync the line editor. */
+     * cur_shell()->prompt_row is recorded, so the report cannot desync the line editor. */
     proc_report_finished(report_finished_job);
 
     const char *u = users_current_name();
-    prompt_row = vga_get_row();
+    cur_shell()->prompt_row = vga_get_row();
     vga_set_color(users_is_headchef() ? VGA_LIGHT_RED : VGA_LIGHT_GREEN, VGA_BLACK);
     vga_puts(u);
     vga_set_color(VGA_DARK_GREY,   VGA_BLACK); vga_putchar('@');
     vga_set_color(VGA_LIGHT_GREEN, VGA_BLACK); vga_puts("soupOS");
-    vga_set_color(VGA_LIGHT_CYAN,  VGA_BLACK); vga_putchar(':'); vga_puts(cwd);
+    vga_set_color(VGA_LIGHT_CYAN,  VGA_BLACK); vga_putchar(':'); vga_puts(cur_shell()->cwd);
     vga_set_color(VGA_WHITE, VGA_BLACK);       vga_puts("> ");
     vga_set_color(VGA_LIGHT_GREY, VGA_BLACK);
-    /* name + "@" + "soupOS" + ":" + cwd + "> " */
-    prompt_len = (int)strlen(u) + 1 + 6 + 1 + (int)strlen(cwd) + 2;
+    /* name + "@" + "soupOS" + ":" + cur_shell()->cwd + "> " */
+    cur_shell()->prompt_len = (int)strlen(u) + 1 + 6 + 1 + (int)strlen(cur_shell()->cwd) + 2;
 }
 
 static void dispatch(const char *buf) {
@@ -3666,7 +3676,7 @@ void shell_run(void) {
 
         } else if (c == KEY_UP) {
             if (hist_browse == 0) strncpy(saved, input, INPUT_MAX);
-            if (hist_browse < hist_size) {
+            if (hist_browse < cur_shell()->hist_size) {
                 hist_browse++;
                 const char *h = hist_get(hist_browse);
                 if (h) line_replace(input, &pos, &len, h);

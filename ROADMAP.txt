@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.35.0
+Current version: v0.35.1
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,22 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.35.1 (2026-10-07)  — shell_t: WHAT BELONGS TO ONE SHELL
+  Fourth queue, item 2, stage (a) of three. No behaviour change.
+  - shell.c's per-shell state was seven file-scope variables: cwd, the
+    history ring and its two indices, prompt_row, prompt_len and the
+    pager's rows-per-page. They are one `shell_t` now, reached through
+    cur_shell(), which today returns the single instance. Every use was
+    rewritten mechanically (forty of them); the gate is the proof the
+    rewrite changed nothing.
+  - What stayed global on purpose: the 64 KB copy buffer (scratch for one
+    command; two shells copying at once is a later problem), the `rand`
+    seed, and the preempttest/vgastress flags (one test at a time).
+  - What is NOT per-shell yet and must be for stage (c): the logged-in
+    user (users.c keeps one), the foreground job (proc.c keeps one), and
+    every vga_*/keyboard_* call the shell makes, which stage (b) routes
+    through a terminal. Gate 88.
 
 v0.35.0 (2026-10-07)  — SWAP: MEMORY THE MACHINE DOES NOT HAVE, KEPT ON DISK
   Fourth queue, item 1. v0.33.0 killed a process at the page cap; now it
@@ -39,11 +55,11 @@ v0.35.0 (2026-10-07)  — SWAP: MEMORY THE MACHINE DOES NOT HAVE, KEPT ON DISK
     shows swap in use. The exit line now also carries elapsed ticks.
   - MEASURED: under the gate's emulated boot the greedy run takes 296
     ticks, about 11,000 page transfers in three seconds. Under KVM the
-    same run takes far longer, because every port access the driver
-    polls on is a VM exit; that is a finding for the queue (interrupt-
-    driven ATA completion), not a swap matter.
+    same run takes 5601 ticks, 56 seconds, nineteen times slower, because
+    every port access the driver polls on is a VM exit; that is a finding
+    for the queue (interrupt-driven ATA completion), not a swap matter.
   - Global pressure, the PMM itself empty, still fails the map; only the
-    per-process cap evicts. The queue says which step that is. Gate 90.
+    per-process cap evicts. The queue says which step that is. Gate 88.
 
 v0.34.1 (2026-10-07)  — ATA: STRING PIO
   Groundwork for swap, measured on the way.
