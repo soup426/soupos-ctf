@@ -32,7 +32,7 @@ quotes and ~, and makes every test wait for what it checks.
 
 ---
 
-## 1. Quotes in the shell
+## 1. Quotes in the shell — DONE v0.57.2
 
 Arguments are split on every space, so `grep.elf "two words"` and
 `tr.elf ' ' '_'` cannot be written. '...' keeps everything literally and

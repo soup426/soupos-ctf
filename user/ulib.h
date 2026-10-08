@@ -15,6 +15,11 @@ int  sys_open (const char *path, int mode);
 int  sys_close(int fd);
 void *sys_sbrk(int incr);
 int  sys_args (char *buf, int max);
+/* The arguments split as sh splits them (v0.57.2): spaces separate them,
+ * except inside '...' or "..." where everything is kept and the quotes
+ * are dropped. Fills argv with up to `max` pointers into a static buffer;
+ * returns how many. */
+int  uargv(char **argv, int max);
 void sys_yield(void);
 unsigned sys_ticks(void);            /* uptime in 100 Hz PIT ticks */
 /* Entry `index` of directory `path`: 1 written to *out, 0 past the end, -1 error. */

@@ -113,3 +113,30 @@ void *malloc(unsigned n) {
 /* Entry point: the kernel jumps here. Run main, then exit cleanly. */
 extern int main(void);
 void _start(void) { sys_exit(main()); }
+
+int uargv(char **argv, int max) {
+    static char raw[256], out[256];
+    int n = sys_args(raw, sizeof(raw) - 1);
+    if (n < 0) n = 0;
+    raw[n] = '\0';
+    int argc = 0, w = 0;
+    const char *r = raw;
+    for (;;) {
+        while (*r == ' ') r++;
+        if (!*r) break;
+        int start = w;
+        while (*r && *r != ' ') {
+            if (*r == '\'' || *r == '"') {             /* a quoted stretch */
+                char q = *r++;
+                while (*r && *r != q && w < (int)sizeof(out) - 1) out[w++] = *r++;
+                if (*r) r++;
+            } else if (w < (int)sizeof(out) - 1) out[w++] = *r++;
+            else r++;
+        }
+        if (w >= (int)sizeof(out) - 1) break;
+        out[w++] = '\0';
+        if (argc < max) argv[argc++] = out + start;
+    }
+    return argc;
+}
+

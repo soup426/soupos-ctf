@@ -70,17 +70,8 @@ static void emit(char delim) {
 }
 
 int main(void) {
-    char args[96];
-    int an = sys_args(args, sizeof(args));
-    if (an < 0) an = 0;
-    args[an < (int)sizeof(args) ? an : (int)sizeof(args) - 1] = '\0';
-    char *tok[8]; int nt = 0;
-    for (char *p = args; *p && nt < 8; ) {
-        while (*p == ' ') *p++ = '\0';
-        if (!*p) break;
-        tok[nt++] = p;
-        while (*p && *p != ' ') p++;
-    }
+    char *tok[8];
+    int nt = uargv(tok, 8);        /* sh's splitting, quotes kept together (v0.57.2) */
     char delim = '\t';
     int have_list = 0, t = 0;
     while (t < nt && tok[t][0] == '-' && tok[t][1]) {

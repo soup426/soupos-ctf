@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.57.1
+Current version: v0.57.2
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,29 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.57.2 (2026-10-08)  — QUOTES IN THE SHELL
+  Seventeenth queue, item 1.
+  - Arguments were split on every space, so `grep.elf "two words"` and
+    `tr.elf ' ' _` could not be written. '...' and "..." now keep what
+    they hold, spaces and | < > & ; included, as one argument, and the
+    quotes are dropped, as sh does; $? is expanded inside "..." but not
+    inside '...'.
+  - How a quoted space reaches a program, decided and written down:
+    programs still get one argument string, now with the quotes left in,
+    and the new ulib uargv() splits it as sh would, dropping them. It
+    replaces nine copies of the same space-splitting tokenizer (grep,
+    head, tail, sort, uniq, wc, tee, cut, tr); echo, cat, ls, rm and mkdir
+    use it too, so echo joins its arguments by one space as sh's echo
+    does. The shell unquotes the words it uses itself: the program's name
+    and the files after < > and >>. run_line does not split on ; && ||
+    inside quotes.
+  - Builtins still take their raw text: `pour "my file"` is not unquoted.
+    Written down; programs are where quoting matters for now.
+  - scripts/quote-test.sh, in check.sh: eight lines (spaces kept inside
+    quotes, grep and tr with quoted arguments, | ; && inside quotes, '$?'
+    kept, a file name with a space written with > and read with cat)
+    match sh byte for byte. qemu_keys can now type both quotes.
 
 v0.57.1 (2026-10-08)  — $? IN THE SHELL
   Sixteenth queue, item 3.

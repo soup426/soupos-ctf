@@ -15,8 +15,9 @@ static void copy_fd(int fd) {
 }
 
 int main(void) {
-    char path[96];
-    int n = sys_args(path, sizeof(path));
+    char *argv[4];
+    int n = uargv(argv, 4);       /* a quoted name may hold spaces (v0.57.2) */
+    const char *path = n > 0 ? argv[0] : "";
 
     if (n <= 0) {                 /* no argument: be a filter */
         copy_fd(FD_STDIN);

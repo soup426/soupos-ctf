@@ -38,19 +38,8 @@ static void grow(int need) {
 }
 
 int main(void) {
-    char args[96];
-    int n = sys_args(args, sizeof(args));
-    if (n < 0) n = 0;
-    args[n < (int)sizeof(args) ? n : (int)sizeof(args) - 1] = '\0';
-
-    /* Split on spaces: flags, the pattern, an optional file. */
-    char *tok[8]; int nt = 0;
-    for (char *p = args; *p && nt < 8; ) {
-        while (*p == ' ') *p++ = '\0';
-        if (!*p) break;
-        tok[nt++] = p;
-        while (*p && *p != ' ') p++;
-    }
+    char *tok[8];
+    int nt = uargv(tok, 8);        /* sh's splitting, quotes kept together (v0.57.2) */
     int t = 0;
     for (; t < nt && tok[t][0] == '-' && tok[t][1]; t++) {
         for (char *f = tok[t] + 1; *f; f++) {

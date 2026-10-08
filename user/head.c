@@ -17,17 +17,8 @@ static int to_int(const char *s, int *out) {
 }
 
 int main(void) {
-    char args[96];
-    int n = sys_args(args, sizeof(args));
-    if (n < 0) n = 0;
-    args[n < (int)sizeof(args) ? n : (int)sizeof(args) - 1] = '\0';
-    char *tok[4]; int nt = 0;
-    for (char *p = args; *p && nt < 4; ) {
-        while (*p == ' ') *p++ = '\0';
-        if (!*p) break;
-        tok[nt++] = p;
-        while (*p && *p != ' ') p++;
-    }
+    char *tok[4];
+    int nt = uargv(tok, 4);        /* sh's splitting, quotes kept together (v0.57.2) */
     int want = 10, t = 0;
     if (t < nt && tok[t][0] == '-' && tok[t][1] == 'n' && !tok[t][2]) {
         if (t + 1 >= nt || to_int(tok[t + 1], &want) < 0) { print("usage: head.elf [-n N] [file]\n"); return 2; }

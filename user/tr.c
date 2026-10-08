@@ -38,17 +38,8 @@ static int expand(const char *s, unsigned char *out) {
 }
 
 int main(void) {
-    char args[96];
-    int an = sys_args(args, sizeof(args));
-    if (an < 0) an = 0;
-    args[an < (int)sizeof(args) ? an : (int)sizeof(args) - 1] = '\0';
-    char *tok[6]; int nt = 0;
-    for (char *p = args; *p && nt < 6; ) {
-        while (*p == ' ') *p++ = '\0';
-        if (!*p) break;
-        tok[nt++] = p;
-        while (*p && *p != ' ') p++;
-    }
+    char *tok[6];
+    int nt = uargv(tok, 6);        /* sh's splitting, quotes kept together (v0.57.2) */
     int del = 0, squeeze = 0, t = 0;
     for (; t < nt && tok[t][0] == '-' && tok[t][1] && (tok[t][1] == 'd' || tok[t][1] == 's'); t++)
         for (char *f = tok[t] + 1; *f; f++) {

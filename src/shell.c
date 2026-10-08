@@ -1201,13 +1201,32 @@ static int shell_token(const char **sp, char *out, int max) {
         *sp = s;
         return 1;
     }
+    /* A word runs to the next space or special character, except inside
+     * '...' or "..." where everything is part of it (v0.57.2). The quotes
+     * stay in the word: a program's uargv drops them as it splits, and the
+     * shell drops them itself (unquote) from the words it uses as paths. */
     int n = 0;
-    while (*s && *s != ' '  && *s != '\t' && *s != '<' &&
-                 *s != '>'  && *s != '|'  && *s != '&' && n < max - 1)
+    char q = 0;
+    while (*s && n < max - 1) {
+        if (q) { if (*s == q) q = 0; out[n++] = *s++; continue; }
+        if (*s == '\'' || *s == '"') { q = *s; out[n++] = *s++; continue; }
+        if (*s == ' ' || *s == '\t' || *s == '<' || *s == '>' || *s == '|' || *s == '&') break;
         out[n++] = *s++;
+    }
     out[n] = '\0';
     *sp = s;
     return 1;
+}
+
+/* Drop the quotes from a word, keeping what they held (v0.57.2). */
+static void unquote(char *w) {
+    char *r = w, *o = w, q = 0;
+    for (; *r; r++) {
+        if (q) { if (*r == q) q = 0; else *o++ = *r; }
+        else if (*r == '\'' || *r == '"') q = *r;
+        else *o++ = *r;
+    }
+    *o = '\0';
 }
 
 static void stage_add_arg(stage_t *st, const char *tok) {
@@ -1244,6 +1263,7 @@ static void cmd_cook(const char *args) {
     while (shell_token(&sp, tok, sizeof(tok))) {
         if (str_eq(tok, ">>")) {
             if (!shell_token(&sp, outfile, sizeof(outfile))) { cook_err("No file after >>."); return; }
+            unquote(outfile);
             append = 1;
             continue;
         }
@@ -1261,17 +1281,19 @@ static void cmd_cook(const char *args) {
                 if (!shell_token(&sp, infile, sizeof(infile))) {
                     cook_err("No file after <."); return;
                 }
+                unquote(infile);
                 break;
             case '>':
                 if (!shell_token(&sp, outfile, sizeof(outfile))) {
                     cook_err("No file after >."); return;
                 }
+                unquote(outfile);
                 break;
             case '&': background = 1; break;
             }
             continue;
         }
-        if (!st[nst - 1].prog[0]) strncpy(st[nst - 1].prog, tok, FAT_PATH_MAX - 1);
+        if (!st[nst - 1].prog[0]) { strncpy(st[nst - 1].prog, tok, FAT_PATH_MAX - 1); unquote(st[nst - 1].prog); }
         else                      stage_add_arg(&st[nst - 1], tok);
     }
     if (!st[nst - 1].prog[0]) { cook_err("Nothing after the |."); return; }
@@ -4234,7 +4256,10 @@ static void run_line(const char *line) {
     const char *s = line;
     for (;;) {
         int n = 0, next_op = 0;
+        char inq = 0;                    /* inside quotes: no splitting */
         while (*s) {
+            if (inq) { if (*s == inq) inq = 0; if (n < INPUT_MAX - 1) seg[n++] = *s; s++; continue; }
+            if (*s == '\'' || *s == '"') { inq = *s; if (n < INPUT_MAX - 1) seg[n++] = *s; s++; continue; }
             if (s[0] == ';')                 { next_op = ';'; s += 1; break; }
             if (s[0] == '&' && s[1] == '&')  { next_op = 'A'; s += 2; break; }
             if (s[0] == '|' && s[1] == '|')  { next_op = 'O'; s += 2; break; }
@@ -4251,8 +4276,11 @@ static void run_line(const char *line) {
              * in `a || echo $?` it is a's. */
             char ex[INPUT_MAX];
             int  k = 0;
+            char sq = 0;                     /* inside '...', $? is left alone */
             for (int i = 0; seg[i] && k < INPUT_MAX - 1; i++) {
-                if (seg[i] == '$' && seg[i + 1] == '?') {
+                if (seg[i] == '\'' && sq != '"') sq = sq ? 0 : '\'';
+                else if (seg[i] == '"' && sq != '\'') sq = sq ? 0 : '"';
+                if (seg[i] == '$' && seg[i + 1] == '?' && sq != '\'') {
                     char d[12]; int nd = 0; unsigned v = (unsigned)cur_shell()->last_status;
                     do { d[nd++] = (char)('0' + v % 10); v /= 10; } while (v);
                     while (nd && k < INPUT_MAX - 1) ex[k++] = d[--nd];

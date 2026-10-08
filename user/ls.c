@@ -11,9 +11,9 @@
 #include "ulib.h"
 
 int main(void) {
-    char path[128];
-    int n = sys_args(path, sizeof(path));
-    if (n <= 0) { path[0] = '/'; path[1] = 0; }
+    char *argv[4];
+    int n = uargv(argv, 4);       /* a quoted name may hold spaces (v0.57.2) */
+    const char *path = n > 0 ? argv[0] : "/";
 
     udirent_t e;
     int count = 0, r;
