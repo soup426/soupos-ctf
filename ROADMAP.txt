@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.59.3
+Current version: v0.59.4
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,22 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.59.4 (2026-10-08)  — cmp.elf
+  Twenty-first queue, item 3.
+  - user/cmp.c: two files byte by byte, with GNU cmp's messages and codes
+    in the C locale, measured on the host: the same, exit 0 and silence;
+    "A B differ: char N, line M" on stdout and exit 1; "cmp: EOF on 'A'
+    after byte N, line M" when the common part ends a line, "..., in line
+    M" inside one, "... which is empty" for an empty file, on stderr and
+    exit 1; "cmp: A: No such file or directory" and exit 2.
+  - The wording was measured, not remembered: in a UTF-8 locale GNU cmp
+    says "byte" for "char" and uses curly quotes; the first run (written to
+    the UTF-8 wording) differed on exactly those, and on "in line".
+  - scripts/cmp-test.sh, in check.sh: eight pairs (differ both ways, the
+    same, a prefix on either side, empty, missing, a prefix with no final
+    newline) give the host's stdout, stderr (from the serial log) and
+    status.
 
 v0.59.3 (2026-10-08)  — for LOOPS AND if BLOCKS
   Twenty-first queue, items 1 and 2 (one executor for both).

@@ -45,7 +45,7 @@ Compare what a loop leaves behind with sh running the same line.
 branch by the exit status of the condition's last command, as sh does.
 Nested inside for, and for inside if. Compare with sh.
 
-## 3. cmp.elf
+## 3. cmp.elf — DONE v0.59.4
 
 `cmp.elf F1 F2`: exit 0 when the same, 1 with "F1 F2 differ: byte N, line
 M" when not, "cmp: EOF on F1" when one is a prefix of the other, 2 on a
