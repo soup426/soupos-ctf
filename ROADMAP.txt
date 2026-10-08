@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.3
+Current version: v0.60.4
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,21 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.4 (2026-10-08)  — read
+  Twenty-third queue, item 2.
+  - `read NAME...` reads a line from the terminal (console, session, or a
+    capture's empty input) into variables as sh's read does: a word each,
+    the last name taking the rest, the spaces around trimmed. At end of
+    input before anything was typed the names are set empty and the status
+    is 1.
+  - Found by the test: the line splitter cut at a ; inside $( ... ), so
+    `$(read Q ; cook echo.elf st=$?)` never reached the substitution. It
+    no longer splits inside $( ... ), as it already did not inside quotes.
+  - scripts/read-test.sh, in check.sh: a script asks, the console answers
+    "hello  world" and "one two three"; a whole line, `read X Y` with the
+    last taking the rest, and read at end of input inside $(...) (status
+    1) match sh fed the same two lines.
 
 v0.60.3 (2026-10-08)  — COMMAND SUBSTITUTION
   Twenty-third queue, item 1.

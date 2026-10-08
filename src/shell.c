@@ -656,6 +656,7 @@ static void cmd_menu(void) {
         {0, "    du [bowl]          - clusters and bytes under each entry, and the total"},
         {0, "    run <file> [args]  - run a script; its $1..$9, $#, $@ are the args"},
         {0, "    NAME=value, $NAME  - shell variables; unset NAME removes one"},
+        {0, "    read NAME...       - a line from the terminal into variables"},
         {0, "    kill <id>          - stop a background task"},
         {0, "    bgclock            - spawn a clock in the top-right corner"},
         {0, "    yieldbg            - bg task logging [bg] to serial (pairs with cook spin.elf)"},
@@ -2600,6 +2601,7 @@ static void cmd_bowltest(void) {
 static void dispatch(const char *buf);   /* forward decl for chef elevation */
 static void cmd_run(const char *args);  /* defined beside run_rc (v0.57.5) */
 static void cmd_unset(const char *args); /* beside run_line (v0.58.0) */
+static void cmd_read(const char *args);  /* beside run_line (v0.60.4) */
 
 /* The headchef's commands (v0.55.0). Until then any cook could close the
  * vault on everyone, open the clear-text pass door, change the vault's
@@ -4074,7 +4076,7 @@ static const char *const cmd_names[] = {
     "jot", "ai", "cook", "soup", "hash",
     "beep", "mandelbrot", "vgademo", "uname", "cal",
     "clock", "wipe", "fortune", "bounce", "recipe", "leftovers", "spill",
-    "freeze", "reheat", "ps", "kitchen", "who", "last", "du", "run", "unset", "orders", "plate", "steep", "kill", "scraps", "sample", "skewer", "larder", "whistle", "hatch", "hush", "pass", "vault",
+    "freeze", "reheat", "ps", "kitchen", "who", "last", "du", "run", "unset", "read", "orders", "plate", "steep", "kill", "scraps", "sample", "skewer", "larder", "whistle", "hatch", "hush", "pass", "vault",
 #ifndef NO_DOOM
     "sizzle", "hum",
 #endif
@@ -4218,6 +4220,7 @@ static void dispatch(const char *buf) {
     else if (str_eq(p, "serve"))       cmd_serve();
     else if (str_eq(p, "run") || str_startswith(p, "run ")) cmd_run(p + 3);
     else if (str_startswith(p, "unset ")) cmd_unset(uq_args(p + 6));
+    else if (str_eq(p, "read") || str_startswith(p, "read ")) cmd_read(p + 4);
     else if (str_startswith(p, "pour")) {
         const char *a = p + 4; while (*a == ' ') a++;
         cmd_pour(uq_args(a));
@@ -4409,6 +4412,43 @@ static void set_var(const char *name, const char *value) {
     strncpy(me->vval[slot], value, sizeof(me->vval[slot]) - 1);
     me->vval[slot][sizeof(me->vval[slot]) - 1] = '\0';
     me->last_status = 0;
+}
+
+/* read NAME... (v0.60.4): a line from the terminal into variables, as sh's
+ * read does - one word each, the last NAME taking the rest, spaces around
+ * trimmed. At end of input before anything was typed the names are set
+ * empty and the status is 1. */
+static void cmd_read(const char *args) {
+    char names[8][16]; int nn = 0;
+    const char *a = args;
+    while (*a && nn < 8) { a = first_word(a, names[nn], 16); if (names[nn][0]) nn++; }
+    if (!nn) { t_puts("Usage: read NAME...\n"); cur_shell()->last_status = 2; return; }
+    char line[INPUT_MAX];
+    int len = 0, eof = 0;
+    for (;;) {
+        int c = t_getc();
+        if (c < 0) { eof = 1; break; }
+        if (c == '\n') { t_putc('\n'); break; }
+        if (c == '\b') { if (len > 0) { len--; t_putc('\b'); } continue; }
+        if (c >= ' ' && c < 127 && len < INPUT_MAX - 1) { line[len++] = (char)c; t_putc((char)c); }
+    }
+    line[len] = '\0';
+    const char *r = line;
+    for (int i = 0; i < nn; i++) {
+        char word[INPUT_MAX];
+        while (*r == ' ') r++;
+        if (i == nn - 1) {                       /* the last takes the rest */
+            int n = (int)strlen(r);
+            while (n > 0 && r[n - 1] == ' ') n--;
+            memcpy(word, r, (uint32_t)n); word[n] = '\0';
+        } else {
+            int n = 0;
+            while (*r && *r != ' ' && n < INPUT_MAX - 1) word[n++] = *r++;
+            word[n] = '\0';
+        }
+        set_var(names[i], word);
+    }
+    cur_shell()->last_status = (eof && len == 0) ? 1 : 0;
 }
 
 /* unset NAME (v0.58.0). */
@@ -4708,10 +4748,14 @@ static int split_segs(char *buf, lseg_t *sg, int max) {
     char *s = buf;
     while (n < max) {
         char *start = s, inq = 0;
-        int next_op = 0;
+        int next_op = 0, pdepth = 0;      /* inside $( ... ): no splitting (v0.60.4) */
         while (*s) {
             if (inq) { if (*s == inq) inq = 0; s++; continue; }
             if (*s == '\'' || *s == '"') { inq = *s; s++; continue; }
+            if (s[0] == '$' && s[1] == '(') { pdepth++; s += 2; continue; }
+            if (pdepth && *s == '(') { pdepth++; s++; continue; }
+            if (pdepth && *s == ')') { pdepth--; s++; continue; }
+            if (pdepth) { s++; continue; }
             if (s[0] == ';')                { next_op = ';'; *s = '\0'; s += 1; break; }
             if (s[0] == '&' && s[1] == '&') { next_op = 'A'; *s = '\0'; s += 2; break; }
             if (s[0] == '|' && s[1] == '|') { next_op = 'O'; *s = '\0'; s += 2; break; }

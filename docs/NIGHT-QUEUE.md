@@ -40,7 +40,7 @@ the shell as usual) writes to stdout, trailing newlines removed, as sh
 does; not inside '...'. Nested is not needed. Compare with sh, e.g.
 `N=$(cook wc.elf -l < F)`, a pipeline's output, and an empty result.
 
-## 2. read VAR
+## 2. read VAR — DONE v0.60.4
 
 `read NAME` reads a line from the terminal (console or session) into a
 variable; at end of input the status is 1. Test from a script that asks
