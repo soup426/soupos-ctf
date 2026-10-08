@@ -4277,9 +4277,24 @@ static void run_line(const char *line) {
             char ex[INPUT_MAX];
             int  k = 0;
             char sq = 0;                     /* inside '...', $? is left alone */
+            /* ~ is the cook's home (v0.57.3): a word that is ~ or starts
+             * with ~/, unquoted, at the start of a word (after a space, or
+             * right after < >). The headchef's home is /, and ~/X gives /X
+             * (sh would give //X). */
+            char home[FAT_PATH_MAX];
+            if (cur_shell()->uid == 0) strcpy(home, "/");
+            else { strcpy(home, "/home/"); strncpy(home + 6, users_name_of(cur_shell()->uid), sizeof(home) - 7); home[sizeof(home) - 1] = '\0'; }
             for (int i = 0; seg[i] && k < INPUT_MAX - 1; i++) {
                 if (seg[i] == '\'' && sq != '"') sq = sq ? 0 : '\'';
                 else if (seg[i] == '"' && sq != '\'') sq = sq ? 0 : '"';
+                char prev = i ? seg[i - 1] : ' ';
+                if (seg[i] == '~' && !sq && (prev == ' ' || prev == '<' || prev == '>')
+                    && (seg[i + 1] == '\0' || seg[i + 1] == ' ' || seg[i + 1] == '/')) {
+                    const char *h = home;
+                    if (seg[i + 1] == '/' && h[0] == '/' && h[1] == '\0') h = "";   /* ~/X with home / */
+                    while (*h && k < INPUT_MAX - 1) ex[k++] = *h++;
+                    continue;
+                }
                 if (seg[i] == '$' && seg[i + 1] == '?' && sq != '\'') {
                     char d[12]; int nd = 0; unsigned v = (unsigned)cur_shell()->last_status;
                     do { d[nd++] = (char)('0' + v % 10); v /= 10; } while (v);

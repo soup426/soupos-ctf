@@ -42,7 +42,7 @@ quotes are dropped, as sh does. Programs receive their arguments as one
 string today: decide how a quoted space reaches them (and write it down),
 then compare echo, grep and tr results with sh on the same lines.
 
-## 2. ~ is the cook's home
+## 2. ~ is the cook's home — DONE v0.57.3
 
 `cd ~`, `pour ~/NOTES.TXT`, `cook cat.elf ~/X`: a word that is ~ or starts
 with ~/ means the current cook's home, as sh does. Not inside quotes.

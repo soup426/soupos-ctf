@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.57.2
+Current version: v0.57.3
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,20 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.57.3 (2026-10-08)  — ~ IS THE COOK'S HOME
+  Seventeenth queue, item 2.
+  - A word that is ~ or starts with ~/, unquoted, at the start of a word
+    (after a space, or right after < or >), becomes the current cook's
+    home: /home/<cook>, or / for the headchef. It is done in run_line with
+    $?, so builtins (cd ~, pour ~/X) get it as well as programs and
+    redirections. '~', "~/x", a~b and ~x are left alone, as in sh.
+  - One difference from sh, written down: with a home of /, sh makes ~/X
+    into //X; soupOS makes it /X.
+  - scripts/tilde-test.sh, in check.sh: > ~/H.TXT and cat.elf ~/H.TXT
+    land in the cook's home; cd ~ and pour ~/H.TXT work; a line mixing ~,
+    '~', "~/x", a~b, ~x and ~/ matches sh run with HOME=/home/cook; the
+    headchef's ~ and ~/X are / and /X.
 
 v0.57.2 (2026-10-08)  — QUOTES IN THE SHELL
   Seventeenth queue, item 1.
