@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.33
+Current version: v0.60.34
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,24 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.34 (2026-10-08)  — A PROGRAM INTO A SHELL LOOP
+  - `cook spoon.elf F | while take line ; do ... ; done` (and for, if, case
+    after the |): the shell itself reads the program's output. split_segs
+    marks the segment before a | that is followed by a compound; exec_range
+    starts it writing into a pipe (a cook line runs alongside the loop; a
+    builtin is captured and a task feeds it in), runs the compound with
+    take reading that pipe instead of the keyboard (no echo), then closes
+    the pipe, so a program still writing ends, and collects it.
+  - take from a pipe returns 1 at the end even when a last line without a
+    newline was read (its words still set), as bash's read: `while take`
+    does not run for that line.
+  - The loop runs in this shell, so what it sets stays set (as ksh, zsh and
+    bash's lastpipe do; plain bash would forget). Programs inside the loop
+    still read the keyboard, not the pipe.
+  - scripts/loopin-test.sh compares eight lines with `bash -O lastpipe`.
+  - Found on the way, queued: soupOS does not split an unquoted $VAR into
+    words, so `slurp $line` keeps "a  b" where bash's echo prints "a b".
 
 v0.60.33 (2026-10-08)  — A BUILTIN'S PIPE STREAMS
   - v0.60.27 ran the left side of `builtin | prog` to the end before the

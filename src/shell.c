@@ -84,6 +84,9 @@ typedef struct {
     int     npargs;              /* $#                                      */
     uint32_t started, last_input;/* ticks: for `who`                          */
     int     tabs;                /* Tabs in a row: the second lists (v0.60.10) */
+    vfs_node_t *in_pipe;         /* `prog | while take ...`: take reads this (v0.60.34) */
+    char    in_buf[512];
+    int     in_pos, in_len;
     char    fname[16][16];       /* functions (v0.60.22): NAME() { BODY } */
     char    fbody[16][INPUT_MAX];
     int     nfuncs;
@@ -1570,6 +1573,10 @@ static void cook_err(const char *msg) {
 static void build_env(char *out, int max);   /* with hand (v0.60.26) */
 static vfs_node_t *pending_in;   /* stdin for the next cook's first stage (v0.60.27, pipe_into) */
 static void (*pending_feed)(void);   /* run once the pipeline is up (v0.60.33, pipe_into) */
+static vfs_node_t *pending_out;        /* stdout for the next cook's last stage (v0.60.34) */
+static int pending_nowait;             /* ... and do not wait: leave the pids here */
+static uint32_t pending_pids[4];
+static int pending_npids;
 
 /* Open a file a pipeline writes to (> >> 2> 2>>), with the checks SYS_OPEN
  * makes: write on the file if it exists, write on its bowl if it does not
@@ -1714,6 +1721,8 @@ static void cmd_cook(const char *args) {
     uint32_t pids[PIPE_MAX_STAGES];
     int started = 0;
     if (!fin && pending_in) { fin = pending_in; pending_in = 0; }   /* a builtin's output (v0.60.27) */
+    if (!fout && pending_out) { fout = pending_out; pending_out = 0; }   /* into a shell loop (v0.60.34) */
+    int nowait = pending_nowait; pending_nowait = 0;
     static char env[PROC_ENV_MAX];          /* the same for every stage (v0.60.26) */
     build_env(env, sizeof(env));
     vfs_node_t *stage_in = fin;
@@ -1762,6 +1771,11 @@ static void cmd_cook(const char *args) {
         return;
     }
 
+    if (nowait) {                               /* `prog | while ...`: the loop reads it (v0.60.34) */
+        pending_npids = nst;
+        for (int i = 0; i < nst; i++) pending_pids[i] = pids[i];
+        return;
+    }
     if (pending_feed) {                         /* a builtin feeds the first stage now (v0.60.33) */
         void (*feed)(void) = pending_feed;
         pending_feed = 0;
@@ -4850,6 +4864,23 @@ static void cmd_read(const char *args) {
     if (!nn) { t_puts("Usage: take NAME...\n"); cur_shell()->last_status = 2; return; }
     char line[INPUT_MAX];
     int len = 0, eof = 0;
+    shell_t *me = cur_shell();
+    if (me->in_pipe) {
+        /* From a pipe (v0.60.34): the line as written, no echo, as sh's read
+         * from a pipe. Reaching the end is status 1 even when a last line with
+         * no newline was read (its words are still set), as bash's read: so
+         * `while take` does not run for that line. */
+        for (;;) {
+            if (me->in_pos == me->in_len) {
+                int n = vfs_read(me->in_pipe, me->in_buf, sizeof(me->in_buf));
+                if (n <= 0) { eof = 1; break; }
+                me->in_pos = 0; me->in_len = n;
+            }
+            char c = me->in_buf[me->in_pos++];
+            if (c == '\n') break;
+            if (c != '\r' && len < INPUT_MAX - 1) line[len++] = c;
+        }
+    } else
     for (;;) {
         int c = t_getc();
         if (c < 0) { eof = 1; break; }
@@ -4873,7 +4904,7 @@ static void cmd_read(const char *args) {
         }
         set_var(names[i], word);
     }
-    cur_shell()->last_status = (eof && len == 0) ? 1 : 0;
+    cur_shell()->last_status = me->in_pipe ? (eof ? 1 : 0) : ((eof && len == 0) ? 1 : 0);
 }
 
 /* unset NAME (v0.58.0). */
@@ -5340,6 +5371,59 @@ static void pipe_into(const char *left, const char *right) {
     if (pending_in) { vfs_close(pending_in); pending_in = 0; }
 }
 
+/* Feeds a captured builtin's output into a pipe for a shell loop that
+ * reads it (v0.60.34), then closes the pipe. */
+typedef struct { vfs_node_t *wr; char *buf; int len; } loopfeed_t;
+static void loopfeed_task(void *arg) {
+    loopfeed_t *f = arg;
+    for (int off = 0; off < f->len; ) {
+        int w = vfs_write(f->wr, f->buf + off, (uint32_t)(f->len - off));
+        if (w <= 0) break;
+        off += w;
+    }
+    vfs_close(f->wr);
+    kfree(f->buf); kfree(f);
+    task_exit();
+}
+
+/* Start `left` writing into wr, for a shell loop to read (v0.60.34). A cook
+ * line runs alongside the loop (its pids are left in pending_pids); anything
+ * else runs first with its output captured, and a task feeds it in. Either
+ * way wr is owned from here on. */
+static void start_into(const char *left) {
+    vfs_node_t *wr = pending_out;
+    pending_npids = 0;
+    const char *q = left; while (*q == ' ') q++;
+    if (is_kw(q, "cook")) {
+        pending_nowait = 1;
+        run_one(q);
+        pending_nowait = 0;
+        if (pending_out) { vfs_close(pending_out); pending_out = 0; }   /* cook did not take it */
+        return;
+    }
+    pending_out = 0;
+    shell_t *me = cur_shell();
+    capterm_t cap;
+    cap.t.name = "subst"; cap.t.puts = cap_puts; cap.t.putc = cap_putc; cap.t.set_color = cap_color;
+    cap.t.set_cursor = cap_cursor; cap.t.row = cap_zero; cap.t.col = cap_zero; cap.t.cols = cap_cols;
+    cap.t.rows = cap_rows; cap.t.clear = cap_clear; cap.t.getc = cap_getc; cap.t.available = cap_zero;
+    cap.t.flush_in = cap_flush; cap.t.fg = 0;
+    cap.buf = kmalloc(4096); cap.len = 0; cap.cap = 4096; cap.limit = 256 * 1024;
+    loopfeed_t *f = kmalloc(sizeof(loopfeed_t));
+    if (!cap.buf || !f) { if (cap.buf) kfree(cap.buf); if (f) kfree(f); vfs_close(wr); return; }
+    task_t *tk = task_current();
+    term_t *was_sh = me->term, *was_tk = tk->term;
+    cap.t.intr = was_sh ? was_sh->intr : 0;
+    cap.t.ctx = was_tk ? was_tk : &term_vga;
+    me->term = &cap.t; tk->term = &cap.t;
+    subst_depth++;
+    run_line(q);
+    subst_depth--;
+    me->term = was_sh; tk->term = was_tk;
+    f->wr = wr; f->buf = cap.buf; f->len = cap.len;
+    if (!task_spawn("loopfeed", loopfeed_task, f)) { vfs_close(wr); kfree(cap.buf); kfree(f); }
+}
+
 /* Run one command: expand it, then it is an assignment or a dispatch. */
 static void run_one(const char *seg) {
     const char *q = seg; while (*q == ' ') q++;
@@ -5381,7 +5465,7 @@ static void run_one(const char *seg) {
  * loop in turn. `case W in P) ... ;; esac` (v0.60.19) splits further: the
  * header, each arm's pattern and a ;; are segments of their own. */
 #define LSEG_MAX 64
-typedef struct { const char *text; int op; } lseg_t;     /* op: ';' 'A' 'O' */
+typedef struct { const char *text; int op; int into; } lseg_t;  /* op: ';' 'A' 'O'; into: | the next (v0.60.34) */
 
 static int is_kw(const char *t, const char *kw) {
     int n = (int)strlen(kw);
@@ -5444,8 +5528,19 @@ static char *case_header_end(char *t) {
 
 static const char *const DSEMI = ";;";
 
+/* `X | while ...` (and for, if, case): the | before a compound (v0.60.34). */
+static char *compound_bar(char *t) {
+    for (const char *b = pipe_bar(t); b; b = pipe_bar(b + 1)) {
+        const char *r = b + 1;
+        while (*r == ' ') r++;
+        if (is_kw(r, "while") || is_kw(r, "for") || is_kw(r, "if") || is_kw(r, "case")) return (char *)b;
+    }
+    return 0;
+}
+
 static int split_segs(char *buf, lseg_t *sg, int max) {
     int n = 0, op = ';', arm_next = 0;
+    memset(sg, 0, sizeof(lseg_t) * (uint32_t)max);
     char *s = buf;
     while (n < max) {
         char *start = s, inq = 0;
@@ -5469,6 +5564,17 @@ static int split_segs(char *buf, lseg_t *sg, int max) {
         while (*t == ' ') t++;
         char *end = t + strlen(t);
         while (end > t && end[-1] == ' ') *--end = '\0';
+        {
+            char *cb = compound_bar(t);               /* X | while ...: X pipes into what follows */
+            if (cb && n < max - 1) {
+                char *e = cb;
+                *cb = '\0';
+                while (e > t && e[-1] == ' ') *--e = '\0';
+                sg[n].text = t; sg[n].op = op; sg[n].into = 1; n++;
+                op = ';';
+                t = cb + 1; while (*t == ' ') t++;
+            }
+        }
     again:
         /* do X / then X / else X / if X: the keyword, then X on its own -
          * repeatedly, since X may start with a keyword too (`do if ...`,
@@ -5583,6 +5689,35 @@ static void exec_range(lseg_t *sg, int from, int to, int depth) {
         if (interrupted()) { cur_shell()->last_status = 130; return; }
         int status = cur_shell()->last_status, op = sg[i].op;
         int run = (op == ';') || (op == 'A' && status == 0) || (op == 'O' && status != 0);
+        if (sg[i].into && i + 1 < to) {
+            /* X | while/for/if/case ... (v0.60.34): the compound after this
+             * segment reads X's output through take. Find where it ends. */
+            const char *c = sg[i + 1].text;
+            int e = (is_kw(c, "while") || is_kw(c, "for")) ? match_done(sg, i + 1, to)
+                  : is_kw(c, "if") ? match_end(sg, i + 1, to, "if", "fi")
+                  : match_end(sg, i + 1, to, "case", "esac");
+            if (e < 0) { t_puts("  |: the loop after it never ends (no done, fi or esac).\n"); cur_shell()->last_status = 2; return; }
+            if (run) {
+                shell_t *me = cur_shell();
+                vfs_node_t *rd = 0, *wr = 0;
+                if (vfs_pipe(&rd, &wr) < 0) { cook_err("Out of pipes."); i = e + 1; continue; }
+                pending_out = wr;
+                start_into(sg[i].text);
+                vfs_node_t *was_in = me->in_pipe;
+                int was_pos = me->in_pos, was_len = me->in_len;
+                me->in_pipe = rd; me->in_pos = me->in_len = 0;
+                sg[i + 1].op = ';';                 /* the compound runs whatever X's status */
+                exec_range(sg, i + 1, e + 1, depth + 1);
+                me->in_pipe = was_in; me->in_pos = was_pos; me->in_len = was_len;
+                vfs_close(rd);                       /* a writer still going gets -1 and ends */
+                int st = me->last_status;
+                for (int k = 0; k < pending_npids; k++) { int code; proc_wait(pending_pids[k], &code); }
+                pending_npids = 0;
+                me->last_status = st;                /* the loop's, as sh's */
+            }
+            i = e + 1;
+            continue;
+        }
         if (is_kw(sg[i].text, "for")) {
             int d = match_done(sg, i, to);
             if (d < 0 || i + 1 >= d || !is_kw(sg[i + 1].text, "do")) {

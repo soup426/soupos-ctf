@@ -54,7 +54,7 @@ the right side first, feed it as the left side prints, and wait for it as
 cook does. Test with a left side that prints more than a pipe holds and a
 right side that stops early.
 
-## 4. A program into a shell loop
+## 4. A program into a shell loop — DONE v0.60.34
 
 `cook spoon.elf F | while take line ; do slurp got $line ; done`: the right
 side of a pipe is the shell itself, reading the program's output as its
@@ -80,6 +80,15 @@ the whole compound. Pipe for, while, if and case when their closing word
 has `| ...` after it (the feed exec_ranges the compound instead of a line),
 and refuse anything after done/fi/esac that cook would not take. Compare
 `for ... done | rack.elf` and `while ... done | skim.elf -n 3` with bash.
+
+## 9. Word splitting of an unquoted $VAR
+
+Found with item 4: line="a  b" ; `slurp x:$line` prints "x:a  b" where
+bash's `echo x:$line` prints "x:a b": sh splits an unquoted expansion into
+words at blanks, and a builtin that joins its words gets one space between
+them. soupOS keeps the expansion as it is. Decide where splitting belongs
+(expand_seg marks the text from expansions; the builtins that take words
+split there) and compare echo/slurp, for and a program's args with bash.
 
 ## 7. Doom at the framebuffer's own resolution — DEFERRED
 
