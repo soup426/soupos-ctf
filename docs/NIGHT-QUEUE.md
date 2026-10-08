@@ -49,12 +49,23 @@ long lines and empty ones included.
 `-n N`, default 10, from a file or a pipe. Compare with the host's head and
 tail, including files shorter than N and files with no final newline.
 
-## 4. sort.elf
+## 4. sort.elf — DONE v0.56.3
 
 Lines in byte order, with -r and -n. Compare with `LC_ALL=C sort` on the
 host. Find the largest input it handles and say so.
 
-## 5. Doom at the framebuffer's own resolution — DEFERRED
+## 5. > loses output past about 2 MB, and says nothing
+
+Found measuring sort.elf: `cook sort.elf /B3.TXT > /O3.TXT` left exactly
+2097152 bytes of a 3 MB result, and 5 and 7 MB results left empty files,
+every time with exit code 0. A redirect buffers the whole file in the 8 MB
+kernel heap and writes it on close; when the buffer cannot grow, the write
+fails and nobody hears. Make the output reach the disk in pieces (or, at
+the least, make a failed write fail loudly: the program sees it, the shell
+says the file was cut, and nothing pretends it worked). Test with a 5 MB
+result checked against the host.
+
+## 6. Doom at the framebuffer's own resolution — DEFERRED
 
 Carried; the user asked to keep to OS work.
 

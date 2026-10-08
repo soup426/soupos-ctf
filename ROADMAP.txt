@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.56.2
+Current version: v0.56.3
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,28 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.56.3 (2026-10-08)  — sort.elf
+  Fourteenth queue, item 4.
+  - user/sort.c: lines in order, -r and -n, with GNU sort's rules in the C
+    locale (unsigned bytes, prefix first; -n reads blanks, '-', digits and
+    a '.' fraction, a line with no number is 0, and -n ties fall back to
+    the whole line's bytes; -r reverses all of it; a last line with no
+    newline is printed with one). The input is read whole into memory,
+    then a merge sort over pointers.
+  - Largest input, measured through a pipe into wc.elf: 5 MB (191219
+    lines) in 13.75 s and 7 MB (267205 lines) in 36 s, both exactly the
+    input's line and byte counts, swapping hard. The next doubling of its
+    buffer would need 16 MB, so about 8 MB is the ceiling; past it malloc
+    fails and sort says so.
+  - Measuring found a bug that is not sort's: output redirected with `>`
+    past about 2 MB is cut short or lost, and the program still exits 0.
+    The redirect buffers the whole file in the 8 MB kernel heap and a
+    failed growth is ignored. Queued as item 5.
+  - scripts/sort-test.sh, in check.sh: words with case, duplicates, a
+    prefix pair, an empty line, bytes above 127 and no final newline;
+    numbers with negatives, decimals, blanks, -0, lines with no number and
+    ties; five forms compared byte for byte with LC_ALL=C sort.
 
 v0.56.2 (2026-10-08)  — head.elf AND tail.elf
   Fourteenth queue, item 3.
