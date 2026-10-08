@@ -1,0 +1,268 @@
+[boot] kernel_main
+[boot] GDT ok
+[boot] IDT ok
+[boot] timer ok
+[boot] keyboard ok
+[random] pool seeded (rdrand absent)
+[boot] PMM ok
+[boot] paging on
+[boot] heap ok
+[boot] interrupts enabled
+[ata] bus-master DMA at io 0xc600
+[boot] ATA ok
+[swap] 4096 pages past the volume, sectors 65536 to 98304
+[boot] FAT ok
+[boot] VFS ok
+[fat] counted 14118 free clusters in 1 ticks
+[boot] users ok
+[boot] ai bridge off (no COM2)
+[boot] syscall gate ok (int 0x80)
+▄███████     ▄█████▄    ███   ███   ▄███████▄    ▄█████▄    ▄███████
+███   ███   ███   ███   ███   ███   ███   ███   ███   ███   ███   ███
+███   █▀    ███   ███   ███   ███   ███   ███   ███   ███   ███   █▀
+███▄▄▄▄▄▄   ███   ███   ███   ███   ███   ███   ███   ███   ███▄▄▄▄▄▄
+▀▀▀▀▀▀███   ███   ███   ███   ███   ███▄▄▄██▀   ███   ███   ▀▀▀▀▀▀███
+ ▄█   ███   ███   ███   ███   ███   ███▀▀▀▀     ███   ███    ▄█   ███
+███   ███   ███   ███   ███   ███   ███         ███   ███   ███   ███
+ ▀███████    ▀█████▀    ████████▀   ███          ▀█████▀     ▀███████
+                           a shitty kernel
+
+[OK] Multiboot handoff verified
+[OK] GDT loaded (flat 32-bit, ring 0)
+[OK] IDT loaded (32 exceptions + 16 IRQs)
+[OK] 8259 PIC remapped (IRQs -> vectors 32-47)
+[OK] Timer running at 100 Hz (IRQ0)
+[OK] Keyboard driver ready (IRQ1)
+[OK] PMM ready     - 119596 KB free / 130556 KB total
+[OK] Paging on     - 127 MB identity-mapped
+[OK] Heap ready    - 8191 KB
+[OK] ATA drive     - 48 MB
+[OK] FAT16 volume   - SOUPOS
+[OK] VFS ready     - files + /dev/{null,zero,serial,kbd}
+[OK] Kernel log    - ring buffer + serial mirror (see: dmesg)
+[mouse] ps/2 mouse ready at 64,24
+[OK] Mouse         - PS/2 auxiliary device on IRQ 12
+[fb] 1024x768 at 32 bpp, pitch 4096, 3072 KB at fd000000
+[OK] Framebuffer   - 1024x768 at 32 bpp
+[ac97] ready, mixer at c000, bus master at c500, 48000 Hz
+[OK] Sound         - AC97 at 48000 Hz
+[net] rtl8139 at io 0xc400 irq 11 mac 52:54:0:12:34:56
+[net] ip 10.0.2.15 gw 10.0.2.2
+[dhcp] lease 10.0.2.15 mask 255.255.255.0 gw 10.0.2.2 dns 10.0.2.3 for 86400s
+[OK] Network       - RTL8139, MAC 52:54:0:12:34:56
+                     IP 10.0.2.15 (dhcp), gateway 10.0.2.2
+[mixer] 4 voices over a 65536-sample ring
+[OK] Mixer         - 4 voices into the AC97 ring
+[fbcon] 128x48 console at 0,0 on the 1024x768 framebuffer
+[OK] Console       - 128x48 on the framebuffer
+[boot] scheduler ok (kernel is task 0)
+[OK] Scheduler ok  - kernel is task 0 (kernel)
+
+[boot] scheduler self-test:
+[boot] spawned counter task, driving scheduler...
+  [task 3:counter] tick 1
+A  [task 3:counter] tick 2
+B  [task 3:counter] tick 3
+C  [task 3:counter] tick 4
+D  [task 3:counter] tick 5
+E  [task counter] done, exiting
+
+[boot] counter task exited
+[boot] scheduler self-test complete
+[boot] self-test complete, tasks alive: 3
+
+[boot] preemption enabled (IRQ0 @ 100 Hz)
+Type 'menu' to see available commands.
+
+
+  soupOS kitchen -- clock in to start your shift.
+  cook:   headchef
+  secret: ********
+[users] headchef: pbkdf2 check took 203 ticks
+
+  Welcome to the kitchen, headchef. (headchef -- run of the kitchen)
+
+headchef@soupOS:/> cook glutton.elf &
+[proc 4] spawned /glutton.elf  &
+  [4] glutton.elf
+headchef@soupOS:/> [proc 4] ring3 esp0=0x20d738
+[hog] running, never yields, kill me
+kill %
+[proc 4] kill flagged
+killing process 4 (/glutton.elf)
+headchef@soupOS:/> [proc 4] killed (irq)
+[proc 4] /glutton.elf exited with code -137, 29898 pages free, 283 ticks
+cook glutton.elf
+[proc 5] spawned /glutton.elf 
+  cooking /glutton.elf in ring 3...
+[proc 5] ring3 esp0=0x20d738
+[hog] running, never yields, kill me
+[proc 5] killed (irq)
+[proc 5] /glutton.elf exited with code -137, 29898 pages free, 246 ticks
+  [/glutton.elf killed]
+  [4] killed  /glutton.elf
+headchef@soupOS:/> cook mise.elf afterctrlc
+[proc 6] spawned /mise.elf afterctrlc
+  cooking /mise.elf in ring 3...
+[proc 6] ring3 esp0=0x20d738
+TESTOUT args=afterctrlc
+TESTOUT read=Hello from soupOS!
+TESTOUT heap=AX
+[proc 6] /mise.elf exited with code 7, 29898 pages free, 3 ticks
+[demand] /mise.elf faulted in 1 pages on first touch
+  [/mise.elf exited with code 7]
+headchef@soupOS:/> cook ticket.elf Z
+[proc 7] spawned /ticket.elf Z
+  cooking /ticket.elf in ring 3...
+[proc 7] ring3 esp0=0x20d738
+[p:Z] step 0
+[p:Z] step 1
+[p:Z] step 2
+[p:Z] step 3
+[p:Z] step 4
+[p:Z] step 5
+[p:Z] step 6
+[p:Z] step 7
+[p:Z] step 8
+[p:Z] step 9
+[p:Z] step 10
+[p:Z] step 11
+[p:Z] step 12
+[p:Z] step 13
+[p:Z] step 14
+[proc 7] /ticket.elf stopped
+  [7] set aside  /ticket.elf   (plate / steep / kill %)
+headchef@soupOS:/> orders
+  PID  ST  BG  CODE  OWNER     PROGRAM
+    7   T   n     -  headchef  /ticket.elf
+headchef@soupOS:/> steep
+[proc 7] /ticket.elf continued
+  [7] /ticket.elf &
+headchef@soupOS:/> [p:Z] step 15
+[p:Z] step 16
+[p:Z] step 17
+[p:Z] step 18
+[p:Z] step 19
+[p:Z] step 20
+[p:Z] step 21
+[p:Z] step 22
+[p:Z] step 23
+[p:Z] step 24
+[p:Z] step 25
+[p:Z] step 26
+[p:Z] step 27
+[p:Z] step 28
+[p:Z] step 29
+[p:Z] step 30
+[p:Z] step 31
+[p:Z] step 32
+[p:Z] step 33
+[p:Z] step 34
+[p:Z] step 35
+[p:Z] step 36
+[p:Z] step 37
+[p:Z] step 38
+[p:Z] step 39
+marker: done
+[proc 7] /ticket.elf exited with code 0, 29898 pages free, 935 ticks
+cook ticket.elf K
+[proc 8] spawned /ticket.elf K
+  cooking /ticket.elf in ring 3...
+[proc 8] ring3 esp0=0x20d738
+[p:K] step 0
+[p:K] step 1
+[p:K] step 2
+[p:K] step 3
+[p:K] step 4
+[p:K] step 5
+[p:K] step 6
+[p:K] step 7
+[p:K] step 8
+[p:K] step 9
+[p:K] step 10
+[p:K] step 11
+[p:K] step 12
+[p:K] step 13
+[p:K] step 14
+[proc 8] /ticket.elf stopped
+  [8] set aside  /ticket.elf   (plate / steep / kill %)
+  [7] done    /ticket.elf (exit 0)
+headchef@soupOS:/> kill %
+[proc 8] kill flagged
+killing process 8 (/ticket.elf)
+headchef@soupOS:/> [proc 8] killed (syscall-exit)
+[proc 8] /ticket.elf exited with code -137, 29898 pages free, 298 ticks
+cook call.elf hello pipes | weigh.elf
+[proc 9] spawned /call.elf hello pipes
+[proc 10] spawned /weigh.elf 
+[proc 9] ring3 esp0=0x20e760
+[proc 9] /call.elf exited with code 0, 29895 pages free, 1 ticks
+[proc 10] ring3 esp0=0x2127e0
+ 1  2 12
+WCOUT lines=1 words=2 bytes=12
+[proc 10] /weigh.elf exited with code 0, 29898 pages free, 1 ticks
+  [/weigh.elf exited with code 0]
+headchef@soupOS:/> cook call.elf pipes are plumbing | raise.elf | weigh.elf
+[proc 11] spawned /call.elf pipes are plumbing
+[proc 12] spawned /raise.elf 
+[proc 13] spawned /weigh.elf 
+[proc 13] ring3 esp0=0x217888
+[proc 12] ring3 esp0=0x213808
+[proc 11] ring3 esp0=0x20e760
+[proc 11] /call.elf exited with code 0, 29882 pages free, 0 ticks
+[proc 12] /raise.elf exited with code 0, 29890 pages free, 1 ticks
+ 1  3 19
+WCOUT lines=1 words=3 bytes=19
+[proc 13] /weigh.elf exited with code 0, 29898 pages free, 1 ticks
+  [/weigh.elf exited with code 0]
+headchef@soupOS:/> cook call.elf through a file > P.TXT
+[proc 14] spawned /call.elf through a file
+  cooking /call.elf in ring 3...
+[proc 14] ring3 esp0=0x20d738
+[proc 14] /call.elf exited with code 0, 29898 pages free, 0 ticks
+  [/call.elf exited with code 0]
+headchef@soupOS:/> cook weigh.elf < P.TXT
+[proc 15] spawned /weigh.elf 
+  cooking /weigh.elf in ring 3...
+[proc 15] ring3 esp0=0x20d738
+ 1  3 15
+WCOUT lines=1 words=3 bytes=15
+[proc 15] /weigh.elf exited with code 0, 29898 pages free, 0 ticks
+  [/weigh.elf exited with code 0]
+headchef@soupOS:/> cook glutton.elf | weigh.elf &
+[proc 16] spawned /glutton.elf  &
+[proc 17] spawned /weigh.elf  &
+  [17] glutton.elf | ...
+headchef@soupOS:/> [proc 16] ring3 esp0=0x20e760
+[hog] running, never yields, kill me
+[proc 17] ring3 esp0=0x2127e0
+kill %
+[proc 17] kill flagged
+killing process 17 (/weigh.elf)
+headchef@soupOS:/> [proc 17] killed (syscall-exit)
+[proc 17] /weigh.elf exited with code -137, 29890 pages free, 294 ticks
+kill %
+[proc 16] kill flagged
+killing process 16 (/glutton.elf)
+  [17] killed  /weigh.elf
+headchef@soupOS:/> [proc 16] killed (irq)
+[proc 16] /glutton.elf exited with code -137, 29898 pages free, 589 ticks
+cook measure.elf A | measure.elf B | measure.elf C
+[proc 18] spawned /measure.elf A
+[proc 19] spawned /measure.elf B
+[proc 20] spawned /measure.elf C
+[proc 20] ring3 esp0=0x217888
+[proc 19] ring3 esp0=0x213808
+[proc 18] ring3 esp0=0x20e760
+MEMTEST OK tag=C
+[proc 20] /measure.elf exited with code 0, 29864 pages free, 40 ticks
+[demand] /measure.elf faulted in 8 pages on first touch
+MEMTEST OK tag=B
+[proc 19] /measure.elf exited with code 0, 29881 pages free, 40 ticks
+[demand] /measure.elf faulted in 8 pages on first touch
+MEMTEST OK tag=A
+[proc 18] /measure.elf exited with code 0, 29898 pages free, 40 ticks
+[demand] /measure.elf faulted in 8 pages on first touch
+  [/measure.elf exited with code 0]
+  [16] killed  /glutton.elf
+headchef@soupOS:/> 

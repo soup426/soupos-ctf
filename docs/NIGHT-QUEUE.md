@@ -43,7 +43,7 @@ final offset. Compare with the host's hexdump -C byte for byte.
 Lines folded at a width, as `fold -w N` does (default 80), and with -s at
 the last space. Compare with the host's fold.
 
-## 3. layer.elf
+## 3. layer.elf — DONE v0.60.16
 
 Lines of two or more files side by side, as `paste` does (tab between,
 -d to choose), files of different lengths included. Compare with the
@@ -66,6 +66,19 @@ Ctrl+C gives the line back. Test by typing.
 `case WORD in pat) ... ;; pat|pat) ... ;; *) ... ;; esac`, with the glob
 patterns the shell already has. Compare with bash's results for the same
 script.
+
+## 8. A gate failure that its own log says passed
+
+2026-10-08 10:34, one full check (the run before v0.60.16's commit) failed
+two gate checks; the rerun passed. Both logs are in docs/flakes/.
+- desk: the in-kernel self-test's "services are not busy" failed with
+  "busiest service: fbcon at 55%". A share of CPU measured while ~55 QEMUs
+  run is a load measurement; decide whether the self-test should judge it
+  under check.sh at all.
+- jobs: "no ring-3 output after the kill" failed, yet run against the kept
+  log the same check passes (first `killed (irq)` at line 93, TESTOUT at
+  108). Find how the check saw something else: the log at check time, the
+  grep on it, or a second writer.
 
 ## 7. Doom at the framebuffer's own resolution — DEFERRED
 

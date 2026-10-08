@@ -107,7 +107,7 @@ UCFLAGS  = -m32 -ffreestanding -fno-pie -no-pie -fno-stack-protector \
            -nostdlib -Isrc -mgeneral-regs-only -O2
 USER_ELFS = user/greet.elf user/spoon.elf user/call.elf user/mise.elf user/whisk.elf \
             user/drop.elf user/unwrap.elf user/ticket.elf user/glutton.elf \
-            user/raise.elf user/weigh.elf user/measure.elf user/proof.elf user/stockpot.elf user/fridge.elf user/peek.elf user/toss.elf user/newbowl.elf user/sift.elf user/skim.elf user/dregs.elf user/rack.elf user/cull.elf user/divvy.elf user/slice.elf user/swap.elf user/tally.elf user/taste.elf user/forage.elf user/pair.elf user/flip.elf user/label.elf user/mince.elf user/knead.elf
+            user/raise.elf user/weigh.elf user/measure.elf user/proof.elf user/stockpot.elf user/fridge.elf user/peek.elf user/toss.elf user/newbowl.elf user/sift.elf user/skim.elf user/dregs.elf user/rack.elf user/cull.elf user/divvy.elf user/slice.elf user/swap.elf user/tally.elf user/taste.elf user/forage.elf user/pair.elf user/flip.elf user/label.elf user/mince.elf user/knead.elf user/layer.elf
 
 .PHONY: all clean distclean run run-ai run-console run-tcp iso disk user
 
@@ -278,6 +278,7 @@ $(DISK):
 	mcopy -i $(DISK) -o user/label.elf    ::LABEL.ELF
 	mcopy -i $(DISK) -o user/mince.elf    ::MINCE.ELF
 	mcopy -i $(DISK) -o user/knead.elf    ::KNEAD.ELF
+	mcopy -i $(DISK) -o user/layer.elf    ::LAYER.ELF
 	@if [ -f DOOM1.WAD ]; then \
 	    echo "  Copying DOOM1.WAD to disk image..."; \
 	    mcopy -i $(DISK) DOOM1.WAD ::DOOM1.WAD; \
