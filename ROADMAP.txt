@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.59.0
+Current version: v0.59.1
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,18 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.59.1 (2026-10-08)  — ls.elf -l
+  Twentieth queue, item 2.
+  - ls.elf -l prints mode, owner and size for each entry through
+    SYS_STAT, in serve's columns, with machine-readable "LSL" lines on
+    stderr. Programs cannot read the roster to turn a uid into a name, so
+    ustat_t now carries the owner's name too (owner_name[16]).
+  - scripts/lsl-test.sh, in check.sh: for /, /etc and /home, every entry's
+    mode, owner, name and size from ls.elf -l equals serve's (57, 2 and 1
+    entries); for the ordinary cook, ls -l /etc shows the kitchen they may
+    not read; /etc's file sizes equal mtools'. (The first run compared a
+    size taken before a later login had grown /etc/logins.)
 
 v0.59.0 (2026-10-08)  — SYS_STAT
   Twentieth queue, item 1.

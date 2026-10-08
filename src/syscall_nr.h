@@ -31,6 +31,8 @@ typedef struct {
     unsigned is_dir;
     unsigned owner;     /* uid                                 */
     unsigned mode;      /* FAT_PERM_* bits: OR OW OX AR AW AX  */
+    char     owner_name[16];   /* the owner's name (v0.59.1: programs cannot
+                                * read the roster to look it up)      */
 } ustat_t;
 
 /* Reserved file descriptors. fd >= 3 are returned by open(). */

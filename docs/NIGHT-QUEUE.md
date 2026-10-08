@@ -40,7 +40,7 @@ the bowls above it; reading the file itself is not needed, as with stat).
 test.elf then uses it, and its written-down difference (an unreadable file
 counted as absent) goes away. Check against what perms and du say.
 
-## 2. ls.elf -l
+## 2. ls.elf -l — DONE v0.59.1
 
 Mode, owner and size for each entry, through SYS_STAT, in the columns
 `serve` uses. Check every line against perms for the same names.

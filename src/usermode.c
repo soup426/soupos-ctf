@@ -590,6 +590,8 @@ void syscall_dispatch(registers_t *r) {
             if (!st.is_dir) { int fd = fat_fopen(path); if (fd >= 0) { st.size = fat_fsize(fd); fat_fclose(fd); } }
             st.owner  = owner;
             st.mode   = mode & 0x3F;
+            memset(st.owner_name, 0, sizeof(st.owner_name));
+            strncpy(st.owner_name, users_name_of(owner), sizeof(st.owner_name) - 1);
             memcpy((void *)r->ecx, &st, sizeof(st));
             r->eax = 0;
             break;
