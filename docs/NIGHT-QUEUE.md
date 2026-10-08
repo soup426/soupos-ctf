@@ -1,11 +1,10 @@
 # Night queue
 
-Seventh queue. The first six are in `docs/queue-archive-2026-10-07*.md`. The
-sixth's lesson is in its tests: three times a test silently skipped what it
-meant to check (an unanswered prompt, an untypeable character, a file set up
-where the user could not write), and each time the fix was to make the test
-say so. This queue is mostly security: soupOS has a network door now, and
-several rules the shell enforces were never enforced anywhere else.
+Eighth queue. The first seven are in `docs/queue-archive-2026-10-07*.md`. The
+seventh's notes hold two things a person should look at: item 4 (syscalls
+and unmapped buffers) set aside for a decision on how to test it, and an
+open flake in the jobs segment whose next occurrence will keep its log.
+This queue makes the multi-user system the last queues built usable.
 
 ## Standing rules
 
@@ -31,40 +30,32 @@ several rules the shell enforces were never enforced anywhere else.
 
 ---
 
-## 1. A key logs in as its own cook — DONE v0.49.0 (the hole proven on the old kernel first)
+## 1. who
 
-/AUTHKEYS lines are bare public keys, and any listed key may log in as any
-cook that exists, the headchef included. Give each line its cook
-("headchef ssh-ed25519 AAAA... comment", the OpenSSH authorized_keys shape
-with the user in front), accept a key only for the cook it names, keep
-reading the old bare form as headchef-only rather than everyone, and test
-that saucier's key does not open headchef's account.
+Since v0.36.0 there can be five shells at once: the console and four SSH
+sessions. Nothing lists them. `who`: each shell, its cook, where it is (the
+console, or the client's address), when it started and how long it has been
+idle. Test with the console and two SSH sessions as two cooks.
 
-## 2. Guessing a password over the network costs time — DONE v0.50.0 (124 a minute to about 2)
+## 2. passwd
 
-The vault allows six attempts per connection and a client can reconnect at
-once, so the only limit on guessing is PBKDF2's 50 ms. Add a delay after each
-failed attempt (doubling, capped), and a per-address count that refuses new
-connections from an address with too many recent failures. Measure: attempts
-per minute from one address before and after, with the real client.
+Secrets are PBKDF2 since v0.46.0, but the only way to set one is `hire`, and
+a cook cannot change their own. `passwd`: the old secret, then the new one
+twice; the headchef may set any cook's without the old one. Check that the
+old secret stops working, the new one works over SSH, and /etc/kitchen holds a
+fresh salt.
 
-## 3. Only your own processes — DONE v0.51.0 (the hole proven on the old kernel: a cook killed fbcon)
+## 3. Home bowls
 
-`kill`, `fg`/`plate`, `bg`/`steep` and `kill %` act on any process, so a cook
-(or an SSH session) can kill another cook's programs, and `kill <id>` on a
-kernel task such as the vault's worker kills it outright. Record the owner
-uid in proc_t at cook time; let a cook signal only their own processes, the
-headchef any; refuse kernel tasks to everyone but the headchef. Test with two
-SSH sessions as two cooks.
+`hire` makes a cook who can write almost nowhere (the root is the headchef's).
+Make /home/<cook> at hire, owned by the cook, and start every shell of theirs
+there (console login and SSH alike). fsck and mtools as judges; existing cooks
+without a home get one at their next login.
 
-## 4. Every syscall survives hostile pointers — SET ASIDE 2026-10-07 (see the note at the bottom)
+## 4. Owners in ps and orders
 
-Two syscalls trusted user pointers too far (open read its path past the first
-checked byte; the fault path's copies). Audit every case in syscall_dispatch
-for each pointer and length, and add evil.elf: it calls every syscall with
-kernel addresses, unmapped addresses, a buffer straddling the end of user
-space and absurd lengths, and must get -1 every time while the kernel logs no
-panic and the shell carries on.
+Processes have owners since v0.51.0; show them. `ps` and `orders` gain an
+OWNER column, and kitchen's task table too.
 
 ## 5. Doom at the framebuffer's own resolution — DEFERRED
 
@@ -74,18 +65,4 @@ Carried; the user asked to keep to OS work.
 
 ## Notes left by unattended runs
 
-- 2026-10-07, open flake: the jobs segment's "> redirection reached the
-  filesystem" (expects WCOUT lines=1 words=3 bytes=15 after `cook echo.elf
-  through a file > P.TXT` and `cook wc.elf < P.TXT`) failed once under the
-  full check's load and passed in 22 runs after it, 18 of them six-wide. Its
-  log was not kept. Normally echo takes 0 ticks and wc reads the 15 bytes at
-  once. The check was NOT loosened; failing segments now always keep their
-  serial log, so the next occurrence brings its evidence.
-- 2026-10-07, item 4: set aside. The audit started and found one thing
-  worth a human decision: user_ok() checks that a buffer lies inside the
-  user address range, not that it is mapped, so a buffer in the unmapped gap
-  between a program's image and its heap would reach the kernel unvalidated.
-  The planned way to test that, a program that calls every syscall with bad
-  arguments, was not built. Decide how this should be tested (or whether to
-  make user_ok also require each page to be mapped or demand-pageable, and
-  rely on the existing tests for regressions) before picking it up.
+(none yet)
