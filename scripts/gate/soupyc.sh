@@ -8,7 +8,8 @@ gate_drive \
     "soup SCOPE.SC" "WAIT:4" \
     "soup RUNAWAY.SC" "WAIT:22" "pwd" "WAIT:2" \
     "soup SPAWN.SC" "WAIT:1" "ps" "WAIT:5" \
-    "soup LINES.SC" "WAIT:3"
+    "soup LINES.SC" "WAIT:3" \
+    "soup BIGSCRIPT.SC" "WAIT:2"
 # Exact lengths, so a truncation anywhere shows up as the wrong number.
 check "soupyc concatenates past 47 chars" 'built 100'
 check "soupyc takes a long literal"       'literal 97'
@@ -30,4 +31,7 @@ check "the spawned script finishes"        '\[child\] done'
 check "lines() read the seed file"          'read 6 lines'
 check "write_lines() wrote the result"      'wrote 6 lines'
 check "the written file reads back"         'first line back: 6: SERVE'
+# fat_read reports a file's size even when it exceeds the buffer; soup used
+# to write a NUL that far past its 8 KB buffer. Now it refuses.
+check "an oversized script is refused, not overrun" 'BIGSCRIPT.SC is too large to run \(10000 bytes'
 gate_finish

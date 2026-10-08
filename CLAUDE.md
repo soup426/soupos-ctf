@@ -874,6 +874,13 @@ how many, and the temporaries live in C locals where no collector can see them.
 If you add a builtin, allocate with `str_alloc` and return `mksval_ref`; never
 `kfree` a string. `SVAL_LEN` is now only the identifier length.
 
+## `fat_read` reports the file's size, not the bytes it stored (v0.39.1)
+
+`*out_size` can exceed `bufsize`. Clamp it before using it as a byte count,
+or refuse the file. Five callers did not: hatch leaked kernel memory over the
+network with it, and three wrote a NUL past their buffers. For anything that
+may be large, stream with `vfs_open`/`vfs_read` instead, as hatch now does.
+
 ## SSH keys, exec, busy (v0.34.0)
 
 `/AUTHKEYS` on the disk holds `.pub`-shaped lines; `key_authorized()` in

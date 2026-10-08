@@ -775,6 +775,17 @@ static void cmd_soup(const char *args) {
         t_color(VGA_LIGHT_GREY, VGA_BLACK);
         return;
     }
+    /* fat_read fills at most bufsize but reports the FILE's size: clamp, or a big file writes past fbuf. */
+    if (fsize > sizeof(fbuf) - 1) {
+        /* fat_read reports the file's size, which can exceed the buffer:
+         * running the first 8 KB of a longer script would be worse than
+         * refusing it. */
+        t_color(VGA_LIGHT_RED, VGA_BLACK);
+        t_printf("  %s is too large to run (%u bytes; a script may be %u)\n",
+                 args, fsize, (uint32_t)(sizeof(fbuf) - 1));
+        t_color(VGA_LIGHT_GREY, VGA_BLACK);
+        return;
+    }
     fbuf[fsize] = '\0';
     soupyc_run((const char *)fbuf);
 }
@@ -1726,10 +1737,16 @@ static void cmd_hatch(const char *args) {
         path[k] = '\0';
         if (k == 1) strcpy(path, "/README.TXT");    /* "/" gets something to read */
 
-        uint32_t got = 0;
-        int rc = fat_read(path, body, sizeof(body), &got);
+        /* Streamed through the VFS in body-sized pieces. Until v0.39.1 the
+         * file was read into this 32 KB buffer whole, fat_read reported the
+         * file's FULL size, and that many bytes were sent: a 40 KB file went
+         * out with 7 KB of kernel memory after its first 32 KB, and anything
+         * of 64 KB or more was cut to its size modulo 65536 by the
+         * uint16_t length tcp_send_on takes. */
+        vfs_node_t *f = fat_is_dir(path) ? 0 : vfs_open(path, VFS_RDONLY);
+        uint32_t got = f ? vfs_size(f) : 0;
 
-        if (rc < 0) {
+        if (!f) {
             static const char nf[] = "Not found.\n";
             int hl = 0;
             strcpy(head, "HTTP/1.0 404 Not Found\r\n"
@@ -1757,7 +1774,15 @@ static void cmd_hatch(const char *args) {
             strcat(head, num);
             strcat(head, "\r\nConnection: close\r\n\r\n");
             tcp_send_on(h, head, (uint16_t)strlen(head));
-            tcp_send_on(h, body, (uint16_t)got);
+            uint32_t sent = 0;
+            while (sent < got) {
+                int r = vfs_read(f, body, sizeof(body));
+                if (r <= 0) break;
+                if (tcp_send_on(h, body, (uint16_t)r) != r) break;   /* r <= 32768 */
+                sent += (uint32_t)r;
+            }
+            vfs_close(f);
+            if (sent != got) t_printf("  %s: sent %u of %u bytes\n", path, sent, got);
             t_printf("  200 %s (%u bytes)\n", path, got);
             served++;
         }
@@ -1767,6 +1792,10 @@ static void cmd_hatch(const char *args) {
     t_flush_in();
     tcp_stop_listening((uint16_t)port);
     t_printf("  hatch closed after %d file%s\n", served, served == 1 ? "" : "s");
+    /* What serving cost the machine, measured over the second before the
+     * key: queue item 6 asked whether TCP's waits spin. */
+    klog("[hatch] closed after %d files; idle %u%%, hatch %u%% in the last second\n",
+         served, task_idle_last(), task_current()->cpu_last);
 }
 
 #ifndef NO_DOOM
@@ -2439,6 +2468,7 @@ static void cmd_fortune(void) {
         t_color(VGA_LIGHT_GREY, VGA_BLACK);
         return;
     }
+    if (fsize > sizeof(fbuf) - 1) fsize = sizeof(fbuf) - 1;   /* fat_read fills at most bufsize but reports the FILE's size */
     fbuf[fsize] = '\0';
 
     /* Count non-empty lines */

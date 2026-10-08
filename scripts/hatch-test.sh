@@ -18,10 +18,17 @@ LOG=$(mktemp /tmp/soupos-hatch.XXXXXX.log)
 MON=$(mktemp -u /tmp/soupos-hatch.XXXXXX.sock)
 TESTDISK=$(mktemp /tmp/soupos-hatchdisk.XXXXXX.img)
 PID=""
-cleanup() { [ -n "$PID" ] && kill "$PID" 2>/dev/null; rm -f "$MON" "$LOG" "$TESTDISK"; }
+cleanup() { [ -n "$PID" ] && kill "$PID" 2>/dev/null; rm -f "$MON" "$LOG" "$TESTDISK"; rm -rf "${BIGDIR:-}"; }
 trap cleanup EXIT
 
 cp disk.img "$TESTDISK"
+# Two files that broke hatch until v0.39.1: one past its 32 KB buffer (the
+# rest went out as kernel memory) and one past 64 KB (cut by a uint16_t).
+BIGDIR=$(mktemp -d /tmp/soupos-hatchbig.XXXXXX)
+head -c 40000  /dev/urandom > "$BIGDIR/MID.BIN"
+head -c 200000 /dev/urandom > "$BIGDIR/BIG.BIN"
+mcopy -i "$TESTDISK" "$BIGDIR/MID.BIN" ::MID.BIN
+mcopy -i "$TESTDISK" "$BIGDIR/BIG.BIN" ::BIG.BIN
 
 qemu-system-i386 -accel kvm -cpu host \
     -drive "file=$TESTDISK,format=raw,if=ide,index=0" \
@@ -93,4 +100,12 @@ else
 fi
 
 grep -E "^\[tcp\] accepted" "$LOG" | tail -3 | sed 's/^/  /'
+for f in MID BIG; do
+    curl -s -m 20 -o "$BIGDIR/$f.got" "http://127.0.0.1:$PORT/$f.BIN"
+    if cmp -s "$BIGDIR/$f.BIN" "$BIGDIR/$f.got"; then
+        echo "  ok    $f.BIN ($(wc -c < "$BIGDIR/$f.BIN") bytes) arrived byte for byte"
+    else
+        echo "  FAIL  $f.BIN differs: sent $(wc -c < "$BIGDIR/$f.BIN"), got $(wc -c < "$BIGDIR/$f.got" 2>/dev/null || echo 0)"; fail=1
+    fi
+done
 exit $fail

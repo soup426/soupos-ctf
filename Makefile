@@ -230,6 +230,9 @@ $(DISK):
 	    | mcopy -i $(DISK) - ::SOUP.TXT
 	printf '# lines() and write_lines(): a file from a file - run with: soup LINES.SC\nlet src = lines(\"SOUP.TXT\")\npour \"read \" + len(src) + \" lines\"\nlet out = []\nlet i = len(src) - 1\nwhile i >= 0 {\n    push(out, (i + 1) + \": \" + upper(src[i]))\n    i = i - 1\n}\npour \"wrote \" + write_lines(\"SOUPUP.TXT\", out) + \" lines\"\nlet back = lines(\"SOUPUP.TXT\")\npour \"first line back: \" + back[0]\n' \
 	    | mcopy -i $(DISK) - ::LINES.SC
+	# A script larger than soup's 8 KB buffer, which used to write past it.
+	yes '# filler, to make this script longer than eight kilobytes' | head -c 10000 \
+	    | mcopy -i $(DISK) - ::BIGSCRIPT.SC
 	# Long names, for the VFAT read path. mtools writes a proper LFN chain
 	# plus the mangled 8.3 alias, which is exactly what has to be parsed.
 	printf 'A file whose name does not fit in 8.3 at all.\n' \

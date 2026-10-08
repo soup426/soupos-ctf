@@ -230,7 +230,9 @@ int usermode_run(proc_t *pr) {
     if (!buf) return -1;
 
     uint32_t size = 0;
-    if (fat_read(pr->name, buf, MAX_ELF, &size) < 0 ||
+    /* fat_read fills at most bufsize but reports the FILE's size: a program bigger than the buffer would pass every header
+     * bounds check below against bytes that were never read. Refuse it. */
+    if (fat_read(pr->name, buf, MAX_ELF, &size) < 0 || size > MAX_ELF ||
         size < sizeof(elf32_ehdr_t)) {
         kfree(buf); return -1;
     }

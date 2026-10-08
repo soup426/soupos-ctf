@@ -48,7 +48,9 @@ const char *fat_label(void);      /* volume label, trimmed */
    `.` and `..` are omitted. path "/" lists the root. */
 int fat_ls(const char *path, fat_entry_t *out, int max);
 
-/* Read a file into buf (up to bufsize bytes). *out_size = actual file size.
+/* Read a file into buf (up to bufsize bytes). *out_size = actual file size,
+   WHICH MAY BE LARGER THAN bufsize: clamp before using it as a byte count.
+   (Five callers did not, v0.39.1: an out-of-bounds write in three of them.)
    Returns 0=ok, -1=not found / is a directory / error. */
 int fat_read(const char *path, uint8_t *buf, uint32_t bufsize, uint32_t *out_size);
 

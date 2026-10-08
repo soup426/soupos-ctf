@@ -113,6 +113,7 @@ void users_init(void) {
     static uint8_t buf[USERS_MAX * (USER_NAME_MAX + 16) + 16];
     uint32_t size = 0;
     if (fat_read(KITCHEN_PATH, buf, sizeof(buf) - 1, &size) == 0 && size > 0) {
+        if (size > sizeof(buf) - 1) size = sizeof(buf) - 1;   /* fat_read fills at most bufsize but reports the FILE's size */
         uint32_t s = 0;
         while (s < size) {
             uint32_t e = s;

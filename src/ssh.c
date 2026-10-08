@@ -548,6 +548,7 @@ static int key_authorized(const uint8_t *blob, uint32_t blob_len) {
     static uint8_t file[4096];
     uint32_t got = 0;
     if (fat_read("/AUTHKEYS", file, sizeof(file) - 1, &got) < 0 || got == 0) return 0;
+    if (got > sizeof(file) - 1) got = sizeof(file) - 1;   /* fat_read fills at most bufsize but reports the FILE's size */
     file[got] = 0;
     uint32_t i = 0;
     while (i < got) {

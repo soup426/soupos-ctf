@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.39.0
+Current version: v0.39.1
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,31 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.39.1 (2026-10-07)  — HATCH LEAKED KERNEL MEMORY; FIVE fat_read CALLERS OVERRAN
+  Found while setting up a measurement for queue item 6, not by looking.
+  - To load the network, the host fetched a 1 MB file from `hatch`. It got
+    0 bytes in 22 ms while hatch logged "200 (1048576 bytes)". Hatch read
+    files into a 32 KB static buffer, fat_read reported the FILE's size
+    (not the bytes it stored), and hatch sent that many bytes through a
+    uint16_t length. 1,048,576 truncates to exactly 0.
+  - THE WORSE CASE WAS PROVEN BEFORE IT WAS FIXED: a 40,000-byte file of
+    the letter S came back with 7,232 bytes that were not S, starting at
+    offset 32,768 with "/MID.BIN" - hatch's own path buffer, then whatever
+    else follows it in kernel memory. Anyone who could reach hatch could
+    read kernel memory by asking for a file between 32 and 64 KB. Hatch
+    now streams the file through the VFS in 32 KB pieces; hatch-test.sh
+    fetches a 40,000- and a 200,000-byte random file and compares both
+    byte for byte.
+  - The root is fat_read's contract, so every caller was audited. Five
+    used the reported size as a byte count: `soup` and `fortune` wrote a
+    NUL that far past their buffers, ssh's /AUTHKEYS reader did the same,
+    users.c parsed past its buffer, and the ELF loader bounds-checked
+    program headers against the file size, so a program over 256 KB would
+    pass checks against bytes never read. Each now clamps or refuses
+    (`soup` refuses a script over 8 KB rather than run half of it; the
+    loader refuses a program over its limit), fat.h says so in capitals,
+    and a 10 KB script on the disk checks `soup` in the gate. Gate 92.
 
 v0.39.0 (2026-10-07)  — BUS-MASTER DMA: SWAP UNDER KVM 58x FASTER
   Fourth queue, item 5b, which turned out not to be what it said.
