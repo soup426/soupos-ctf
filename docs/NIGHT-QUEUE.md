@@ -39,7 +39,7 @@ the pass now cost time per wrong secret and are recorded; chef may do
 neither. Measure how many guesses a cook gets a minute through it, then give
 it the same pause and a record in /etc/logins.
 
-## 2. One cook can fill the process table
+## 2. One cook can fill the process table — DONE v0.55.3
 
 Nothing limits how many processes one cook runs. Find the table's size,
 prove a cook can fill it so that nobody else (the headchef included) can

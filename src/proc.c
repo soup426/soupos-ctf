@@ -103,10 +103,18 @@ int proc_spawn(const char *path, const char *args, int background,
     preempt_disable();      /* slot claim + linking must be indivisible */
 
     proc_t *p = 0;
+    uint8_t me = users_current_uid();
+    int mine = 0, cooks = 0;
     for (int i = 0; i < PROC_MAX; i++) {
-        if (procs[i].state == PROC_FREE) { p = &procs[i]; break; }
+        if (procs[i].state == PROC_FREE) { if (!p) p = &procs[i]; continue; }
+        if (procs[i].owner == me) mine++;
+        if (procs[i].owner != 0)  cooks++;
     }
-    if (!p) { preempt_enable(); return -1; }
+    if (!p) { preempt_enable(); return PROC_ERR_FULL; }
+    if (me != 0) {                         /* the headchef is not limited */
+        if (mine  >= PROC_PER_COOK)            { preempt_enable(); return PROC_ERR_COOK_CAP; }
+        if (cooks >= PROC_MAX - PROC_RESERVE)  { preempt_enable(); return PROC_ERR_RESERVED; }
+    }
 
     memset(p, 0, sizeof(*p));
     p->state     = PROC_RUNNING;

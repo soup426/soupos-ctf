@@ -1282,8 +1282,13 @@ static void cmd_cook(const char *args) {
         }
         int rc = proc_spawn(st[i].path, st[i].args, background, stage_in, out, &pids[i]);
         if (rc < 0) {
-            cook_err(rc == -1 ? "Too many orders (try: orders)"
-                              : "Out of memory starting the process.");
+            cook_err(rc == PROC_ERR_FULL     ? "Too many orders (try: orders)" :
+                     rc == PROC_ERR_COOK_CAP ? "You already have 4 orders cooking (try: orders, kill)" :
+                     rc == PROC_ERR_RESERVED ? "The last orders are kept for the headchef (try: orders)" :
+                                               "Out of memory starting the process.");
+            if (rc == PROC_ERR_COOK_CAP || rc == PROC_ERR_RESERVED)
+                klog("[proc] %s refused a process: %s\n", users_current_name(),
+                     rc == PROC_ERR_COOK_CAP ? "their limit" : "the headchef's reserve");
             if (stage_in) vfs_close(stage_in);
             if (rd) vfs_close(rd);
             if (out) vfs_close(out);

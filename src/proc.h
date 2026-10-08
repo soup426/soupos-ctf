@@ -17,6 +17,15 @@
  * or proc_report_finished() announces it. */
 
 #define PROC_MAX        8      /* concurrent processes (slots, no malloc)   */
+/* v0.55.3: one ordinary cook could take every slot, and then nobody, the
+ * headchef included, could cook anything. A cook may hold PROC_PER_COOK
+ * slots (zombies count: they hold a slot until reaped), and all ordinary
+ * cooks together leave PROC_RESERVE free for the headchef. */
+#define PROC_PER_COOK   4
+#define PROC_RESERVE    2
+#define PROC_ERR_FULL     (-1)   /* no slot at all                            */
+#define PROC_ERR_COOK_CAP (-4)   /* this cook already holds PROC_PER_COOK     */
+#define PROC_ERR_RESERVED (-5)   /* the rest are kept for the headchef        */
 #define PROC_UFD_MAX    16     /* open files per process, fd >= 3           */
 #define PROC_ARGS_MAX   128    /* command line handed to the program        */
 #define PROC_NAME_MAX   64     /* program path, for ps/jobs                 */

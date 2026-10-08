@@ -45,4 +45,29 @@ grep -qE '^\s+1\s+[RrB]' "$LOG" >/dev/null; grep -q "killed task $fbcon_id" "$LO
 # orders shows whose each job is (v0.52.3).
 grep -qE '^ +[0-9]+ +R +y +- +headchef +/hog\.elf' "$LOG" && grep -qE '^ +[0-9]+ +R +y +- +cook +/hog\.elf' "$LOG" \
     && echo "  ok    orders shows each job's owner" || { echo "  FAIL  orders owner column"; grep -A3 "PID  ST  BG" "$LOG" | head -4; fail=1; }
+
+# ── one cook cannot fill the process table (v0.55.3) ──
+# Proven on v0.55.2: the ordinary cook started eight hog.elf and the
+# headchef's `cook hello.elf` got "Too many orders". A second boot.
+kill "$PID" 2>/dev/null; wait "$PID" 2>/dev/null; PID=""
+cp disk.img "$TESTDISK"; : > "$LOG"; rm -f "$MON"
+qemu-system-i386 -accel kvm -cpu host -drive "file=$TESTDISK,format=raw,if=ide,index=0" \
+    -cdrom soupOS.iso -boot d -m 128M -no-reboot -no-shutdown -display none \
+    -serial "file:$LOG" -monitor "unix:$MON,server,nowait" >/dev/null 2>&1 &
+PID=$!
+hogs() { for i in $(seq 1 "$1"); do printf '%s\n' "cook hog.elf &" "WAIT:1"; done; }
+mapfile -t COOK5 < <(hogs 5); mapfile -t SAUC3 < <(hogs 3)
+python3 scripts/qemu_keys.py "$MON" "headchef" "rosemary" "WAIT:1" "hire saucier" "WAIT:1" "basil" "WAIT:1" "basil" "WAIT:2" \
+    "clockout" "WAIT:1" "cook" "soup" "WAIT:2" "${COOK5[@]}" "clockout" "WAIT:1" \
+    "saucier" "basil" "WAIT:2" "${SAUC3[@]}" "clockout" "WAIT:1" \
+    "headchef" "rosemary" "WAIT:2" "cook hello.elf" "WAIT:2" "cook hello.elf &" "WAIT:2" >/dev/null 2>&1 \
+    || { echo "  FAIL  could not drive QEMU"; fail=1; }
+kill "$PID" 2>/dev/null; wait "$PID" 2>/dev/null; PID=""
+L=$(tr -d '\r' < "$LOG")
+[ "$(echo "$L" | grep -c "You already have 4 orders cooking")" = 1 ] && echo "$L" | grep -q "^\[proc\] cook refused a process: their limit" \
+    && echo "  ok    a cook's fifth process is refused: four each" || { echo "  FAIL  the per-cook limit"; fail=1; }
+[ "$(echo "$L" | grep -c "The last orders are kept for the headchef")" = 1 ] && echo "$L" | grep -q "^\[proc\] saucier refused a process: the headchef's reserve" \
+    && echo "  ok    a second cook stops at six between them, two kept for the headchef" || { echo "  FAIL  the headchef's reserve"; fail=1; }
+[ "$(echo "$L" | grep -c "hello from ring 3")" = 2 ] \
+    && echo "  ok    with the cooks at their limits, the headchef still cooks (twice)" || { echo "  FAIL  the headchef could not cook"; fail=1; }
 exit $fail

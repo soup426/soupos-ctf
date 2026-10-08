@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.55.2
+Current version: v0.55.3
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,21 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.55.3 (2026-10-08)  — ONE COOK CANNOT FILL THE PROCESS TABLE
+  Twelfth queue, item 2.
+  - The process table has eight slots and nothing limited how many one
+    cook took. Proven on v0.55.2: the ordinary cook started eight hog.elf
+    in the background and clocked out, and the headchef's `cook hello.elf`
+    got "Too many orders".
+  - proc_spawn now limits an ordinary cook to PROC_PER_COOK (4) slots,
+    zombies included since they hold a slot until reaped, and all ordinary
+    cooks together to PROC_MAX - PROC_RESERVE (6), so two are always left
+    for the headchef, who is not limited. Each refusal says which limit
+    and is logged.
+  - owner-test.sh, a second boot: cook's fifth hog.elf is refused by the
+    per-cook limit; saucier's third by the reserve (four plus two); and
+    the headchef still cooks hello.elf twice.
 
 v0.55.2 (2026-10-08)  — chef GETS THE BRAKES
   Twelfth queue, item 1.
