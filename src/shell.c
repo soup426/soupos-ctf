@@ -392,6 +392,7 @@ static void run_profile(void) {
     run_line(line);
 }
 
+static void hist_load(void);     /* below, with the history */
 static void do_login(void) {
     char name[USER_NAME_MAX];
     char secret[64];
@@ -418,6 +419,7 @@ static void do_login(void) {
         if (uid >= 0) {
             set_session_uid((uint8_t)uid);
             ensure_home((uint8_t)uid, cur_shell()->cwd);
+            hist_load();
             logins_record(users_current_name(), where, 1);
             console_at_login = 0;
             t_color(VGA_LIGHT_GREEN, VGA_BLACK);
@@ -444,12 +446,75 @@ static void do_login(void) {
 
 /* ---- command history ---- */
 
-static void hist_push(const char *cmd) {
-    if (!cmd || !cmd[0]) return;
+static const char *hist_get(int offset);
+
+static void hist_add(const char *cmd) {
     strncpy(cur_shell()->hist[cur_shell()->hist_head % HIST_MAX], cmd, INPUT_MAX - 1);
     cur_shell()->hist[cur_shell()->hist_head % HIST_MAX][INPUT_MAX - 1] = '\0';
     cur_shell()->hist_head++;
     if (cur_shell()->hist_size < HIST_MAX) cur_shell()->hist_size++;
+}
+
+/* A cook's leftovers outlive the shift (v0.60.17). The shift's end writes
+ * the cook's file, oldest line first: clockout, the end of an SSH session,
+ * and reheat or freeze for the cook who gives it. Not every line: a file
+ * that changed under every command would change under `portions` and
+ * `peek -l` as they measured it (and bash, too, writes at the end). A
+ * power cut loses the shift in progress. Logging in loads the file.
+ * The headchef's home is the root, where every cook looks, so theirs is
+ * /etc/LEFTOVER; anyone else's is LEFTOVER in their home, and only while
+ * that home is still theirs. Owner read and write only.
+ * Not in the CTF build: its ring-3 open is unchecked on purpose, and every
+ * cook's history would become something to read. */
+#ifdef NO_CHALLENGE
+static int hist_file(char *out) {
+    uint8_t uid = cur_shell()->uid, owner, mode;
+    if (uid == 0) { strcpy(out, "/etc/LEFTOVER"); return fat_is_dir("/etc"); }
+    char home[FAT_PATH_MAX];
+    strcpy(home, "/home/");
+    strncpy(home + 6, users_name_of(uid), sizeof(home) - 7); home[sizeof(home) - 1] = '\0';
+    if (!fat_is_dir(home) || fat_stat(home, &owner, &mode) < 0 || owner != uid) return 0;
+    strcpy(out, home); strcat(out, "/LEFTOVER");
+    return 1;
+}
+
+static void hist_save(void) {
+    char path[FAT_PATH_MAX];
+    if (!hist_file(path)) return;
+    shell_t *sh = cur_shell();
+    static char buf[HIST_MAX * INPUT_MAX];
+    uint32_t n = 0;
+    for (int i = sh->hist_size; i >= 1; i--) {          /* oldest first */
+        const char *h = hist_get(i);
+        for (int k = 0; h && h[k] && n < sizeof(buf) - 1; k++) buf[n++] = h[k];
+        if (n < sizeof(buf)) buf[n++] = '\n';
+    }
+    int fresh = !fat_exists(path);
+    if (fat_write(path, (const uint8_t *)buf, n) < 0) return;    /* a full disk keeps the old one */
+    if (fresh) { fat_chown(path, sh->uid); fat_chmod(path, FAT_PERM_MARK | FAT_PERM_OR | FAT_PERM_OW); }
+}
+
+static void hist_load(void) {
+    char path[FAT_PATH_MAX];
+    if (!hist_file(path) || !fat_exists(path)) return;
+    static char buf[HIST_MAX * INPUT_MAX];
+    uint32_t n = 0;
+    if (fat_read(path, (uint8_t *)buf, sizeof(buf) - 1, &n) < 0) return;
+    char line[INPUT_MAX];
+    int l = 0;
+    for (uint32_t i = 0; i < n; i++) {
+        if (buf[i] == '\n') { line[l] = '\0'; if (l) hist_add(line); l = 0; }
+        else if (l < INPUT_MAX - 1 && buf[i] >= ' ' && buf[i] < 127) line[l++] = buf[i];
+    }
+}
+#else
+static void hist_save(void) {}
+static void hist_load(void) {}
+#endif
+
+static void hist_push(const char *cmd) {
+    if (!cmd || !cmd[0]) return;
+    hist_add(cmd);
 }
 
 /* offset=1 -> most recent, offset=2 -> one before that, etc. */
@@ -2655,7 +2720,9 @@ static void cmd_roster(void) {
     }
 }
 
+static void hist_save(void);    /* with the history */
 static void cmd_clockout(void) {
+    hist_save();                               /* the shift's leftovers, kept */
     if (cur_shell() != &the_shell) {           /* a session: clocking out leaves */
         t_printf("  %s clocks out. Goodbye.\n", users_current_name());
         cur_shell()->exiting = 1;
@@ -4336,8 +4403,8 @@ static void dispatch(const char *buf) {
     else if (str_eq(p, "recipe"))     cmd_recipe();
     else if (str_eq(p, "leftovers"))  cmd_leftovers();
     else if (str_eq(p, "spill"))      { if (headchef_only("crash the kernel")) cmd_spill(); }
-    else if (str_eq(p, "freeze"))     { if (headchef_only("halt the machine")) cmd_freeze(); }
-    else if (str_eq(p, "reheat"))     { if (headchef_only("reboot the machine")) cmd_reheat(); }
+    else if (str_eq(p, "freeze"))     { if (headchef_only("halt the machine")) { hist_save(); cmd_freeze(); } }
+    else if (str_eq(p, "reheat"))     { if (headchef_only("reboot the machine")) { hist_save(); cmd_reheat(); } }
     else if (str_startswith(p, "slurp")) {
         const char *a = p + 5; while (*a == ' ') a++;
         cmd_slurp(uq_args(a));
@@ -5308,6 +5375,7 @@ static void session_task(void *arg) {
     me->shell = sh;
     me->term  = sh->term;
     ensure_home(sh->uid, sh->cwd);            /* a session starts at home too */
+    if (!sh->exec_line[0]) hist_load();       /* and with its cook's leftovers */
 
     if (sh->exec_line[0]) {
         /* One command, no prompt and no echo: what `ssh host cmd` means. */
@@ -5324,6 +5392,7 @@ static void session_task(void *arg) {
         run_profile();
         prompt();
         shell_loop(input, saved, &pos, &len, &hb);
+        if (!sh->exiting) hist_save();       /* hung up: clockout saved it otherwise */
     }
     t_color(VGA_LIGHT_GREY, VGA_BLACK);
     klog("[shell] session for %s ended, status %d\n", users_current_name(), sh->last_status);

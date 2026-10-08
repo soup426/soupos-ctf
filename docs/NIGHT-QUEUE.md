@@ -49,7 +49,7 @@ Lines of two or more files side by side, as `paste` does (tab between,
 -d to choose), files of different lengths included. Compare with the
 host's paste.
 
-## 4. A cook's leftovers outlive the shift
+## 4. A cook's leftovers outlive the shift — DONE v0.60.17
 
 History is per shell and wiped at clockout (v0.60.12). Keep each cook's
 in their home (a file only they can read), load it at login, so the up

@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.16
+Current version: v0.60.17
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,25 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.17 (2026-10-08)  — LEFTOVERS OUTLIVE THE SHIFT
+  - A cook's history is kept on the disk: the shift's end (clockout, an
+    SSH session ending, reheat or freeze) writes their LEFTOVER file, the
+    last 16 lines oldest first, and logging in, at the console or over
+    SSH, loads it. The up arrow and `leftovers` survive a clockout and a
+    reboot. Not after every line: a file changing under every command
+    changed under `portions` and `peek -l` as they measured it (du-test
+    and lsl-test caught that), and bash writes at the end too. A power cut
+    loses the shift in progress.
+  - Where: /home/<cook>/LEFTOVER, only while that home is still the cook's;
+    the headchef's home is the root, where everyone looks, so theirs is
+    /etc/LEFTOVER. Owner read and write only: another cook is refused by
+    the shell and by the kernel's ring-3 open.
+  - Not in the CHALLENGE=1 build, whose ring-3 open is unchecked on
+    purpose: every cook's history would become something to read there.
+  - scripts/leftovers-test.sh boots the same disk twice, with a reheat
+    between. cooks-test now expects fire to hand over three entries: the
+    home, the file and the history.
 
 v0.60.16 (2026-10-08)  — LAYER
   - layer.elf puts up to eight files side by side as `paste` does: the Nth

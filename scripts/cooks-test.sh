@@ -61,8 +61,10 @@ boot "$WORK/fire.img" "$WORK/fire.log" "headchef" "rosemary" "WAIT:1" \
     "intern" "mint" "WAIT:2" "whoami" "WAIT:1" "cd /home/saucier" "WAIT:1"
 grep -q "saucier is still at work (0 shells, 1 process)" "$WORK/fire.log" \
     && echo "  ok    fire refuses a cook with a process still running" || { echo "  FAIL  fire did not refuse a cook at work"; fail=1; }
-grep -q "fired saucier (uid [0-9]*): 2 entries handed to the headchef" "$WORK/fire.log" \
-    && echo "  ok    firing hands the cook's home and file to the headchef" || { echo "  FAIL  hand-over"; grep "fired" "$WORK/fire.log"; fail=1; }
+# Three since v0.60.17: the home, the file, and the LEFTOVER history the
+# saucier's clockout wrote.
+grep -q "fired saucier (uid [0-9]*): 3 entries handed to the headchef" "$WORK/fire.log" \
+    && echo "  ok    firing hands the cook's home, file and history to the headchef" || { echo "  FAIL  hand-over"; grep "fired" "$WORK/fire.log"; fail=1; }
 grep -q "owner: headchef" "$WORK/fire.log" && grep -q "intern  (uid 2)" "$WORK/fire.log" && grep -q "Permission denied: /home/saucier" "$WORK/fire.log" \
     && echo "  ok    the next hire gets the uid but not the files" || { echo "  FAIL  the reused uid still reaches the old files"; fail=1; }
 grep -q "but no home: /home/saucier is not theirs" "$WORK/fire.log" \
