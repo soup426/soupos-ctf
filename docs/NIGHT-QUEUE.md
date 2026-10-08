@@ -1,9 +1,10 @@
 # Night queue
 
-Thirteenth queue. The first twelve are in `docs/queue-archive-2026-10-0*.md`.
-The seventh's notes still hold the set-aside syscall item for a person to
-decide on. The twelfth put brakes on guessing, process slots and the login
-record; this one looks at the other things the cooks share.
+Fourteenth queue. The first thirteen are in `docs/queue-archive-2026-10-0*.md`.
+Two items wait on a person, with notes in their archives: the seventh's
+syscall-pointer item and the thirteenth's swap-shares item. After several
+queues of hardening, this one is ordinary features: the small tools that
+make pipes worth having. Each is checked against the same tool on the host.
 
 ## Standing rules
 
@@ -31,27 +32,29 @@ record; this one looks at the other things the cooks share.
 
 ---
 
-## 1. One cook can fill the disk — DONE v0.55.5
+## 1. >> appends
 
-A cook may write in their home and anywhere they have write permission, and
-nothing stops them filling the volume. Then the kernel's own writes fail:
-/etc/kitchen (so `secret` and `hire`), /etc/logins, the host key. Prove what
-breaks when a cook fills the disk, then keep a reserve of clusters only the
-headchef (and the kernel's own files) may use, the way ext filesystems keep
-5% for root. Check with fsck and mtools.
+`cook echo.elf x > F` overwrites; nothing appends. Add `>>` to the shell's
+redirection (the cook's write permission rules as for `>`), and check the
+result against the host shell doing the same with the same input.
 
-## 2. One cook can fill swap — SET ASIDE 2026-10-08 (see the note at the bottom)
+## 2. grep.elf
 
-Swap is 16 MB, shared. Measure whether one cook's processes can take all of
-it, and what happens to another cook's process that then needs a page. If
-it is real, give swap the same kind of per-cook share as the process table.
+A fixed-string filter for pipes and files: `grep.elf [-v] [-c] [-i] word
+[file]`. Compare its output with `grep -F` on the host over the same files,
+long lines and empty ones included.
 
-## 3. A message of the day — DONE v0.55.6
+## 3. head.elf and tail.elf
 
-/etc/motd, if it exists, shown after every login: console, pass and vault.
-The headchef's to write. A small one, after the last two queues.
+`-n N`, default 10, from a file or a pipe. Compare with the host's head and
+tail, including files shorter than N and files with no final newline.
 
-## 4. Doom at the framebuffer's own resolution — DEFERRED
+## 4. sort.elf
+
+Lines in byte order, with -r and -n. Compare with `LC_ALL=C sort` on the
+host. Find the largest input it handles and say so.
+
+## 5. Doom at the framebuffer's own resolution — DEFERRED
 
 Carried; the user asked to keep to OS work.
 
@@ -59,8 +62,4 @@ Carried; the user asked to keep to OS work.
 
 ## Notes left by unattended runs
 
-- 2026-10-08, item 2: set aside, unbuilt. The measurement found that one
-  cook's background processes can take all 4096 swap pages, after which
-  another cook's program that needs a page is killed. No fix was written,
-  and the throwaway test-program change used to measure it was reverted.
-  Leave it for a person to decide whether and how to pick it up.
+(none yet)
