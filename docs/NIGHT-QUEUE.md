@@ -44,7 +44,7 @@ A fixed-string filter for pipes and files: `grep.elf [-v] [-c] [-i] word
 [file]`. Compare its output with `grep -F` on the host over the same files,
 long lines and empty ones included.
 
-## 3. head.elf and tail.elf
+## 3. head.elf and tail.elf — DONE v0.56.2
 
 `-n N`, default 10, from a file or a pipe. Compare with the host's head and
 tail, including files shorter than N and files with no final newline.

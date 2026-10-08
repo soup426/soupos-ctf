@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.56.1
+Current version: v0.56.2
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,21 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.56.2 (2026-10-08)  — head.elf AND tail.elf
+  Fourteenth queue, item 3.
+  - user/head.c: the first N lines (-n N, default 10) of a file or stdin,
+    bytes copied as they are, stopping once it has N lines.
+    user/tail.c: the last N; the whole input is read into memory (a pipe
+    cannot be read backwards), growing by doubling, then the lines are
+    found from the end. Both copy a last line with no newline without one,
+    as GNU head and tail do.
+  - scripts/headtail-test.sh, in check.sh: 13 forms over a 25-line file, a
+    3-line file with no final newline, an empty file and a 2000-line file
+    past tail's first 4 KB, with -n 0, files shorter than N and pipes
+    (head into tail too); each compared byte for byte with the host's head
+    and tail. The pipe stopping early (head after 4 lines while cat still
+    writes) needs no work: a write with no reader left returns -1.
 
 v0.56.1 (2026-10-08)  — grep.elf
   Fourteenth queue, item 2.
