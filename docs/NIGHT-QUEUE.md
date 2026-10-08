@@ -33,7 +33,7 @@ to branch on, and globs.
 
 ---
 
-## 1. Shell variables
+## 1. Shell variables — DONE v0.58.0
 
 `NAME=value` sets a variable for this shell (quotes allowed in the value);
 `$NAME` and `${NAME}` are replaced where a word may hold them, not inside

@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.57.7
+Current version: v0.58.0
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,20 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.58.0 (2026-10-08)  — SHELL VARIABLES
+  Nineteenth queue, item 1.
+  - NAME=value as the whole of a command sets a variable in this shell (the
+    value unquoted, so A="two  words" keeps both spaces); $NAME and ${NAME}
+    are replaced in run_line's expansion pass with $? and ~, not inside
+    '...'; an unset name is empty; `unset NAME` removes one. Each shell
+    (the console, every session) has its own sixteen.
+  - Not supported, and written down: `A=1 cmd` (a variable for one command
+    only); exported environments (programs get no environment).
+  - scripts/vars-test.sh, in check.sh: a script run with `run` leaves the
+    same files as sh running the same lines ($A, ${A}y, "$B", '$A', an
+    unset name, A=$A$A, unset, assignments joined by ;, S=$?); an SSH
+    session does not see the console's variable, nor change it.
 
 v0.57.7 (2026-10-08)  — seq.elf
   Eighteenth queue, item 4.

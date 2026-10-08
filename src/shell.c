@@ -74,6 +74,9 @@ typedef struct {
     volatile int done;           /* the session task has finished                */
     char    exec_line[INPUT_MAX];/* a session that runs one line (ssh host cmd)  */
     char    where[20];           /* "console", or the client's address (v0.52.0) */
+    char    vname[16][16];       /* shell variables (v0.58.0): NAME=value, $NAME */
+    char    vval[16][96];
+    int     nvars;
     uint32_t started, last_input;/* ticks: for `who`                          */
 } shell_t;
 
@@ -649,6 +652,7 @@ static void cmd_menu(void) {
         {0, "    last               - who clocked in, and who was refused, newest first"},
         {0, "    du [bowl]          - clusters and bytes under each entry, and the total"},
         {0, "    run <file>         - run a file of command lines (a script)"},
+        {0, "    NAME=value, $NAME  - shell variables; unset NAME removes one"},
         {0, "    kill <id>          - stop a background task"},
         {0, "    bgclock            - spawn a clock in the top-right corner"},
         {0, "    yieldbg            - bg task logging [bg] to serial (pairs with cook spin.elf)"},
@@ -2507,6 +2511,7 @@ static void cmd_bowltest(void) {
 
 static void dispatch(const char *buf);   /* forward decl for chef elevation */
 static void cmd_run(const char *args);  /* defined beside run_rc (v0.57.5) */
+static void cmd_unset(const char *args); /* beside run_line (v0.58.0) */
 
 /* The headchef's commands (v0.55.0). Until then any cook could close the
  * vault on everyone, open the clear-text pass door, change the vault's
@@ -3981,7 +3986,7 @@ static const char *const cmd_names[] = {
     "jot", "ai", "cook", "soup", "hash",
     "beep", "mandelbrot", "vgademo", "uname", "cal",
     "clock", "wipe", "fortune", "bounce", "recipe", "leftovers", "spill",
-    "freeze", "reheat", "ps", "kitchen", "who", "last", "du", "run", "orders", "plate", "steep", "kill", "scraps", "sample", "skewer", "larder", "whistle", "hatch", "hush", "pass", "vault",
+    "freeze", "reheat", "ps", "kitchen", "who", "last", "du", "run", "unset", "orders", "plate", "steep", "kill", "scraps", "sample", "skewer", "larder", "whistle", "hatch", "hush", "pass", "vault",
 #ifndef NO_DOOM
     "sizzle", "hum",
 #endif
@@ -4124,6 +4129,7 @@ static void dispatch(const char *buf) {
     }
     else if (str_eq(p, "serve"))       cmd_serve();
     else if (str_eq(p, "run") || str_startswith(p, "run ")) cmd_run(uq_args(p + 3));
+    else if (str_startswith(p, "unset ")) cmd_unset(uq_args(p + 6));
     else if (str_startswith(p, "pour")) {
         const char *a = p + 4; while (*a == ' ') a++;
         cmd_pour(uq_args(a));
@@ -4273,6 +4279,54 @@ static void dispatch(const char *buf) {
  * runs c when either a or b failed. A single & (background) and a single
  * | (pipe) belong to their command and are not split on. The status of a
  * skipped command is not taken: the last one that ran stands. */
+/* NAME=value as the whole of a command (v0.58.0): sets a variable in this
+ * shell; the value is unquoted (A="two  words" keeps both spaces). Returns
+ * 1 if the text was an assignment. `A=1 cmd` (a variable for one command)
+ * is not supported: written down, not pretended. */
+static void unquote(char *w);
+static int try_assign(const char *text) {
+    const char *t = text;
+    while (*t == ' ') t++;
+    int n = 0;
+    if (!(t[0] == '_' || (t[0] >= 'A' && t[0] <= 'Z') || (t[0] >= 'a' && t[0] <= 'z'))) return 0;
+    while (t[n] == '_' || (t[n] >= 'A' && t[n] <= 'Z') || (t[n] >= 'a' && t[n] <= 'z') || (t[n] >= '0' && t[n] <= '9')) n++;
+    if (t[n] != '=' || n > 15) return 0;
+    char value[INPUT_MAX];
+    int k = 0; char q = 0;
+    for (const char *v = t + n + 1; *v && k < INPUT_MAX - 1; v++) {
+        if (!q && *v == ' ') { const char *w = v; while (*w == ' ') w++; if (*w) return 0; break; }
+        if (q) { if (*v == q) q = 0; }
+        else if (*v == '\'' || *v == '"') q = *v;
+        value[k++] = *v;
+    }
+    value[k] = '\0';
+    unquote(value);
+    shell_t *me = cur_shell();
+    char name[16]; memcpy(name, t, (uint32_t)n); name[n] = '\0';
+    int slot = -1;
+    for (int i = 0; i < me->nvars; i++) if (str_eq(me->vname[i], name)) slot = i;
+    if (slot < 0) {
+        if (me->nvars >= 16) { t_puts("  Too many variables (16).\n"); me->last_status = 1; return 1; }
+        slot = me->nvars++;
+        strcpy(me->vname[slot], name);
+    }
+    strncpy(me->vval[slot], value, sizeof(me->vval[slot]) - 1);
+    me->vval[slot][sizeof(me->vval[slot]) - 1] = '\0';
+    me->last_status = 0;
+    return 1;
+}
+
+/* unset NAME (v0.58.0). */
+static void cmd_unset(const char *args) {
+    shell_t *me = cur_shell();
+    for (int i = 0; i < me->nvars; i++)
+        if (str_eq(me->vname[i], args)) {
+            me->nvars--;
+            if (i != me->nvars) { strcpy(me->vname[i], me->vname[me->nvars]); strcpy(me->vval[i], me->vval[me->nvars]); }
+            return;
+        }
+}
+
 static void run_line(const char *line) {
     char seg[INPUT_MAX];
     int  op = ';';                 /* how this segment joins the one before */
@@ -4318,6 +4372,26 @@ static void run_line(const char *line) {
                     while (*h && k < INPUT_MAX - 1) ex[k++] = *h++;
                     continue;
                 }
+                /* $NAME and ${NAME} (v0.58.0): a shell variable, empty if unset;
+                 * not inside '...'. */
+                if (seg[i] == '$' && sq != '\'' &&
+                    (seg[i + 1] == '{' || seg[i + 1] == '_' ||
+                     (seg[i + 1] >= 'A' && seg[i + 1] <= 'Z') || (seg[i + 1] >= 'a' && seg[i + 1] <= 'z'))) {
+                    char name[16]; int nn = 0, j = i + 1, braced = (seg[j] == '{');
+                    if (braced) j++;
+                    while ((seg[j] == '_' || (seg[j] >= 'A' && seg[j] <= 'Z') || (seg[j] >= 'a' && seg[j] <= 'z') ||
+                            (seg[j] >= '0' && seg[j] <= '9')) && nn < 15) name[nn++] = seg[j++];
+                    name[nn] = '\0';
+                    if (braced) { if (seg[j] != '}') { ex[k++] = seg[i]; continue; } j++; }
+                    shell_t *me = cur_shell();
+                    for (int v = 0; v < me->nvars; v++)
+                        if (str_eq(me->vname[v], name)) {
+                            for (const char *val = me->vval[v]; *val && k < INPUT_MAX - 1; val++) ex[k++] = *val;
+                            break;
+                        }
+                    i = j - 1;
+                    continue;
+                }
                 if (seg[i] == '$' && seg[i + 1] == '?' && sq != '\'') {
                     char d[12]; int nd = 0; unsigned v = (unsigned)cur_shell()->last_status;
                     do { d[nd++] = (char)('0' + v % 10); v /= 10; } while (v);
@@ -4326,7 +4400,7 @@ static void run_line(const char *line) {
                 } else ex[k++] = seg[i];
             }
             ex[k] = '\0';
-            dispatch(ex);
+            if (!try_assign(ex)) dispatch(ex);
         }
         if (cur_shell()->exiting || !next_op) break;
         op = next_op;
