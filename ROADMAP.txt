@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.21
+Current version: v0.60.22
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,19 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.22 (2026-10-08)  — FUNCTIONS
+  - `name() { cmd ; cmd ; }` on one line defines a function (sixteen per
+    shell; defining one again replaces it). `name a b` runs the body with
+    $1..$9, $# and $@ set for it and the caller's given back after, as
+    `follow` does for a script; its status is the body's last. The body is
+    kept as written and expanded at each call, so loops, case and ${NAME}
+    work inside; variables are shared with the caller, as in sh. Eight
+    calls deep at most. Clockout forgets them with the variables.
+  - split_segs keeps a definition whole (its braces counted outside quotes,
+    ${...} not counted). scripts/func-test.sh compares ten lines with bash.
+    qemu_keys.py types { } @ and ^ now.
+  - Not yet: piping a function (or a builtin) into a program; queued.
 
 v0.60.21 (2026-10-08)  — 2>
   - `cook X.elf 2> ERR.TXT`, `2>> ERR.TXT` and `2>&1`, on any stage of a

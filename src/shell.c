@@ -81,6 +81,9 @@ typedef struct {
     int     npargs;              /* $#                                      */
     uint32_t started, last_input;/* ticks: for `who`                          */
     int     tabs;                /* Tabs in a row: the second lists (v0.60.10) */
+    char    fname[16][16];       /* functions (v0.60.22): NAME() { BODY } */
+    char    fbody[16][INPUT_MAX];
+    int     nfuncs;
 } shell_t;
 
 /* The console's shell. A session's shell_t is kmalloc'd by
@@ -2873,7 +2876,7 @@ static void cmd_clockout(void) {
                users_current_name());
     /* The next cook starts clean (v0.60.12): the console's shell outlives
      * the cook, so what they typed (leftovers and the up arrow), set
-     * (variables, $1..$9) and cut (Ctrl+U, Ctrl+W) would pass to whoever
+     * (variables, functions, $1..$9) and cut (Ctrl+U, Ctrl+W) would pass to whoever
      * clocks in next. Wiped, not just forgotten: a secret typed at the
      * wrong prompt sits in the history. */
     shell_t *sh = cur_shell();
@@ -2884,6 +2887,9 @@ static void cmd_clockout(void) {
     sh->nvars = 0;
     memset(sh->parg, 0, sizeof(sh->parg));
     sh->npargs = 0;
+    memset(sh->fname, 0, sizeof(sh->fname));
+    memset(sh->fbody, 0, sizeof(sh->fbody));
+    sh->nfuncs = 0;
     clip_clear();
     do_login();
 }
@@ -5048,6 +5054,39 @@ static void expand_seg(const char *seg, char *ex) {
     ex[k] = '\0';
 }
 
+/* A function's name as the first word runs its body (v0.60.22), with the
+ * words after it as $1..$9 for the body and the caller's given back after,
+ * as `follow` does for a script. Its status is the body's last. 1 if ex
+ * named a function. Eight calls deep at most, so one that calls itself
+ * forever stops. */
+static void run_line(const char *line);
+static int call_function(const char *ex) {
+    shell_t *me = cur_shell();
+    char name[16];
+    const char *rest = first_word(ex, name, sizeof(name));
+    int f = -1;
+    for (int i = 0; i < me->nfuncs; i++) if (str_eq(me->fname[i], name)) f = i;
+    if (f < 0) return 0;
+    static int depth;
+    if (depth >= 8) { t_printf("  %s: functions nested eight deep; not going further.\n", name); me->last_status = 1; return 1; }
+    char (*saved)[64] = kmalloc(sizeof(me->parg));
+    char *body = kmalloc(INPUT_MAX);
+    if (!saved || !body) { if (saved) kfree(saved); if (body) kfree(body); return 1; }
+    int saved_n = me->npargs;
+    memcpy(saved, me->parg, sizeof(me->parg));
+    strcpy(body, me->fbody[f]);                 /* it may redefine itself */
+    me->npargs = 0;
+    while (*rest && me->npargs < 9) { rest = first_word(rest, me->parg[me->npargs], 64); me->npargs++; }
+    me->last_status = 0;
+    depth++;
+    run_line(body);
+    depth--;
+    memcpy(me->parg, saved, sizeof(me->parg));
+    me->npargs = saved_n;
+    kfree(saved); kfree(body);
+    return 1;
+}
+
 /* Run one command: expand it, then it is an assignment or a dispatch. */
 static void run_one(const char *seg) {
     const char *q = seg; while (*q == ' ') q++;
@@ -5060,7 +5099,9 @@ static void run_one(const char *seg) {
         cur_shell()->last_status = 1;
         return;
     }
-    if (!try_assign(ex)) dispatch(ex);
+    if (try_assign(ex)) return;
+    if (call_function(ex)) return;
+    dispatch(ex);
 }
 
 /* ---- control flow: for and if (v0.59.3) ---------------------------------
@@ -5079,6 +5120,37 @@ typedef struct { const char *text; int op; } lseg_t;     /* op: ';' 'A' 'O' */
 static int is_kw(const char *t, const char *kw) {
     int n = (int)strlen(kw);
     return strncmp(t, kw, (uint32_t)n) == 0 && (t[n] == '\0' || t[n] == ' ');
+}
+
+/* Functions (v0.60.22). `NAME() { BODY ; }` (or `NAME () {`), one line:
+ * if t starts with one, where it ends (just past its '}'), else 0. The
+ * braces are counted outside quotes, and ${...} is not one. */
+static int fn_name_len(const char *t) {
+    int k = 0;
+    if (!((t[0] >= 'a' && t[0] <= 'z') || (t[0] >= 'A' && t[0] <= 'Z') || t[0] == '_')) return 0;
+    while ((t[k] >= 'a' && t[k] <= 'z') || (t[k] >= 'A' && t[k] <= 'Z') ||
+           (t[k] >= '0' && t[k] <= '9') || t[k] == '_') k++;
+    return k;
+}
+static char *fndef_end(char *t) {
+    while (*t == ' ') t++;
+    int k = fn_name_len(t);
+    if (!k || k > 15) return 0;
+    char *r = t + k;
+    while (*r == ' ') r++;
+    if (r[0] != '(' || r[1] != ')') return 0;
+    r += 2;
+    while (*r == ' ') r++;
+    if (*r != '{' || (r[1] && r[1] != ' ')) return 0;
+    int depth = 0; char q = 0;
+    for (; *r; r++) {
+        if (q) { if (*r == q) q = 0; continue; }
+        if (*r == '\'' || *r == '"') { q = *r; continue; }
+        if (r[0] == '$' && r[1] == '{') { while (*r && *r != '}') r++; if (!*r) return 0; continue; }
+        if (*r == '{') depth++;
+        else if (*r == '}' && --depth == 0) return r + 1;
+    }
+    return 0;
 }
 
 /* The first ')' outside quotes, or 0: where a case arm's pattern ends. */
@@ -5112,6 +5184,8 @@ static int split_segs(char *buf, lseg_t *sg, int max) {
     while (n < max) {
         char *start = s, inq = 0;
         int next_op = 0, pdepth = 0, dsemi = 0;   /* inside $( ... ): no splitting (v0.60.4) */
+        char *defend = fndef_end(start);          /* NAME() { ... }: one segment (v0.60.22) */
+        if (defend) s = defend;
         while (*s) {
             if (inq) { if (*s == inq) inq = 0; s++; continue; }
             if (*s == '\'' || *s == '"') { inq = *s; s++; continue; }
@@ -5358,6 +5432,28 @@ static void exec_range(lseg_t *sg, int from, int to, int depth) {
             continue;
         }
         if (sg[i].text == DSEMI) { i++; continue; }
+        if (run && fndef_end((char *)sg[i].text)) {
+            /* A definition: kept as written, expanded only when called. */
+            shell_t *sh = cur_shell();
+            const char *t = sg[i].text;
+            int k = fn_name_len(t);
+            char name[16];
+            memcpy(name, t, (size_t)k); name[k] = '\0';
+            const char *b = strchr(t, '{') + 1;
+            const char *e = t + strlen(t) - 1;           /* the '}' */
+            while (*b == ' ') b++;
+            while (e > b && (e[-1] == ' ' || e[-1] == ';')) e--;
+            int slot = -1;
+            for (int f = 0; f < sh->nfuncs; f++) if (str_eq(sh->fname[f], name)) slot = f;
+            if (slot < 0 && sh->nfuncs < 16) slot = sh->nfuncs++;
+            if (slot < 0) { t_puts("  Sixteen functions already; not another.\n"); sh->last_status = 1; i++; continue; }
+            int bl = (int)(e - b) < INPUT_MAX - 1 ? (int)(e - b) : INPUT_MAX - 1;
+            strcpy(sh->fname[slot], name);
+            memcpy(sh->fbody[slot], b, (size_t)bl); sh->fbody[slot][bl] = '\0';
+            sh->last_status = 0;
+            i++;
+            continue;
+        }
         if (is_kw(sg[i].text, "if")) {
             int f = match_end(sg, i, to, "if", "fi");
             int th = -1, el = -1, dep = 0;

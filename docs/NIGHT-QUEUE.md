@@ -40,7 +40,7 @@ environment and two more tools; the shell gets functions.
 (fd 2), on any stage of a pipeline, as sh does. Today stderr always goes to
 the screen. Compare what lands where with bash running the host tools.
 
-## 2. Shell functions
+## 2. Shell functions — DONE v0.60.22
 
 `name() { cmd ; cmd ; }` on one line defines one; `name a b` runs it with
 $1..$9, $# and $@ set for the body and restored after; its status is the
@@ -67,6 +67,14 @@ field N), with the existing -n and -r. Compare with the host's sort.
 cook runs gets the marked ones as NAME=value strings, read through a new
 ulib getenv(). A program to list them (a kitchen name). Test that only
 exported ones arrive and that unset removes one.
+
+## 8. A builtin or a function into a pipe
+
+Found with item 2: `up loud | raise.elf`, where up is a function (or
+`slurp hi | raise.elf`, a builtin), hands `|` and `raise.elf` to it as
+words; only `cook` lines make pipes. Run the left side with its output
+captured (the $(...) capture terminal is the start) and feed it to the
+program as stdin. Compare with bash.
 
 ## 7. Doom at the framebuffer's own resolution — DEFERRED
 
