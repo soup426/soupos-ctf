@@ -1,9 +1,10 @@
 # Night queue
 
-Eleventh queue. The first ten are in `docs/queue-archive-2026-10-0*.md`.
+Twelfth queue. The first eleven are in `docs/queue-archive-2026-10-0*.md`.
 The seventh's notes still hold the set-aside syscall item for a person to
-decide on. The tenth sealed the files that hold secrets; this one looks at
-what a cook may DO, and at the other door into the kitchen.
+decide on. The eleventh gated what a cook may do and closed the pass door's
+hijack; this one looks at the brakes a determined cook could still get
+around.
 
 ## Standing rules
 
@@ -31,27 +32,25 @@ what a cook may DO, and at the other door into the kitchen.
 
 ---
 
-## 1. Which commands a cook may run — DONE v0.55.0
+## 1. chef is a secret-guessing oracle without brakes
 
-Only kill, hire, fire and secret have been looked at for who may run them.
-Go through every shell command for actions that belong to the headchef:
-opening or closing the vault or the pass door, rekey and idle settings,
-network changes, anything that writes the disk wholesale or reboots. Prove
-each one an ordinary cook can wrongly run on the current kernel before
-gating it, and test them together.
+`chef <command>` asks for the headchef's secret. Logins over the vault and
+the pass now cost time per wrong secret and are recorded; chef may do
+neither. Measure how many guesses a cook gets a minute through it, then give
+it the same pause and a record in /etc/logins.
 
-## 2. The pass door gets the same rules as the vault — DONE v0.55.1
+## 2. One cook can fill the process table
 
-`pass` is the clear-text door (telnet-style). The vault records logins in
-/etc/logins, slows guessing and locks out an address, ends idle sessions.
-Find out which of those apply to pass sessions (measure, do not assume),
-and give it the ones it lacks.
+Nothing limits how many processes one cook runs. Find the table's size,
+prove a cook can fill it so that nobody else (the headchef included) can
+cook anything, then add a per-cook limit (the headchef exempt) and test it.
 
-## 3. The full check waits on cooks-test — DONE (scripts only): 237 s to 134 s
+## 3. The login record can be flushed
 
-cooks-test is 226 of the full check's 237 s. Split it so the check is no
-slower than its next-longest test plus a little, and record the before and
-after.
+/etc/logins keeps the newest 64 lines, so refusals push real logins out.
+Measure how long a determined guesser needs to flush a login out through
+each door, and decide (and write down why) between keeping more lines,
+keeping successes apart from refusals, or both.
 
 ## 4. Doom at the framebuffer's own resolution — DEFERRED
 
