@@ -1,10 +1,9 @@
 # Night queue
 
-Eighth queue. The first seven are in `docs/queue-archive-2026-10-07*.md`. The
-seventh's notes hold two things a person should look at: item 4 (syscalls
-and unmapped buffers) set aside for a decision on how to test it, and an
-open flake in the jobs segment whose next occurrence will keep its log.
-This queue makes the multi-user system the last queues built usable.
+Ninth queue. The first eight are in `docs/queue-archive-2026-10-0*.md`. The
+seventh's notes still hold the set-aside syscall item (item 4) for a person
+to decide on. The eighth made the system multi-user in practice; this one
+looks at what that leaves loose.
 
 ## Standing rules
 
@@ -25,37 +24,39 @@ This queue makes the multi-user system the last queues built usable.
 9. **Gitea only.** Never GitHub, never the `cdctf-release` branch.
 10. **`make clean` leaves disk.img alone**: `rm disk.img && make disk` after
     changing anything the Makefile embeds.
-11. If an item is blocked or needs a decision that is not written down, leave
+11. Do not edit the tree while check.sh runs: it builds once at its start
+    and reads each test script when that test starts.
+12. If an item is blocked or needs a decision that is not written down, leave
     a note at the bottom and move on.
 
 ---
 
-## 1. who — DONE v0.52.0
+## 1. A fired cook's files go to the next hire
 
-Since v0.36.0 there can be five shells at once: the console and four SSH
-sessions. Nothing lists them. `who`: each shell, its cook, where it is (the
-console, or the client's address), when it started and how long it has been
-idle. Test with the console and two SSH sessions as two cooks.
+`hire` takes the smallest free uid, and `fire` frees it. Files record their
+owner as a uid, so the next cook hired is likely to own everything the fired
+one left, home included. Prove it first: hire, write a file, fire, hire
+someone else, and see who owns the file. Then decide between never reusing a
+uid and handing a fired cook's files to the headchef, and write down why.
+Also find the real upper bound on uids, given how the owner is stored on disk.
 
-## 2. passwd — DONE v0.52.1 as `secret`
+## 2. last
 
-Secrets are PBKDF2 since v0.46.0, but the only way to set one is `hire`, and
-a cook cannot change their own. `passwd`: the old secret, then the new one
-twice; the headchef may set any cook's without the old one. Check that the
-old secret stops working, the new one works over SSH, and /etc/kitchen holds a
-fresh salt.
+Logins leave only klog lines, which do not survive a reboot. Record each
+login and each refused one (cook, console or address, time) in a file that
+does, and add `last` to show them, newest first. Check the record survives a
+reboot and that mtools can read it.
 
-## 3. Home bowls — DONE v0.52.2
+## 3. Idle sessions end
 
-`hire` makes a cook who can write almost nowhere (the root is the headchef's).
-Make /home/<cook> at hire, owned by the cook, and start every shell of theirs
-there (console login and SSH alike). fsck and mtools as judges; existing cooks
-without a home get one at their next login.
+An SSH session left open holds one of four slots forever. End sessions with
+no input for a set time (a setting in /etc/rc, off by default on the
+console), say why to the client, and log it. Test with a short timeout.
 
-## 4. Owners in ps and orders — DONE v0.52.3
+## 4. du
 
-Processes have owners since v0.51.0; show them. `ps` and `orders` gain an
-OWNER column, and kitchen's task table too.
+Homes make it worth knowing what takes the space. `du [bowl]`: the bytes and
+clusters under each entry, with a total, checked against mtools.
 
 ## 5. Doom at the framebuffer's own resolution — DEFERRED
 
