@@ -47,7 +47,7 @@ gating it, and test them together.
 Find out which of those apply to pass sessions (measure, do not assume),
 and give it the ones it lacks.
 
-## 3. The full check waits on cooks-test
+## 3. The full check waits on cooks-test — DONE (scripts only): 237 s to 134 s
 
 cooks-test is 226 of the full check's 237 s. Split it so the check is no
 slower than its next-longest test plus a little, and record the before and
