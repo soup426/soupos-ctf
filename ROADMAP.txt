@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.32
+Current version: v0.60.33
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,20 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.33 (2026-10-08)  — A BUILTIN'S PIPE STREAMS
+  - v0.60.27 ran the left side of `builtin | prog` to the end before the
+    right side started, so `forever | skim.elf -n 2` (forever a function
+    that loops for ever) never came back: on v0.60.32 the prompt was still
+    gone after 60 s. Now cook starts the right side first and then calls
+    back (pending_feed); the left side runs with a terminal that writes into
+    the pipe as it prints (512 bytes at a time). When the reader has gone
+    the terminal stops writing and counts a Ctrl-C, which ends a loop on
+    the left as sh's SIGPIPE would. The capture buffer and feeder task are
+    gone.
+  - bpipe-test adds the never-ending function: 13 lines, 14 files.
+  - Found on the way, queued as item 8: `while ... ; done | prog` takes
+    `done | prog` for the loop's done and drops the pipe without a word.
 
 v0.60.32 (2026-10-08)  — CD -, $PWD AND $OLDPWD
   - PWD and OLDPWD are ordinary variables, as in sh: logging in (at the

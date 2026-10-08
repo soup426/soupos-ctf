@@ -46,7 +46,7 @@ written in. Compare both orders with bash.
 `cd -` goes back to the previous bowl and prints it, as sh does; $PWD and
 $OLDPWD expand to the current and previous bowls. Compare with bash.
 
-## 3. A builtin's pipe streams
+## 3. A builtin's pipe streams — DONE v0.60.33
 
 v0.60.27 runs the left side of `builtin | prog` to the end before the
 right side starts, so a left side that never ends holds the line. Start
@@ -70,6 +70,16 @@ input (take reads the pipe, not the keyboard). Compare with bash's
 
 -s SEP between the numbers instead of a newline, -w pads them to equal
 width with zeros. Compare with the host's seq.
+
+## 8. A whole loop into a pipe
+
+Found with item 3: `while slurp y ; do x=1 ; done | skim.elf -n 3` takes
+`done | skim.elf ...` for the loop's done, so the pipe is dropped without a
+word and the loop prints to the screen for ever (Ctrl-C stops it). sh pipes
+the whole compound. Pipe for, while, if and case when their closing word
+has `| ...` after it (the feed exec_ranges the compound instead of a line),
+and refuse anything after done/fi/esac that cook would not take. Compare
+`for ... done | rack.elf` and `while ... done | skim.elf -n 3` with bash.
 
 ## 7. Doom at the framebuffer's own resolution — DEFERRED
 

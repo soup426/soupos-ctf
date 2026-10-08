@@ -29,8 +29,9 @@ LINES=(
   'pour /HELLO.TXT | raise.elf > /P11.TXT'
   'pour /BIG.TXT | weigh.elf -l > /P12.TXT'
   'pour /RAND.BIN | mince.elf > /P13.TXT'
+  'forever() { while slurp yes ; do x=1 ; done ; } ; forever | skim.elf -n 2 > /P15.TXT'
 )
-FILES="P1 P2 P3 P4 P5 P6 P7 P8 P9 P10 P11 P12 P13"
+FILES="P1 P2 P3 P4 P5 P6 P7 P8 P9 P10 P11 P12 P13 P15"
 keys=("headchef" "rosemary" "WAIT:1")
 for l in "${LINES[@]}"; do keys+=("$l" "UNTIL:@soupOS:"); done
 keys+=("cook mise.elf after-pipes" "UNTIL:@soupOS:")
@@ -58,7 +59,7 @@ for f in $FILES; do
     else cmp -s "$WORK/got.$f" "$WORK/host/$f.TXT" && continue; fi
     echo "        $f.TXT: got '$(head -c 120 "$WORK/got.$f")', bash '$(head -c 120 "$WORK/host/$f.TXT")'"; bad=1
 done
-[ "$bad" = 0 ] && echo "  ok    all ${#LINES[@]} lines write what bash writes ($(echo $FILES | wc -w) files: a builtin, a function, three stages, 6000 lines (60 KB) from a function, a reader that stops early, the status, a quoted |, a < that wins, pour as cat: exact, 200 KB, every byte value)" \
+[ "$bad" = 0 ] && echo "  ok    all ${#LINES[@]} lines write what bash writes ($(echo $FILES | wc -w) files: a builtin, a function, three stages, 6000 lines (60 KB) from a function, a reader that stops early, the status, a quoted |, a < that wins, pour as cat: exact, 200 KB, every byte value, a left side that never ends)" \
     || { echo "  FAIL  a builtin's pipe differs from bash"; fail=1; }
 grep -q 'TESTOUT args=after-pipes' "$WORK/serial.log" && echo "  ok    programs still run after all that" \
     || { echo "  FAIL  a program did not run after the pipe lines"; fail=1; }

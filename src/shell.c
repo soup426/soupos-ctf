@@ -1569,6 +1569,7 @@ static void cook_err(const char *msg) {
 
 static void build_env(char *out, int max);   /* with hand (v0.60.26) */
 static vfs_node_t *pending_in;   /* stdin for the next cook's first stage (v0.60.27, pipe_into) */
+static void (*pending_feed)(void);   /* run once the pipeline is up (v0.60.33, pipe_into) */
 
 /* Open a file a pipeline writes to (> >> 2> 2>>), with the checks SYS_OPEN
  * makes: write on the file if it exists, write on its bowl if it does not
@@ -1759,6 +1760,12 @@ static void cmd_cook(const char *args) {
     if (started < nst) {                        /* partial pipeline: undo it */
         for (int i = 0; i < started; i++) proc_kill(pids[i]);
         return;
+    }
+
+    if (pending_feed) {                         /* a builtin feeds the first stage now (v0.60.33) */
+        void (*feed)(void) = pending_feed;
+        pending_feed = 0;
+        feed();
     }
 
     if (background) {
@@ -5236,32 +5243,37 @@ static int call_function(const char *ex) {
     return 1;
 }
 
-/* A builtin or a function into a program (v0.60.27): `slurp hi | raise.elf`,
- * `two | stack.elf`. Only `cook` lines made pipes before; anything else
- * handed `|` and the program's name to the command as words. The left side
- * runs first with what it prints captured (stdout only, as for $(...); 256 KB
- * at most), then a kernel task feeds the capture into a pipe while the right
- * side runs as a cook line with that pipe as its first stage's stdin (a `<`
- * on the right wins, as in sh). The status is the right side's. The left
- * side has finished before the right starts, so a left side that never ends
- * holds the line, which sh would not: written down. */
-static void run_one(const char *seg);
-static int is_kw(const char *t, const char *kw);
-
-typedef struct { vfs_node_t *wr; char *buf; int len; } feeder_t;
-static void feeder_task(void *arg) {
-    feeder_t *f = arg;
-    for (int off = 0; off < f->len; ) {
-        int w = vfs_write(f->wr, f->buf + off, (uint32_t)(f->len - off));
-        if (w <= 0) break;                   /* the reader has gone: stop */
+/* A builtin or a function into a program (v0.60.27; streams since v0.60.33):
+ * `slurp hi | raise.elf`, `myfunc | stack.elf`. Only `cook` lines made pipes
+ * before. The right side starts first, as a cook line whose first stage
+ * reads a pipe; once it is running, cook calls back here (pending_feed) and
+ * the left side runs with a terminal that writes into that pipe as it
+ * prints, then the pipe is closed and cook waits as usual. So a left side
+ * that never ends no longer holds the line: when the reader is gone the
+ * terminal stops writing and counts a Ctrl-C, which ends a loop on the
+ * left the way sh's SIGPIPE would. A `<` on the right wins, as in sh; the
+ * status is the right side's. The left side runs in this shell, not a
+ * subshell, so what it sets stays set (sh would forget it). */
+typedef struct { term_t t; vfs_node_t *wr; char buf[512]; int n, dead; } pipeterm_t;
+static void pt_flush(pipeterm_t *k) {
+    for (int off = 0; off < k->n && !k->dead; ) {
+        int w = vfs_write(k->wr, k->buf + off, (uint32_t)(k->n - off));
+        if (w <= 0) { k->dead = 1; k->t.intr++; break; }   /* the reader has gone */
         off += w;
     }
-    vfs_close(f->wr);                        /* EOF for the reader */
-    kfree(f->buf);
-    kfree(f);
-    task_exit();
+    k->n = 0;
 }
+static void pt_putc(term_t *t, char c) {
+    pipeterm_t *k = (pipeterm_t *)t;
+    if (k->dead) return;
+    k->buf[k->n++] = c;
+    if (k->n == (int)sizeof(k->buf)) pt_flush(k);
+}
+static void pt_puts(term_t *t, const char *s) { while (*s) pt_putc(t, *s++); }
 
+static void run_one(const char *seg);
+static int is_kw(const char *t, const char *kw);
+static void run_line(const char *line);
 /* The first '|' in seg that is a pipe: outside quotes and $(...), not ||. */
 static const char *pipe_bar(const char *seg) {
     char q = 0; int dep = 0;
@@ -5276,34 +5288,40 @@ static const char *pipe_bar(const char *seg) {
     return 0;
 }
 
-static void run_line(const char *line);
-static void pipe_into(const char *left, const char *right) {
+static unsigned intr_mark;               /* see interrupted(), below */
+static const char *feed_left;            /* what pending_feed runs */
+static vfs_node_t *feed_wr;
+
+static void feed_now(void) {
     shell_t *me = cur_shell();
-    capterm_t cap;
-    cap.t.name = "subst"; cap.t.puts = cap_puts; cap.t.putc = cap_putc; cap.t.set_color = cap_color;
-    cap.t.set_cursor = cap_cursor; cap.t.row = cap_zero; cap.t.col = cap_zero; cap.t.cols = cap_cols;
-    cap.t.rows = cap_rows; cap.t.clear = cap_clear; cap.t.getc = cap_getc; cap.t.available = cap_zero;
-    cap.t.flush_in = cap_flush; cap.t.fg = 0;
-    cap.buf = kmalloc(4096); cap.len = 0; cap.cap = 4096; cap.limit = 256 * 1024;
-    if (!cap.buf) return;
+    pipeterm_t *pt = kmalloc(sizeof(pipeterm_t));
+    if (!pt) { vfs_close(feed_wr); return; }
+    memset(pt, 0, sizeof(*pt));
+    pt->t.name = "subst"; pt->t.puts = pt_puts; pt->t.putc = pt_putc; pt->t.set_color = cap_color;
+    pt->t.set_cursor = cap_cursor; pt->t.row = cap_zero; pt->t.col = cap_zero; pt->t.cols = cap_cols;
+    pt->t.rows = cap_rows; pt->t.clear = cap_clear; pt->t.getc = cap_getc; pt->t.available = cap_zero;
+    pt->t.flush_in = cap_flush; pt->t.fg = 0;
+    pt->wr = feed_wr;
     task_t *tk = task_current();
     term_t *was_sh = me->term, *was_tk = tk->term;
-    cap.t.intr = was_sh ? was_sh->intr : 0;
-    cap.t.ctx = was_tk ? was_tk : &term_vga;   /* stderr goes where it would have */
-    me->term = &cap.t; tk->term = &cap.t;
+    pt->t.intr = was_sh ? was_sh->intr : 0;
+    pt->t.ctx = was_tk ? was_tk : &term_vga;   /* stderr goes where it would have */
+    me->term = &pt->t; tk->term = &pt->t;
+    unsigned mark = intr_mark;
+    intr_mark = pt->t.intr;                    /* a dead reader is the Ctrl-C it watches for */
     subst_depth++;
-    run_line(left);
+    run_line(feed_left);
     subst_depth--;
+    intr_mark = mark;
     me->term = was_sh; tk->term = was_tk;
+    pt_flush(pt);
+    vfs_close(pt->wr);                         /* EOF for the reader */
+    kfree(pt);
+}
 
+static void pipe_into(const char *left, const char *right) {
     vfs_node_t *rd = 0, *wr = 0;
-    feeder_t *f = kmalloc(sizeof(feeder_t));
-    if (!f || vfs_pipe(&rd, &wr) < 0) { if (f) kfree(f); kfree(cap.buf); cook_err("Out of pipes."); return; }
-    f->wr = wr; f->buf = cap.buf; f->len = cap.len;
-    if (!task_spawn("feeder", feeder_task, f)) {
-        vfs_close(wr); vfs_close(rd); kfree(cap.buf); kfree(f); cook_err("Out of memory starting the pipe.");
-        return;
-    }
+    if (vfs_pipe(&rd, &wr) < 0) { cook_err("Out of pipes."); return; }
     char line[INPUT_MAX];
     int n = 0;
     const char *c = "cook ";
@@ -5312,8 +5330,14 @@ static void pipe_into(const char *left, const char *right) {
     while (*right && n < INPUT_MAX - 1) line[n++] = *right++;
     line[n] = '\0';
     pending_in = rd;
+    feed_left = left; feed_wr = wr;
+    pending_feed = feed_now;
     run_one(line);
-    if (pending_in) { vfs_close(pending_in); pending_in = 0; }   /* not taken: the feeder sees no reader */
+    if (pending_feed) {                         /* cook never started it: no left side */
+        pending_feed = 0;
+        vfs_close(wr);
+    }
+    if (pending_in) { vfs_close(pending_in); pending_in = 0; }
 }
 
 /* Run one command: expand it, then it is an assignment or a dispatch. */
@@ -5537,7 +5561,6 @@ static void wl_add(void *ctx, const char *raw) {
  * terminal's Ctrl-C count; a loop, and a script, stop between commands once
  * it has moved: the rest of the line is dropped and the status is 130, as
  * sh gives for SIGINT. A program running at the press is killed as before. */
-static unsigned intr_mark;
 static int run_depth;
 static int interrupted(void) {
     term_t *t = cur_shell()->term;
