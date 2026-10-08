@@ -38,7 +38,7 @@ A hex dump in `hexdump -C` form: offset, sixteen bytes in two groups of
 eight, the printable ones between bars, a `*` for repeated lines and the
 final offset. Compare with the host's hexdump -C byte for byte.
 
-## 2. knead.elf
+## 2. knead.elf — DONE v0.60.15
 
 Lines folded at a width, as `fold -w N` does (default 80), and with -s at
 the last space. Compare with the host's fold.
