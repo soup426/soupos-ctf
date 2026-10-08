@@ -1,11 +1,11 @@
 # Night queue
 
-Eighteenth queue. The first seventeen are in `docs/queue-archive-2026-10-0*.md`.
+Nineteenth queue. The first eighteen are in `docs/queue-archive-2026-10-0*.md`.
 Two items wait on a person, with notes in their archives: the seventh's
-syscall-pointer item and the thirteenth's swap-shares item. The seventeenth
-gave the shell quotes and ~ and made the tests hold up under load; this one
-closes the gap quotes left in the builtins and lets a cook keep commands in
-a file.
+syscall-pointer item and the thirteenth's swap-shares item. The eighteenth
+gave builtins quotes, added run FILE and seq, and fixed long-named bowls
+and orphaned long names; this one gives scripts variables, a test command
+to branch on, and globs.
 
 ## Standing rules
 
@@ -33,36 +33,28 @@ a file.
 
 ---
 
-## 1. Builtins take quoted arguments — DONE v0.57.4
+## 1. Shell variables
 
-Programs have understood quotes since v0.57.2; builtins still take their
-raw text, so `pour "my file.txt"` looks for a name with quotes in it.
-Find every builtin that takes a path or text, give them the same splitting
-(one shared helper), and test the ones that take paths on a file whose
-name has a space.
+`NAME=value` sets a variable for this shell (quotes allowed in the value);
+`$NAME` and `${NAME}` are replaced where a word may hold them, not inside
+'...'; an unset name is empty; `unset NAME` removes one. Each shell
+(console, each session) has its own. Compare a script's results with sh.
 
-## 2. run FILE — DONE v0.57.5
+## 2. test.elf
 
-A builtin that runs a file of command lines as the cook who runs it: each
-line through run_line, so ; && || $? ~ and quotes all work, '#' lines are
-comments, and it stops on nothing. Its status is the last line's. Compare
-what a small script leaves behind with sh running the same lines.
+`test.elf` with -e -f -d FILE, -z -n STRING, S1 = S2, S1 != S2, and
+-eq -ne -lt -le -gt -ge on integers, and ! in front: exit 0 when true, 1
+when false, 2 for a usage error, as test does. Compare exit codes with the
+host's test over the same cases.
 
-## 3. Bowls with long names — DONE v0.57.6
+## 3. Globs
 
-Found testing item 1: `mkbowl "/a bowl"` says "Bowl ready" and leaves a
-directory entry named `A BOWL` (a space inside an 8.3 name, which 8.3 does
-not allow); cd and rmbowl then cannot find it. fat_mkdir never writes the
-long-name entries that fat_write does for files. Make bowls get long names
-the same way (and their alias), and test with a space and with a name
-longer than 8.3, checked with mtools and fsck.
+* and ? in a program's argument are matched against the names in the
+bowl the word names (or the cwd), sorted as sh sorts them in the C locale;
+a word that matches nothing is passed as it is, as sh does; not inside
+quotes. Compare the expanded argument lists with sh over the same files.
 
-## 4. seq.elf — DONE v0.57.7
-
-`seq LAST`, `seq FIRST LAST`, `seq FIRST STEP LAST`, integers, negatives
-and counting down included. Compare with the host's seq.
-
-## 5. Doom at the framebuffer's own resolution — DEFERRED
+## 4. Doom at the framebuffer's own resolution — DEFERRED
 
 Carried; the user asked to keep to OS work.
 
