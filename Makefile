@@ -107,7 +107,7 @@ UCFLAGS  = -m32 -ffreestanding -fno-pie -no-pie -fno-stack-protector \
            -nostdlib -Isrc -mgeneral-regs-only -O2
 USER_ELFS = user/hello.elf user/cat.elf user/echo.elf user/systest.elf user/spin.elf \
             user/crash.elf user/unhex.elf user/marker.elf user/hog.elf \
-            user/upper.elf user/wc.elf user/memtest.elf user/lazy.elf user/deep.elf user/hotcold.elf user/ls.elf user/rm.elf user/mkdir.elf user/grep.elf user/head.elf user/tail.elf user/sort.elf user/uniq.elf user/tee.elf user/cut.elf user/tr.elf user/seq.elf
+            user/upper.elf user/wc.elf user/memtest.elf user/lazy.elf user/deep.elf user/hotcold.elf user/ls.elf user/rm.elf user/mkdir.elf user/grep.elf user/head.elf user/tail.elf user/sort.elf user/uniq.elf user/tee.elf user/cut.elf user/tr.elf user/seq.elf user/test.elf
 
 .PHONY: all clean distclean run run-ai run-console run-tcp iso disk user
 
@@ -271,6 +271,7 @@ $(DISK):
 	mcopy -i $(DISK) -o user/cut.elf     ::CUT.ELF
 	mcopy -i $(DISK) -o user/tr.elf      ::TR.ELF
 	mcopy -i $(DISK) -o user/seq.elf     ::SEQ.ELF
+	mcopy -i $(DISK) -o user/test.elf    ::TEST.ELF
 	@if [ -f DOOM1.WAD ]; then \
 	    echo "  Copying DOOM1.WAD to disk image..."; \
 	    mcopy -i $(DISK) DOOM1.WAD ::DOOM1.WAD; \

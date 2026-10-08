@@ -40,7 +40,7 @@ to branch on, and globs.
 '...'; an unset name is empty; `unset NAME` removes one. Each shell
 (console, each session) has its own. Compare a script's results with sh.
 
-## 2. test.elf
+## 2. test.elf — DONE v0.58.1
 
 `test.elf` with -e -f -d FILE, -z -n STRING, S1 = S2, S1 != S2, and
 -eq -ne -lt -le -gt -ge on integers, and ! in front: exit 0 when true, 1

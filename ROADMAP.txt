@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.58.0
+Current version: v0.58.1
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,20 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.58.1 (2026-10-08)  — test.elf
+  Nineteenth queue, item 2.
+  - user/test.c: a condition's truth as the exit code (0 true, 1 false, 2
+    a usage error or a bad integer), as test does: one argument is true if
+    not empty; ! negates; -e -f -d FILE; -z -n STRING; = and !=; -eq -ne
+    -lt -le -gt -ge. Made for && and ||: `test.elf -f F && pour F`.
+  - Two differences, written down: programs have no stat call, so -f is
+    "opens for reading and is not a bowl" and -d "can be listed", and a
+    file the cook may not read counts as absent; -a and -o are not
+    supported (&& and || do the same).
+  - scripts/testcmd-test.sh, in check.sh: 21 cases, each run as `cook
+    test.elf ... ; cook echo.elf $?`, exit as the host's test does over the
+    same file and directory.
 
 v0.58.0 (2026-10-08)  — SHELL VARIABLES
   Nineteenth queue, item 1.
