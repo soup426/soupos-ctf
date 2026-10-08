@@ -54,7 +54,7 @@ tail, including files shorter than N and files with no final newline.
 Lines in byte order, with -r and -n. Compare with `LC_ALL=C sort` on the
 host. Find the largest input it handles and say so.
 
-## 5. > loses output past about 2 MB, and says nothing
+## 5. > loses output past about 2 MB, and says nothing — DONE v0.56.4
 
 Found measuring sort.elf: `cook sort.elf /B3.TXT > /O3.TXT` left exactly
 2097152 bytes of a 3 MB result, and 5 and 7 MB results left empty files,

@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.56.3
+Current version: v0.56.4
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,31 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.56.4 (2026-10-08)  — > KEEPS BIG OUTPUT, AND SAYS WHEN IT CANNOT
+  Fourteenth queue, item 5 (found measuring sort.elf).
+  - A redirect kept the whole output in one block of the 8 MB kernel heap,
+    doubled with krealloc, and wrote it on close. Past about 2 MB the
+    doubling failed; the write returned -1, programs ignored it, and the
+    close wrote what there was. Proven on v0.56.3: a 5 MB copy through `>`
+    left exactly 2097152 bytes, with exit code 0 and nothing said.
+  - The bytes now live in 4 KB physical pages (all of RAM is
+    identity-mapped), and the close streams them to the FAT through
+    fat_write_from, the whole-file write generalised to pull from a source
+    (fat_write is that with a plain buffer). >> preloads the pages.
+  - A write that cannot get memory, or a flush that fails (a full disk),
+    marks the handle; vfs_close now returns -1 for it, and at process exit
+    the kernel prints "[prog: the output to /F did not reach the disk
+    whole]" on the cook's terminal, logs it, and turns an exit code of 0
+    into 1.
+  - Measured after: sort.elf results of 1, 3 and 5 MB through `>` all match
+    LC_ALL=C sort; a 7 MB one on a disk with less room is refused loudly
+    (log, terminal, exit 1). Note on measuring: a driver that counted
+    "sort.elf exited" matched two lines per process and typed the next
+    command early; it now counts only the [proc N] line.
+  - scripts/redirect-test.sh, in check.sh: a 5 MB output through > matches
+    its source (cmp); one that does not fit is reported on the terminal and
+    in the log and exits 1; fsck is clean. On v0.56.3 the first two failed.
 
 v0.56.3 (2026-10-08)  — sort.elf
   Fourteenth queue, item 4.

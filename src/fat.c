@@ -916,7 +916,20 @@ static int write_lfn_chain(uint32_t dir_cl, uint32_t first_slot, int n,
     return 0;
 }
 
+/* Where a whole-file write gets its bytes (v0.56.4): a plain buffer, or
+ * anything that can hand them over in order - the VFS keeps a redirect's
+ * output in a list of pages, not one block of the 8 MB kernel heap. */
+static int mem_source(void *ctx, uint32_t off, uint8_t *dst, uint32_t n) {
+    memcpy(dst, (const uint8_t *)ctx + off, n);
+    return 0;
+}
+
+static int fat_write_src_impl(const char *path, uint32_t size, fat_source_fn src, void *ctx);
 static int fat_write_impl(const char *path, const uint8_t *buf, uint32_t size) {
+    return fat_write_src_impl(path, size, mem_source, (void *)buf);
+}
+
+static int fat_write_src_impl(const char *path, uint32_t size, fat_source_fn src, void *ctx) {
     if (!initialized || !path || fs_type_val == 32) return -1;
 
     uint32_t parent_cl;
@@ -1026,7 +1039,7 @@ static int fat_write_impl(const char *path, const uint8_t *buf, uint32_t size) {
             memset(sec_buf, 0, bps);
             uint32_t to_copy = (written < size) ? (size - written) : 0;
             if (to_copy > bps) to_copy = bps;
-            if (to_copy) memcpy(sec_buf, buf + written, to_copy);
+            if (to_copy && src(ctx, written, sec_buf, to_copy) < 0) goto fail;
             if (ata_write_sector(lba + s, sec_buf) < 0) goto fail;
             written += to_copy;
         }
@@ -1474,6 +1487,13 @@ int fat_ls(const char *path, fat_entry_t *out, int max) {
 int fat_read(const char *path, uint8_t *buf, uint32_t bufsize, uint32_t *out_size) {
     mutex_lock(&fat_mtx);
     int _r = fat_read_impl(path, buf, bufsize, out_size);
+    mutex_unlock(&fat_mtx);
+    return _r;
+}
+
+int fat_write_from(const char *path, uint32_t size, fat_source_fn src, void *ctx) {
+    mutex_lock(&fat_mtx);
+    int _r = fat_write_src_impl(path, size, src, ctx);
     mutex_unlock(&fat_mtx);
     return _r;
 }

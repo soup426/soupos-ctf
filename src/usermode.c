@@ -307,8 +307,20 @@ int usermode_run(proc_t *pr) {
     pr->esp0 = 0;
     tss_set_esp0(tss_boot_esp0());
 
-    for (int i = 0; i < PROC_UFD_MAX; i++)   /* close anything left open */
-        if (pr->ufds[i]) { vfs_close(pr->ufds[i]); pr->ufds[i] = 0; }
+    for (int i = 0; i < PROC_UFD_MAX; i++) { /* close anything left open */
+        if (!pr->ufds[i]) continue;
+        char name[VFS_NAME_MAX];
+        strncpy(name, pr->ufds[i]->name, sizeof(name) - 1); name[sizeof(name) - 1] = '\0';
+        if (vfs_close(pr->ufds[i]) < 0 && pr->ufds[i]->type == VFS_FILE) {
+            /* A file written through this handle did not reach the disk
+             * whole (v0.56.4). Say so where the cook can see it, and do not
+             * let the program's 0 pretend it all worked. */
+            term_printf(term_current(), "  [%s: the output to /%s did not reach the disk whole]\n", pr->name, name);
+            klog("[proc %u] %s: output to /%s cut short\n", pr->pid, pr->name, name);
+            if (pr->exit_code == 0) pr->exit_code = 1;
+        }
+        pr->ufds[i] = 0;
+    }
     leave_proc_space(kdir, pdir);
     return pr->exit_code;
 }

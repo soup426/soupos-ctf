@@ -13,6 +13,8 @@
 #include "vfs.h"
 #include "fat.h"
 #include "heap.h"
+#include "pmm.h"
+#include "klog.h"
 #include "str.h"
 #include "keyboard.h"
 #include "serial.h"
@@ -200,21 +202,62 @@ static const vfs_ops_t fat_read_ops = {
     fat_read_op, 0, fat_seek_op, fat_close_op
 };
 
-/* ---- FAT write backend (buffer in heap, flush on close) ---- */
+/* ---- FAT write backend (pages, flushed whole on close) ----
+ * Until v0.56.4 this was one buffer in the kernel heap, doubled with
+ * krealloc. The heap is 8 MB, and past about 2 MB the doubling failed: the
+ * write returned -1, programs ignored it, and the close wrote what there was.
+ * Measured: a 3 MB sort result left exactly 2097152 bytes, and 5 and 7 MB
+ * results left empty files, all with exit code 0. Now the bytes live in
+ * physical pages (all of RAM is identity-mapped), and the close streams
+ * them to the FAT through fat_write_from. A failure marks the handle, and
+ * vfs_close says so. */
+#define VFS_PG 4096u
 static int mem_ensure(vfs_node_t *n, uint32_t need) {
-    if (need <= n->cap) return 0;
-    uint32_t nc = n->cap ? n->cap : 512;
-    while (nc < need) nc <<= 1;
-    uint8_t *nb = n->buf ? (uint8_t *)krealloc(n->buf, nc)
-                         : (uint8_t *)kmalloc(nc);
-    if (!nb) return -1;
-    n->buf = nb;
-    n->cap = nc;
+    uint32_t want = (need + VFS_PG - 1) / VFS_PG;
+    if (want <= n->npg) return 0;
+    if (want > n->pgcap) {
+        uint32_t nc = n->pgcap ? n->pgcap : 16;
+        while (nc < want) nc *= 2;
+        uint8_t **np = n->pg ? (uint8_t **)krealloc(n->pg, nc * sizeof(uint8_t *))
+                             : (uint8_t **)kmalloc(nc * sizeof(uint8_t *));
+        if (!np) return -1;
+        n->pg = np; n->pgcap = nc;
+    }
+    while (n->npg < want) {
+        uint8_t *page = (uint8_t *)pmm_alloc_page();
+        if (!page) return -1;
+        memset(page, 0, VFS_PG);
+        n->pg[n->npg++] = page;
+    }
+    return 0;
+}
+static void pages_put(vfs_node_t *n, uint32_t off, const uint8_t *src, uint32_t len) {
+    while (len) {
+        uint32_t in = off % VFS_PG, k = VFS_PG - in;
+        if (k > len) k = len;
+        memcpy(n->pg[off / VFS_PG] + in, src, k);
+        off += k; src += k; len -= k;
+    }
+}
+static void pages_get(vfs_node_t *n, uint32_t off, uint8_t *dst, uint32_t len) {
+    while (len) {
+        uint32_t in = off % VFS_PG, k = VFS_PG - in;
+        if (k > len) k = len;
+        memcpy(dst, n->pg[off / VFS_PG] + in, k);
+        off += k; dst += k; len -= k;
+    }
+}
+static int page_source(void *ctx, uint32_t off, uint8_t *dst, uint32_t len) {
+    pages_get((vfs_node_t *)ctx, off, dst, len);
     return 0;
 }
 static int mem_write_op(vfs_node_t *n, const void *buf, uint32_t count) {
-    if (mem_ensure(n, n->pos + count) < 0) return -1;
-    memcpy(n->buf + n->pos, buf, count);
+    if (mem_ensure(n, n->pos + count) < 0) {
+        if (!n->failed) klog("[vfs] /%s: out of memory at %u bytes; the rest is lost\n", n->name, n->size);
+        n->failed = 1;
+        return -1;
+    }
+    pages_put(n, n->pos, (const uint8_t *)buf, count);
     n->pos += count;
     if (n->pos > n->size) n->size = n->pos;
     return (int)count;
@@ -223,7 +266,7 @@ static int mem_read_op(vfs_node_t *n, void *buf, uint32_t count) {
     if (n->pos >= n->size) return 0;
     uint32_t avail = n->size - n->pos;
     if (count > avail) count = avail;
-    if (n->buf) memcpy(buf, n->buf + n->pos, count);
+    pages_get(n, n->pos, (uint8_t *)buf, count);
     n->pos += count;
     return (int)count;
 }
@@ -238,10 +281,13 @@ static int mem_seek_op(vfs_node_t *n, int32_t off, int whence) {
     return 0;
 }
 static void mem_close_op(vfs_node_t *n) {
-    static const uint8_t empty = 0;
-    /* Flush the accumulated buffer to disk as a whole-file write. */
-    fat_write(n->name, n->buf ? n->buf : &empty, n->size);
-    if (n->buf) kfree(n->buf);
+    if (fat_write_from(n->name, n->size, page_source, n) < 0) {
+        klog("[vfs] /%s: the write to disk failed (%u bytes)\n", n->name, n->size);
+        n->failed = 1;
+    }
+    for (uint32_t i = 0; i < n->npg; i++) pmm_free_page(n->pg[i]);
+    if (n->pg) kfree(n->pg);
+    n->pg = 0; n->npg = n->pgcap = 0;
 }
 static const vfs_ops_t mem_file_ops = {
     mem_read_op, mem_write_op, mem_seek_op, mem_close_op
@@ -340,9 +386,16 @@ vfs_node_t *vfs_open(const char *path, int flags) {
             uint32_t sz = fd >= 0 ? fat_fsize(fd) : 0;
             if (fd >= 0) fat_fclose(fd);
             if (sz) {
+                int rfd = fat_fopen(p);
+                if (rfd < 0 || mem_ensure(n, sz) < 0) { if (rfd >= 0) fat_fclose(rfd); n->used = 0; return 0; }
                 uint32_t got = 0;
-                if (mem_ensure(n, sz) < 0 || fat_read(p, n->buf, sz, &got) < 0) { n->used = 0; return 0; }
-                if (got > sz) got = sz;               /* fat_read reports the file's size */
+                while (got < sz) {                      /* page by page into the pages */
+                    uint32_t k = sz - got < VFS_PG ? sz - got : VFS_PG;
+                    int r = fat_fread(rfd, n->pg[got / VFS_PG], k);
+                    if (r <= 0) break;
+                    got += (uint32_t)r;
+                }
+                fat_fclose(rfd);
                 n->size = n->pos = got;
             }
         }
@@ -392,10 +445,12 @@ int vfs_eof(vfs_node_t *n) {
     return n->pos >= n->size;
 }
 
-void vfs_close(vfs_node_t *n) {
-    if (!n || !n->used) return;
+int vfs_close(vfs_node_t *n) {
+    if (!n || !n->used) return -1;
     if (n->ops && n->ops->close) n->ops->close(n);
+    int failed = n->failed;
     n->used = 0;
+    return failed ? -1 : 0;
 }
 
 int vfs_ls(const char *path, vfs_dirent_t *out, int max) {

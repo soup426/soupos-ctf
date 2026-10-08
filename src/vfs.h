@@ -56,8 +56,12 @@ typedef struct vfs_node {
     uint32_t         size;      /* file size (0 for char devices)       */
     const vfs_ops_t *ops;
     int              backend_fd;/* FAT fd for read-mode files, else -1  */
-    uint8_t         *buf;       /* write-mode scratch buffer            */
-    uint32_t         cap;       /* capacity of buf                      */
+    uint8_t        **pg;        /* write mode: the file's bytes, in 4 KB
+                                 * physical pages (v0.56.4; was one block
+                                 * of the 8 MB kernel heap, which stopped
+                                 * growing at about 2 MB, silently)     */
+    uint32_t         npg, pgcap;/* pages held, and room in pg[]          */
+    int              failed;    /* a write or the flush failed           */
     void            *priv;      /* backend-private state (pipes)        */
     int              used;
 } vfs_node_t;
@@ -85,7 +89,9 @@ uint32_t vfs_size (vfs_node_t *n);
 int      vfs_eof  (vfs_node_t *n);
 
 /* Flush (write-mode files) and release the handle. */
-void     vfs_close(vfs_node_t *n);
+/* 0, or -1 if anything written through this handle did not reach the
+ * disk whole (v0.56.4). */
+int      vfs_close(vfs_node_t *n);
 
 /* Create a pipe: whatever is written to *wr can be read from *rd. Both are
  * ordinary handles and are closed with vfs_close like anything else; the
