@@ -44,3 +44,11 @@ void usermode_fault(uint32_t exc, uint32_t err, uint32_t eip, uint32_t cr2);
 /* Details of the most recent ring-3 fault, for the shell to report. */
 void usermode_last_fault(uint32_t *exc, uint32_t *err,
                          uint32_t *eip, uint32_t *cr2);
+
+/* Demand paging. A page fault at `cr2` with error `err` is answered with a
+ * fresh zeroed page if the address lies in the running process's heap below
+ * its break and is simply not mapped yet, whether the touch came from ring 3
+ * or from the kernel copying into a user buffer. Returns 0 and the faulting
+ * instruction is retried; -1 means the fault is real (or the process is out
+ * of pages) and the caller kills or panics as before. */
+int usermode_demand_page(uint32_t cr2, uint32_t err);

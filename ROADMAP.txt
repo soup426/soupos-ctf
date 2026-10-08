@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.32.0
+Current version: v0.33.0
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,36 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.33.0 (2026-10-07)  — MEMORY THE MACHINE DOES NOT HAVE, YET
+  Queue item 8, the honest small version: demand paging for the heap.
+  - sbrk no longer maps anything. It moves the break, checks it will not
+    run into the stack, and returns. A page gets a frame the first time
+    something touches it, in usermode_demand_page: a page fault whose
+    address lies in the running process's heap below its break, and whose
+    error says "not present" rather than "protected", is answered with a
+    zeroed page and the faulting instruction is retried. Any other fault
+    is the fault it always was: a ring-3 one kills the program, a ring-0
+    one is still a panic.
+  - THE HOOK SITS AHEAD OF BOTH. The kernel touches user memory too, when
+    a syscall copies into a buffer the program has only sbrk'd, and that
+    fault arrives from ring 0. lazy.elf's third mode is exactly that: a
+    read() into a page it never wrote. Before the hook was moved in front
+    of the panic path, that would have taken the machine down; it now
+    reads 64 bytes of README.TXT into a page that did not exist a moment
+    earlier.
+  - The cap (1024 pages a process) applies at touch time, not at sbrk.
+    So lazy.elf can claim 16 MB, four times the cap, and touch one page
+    in sixty-four for free; the greedy run touches every page, meets the
+    cap at 4 MB, and is killed with "[demand] no page for 0x...", which is
+    the honest answer to a program wanting memory the machine does not
+    have. The shell goes on, and the two hello.elf runs that follow end at
+    the same free-page count, so the killed process's 1024 pages came
+    back. crash.elf, the fault that was never a heap page, still kills.
+  - Each process counts its faulted-in pages and the exit line reports
+    them ("[demand] /lazy.elf faulted in 64 pages on first touch"). Six
+    checks in the boot segment. Swapping to disk is the item after this
+    one, as the queue said. Gate 85.
 
 v0.32.0 (2026-10-07)  — soupyc: A FILE FROM A FILE
   Queue item 7. The language could create, read and delete files, but not

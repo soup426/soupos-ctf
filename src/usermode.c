@@ -109,6 +109,22 @@ uint32_t usermode_resume_esp(void) {
  * per page, and could only ever describe one process; the page tables already
  * hold the answer and are authoritative. What remains of the counter is just
  * the per-process page budget. */
+static int map_user_page(proc_t *pr, uint32_t va);
+
+int usermode_demand_page(uint32_t cr2, uint32_t err) {
+    proc_t *pr = proc_current();
+    if (!pr) return -1;
+    if (err & 1) return -1;                             /* present: a protection fault, real */
+    if (cr2 < USER_HEAP || cr2 >= pr->brk) return -1;   /* outside the heap: real */
+    if (map_user_page(pr, cr2 & ~0xFFFu) < 0) {
+        klog("[demand] %s: no page for 0x%x (%u mapped, cap %u)\n",
+             pr->name, cr2, pr->upages, (unsigned)PROC_PAGE_CAP);
+        return -1;
+    }
+    pr->demand_pages++;
+    return 0;
+}
+
 static int map_user_page(proc_t *pr, uint32_t va) {
     if (paging_is_mapped(va)) return 0;                /* already backed */
     if (pr && pr->upages >= PROC_PAGE_CAP) return -1;
@@ -370,12 +386,13 @@ void syscall_dispatch(registers_t *r) {
             if (newbrk > USTACK_TOP - (uint32_t)USTACK_PAGES * 4096) {
                 r->eax = (uint32_t)-1; break;   /* would hit the stack */
             }
-            for (uint32_t va = old & ~0xFFFu; va < newbrk; va += 4096) {
-                if (map_user_page(pr, va) < 0) { r->eax = (uint32_t)-1; goto sbrk_done; }
-            }
+            /* The break moves; no page is mapped until it is touched. A
+             * program can now claim far more than the machine would give it
+             * at once, and only pays for what it uses - see
+             * usermode_demand_page for the bill. */
             pr->brk = newbrk;
             r->eax = old;
-            sbrk_done: break;
+            break;
         }
 
         case SYS_ARGS: {

@@ -14,6 +14,10 @@ gate_drive \
     "yieldbg" "cook spin.elf" "WAIT:11" \
     "cook marker.elf A &" "cook marker.elf B &" "WAIT:7" \
     "jobs" "WAIT:1" \
+    "cook lazy.elf" "WAIT:3" \
+    "cook lazy.elf greedy" "WAIT:6" \
+    "cook lazy.elf read" "WAIT:2" \
+    "cook crash.elf" "WAIT:2" \
     "cook hello.elf" "WAIT:2" "cook hello.elf" "WAIT:2"
 
 check "boot reaches the scheduler"   '\[boot\] scheduler ok'
@@ -28,6 +32,19 @@ check "preempt_disable works"        'PASS'
 check "address spaces isolated"      '\[vmtest\] PASS'
 check "two processes both ran to completion" '\[p:A\] step 39'
 check "second process ran to completion"    '\[p:B\] step 39'
+
+# Demand paging: sbrk promises 16 MB, four times the page cap, and only the
+# pages touched get a frame. The greedy run touches every page, meets the
+# cap, and is killed - the honest answer - and the shell goes on. crash.elf
+# is the fault that was never going to be a heap page, and still kills.
+check "a lazy heap costs only the pages touched" 'LAZY touched 64 of 4096 pages ok'
+check "the kernel counted the pages it faulted in" '\[demand\] /lazy\.elf faulted in 64 pages'
+check "touching past the cap is refused, not ignored" '\[demand\] /lazy\.elf: no page for 0x'
+check "and that program was killed for it" '\[user\] fault exc=14 .* -> program killed'
+check "a wild fault still kills" '/crash\.elf exited with code'
+# The kernel's own first touch, inside read(): a ring-0 page fault that has
+# to be answered the same way, not treated as a panic.
+check "a syscall can fault in an untouched page" 'LAZY kernel wrote [0-9]+ bytes into an untouched page ok'
 
 # Two ring-3 programs alive at the same time. marker.elf tags every line with
 # its own argument, so an A line between two B lines can only mean both were

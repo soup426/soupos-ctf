@@ -234,7 +234,7 @@ one thing scripts are for: produce a file from another file.
 - Then the obvious test: a script that reads a file, transforms it and writes
   it back, verified byte for byte against the same transformation on the host.
 
-## 8. Memory the machine does not have
+## 8. Memory the machine does not have — DONE v0.33.0 (heap demand-paged, cap at touch; swap is the next item)
 
 The PMM is a bitmap over physical pages and every process gets its own page
 directory, which is most of the machinery for demand paging already.

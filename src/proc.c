@@ -163,6 +163,8 @@ void proc_exit(proc_t *p, int exit_code) {
      * report the same number. That is the leak test. */
     klog("[proc %u] %s exited with code %d, %u pages free\n",
          p->pid, p->name, exit_code, pmm_free_pages());
+    if (p->demand_pages)
+        klog("[demand] %s faulted in %u pages on first touch\n", p->name, p->demand_pages);
 
     task_wake(&p->waiters);          /* the parent, if it is waiting */
     preempt_enable();

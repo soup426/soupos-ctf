@@ -71,6 +71,17 @@ void isr_handler(registers_t *regs) {
      * program, and usermode_in_user() confirms one is actually running.
      * Without this, `cook`ing an ELF with a bad instruction panicked and
      * halted the whole box, which defeats the point of having ring 3. */
+    /* A page fault in a process's heap below its break is not an error, it
+     * is the first touch of a page sbrk promised: map it and retry. That
+     * goes for the kernel too, when a syscall copies into a buffer the
+     * program has not touched yet, which is why this sits ahead of both the
+     * kill and the panic. Anything else is the fault it always was. */
+    if (regs->int_no == 14) {
+        uint32_t cr2;
+        __asm__ volatile ("mov %%cr2, %0" : "=r"(cr2));
+        if (usermode_demand_page(cr2, regs->err_code) == 0) return;
+    }
+
     if ((regs->cs & 3) == 3 && usermode_in_user()) {
         uint32_t cr2 = 0;
         if (regs->int_no == 14)

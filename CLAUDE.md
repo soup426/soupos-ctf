@@ -874,6 +874,17 @@ how many, and the temporaries live in C locals where no collector can see them.
 If you add a builtin, allocate with `str_alloc` and return `mksval_ref`; never
 `kfree` a string. `SVAL_LEN` is now only the identifier length.
 
+## The heap is demand-paged (v0.33.0)
+
+`SYS_SBRK` only moves `pr->brk`. `usermode_demand_page()` (called first thing
+in `isr_handler` for vector 14, **before** the ring-3 kill and the ring-0
+panic) maps a zeroed page for a not-present fault inside `[USER_HEAP, brk)`,
+up to `PROC_PAGE_CAP`, and the instruction retries. Two consequences to keep
+in mind: the kernel may fault while copying into user memory (that is handled,
+and `lazy.elf read` proves it), and a program is killed at first touch past
+the cap, not at sbrk. The user stack and the ELF image are still mapped
+eagerly at exec. `pr->demand_pages` is reported on the exit line.
+
 ## soupyc file I/O, and the disk image is not a build product of `make` (v0.32.0)
 
 `lines(path)` and `write_lines(path, array)` live with the other file builtins
