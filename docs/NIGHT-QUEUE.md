@@ -41,7 +41,7 @@ v0.60.21 made 2>&1 a flag meaning "wherever stdout ends up", so
 is taken before > moves stdout). Keep the order the redirections were
 written in. Compare both orders with bash.
 
-## 2. cd -, $PWD and $OLDPWD
+## 2. cd -, $PWD and $OLDPWD — DONE v0.60.32
 
 `cd -` goes back to the previous bowl and prints it, as sh does; $PWD and
 $OLDPWD expand to the current and previous bowls. Compare with bash.

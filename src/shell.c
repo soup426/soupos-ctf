@@ -53,6 +53,7 @@
 
 #define INPUT_MAX   256
 #define HIST_MAX     16
+#define VARS_MAX     24          /* was 16; PWD and OLDPWD take two now (v0.60.32) */
 
 /* Everything that belongs to ONE shell rather than to the kernel: where it
  * is, what it typed before, where its prompt sits. Fourth queue, item 2a:
@@ -74,9 +75,9 @@ typedef struct {
     volatile int done;           /* the session task has finished                */
     char    exec_line[INPUT_MAX];/* a session that runs one line (ssh host cmd)  */
     char    where[20];           /* "console", or the client's address (v0.52.0) */
-    char    vname[16][16];       /* shell variables (v0.58.0): NAME=value, $NAME */
-    char    vval[16][96];
-    uint8_t vhand[16];           /* handed to programs (`hand`, v0.60.26) */
+    char    vname[VARS_MAX][16]; /* shell variables (v0.58.0): NAME=value, $NAME */
+    char    vval[VARS_MAX][96];
+    uint8_t vhand[VARS_MAX];     /* handed to programs (`hand`, v0.60.26) */
     char    vpend[8][16];        /* handed while unset: handed once set    */
     int     nvars, npend;
     char    parg[9][64];         /* a script's $1..$9 (v0.60.2)            */
@@ -398,6 +399,7 @@ static void run_profile(void) {
 }
 
 static void hist_load(void);     /* below, with the history */
+static void set_var_quiet(const char *name, const char *value);   /* with cd (v0.60.32) */
 static void do_login(void) {
     char name[USER_NAME_MAX];
     char secret[64];
@@ -424,6 +426,7 @@ static void do_login(void) {
         if (uid >= 0) {
             set_session_uid((uint8_t)uid);
             ensure_home((uint8_t)uid, cur_shell()->cwd);
+            set_var_quiet("PWD", cur_shell()->cwd);     /* v0.60.32 */
             hist_load();
             logins_record(users_current_name(), where, 1);
             console_at_login = 0;
@@ -783,7 +786,7 @@ static void cmd_menu(void) {
         {0, "    relabel <src> <dst>- move / rename a file"},
         {0, "    jot <file>         - edit a file (full-screen text editor)"},
         {0, "    pwd                - print the current bowl (directory)"},
-        {0, "    cd <bowl>          - change to another bowl"},
+        {0, "    cd <bowl> / cd -   - change bowl; - goes back ($PWD, $OLDPWD)"},
         {0, "    mkbowl <name>      - make a new bowl (directory)"},
         {0, "    rmbowl <name>      - remove an empty bowl"},
         {0, "    bowltest           - self-test the bowl/filesystem layer"},
@@ -2744,20 +2747,53 @@ static void cmd_orders(void) {
 
 /* ---- bowls (directories) ---------------------------------------------- */
 
+/* PWD and OLDPWD (v0.60.32) are ordinary variables, as in sh: login sets
+ * PWD, every cd that moves sets both, a cook may set or discard them, and
+ * cd - goes to $OLDPWD. Set quietly: a cook with every slot full still
+ * moves, the variables just do not follow. */
+static const char *get_var(const char *name) {
+    shell_t *me = cur_shell();
+    for (int v = 0; v < me->nvars; v++) if (str_eq(me->vname[v], name)) return me->vval[v];
+    return 0;
+}
+static void set_var(const char *name, const char *value);
+static void set_var_quiet(const char *name, const char *value) {
+    shell_t *me = cur_shell();
+    int st = me->last_status;
+    if (get_var(name) || me->nvars < VARS_MAX) set_var(name, value);
+    me->last_status = st;
+}
+
 static void cmd_cd(const char *args) {
+    shell_t *me = cur_shell();
     while (*args == ' ') args++;
-    char target[FAT_PATH_MAX];
-    if (!*args) { ensure_home(cur_shell()->uid, cur_shell()->cwd); return; }   /* cd alone -> home (v0.52.3) */
-    resolve_path(args, target);
-    if (!fat_is_dir(target)) {
-        t_color(VGA_LIGHT_RED, VGA_BLACK);
-        t_printf("  No such bowl: %s\n", args);
-        t_color(VGA_LIGHT_GREY, VGA_BLACK);
+    char target[FAT_PATH_MAX], was[FAT_PATH_MAX];
+    const char *pv = get_var("PWD");                 /* OLDPWD is $PWD as it was, as sh has it */
+    strncpy(was, pv ? pv : me->cwd, FAT_PATH_MAX - 1); was[FAT_PATH_MAX - 1] = '\0';
+    me->last_status = 0;
+    if (!*args) {                                   /* cd alone -> home (v0.52.3) */
+        ensure_home(me->uid, me->cwd);
+        set_var_quiet("OLDPWD", was); set_var_quiet("PWD", me->cwd);
         return;
     }
-    if (!may(target, 'x')) { deny(target); return; }
-    strncpy(cur_shell()->cwd, target, FAT_PATH_MAX - 1);
-    cur_shell()->cwd[FAT_PATH_MAX - 1] = '\0';
+    int back = str_eq(args, "-");                   /* cd - (v0.60.32), as sh's */
+    if (back) {
+        const char *o = get_var("OLDPWD");
+        if (!o || !*o) { t_puts("  cd: OLDPWD not set\n"); me->last_status = 1; return; }
+        resolve_path(o, target);
+    } else resolve_path(args, target);
+    if (!fat_is_dir(target)) {
+        t_color(VGA_LIGHT_RED, VGA_BLACK);
+        t_printf("  No such bowl: %s\n", back ? target : args);
+        t_color(VGA_LIGHT_GREY, VGA_BLACK);
+        me->last_status = 1;
+        return;
+    }
+    if (!may(target, 'x')) { deny(target); me->last_status = 1; return; }
+    strncpy(me->cwd, target, FAT_PATH_MAX - 1);
+    me->cwd[FAT_PATH_MAX - 1] = '\0';
+    set_var_quiet("OLDPWD", was); set_var_quiet("PWD", me->cwd);
+    if (back) t_printf("  %s\n", me->cwd);          /* sh prints where cd - went */
 }
 
 static void cmd_pwd(void) {
@@ -4779,7 +4815,7 @@ static void set_var(const char *name, const char *value) {
     int slot = -1;
     for (int i = 0; i < me->nvars; i++) if (str_eq(me->vname[i], name)) slot = i;
     if (slot < 0) {
-        if (me->nvars >= 16) { t_puts("  Too many variables (16).\n"); me->last_status = 1; return; }
+        if (me->nvars >= VARS_MAX) { t_printf("  Too many variables (%d).\n", VARS_MAX); me->last_status = 1; return; }
         slot = me->nvars++;
         strncpy(me->vname[slot], name, sizeof(me->vname[slot]) - 1);
         me->vname[slot][sizeof(me->vname[slot]) - 1] = '\0';
@@ -5945,6 +5981,7 @@ static void session_task(void *arg) {
     me->shell = sh;
     me->term  = sh->term;
     ensure_home(sh->uid, sh->cwd);            /* a session starts at home too */
+    set_var_quiet("PWD", sh->cwd);
     if (!sh->exec_line[0]) hist_load();       /* and with its cook's leftovers */
 
     if (sh->exec_line[0]) {
