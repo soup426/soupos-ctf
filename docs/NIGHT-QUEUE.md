@@ -1,9 +1,9 @@
 # Night queue
 
-Twenty-seventh queue. The first twenty-six are in `docs/queue-archive-2026-10-0*.md`.
+Twenty-eighth queue. The first twenty-seven are in `docs/queue-archive-2026-10-0*.md`.
 Items wait on a person in three archives (the seventh, the thirteenth and
-the twenty-fourth). Programs get somewhere to send their complaints, an
-environment and two more tools; the shell gets functions.
+the twenty-fourth). Two limits written down last queue get fixed, the shell
+learns sh's commonest idiom, and two tools get the flags people reach for.
 
 ## Standing rules
 
@@ -34,74 +34,42 @@ environment and two more tools; the shell gets functions.
 
 ---
 
-## 1. 2> sends a program's complaints somewhere — DONE v0.60.21
+## 1. 2>&1 > f, in sh's order
 
-`cook X.elf 2> ERR.TXT`, `2>> ERR.TXT` and `2>&1` for a program's stderr
-(fd 2), on any stage of a pipeline, as sh does. Today stderr always goes to
-the screen. Compare what lands where with bash running the host tools.
+v0.60.21 made 2>&1 a flag meaning "wherever stdout ends up", so
+`2>&1 > f` sends stderr to f; sh sends it to the terminal (the duplicate
+is taken before > moves stdout). Keep the order the redirections were
+written in. Compare both orders with bash.
 
-## 2. Shell functions — DONE v0.60.22
+## 2. cd -, $PWD and $OLDPWD
 
-`name() { cmd ; cmd ; }` on one line defines one; `name a b` runs it with
-$1..$9, $# and $@ set for the body and restored after; its status is the
-last command's. Compare with bash.
+`cd -` goes back to the previous bowl and prints it, as sh does; $PWD and
+$OLDPWD expand to the current and previous bowls. Compare with bash.
 
-## 3. stack.elf — DONE v0.60.23
+## 3. A builtin's pipe streams
 
-Lines in reverse order, as `tac` does (a last line with no newline joins
-the one after it, as tac's output shows). Compare with the host's tac.
+v0.60.27 runs the left side of `builtin | prog` to the end before the
+right side starts, so a left side that never ends holds the line. Start
+the right side first, feed it as the left side prints, and wait for it as
+cook does. Test with a left side that prints more than a pipe holds and a
+right side that stops early.
 
-## 4. spread.elf — DONE v0.60.24
+## 4. A program into a shell loop
 
-Tabs to spaces, as `expand` does (-t N, default 8). Compare with the host's
-expand.
+`cook spoon.elf F | while take line ; do slurp got $line ; done`: the right
+side of a pipe is the shell itself, reading the program's output as its
+input (take reads the pipe, not the keyboard). Compare with bash's
+`cat F | while read line; do echo got $line; done`.
 
-## 5. rack sorts by a field, once — DONE v0.60.25
+## 5. sift -n and -o
 
-`-u` (one of each line the sort calls equal), `-t SEP` and `-k N` (sort by
-field N), with the existing -n and -r. Compare with the host's sort.
+-n puts the line number before each line, -o prints only the matching part
+(each match on a line of its own). Compare with the host's grep.
 
-## 6. export: programs get an environment — DONE v0.60.26 (as `hand`, with labels.elf)
+## 6. tally -s and -w
 
-`export NAME` (and `export NAME=value`) marks a variable; every program a
-cook runs gets the marked ones as NAME=value strings, read through a new
-ulib getenv(). A program to list them (a kitchen name). Test that only
-exported ones arrive and that unset removes one.
-
-## 8. A builtin or a function into a pipe — DONE v0.60.27
-
-Found with item 2: `up loud | raise.elf`, where up is a function (or
-`slurp hi | raise.elf`, a builtin), hands `|` and `raise.elf` to it as
-words; only `cook` lines make pipes. Run the left side with its output
-captured (the $(...) capture terminal is the start) and feed it to the
-program as stdin. Compare with bash.
-
-## 9. music-test judges fixed seconds of the capture — DONE v0.60.28
-
-2026-10-08: one full check (the first for v0.60.23) failed music-test with
-"the music and the effects did not coexist"; the rerun passed, and twelve
-runs six at a time passed (with effects 2219-2349 against a bar of 1807).
-The test compares the capture's mean amplitude over fixed windows (1.0-3.5 s
-music, 5.0-6.5 s with effects, 7.5-9.0 s music again); under a full check's
-load the effects can start late and miss theirs. Find the effects' onset in
-the capture (or mark it on the serial log) and measure around that instead.
-The failing run's numbers were not kept: have the test print them on FAIL.
-
-## 10. pour as cat — DONE v0.60.29
-
-Found with item 8: pour shows at most 8 KB (then a "truncated" note),
-drops bytes outside printable ASCII, and always adds a newline, so
-`pour X | prog` is not `cat X | prog`. Make it read the whole file in
-pieces and write it as it is (CLAUDE.md and the tests that read pour's
-output may lean on the extra newline: check). Add the pour case back to
-bpipe-test.
-
-## 11. Long word lists — DONE v0.60.30
-
-Found with item 8: `for i in $(cook tally.elf 6000)` loops 64 times, not
-6000: a command is expanded into INPUT_MAX (256) bytes, so the $(...)'s
-words are cut. sh has no such limit. Expand a for loop's word list (and
-$(...) generally) into something larger, and say so when it is cut.
+-s SEP between the numbers instead of a newline, -w pads them to equal
+width with zeros. Compare with the host's seq.
 
 ## 7. Doom at the framebuffer's own resolution — DEFERRED
 
