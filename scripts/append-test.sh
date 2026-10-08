@@ -30,7 +30,8 @@ kill "$PID" 2>/dev/null; wait "$PID" 2>/dev/null; PID=""
 mtype -i "$WORK/disk.img" ::/A.TXT > "$WORK/got.txt" 2>/dev/null
 head -3 "$WORK/got.txt" | cmp -s - "$WORK/want.txt" \
     && echo "  ok    > then two >> give the same bytes as the host shell" || { echo "  FAIL  /A.TXT:"; cat -A "$WORK/got.txt" | sed 's/^/        /'; fail=1; }
-[ "$(sed -n 4p "$WORK/got.txt")" = "1 3 14" ] \
+# wc.elf prints the host's format since v0.56.6.
+[ "$(sed -n 4p "$WORK/got.txt")" = " 1  3 14" ] \
     && echo "  ok    a pipeline's output appends too" || { echo "  FAIL  pipeline >>"; fail=1; }
 [ "$(mtype -i "$WORK/disk.img" ::/B.TXT 2>/dev/null)" = "fresh" ] \
     && echo "  ok    >> makes a file that is not there" || { echo "  FAIL  >> to a new file"; fail=1; }

@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.56.5
+Current version: v0.56.6
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,22 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.56.6 (2026-10-08)  — wc.elf LEARNS -l, -w AND -c, IN THE HOST'S FORMAT
+  Fifteenth queue, item 2.
+  - wc.elf printed "1 3 14" its own way and read only stdin. It now takes
+    -l, -w and -c and a file, and prints GNU wc's format as measured on the
+    host: one count bare; several each right-aligned to the width of the
+    byte count, one space apart; a file argument's name after. Whitespace
+    is space, tab, newline, CR, VT and FF, as the host counts it. The
+    WCOUT serial marker the gate reads is unchanged.
+  - One known difference, written down rather than hidden: GNU pads to 7
+    when its input is a pipe, and wc.elf cannot tell a pipe from a
+    redirected file (there is no fstat), so it always uses the file rule.
+  - scripts/wc-test.sh, in check.sh: 13 forms (each flag and pair, no
+    final newline, an empty file, 20000 lines, stdin by redirection, odd
+    whitespace) compared byte for byte with the host's wc. append-test now
+    expects " 1  3 14", the host's format, for its piped wc line.
 
 v0.56.5 (2026-10-08)  — uniq.elf
   Fifteenth queue, item 1.

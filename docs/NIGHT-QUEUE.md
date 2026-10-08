@@ -39,7 +39,7 @@ Adjacent duplicate lines folded, with -c (counts, in the host's format) and
 -d (only the repeated ones). Compare with the host's uniq over the same
 inputs, sorted and unsorted, with and without a final newline.
 
-## 2. wc.elf learns -l, -w and -c
+## 2. wc.elf learns -l, -w and -c — DONE v0.56.6
 
 wc.elf prints its own format. Give it the host's: the counts it is asked
 for, in the host's column widths, from a file (with its name) or stdin.
