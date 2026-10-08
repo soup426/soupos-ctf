@@ -8,6 +8,10 @@ void shell_run(void);
  * clocks out. Returns a handle, or NULL. */
 struct term;
 void *shell_session_start(struct term *t, int uid, const char *exec_line, const char *where);
+/* For the pass (v0.55.1): is the console at its login prompt, and clock the
+ * console out at its next keystroke (a pass caller left logged in). */
+int  shell_console_at_login(void);
+void shell_console_hangup(void);
 /* 1 once the session has ended, with its last command's status. */
 int   shell_session_done(void *s, int *status);
 /* The terminal has gone: kill every program the session started. */

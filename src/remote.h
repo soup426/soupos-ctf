@@ -15,3 +15,5 @@ int      remote_start(uint16_t port);
 void     remote_stop(void);
 int      remote_running(void);
 uint16_t remote_port(void);
+/* The pass caller's address while one is connected, else 0 (v0.55.1). */
+uint32_t remote_peer(void);

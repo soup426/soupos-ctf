@@ -23,11 +23,15 @@
 #include "task.h"
 #include "vga.h"
 #include "klog.h"
+#include "shell.h"
 
 static volatile int running;
 static volatile int want_stop;
 static int           conn = -1;
 static uint16_t      port_in_use;
+static uint32_t      peer;           /* the caller's address, while connected */
+
+uint32_t remote_peer(void) { return conn >= 0 ? peer : 0; }
 
 /* Output sink: the console hands us every character the screen gets. The
  * expansions match console.c's serial ones, because a terminal on a socket
@@ -54,6 +58,20 @@ static void remote_task(void *arg) {
         int h = tcp_accept(port_in_use, 100);               /* a second, then re-check stop */
         if (h < 0) continue;
 
+        /* The pass hands over THE console's shell, so it may only hand over
+         * a console nobody is logged in at (v0.55.1). Before, a caller got
+         * whoever was logged in, the headchef included, with no password:
+         * measured on v0.55.0, `whoami` from a stranger said headchef. */
+        if (!shell_console_at_login()) {
+            static const char busy[] =
+                "\r\nThe console is in use. The pass opens only to the login prompt.\r\n";
+            tcp_send_on(h, busy, sizeof(busy) - 1);
+            tcp_close_on(h);
+            klog("[pass] refused a caller: the console is logged in\n");
+            continue;
+        }
+        peer = 0;
+        tcp_conn_at(h, 0, &peer, 0, 0);
         conn = h;
         console_set_sink(remote_sink);
         klog("[pass] session open on port %u\n", port_in_use);
@@ -76,6 +94,14 @@ static void remote_task(void *arg) {
         conn = -1;
         tcp_close_on(h);
         klog("[pass] session closed\n");
+        /* A caller who leaves logged in must not leave the next person at the
+         * keyboard their session: clock the console out. Ctrl-C ends any
+         * program they left in the foreground; the Enter wakes the shell. */
+        if (!shell_console_at_login()) {
+            shell_console_hangup();
+            console_rx_byte(0x03);
+            console_rx_byte('\r');
+        }
     }
 
     console_set_sink(0);

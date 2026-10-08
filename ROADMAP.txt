@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.55.0
+Current version: v0.55.1
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,30 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.55.1 (2026-10-08)  — THE PASS GETS THE VAULT'S RULES
+  Eleventh queue, item 2.
+  - The pass door hands its caller THE console's shell. Measured on
+    v0.55.0: with the headchef logged in at the console, a stranger on the
+    pass typed `whoami` and was the headchef, with no password; ten wrong
+    passwords took 8 s, the client's own pace; refusals were recorded as
+    "console".
+  - The pass now accepts a caller only while the console is at its login
+    prompt, and tells anyone else the console is in use. A caller who
+    hangs up logged in leaves the console clocked out (any foreground
+    program gets a Ctrl-C), so the next person does not inherit the
+    session. Over the pass a wrong secret costs 1, 2, 4, then 8 s, and the
+    count lives in the console's login loop, so reconnecting does not
+    reset it. Logins and refusals are recorded with the caller's address.
+    The login prompt now asks again on a bare Enter, which the pass sends
+    on arrival. No idle limit: the pass is the console, which never times
+    out.
+  - pass-test.sh logs in through the pass (it used to rely on the shared,
+    already logged-in console - the hole itself), and a second boot checks:
+    a caller is turned away while the headchef is logged in; three wrong
+    secrets take 7 s or more (10.4 measured); a caller can log in; one who
+    hangs up logged in leaves the console clocked out and the next caller
+    is let in; both events are logged; /etc/logins names 10.0.2.2.
 
 v0.55.0 (2026-10-08)  — WHAT A COOK MAY NOT DO
   Eleventh queue, item 1.

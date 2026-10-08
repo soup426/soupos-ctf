@@ -40,7 +40,7 @@ network changes, anything that writes the disk wholesale or reboots. Prove
 each one an ordinary cook can wrongly run on the current kernel before
 gating it, and test them together.
 
-## 2. The pass door gets the same rules as the vault
+## 2. The pass door gets the same rules as the vault — DONE v0.55.1
 
 `pass` is the clear-text door (telnet-style). The vault records logins in
 /etc/logins, slows guessing and locks out an address, ends idle sessions.

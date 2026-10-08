@@ -317,23 +317,51 @@ static void ensure_home(uint8_t uid, char *cwd_out) {
 
 /* Login gate - loops until a valid cook clocks in. Used at boot and by
  * the `clockout` command. */
+static volatile int console_at_login;   /* the console is in do_login (v0.55.1) */
+static volatile int console_hangup;     /* clock the console out at the next key */
+int  shell_console_at_login(void) { return console_at_login; }
+void shell_console_hangup(void)   { console_hangup = 1; }
+
+static void ip_dotted(uint32_t a, char *out) {          /* out: 16 bytes */
+    int k = 0;
+    for (int part = 3; part >= 0; part--) {
+        uint32_t v = (a >> (part * 8)) & 255;
+        if (v >= 100) out[k++] = (char)('0' + v / 100);
+        if (v >= 10)  out[k++] = (char)('0' + (v / 10) % 10);
+        out[k++] = (char)('0' + v % 10);
+        if (part) out[k++] = '.';
+    }
+    out[k] = '\0';
+}
+
 static void do_login(void) {
     char name[USER_NAME_MAX];
     char secret[64];
+    int  pass_fails = 0;
+    if (cur_shell() == &the_shell) console_at_login = 1;
     for (;;) {
         t_color(VGA_LIGHT_CYAN, VGA_BLACK);
         t_puts("\n  soupOS kitchen -- clock in to start your shift.\n");
         t_color(VGA_LIGHT_GREY, VGA_BLACK);
         t_puts("  cook:   ");
         read_line(name, sizeof(name), 0);
+        if (!name[0]) continue;      /* a bare Enter (the pass sends one on arrival) asks again */
         t_puts("  secret: ");
         read_line(secret, sizeof(secret), '*');
 
         int uid = users_check(name, secret);
+        /* Over the pass the "console" is a network caller: record their
+         * address, and make guessing cost time as the vault does (v0.55.1;
+         * measured on v0.55.0: ten wrong passwords in 8 s, the client's own
+         * pace). */
+        uint32_t caller = remote_peer();
+        char where[16];
+        if (caller) ip_dotted(caller, where); else strcpy(where, "console");
         if (uid >= 0) {
             set_session_uid((uint8_t)uid);
             ensure_home((uint8_t)uid, cur_shell()->cwd);
-            logins_record(users_current_name(), "console", 1);
+            logins_record(users_current_name(), where, 1);
+            console_at_login = 0;
             t_color(VGA_LIGHT_GREEN, VGA_BLACK);
             t_printf("\n  Welcome to the kitchen, %s.%s\n\n",
                        users_current_name(),
@@ -343,7 +371,13 @@ static void do_login(void) {
         }
         t_color(VGA_LIGHT_RED, VGA_BLACK);
         t_puts("  The kitchen door stays locked -- wrong cook or secret.\n");
-        logins_record(name, "console", 0);
+        logins_record(name, where, 0);
+        if (caller) {
+            uint32_t pause = 1000u << (pass_fails < 3 ? pass_fails : 3);
+            pass_fails++;
+            klog("[pass] wrong secret from %s: %u ms pause\n", where, pause);
+            task_sleep(pause);
+        }
         t_color(VGA_LIGHT_GREY, VGA_BLACK);
     }
 }
@@ -4166,6 +4200,16 @@ static void shell_loop(char *input, char *saved, int *pos_p, int *len_p, int *hb
         int c = t_getc();
         if (c < 0) break;
         cur_shell()->last_input = timer_get_ticks();
+        if (console_hangup && cur_shell() == &the_shell) {
+            /* The pass caller left logged in (v0.55.1). */
+            console_hangup = 0;
+            klog("[pass] the caller left logged in as %s: clocking the console out\n", users_current_name());
+            cmd_clockout();
+            pos = len = hist_browse = 0;
+            input[0] = saved[0] = '\0';
+            prompt();
+            continue;
+        }
 
         if (c == '\n') {
             cursor_to(len);
