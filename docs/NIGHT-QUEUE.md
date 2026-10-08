@@ -1,10 +1,11 @@
 # Night queue
 
-Twenty-second queue. The first twenty-one are in `docs/queue-archive-2026-10-0*.md`.
+Twenty-third queue. The first twenty-two are in `docs/queue-archive-2026-10-0*.md`.
 Two items wait on a person, with notes in their archives: the seventh's
 syscall-pointer item and the thirteenth's swap-shares item. The
-twenty-first gave scripts for and if and added cmp; this one adds
-arithmetic, while loops (and a way out of them), and script arguments.
+twenty-second added arithmetic, while (with Ctrl-C stopping a loop) and
+script arguments; this one lets a script use a program's output and the
+cook's input, and gives each cook a profile.
 
 ## Standing rules
 
@@ -32,24 +33,24 @@ arithmetic, while loops (and a way out of them), and script arguments.
 
 ---
 
-## 1. Arithmetic — DONE v0.60.0
+## 1. Command substitution
 
-$(( EXPR )) with integers: + - * / % and parentheses, unary -, the
-comparisons < <= > >= == != (1 or 0), $NAME and bare NAME for variables,
-division by zero an error. Compare with sh over a table of expressions.
+`$(COMMAND)` is replaced by what COMMAND (a program or pipeline, through
+the shell as usual) writes to stdout, trailing newlines removed, as sh
+does; not inside '...'. Nested is not needed. Compare with sh, e.g.
+`N=$(cook wc.elf -l < F)`, a pipeline's output, and an empty result.
 
-## 2. while loops, and Ctrl-C stops a loop — DONE v0.60.1
+## 2. read VAR
 
-`while COMMANDS ; do COMMANDS ; done`, as sh does. A shell loop runs no
-program between some commands, so Ctrl-C must also be noticed by the loop
-itself: pressing it stops a for or while (and the rest of its line), and
-the shell carries on. Compare a counting loop with sh; test Ctrl-C on
-`while cook test.elf 1 = 1 ; do cook echo.elf x > /dev/null ; done`.
+`read NAME` reads a line from the terminal (console or session) into a
+variable; at end of input the status is 1. Test from a script that asks
+and the console that answers.
 
-## 3. Script arguments — DONE v0.60.2
+## 3. ~/profile at login
 
-`run FILE a b c`: $1 to $9, $# and $@ inside the script, as sh gives them
-to `sh FILE a b c`. Compare a script's results with sh's.
+If the cook's home holds a file named profile, it is run (as `run` would)
+at each interactive login - console, pass, vault, not `ssh host cmd` -
+with the cook's permissions. An error in it does not stop the login.
 
 ## 4. Doom at the framebuffer's own resolution — DEFERRED
 
