@@ -1,9 +1,11 @@
 # Night queue
 
-Sixth queue. The first five are in `docs/queue-archive-2026-10-07*.md`. Read
-the fifth's notes first: its first item found a real bug the moment anything
-looked (the permission byte was FAT's case flags), and its swap item is the
-example of modelling a policy on the host before trusting a kernel number.
+Seventh queue. The first six are in `docs/queue-archive-2026-10-07*.md`. The
+sixth's lesson is in its tests: three times a test silently skipped what it
+meant to check (an unanswered prompt, an untypeable character, a file set up
+where the user could not write), and each time the fix was to make the test
+say so. This queue is mostly security: soupOS has a network door now, and
+several rules the shell enforces were never enforced anywhere else.
 
 ## Standing rules
 
@@ -29,41 +31,40 @@ example of modelling a policy on the host before trusting a kernel number.
 
 ---
 
-## 1. Passwords that survive the network — DONE v0.46.0 (and it found v0.45.1's FAT bug)
+## 1. A key logs in as its own cook
 
-users.c stores each cook's secret as an unsalted 32-bit AlphaSOUP hash, and
-any preimage logs in. In the CHALLENGE=1 build that is deliberate - it is the
-whole of challenge stage 2 - and must stay byte for byte. In the ordinary
-build it now sits behind `vault`, where a password crosses the network. Use
-salted PBKDF2-HMAC-SHA256 there (HMAC-SHA256 has been verified since
-v0.23.0): a random 16-byte salt from the entropy pool, a few thousand
-iterations, stored in /etc/kitchen in a new line format the old one can be
-told from. Verify PBKDF2 against Python's hashlib.pbkdf2_hmac before using
-it. Old entries still log in and are rewritten in the new format on the
-first successful login; time one login and keep it well under a second.
+/AUTHKEYS lines are bare public keys, and any listed key may log in as any
+cook that exists, the headchef included. Give each line its cook
+("headchef ssh-ed25519 AAAA... comment", the OpenSSH authorized_keys shape
+with the user in front), accept a key only for the cook it names, keep
+reading the old bare form as headchef-only rather than everyone, and test
+that saucier's key does not open headchef's account.
 
-## 2. The machine comes up ready — DONE v0.47.0 (DHCP at boot already existed; /etc/rc added)
+## 2. Guessing a password over the network costs time
 
-A fresh boot has no address until someone types `plumbing dhcp`, and nothing
-is listening until someone types `vault 22`. Do DHCP at boot when a NIC is
-present (with a short timeout, so a machine with no network still boots
-promptly), and run /etc/rc.sc - a soupyc script, if present - as headchef
-after it. A test boots an image whose rc.sc opens the vault and logs in over
-SSH with nothing typed at the console.
+The vault allows six attempts per connection and a client can reconnect at
+once, so the only limit on guessing is PBKDF2's 50 ms. Add a delay after each
+failed attempt (doubling, capped), and a per-address count that refuses new
+connections from an address with too many recent failures. Measure: attempts
+per minute from one address before and after, with the real client.
 
-## 3. Files get real timestamps — DONE v0.47.1
+## 3. Only your own processes
 
-Everything soupOS creates is dated 1980 (mdir shows it), because the write
-time and date fields are left zero. Stamp them from the RTC on create and on
-every write, in the standard write-time/date fields (bytes 22-25; 13-14 now
-hold the owner and mode). Check with mdir that a file written now is dated
-now, and that fsck stays clean.
+`kill`, `fg`/`plate`, `bg`/`steep` and `kill %` act on any process, so a cook
+(or an SSH session) can kill another cook's programs, and `kill <id>` on a
+kernel task such as the vault's worker kills it outright. Record the owner
+uid in proc_t at cook time; let a cook signal only their own processes, the
+headchef any; refuse kernel tasks to everyone but the headchef. Test with two
+SSH sessions as two cooks.
 
-## 4. Programs can remove files and make directories — DONE v0.48.0 (and open() now checks permissions)
+## 4. Every syscall survives hostile pointers
 
-Ring-3 programs can create and read files and now list directories, but not
-remove anything or make a directory. SYS_UNLINK and SYS_MKDIR, and rm.elf and
-mkdir.elf on the disk, with mtools and fsck as the judges.
+Two syscalls trusted user pointers too far (open read its path past the first
+checked byte; the fault path's copies). Audit every case in syscall_dispatch
+for each pointer and length, and add evil.elf: it calls every syscall with
+kernel addresses, unmapped addresses, a buffer straddling the end of user
+space and absurd lengths, and must get -1 every time while the kernel logs no
+panic and the shell carries on.
 
 ## 5. Doom at the framebuffer's own resolution — DEFERRED
 
