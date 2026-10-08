@@ -1,7 +1,7 @@
 #pragma once
 #include <stdint.h>
 
-/* The system clipboard: one buffer shared by everything that edits text.
+/* The clipboard: one per cook, shared by everything that edits text.
  *
  * There is no mouse driver and no window system, so selection is keyboard
  * driven: `jot` marks a span and copies or cuts it, the shell's line editor
@@ -22,4 +22,8 @@ uint32_t clip_get(char *out, uint32_t max);
 uint32_t    clip_len(void);
 const char *clip_peek(void);
 
-void     clip_clear(void);
+void     clip_clear(void);              /* the current cook's */
+
+/* Wipe a cook's clipboard: when they are fired, so the next cook hired
+ * into the same uid does not inherit it. */
+void     clip_forget(uint8_t uid);

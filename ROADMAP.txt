@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.12
+Current version: v0.60.13
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,17 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.13 (2026-10-08)  — A CLIPBOARD PER COOK
+  - The clipboard was one buffer for the whole kernel: what the saucier
+    cut over SSH, the headchef at the console could paste, and the other
+    way round. Each cook now has their own (src/clip.c keeps one per uid).
+    Keyed by cook, not terminal: `$(scraps)` runs on a capture terminal of
+    its own, and one cook's two sessions share theirs.
+  - fire wipes the fired cook's, so a cook hired into the same uid starts
+    with an empty one.
+  - scripts/clip-test.sh has the console and two SSH sessions at once; on
+    the previous kernel three of its five checks failed.
 
 v0.60.12 (2026-10-08)  — THE NEXT COOK STARTS CLEAN
   - The console's shell outlives the cook at it, and clockout left three

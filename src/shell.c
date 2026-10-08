@@ -2814,6 +2814,7 @@ static void cmd_fire(const char *args) {
         return;
     }
     if (users_remove(args) != 0) { t_puts("  Could not fire (disk error).\n"); return; }
+    clip_forget((uint8_t)uid);          /* the next hire into this uid starts clean */
     int moved = hand_over("/", (uint8_t)uid, 0);
     int keys  = ssh_forget_keys(args);
     t_printf("  Fired: %s has left the kitchen; %d of their files and bowls are the headchef's now.\n", args, moved);

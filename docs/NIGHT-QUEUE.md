@@ -67,7 +67,7 @@ in on the console, `leftovers` lists headchef's commands (including the
 Clear it at clockout (or keep one per cook); check that the up arrow
 shows nothing from before, too.
 
-## 7. One clipboard for every terminal
+## 7. One clipboard for every terminal — DONE v0.60.13 (one per cook)
 
 Found with item 6: the clipboard (src/clip.c) is one for the whole
 kernel, so text an SSH session's cook cuts with Ctrl+U can be pasted by
