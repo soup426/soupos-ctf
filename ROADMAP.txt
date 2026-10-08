@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.53.4
+Current version: v0.54.0
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,24 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.54.0 (2026-10-08)  — THE ROSTER IS THE HEADCHEF'S ALONE
+  Tenth queue, item 1.
+  - /etc/kitchen was rwxr-x. Proven on v0.53.4: an ordinary cook read
+    every cook's PBKDF2 secret with pour and with cat.elf, free to attack
+    them offline. In the ordinary build the roster is now the headchef's,
+    rw----, set every time it is saved and once at boot so an older disk
+    is closed too. The kernel reads and writes it directly, so login,
+    `secret` and `hire` work for cooks who cannot read it.
+  - The CHALLENGE build keeps it readable on purpose: reading it IS stage 2
+    ("Salt to Taste"). That build was compiled by check.sh but never
+    booted, so nothing would have noticed a hardening change reaching it.
+    New scripts/challenge-test.sh, in check.sh in a tree of its own,
+    builds and boots it and checks an ordinary cook reads the headchef's
+    unsalted AlphaSOUP-32 hash.
+  - cooks-test.sh: a cook cannot read the roster from the shell or a
+    program, still changes their secret and logs in with it, and the
+    roster stays rw---- after the rewrite.
 
 v0.53.4 (2026-10-08)  — du
   Ninth queue, item 5.

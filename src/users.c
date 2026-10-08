@@ -109,6 +109,19 @@ static void copy_name(char *dst, const char *src) {
 /* ---- persistence ---- */
 
 /* Serialise the roster to /etc/kitchen. Returns 0=ok, -1=disk error. */
+/* The roster holds every cook's secret, so in the ordinary build it is the
+ * headchef's alone, rw---- (v0.54.0): before, it was rwxr-x and any cook
+ * could read every PBKDF2 secret and attack it offline. The CHALLENGE build
+ * keeps it readable on purpose - reading it is stage 2 ("Salt to Taste",
+ * docs/challenge-solutions.md). The kernel reads and writes it directly,
+ * so login, `secret` and `hire` do not need the cook to read it. */
+static void seal_roster(void) {
+#ifdef NO_CHALLENGE
+    fat_chown(KITCHEN_PATH, 0);
+    fat_chmod(KITCHEN_PATH, FAT_PERM_MARK | FAT_PERM_OR | FAT_PERM_OW);
+#endif
+}
+
 static int users_save(void) {
     static char buf[USERS_MAX * (USER_NAME_MAX + 128)];
     uint32_t len = 0;
@@ -133,7 +146,9 @@ static int users_save(void) {
         buf[len++] = '\n';
     }
     fat_mkdir("/etc");                       /* harmless if it already exists */
-    return fat_write(KITCHEN_PATH, (const uint8_t *)buf, len);
+    int rc = fat_write(KITCHEN_PATH, (const uint8_t *)buf, len);
+    if (rc == 0) seal_roster();
+    return rc;
 }
 
 /* Parse one "name:uid:hexhash" line into the roster. */
@@ -212,6 +227,7 @@ void users_init(void) {
         n_users = 2;
         users_save();
     }
+    seal_roster();               /* a disk from before v0.54.0 is closed at boot */
 }
 
 int         users_count(void)        { return n_users; }

@@ -31,7 +31,7 @@ files that hold the kitchen's secrets.
 
 ---
 
-## 1. The roster is readable by every cook
+## 1. The roster is readable by every cook — DONE v0.54.0
 
 /etc/kitchen is rwxr-x (checked 2026-10-08), so any cook can read every
 cook's PBKDF2 secret and attack it offline. Close it to the headchef in the

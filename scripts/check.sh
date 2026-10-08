@@ -67,6 +67,8 @@ if [ "$MODE" = "full" ]; then
              framebuffer-test fullness-test lines-test fsck-test ls-test users-test rc-test fsops-test guess-test owner-test cooks-test last-test idle-test du-test; do
         run "$t" "./scripts/$t.sh"
     done
+    # challenge-test rebuilds as CHALLENGE=1, so it gets a tree of its own too.
+    run "challenge-test" bash -c "$(declare -f tree_copy); tree_copy '$WORK/t-chal' && cd '$WORK/t-chal' && ./scripts/challenge-test.sh"
     # doom-fb-test rebuilds two ISOs, so it gets a tree of its own.
     run "doom-fb-test" bash -c "$(declare -f tree_copy); tree_copy '$WORK/t-doom' && cd '$WORK/t-doom' && ./scripts/doom-fb-test.sh"
 fi

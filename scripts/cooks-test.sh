@@ -88,4 +88,22 @@ grep -q "/ls.elf: readdir /home/saucier refused" "$WORK/bowl.log" && ! grep -q "
     && echo "  ok    and SYS_READDIR will not list it" || { echo "  FAIL  ls.elf listed a closed bowl"; fail=1; }
 [ "$(grep -c "^the secret sauce" "$WORK/bowl.log")" = "1" ] && ! grep -q "readdir /home/intern refused" "$WORK/bowl.log" \
     && echo "  ok    the owner still reads it, and a cook still lists their own home" || { echo "  FAIL  the owner was locked out too"; fail=1; }
+# ── the roster is the headchef's alone (v0.54.0) ──
+# Proven on v0.53.4: an ordinary cook read every cook's PBKDF2 secret with
+# pour and with cat.elf. The CHALLENGE build keeps it readable on purpose
+# (challenge-test.sh checks that).
+cp disk.img "$WORK/roster.img"
+boot "$WORK/roster.img" "$WORK/roster.log" "headchef" "rosemary" "WAIT:1" \
+    "hire saucier" "WAIT:1" "basil" "WAIT:1" "basil" "WAIT:2" "clockout" "WAIT:1" \
+    "saucier" "basil" "WAIT:2" "pour /etc/kitchen" "WAIT:1" "cook cat.elf /etc/kitchen" "WAIT:2" \
+    "secret" "WAIT:1" "basil" "WAIT:2" "thyme" "WAIT:1" "thyme" "WAIT:2" "clockout" "WAIT:1" \
+    "saucier" "thyme" "WAIT:2" "whoami" "WAIT:1" "perms /etc/kitchen" "WAIT:1"
+tr -d '\r' < "$WORK/roster.log" > "$WORK/roster.txt"
+! grep -q '^headchef:0:\$p\$' "$WORK/roster.txt" && grep -q "Permission denied: /etc/kitchen" "$WORK/roster.txt" \
+    && grep -q "/cat.elf: open /etc/kitchen for reading refused" "$WORK/roster.txt" \
+    && echo "  ok    a cook cannot read the roster, from the shell or a program" || { echo "  FAIL  a cook read the roster"; fail=1; }
+grep -q "saucier has a new secret" "$WORK/roster.txt" && grep -qE "saucier  \(uid [0-9]+\)" "$WORK/roster.txt" \
+    && echo "  ok    a cook who cannot read it still changes their secret and logs in with it" || { echo "  FAIL  secret or login broke"; fail=1; }
+grep -q "owner: headchef   perms: rw----" "$WORK/roster.txt" \
+    && echo "  ok    after the rewrite the roster is still the headchef's, rw----" || { echo "  FAIL  the roster's mode after a rewrite"; fail=1; }
 exit $fail
