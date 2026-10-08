@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.46.0
+Current version: v0.47.0
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,22 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.47.0 (2026-10-07)  — THE MACHINE COMES UP READY
+  Sixth queue, item 2, half of which was already true.
+  - The queue said a fresh boot has no address until someone types
+    `plumbing dhcp`. Checked first: the kernel has leased one at boot all
+    along (kernel.c, with the static defaults as the fallback); every test
+    that typed `plumbing dhcp` was asking for a second lease. Nothing to
+    build there.
+  - /etc/rc: shell commands, one a line ('#' for comments), run as
+    headchef at boot before the login prompt, each logged as "[rc] ...".
+    soupyc was the queue's suggestion, but it cannot run shell commands,
+    and opening the vault is a shell command.
+  - scripts/rc-test.sh, in check.sh: a disk whose /etc/rc says `vault 22`
+    is booted and NOT ONE KEY is sent to its console; the kernel leases an
+    address, rc opens the vault, `ssh host whoami` works from outside, and
+    the console still reaches its login prompt. Gate 99.
 
 v0.46.0 (2026-10-07)  — PASSWORDS THAT SURVIVE THE NETWORK
   Sixth queue, item 1.

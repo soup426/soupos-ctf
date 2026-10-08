@@ -874,6 +874,11 @@ how many, and the temporaries live in C locals where no collector can see them.
 If you add a builtin, allocate with `str_alloc` and return `mksval_ref`; never
 `kfree` a string. `SVAL_LEN` is now only the identifier length.
 
+## Boot (v0.47.0)
+
+The kernel leases an address at boot (kernel.c); tests do not need `plumbing dhcp`.
+`/etc/rc` lines run as headchef before the login prompt (`run_rc` in shell.c).
+
 ## Secrets (v0.46.0)
 
 users.c has two kinds: SOUP32 (the CHALLENGE build's, challenge stage 2, never

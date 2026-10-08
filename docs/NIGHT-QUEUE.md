@@ -42,7 +42,7 @@ told from. Verify PBKDF2 against Python's hashlib.pbkdf2_hmac before using
 it. Old entries still log in and are rewritten in the new format on the
 first successful login; time one login and keep it well under a second.
 
-## 2. The machine comes up ready
+## 2. The machine comes up ready — DONE v0.47.0 (DHCP at boot already existed; /etc/rc added)
 
 A fresh boot has no address until someone types `plumbing dhcp`, and nothing
 is listening until someone types `vault 22`. Do DHCP at boot when a NIC is

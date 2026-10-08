@@ -3749,6 +3749,35 @@ static void dispatch(const char *buf) {
 
 static void shell_loop(char *input, char *saved, int *pos_p, int *len_p, int *hb_p);
 
+/* /etc/rc: shell commands, one a line, run as headchef at boot before the
+ * login prompt (v0.47.0) - so a machine can come up with `vault 22` already
+ * open. The network is already up: the kernel leases an address at boot. A
+ * line starting with '#' is a comment. Each line is logged as it runs. Only
+ * the headchef should be able to write /etc; permissions are advisory. */
+static void run_rc(void) {
+    static char rc[2048];
+    uint32_t size = 0;
+    if (fat_read("/etc/rc", (uint8_t *)rc, sizeof(rc) - 1, &size) < 0 || size == 0) return;
+    if (size > sizeof(rc) - 1) size = sizeof(rc) - 1;     /* fat_read reports the file's size */
+    rc[size] = '\0';
+    set_session_uid(0);
+    uint32_t i = 0;
+    while (i < size) {
+        uint32_t e = i;
+        while (e < size && rc[e] != '\n' && rc[e] != '\r') e++;
+        char line[INPUT_MAX];
+        uint32_t n = e - i < INPUT_MAX - 1 ? e - i : INPUT_MAX - 1;
+        memcpy(line, rc + i, n); line[n] = '\0';
+        const char *l = line;
+        while (*l == ' ') l++;
+        if (*l && *l != '#') {
+            klog("[rc] %s\n", l);
+            dispatch(l);
+        }
+        i = e + 1;
+    }
+}
+
 void shell_run(void) {
     char input[INPUT_MAX];
     char saved[INPUT_MAX];
@@ -3758,6 +3787,7 @@ void shell_run(void) {
     input[0] = saved[0] = '\0';
     users_set_resolver(shell_uid_resolver);
     fat_set_creator_hook(shell_creator);
+    run_rc();                   /* /etc/rc, as headchef, before anyone logs in */
     do_login();                 /* clock in before the kitchen opens */
     prompt();
     shell_loop(input, saved, &pos, &len, &hist_browse);
