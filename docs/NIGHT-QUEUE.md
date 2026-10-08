@@ -87,7 +87,7 @@ so `ls` can only ever be a shell builtin. A `SYS_READDIR` returning one entry
 per call (name, size, is-dir), and `ls.elf` that uses it, with the output
 compared against the shell's own listing of the same directory.
 
-## 6. Memory per process, where you can see it
+## 6. Memory per process, where you can see it — DONE v0.45.0
 
 `ps` and `kitchen` show cpu but not memory. Show each process's resident
 pages, its swapped-out pages and its stack growth, all of which the kernel

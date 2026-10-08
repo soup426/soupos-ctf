@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.44.0
+Current version: v0.45.0
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,18 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.45.0 (2026-10-07)  — MEMORY PER PROCESS, WHERE YOU CAN SEE IT
+  Fifth queue, item 6.
+  - `ps` and `kitchen` show each program's memory in pages: RES, resident
+    now (the cap is 1024), and SWAP, on disk now - a live count the swap
+    code keeps up and down, reset at exec and at exit. Kernel tasks show a
+    dash: they live in the kernel's memory.
+  - Checked against numbers known in advance: `lazy.elf hold` touches 1500
+    heap pages and waits, so ps must show 1024 resident and 1500 plus its
+    image and stack pages less 1024 on disk. It shows 1024 and 481 (so 5
+    pages of image and stack), and every held page reads back right. The
+    boot segment asserts both. Gate 99.
 
 v0.44.0 (2026-10-07)  — PROGRAMS CAN READ DIRECTORIES
   Fifth queue, item 5.

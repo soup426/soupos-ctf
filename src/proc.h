@@ -56,6 +56,7 @@ typedef struct proc {
     uint32_t      evicts_since_sample;
     uint32_t      fifo_head, fifo_len;
     uint32_t      swaps_out, swaps_in;
+    uint32_t      swapped;             /* pages on disk right now (v0.45.0) */
     uint32_t      esp0;                /* ring-0 stack while in ring 3      */
     vfs_node_t   *ufds[PROC_UFD_MAX];
     char          args[PROC_ARGS_MAX];

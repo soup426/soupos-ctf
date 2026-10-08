@@ -132,6 +132,7 @@ int swap_out_one(proc_t *pr) {
     pr->upages--;
     pr->swap_slot[idx] = (uint16_t)(s + 1);
     pr->swaps_out++;
+    pr->swapped++;
     return 0;
 }
 
@@ -153,6 +154,7 @@ int swap_in(proc_t *pr, uint32_t va) {
     slot_free(s);
     pr->swap_slot[idx] = 0;
     pr->swaps_in++;
+    pr->swapped--;
     swap_note_resident(pr, page);
     return 1;
 }
@@ -167,4 +169,5 @@ void swap_release(proc_t *pr) {
     kfree(pr->last_ref);
     pr->swap_slot = 0; pr->fifo = 0; pr->last_ref = 0;
     pr->fifo_head = pr->fifo_len = 0;
+    pr->swapped = 0;
 }

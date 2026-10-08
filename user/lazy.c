@@ -13,6 +13,10 @@
  *   cook lazy.elf absurd    32 MB, more than the cap and the swap together:
  *                           killed when the swap is full, which is the
  *                           honest answer, and the shell must survive it
+ *   cook lazy.elf hold      touches 1500 pages, then stays alive for 4 s
+ *                           doing nothing, so `ps` can be asked what it
+ *                           holds: 1024 resident (the cap) and the rest on
+ *                           disk
  *   cook lazy.elf read      has the KERNEL touch the page first: a read()
  *                           into a buffer this program never wrote to, so
  *                           the fault is taken in ring 0 and must be
@@ -28,6 +32,7 @@ int main(void) {
     int n = sys_args(arg, sizeof(arg));
     int greedy = (n > 0 && (arg[0] == 'g' || arg[0] == 'a'));
     int kread  = (n > 0 && arg[0] == 'r');
+    int hold   = (n > 0 && arg[0] == 'h');
     int pages  = (n > 0 && arg[0] == 'a') ? 2 * PAGES : PAGES;
 
     char *base = (char *)sys_sbrk(pages * PAGE);
@@ -36,6 +41,16 @@ int main(void) {
         return 1;
     }
 
+    if (hold) {
+        for (int i = 0; i < 1500; i++) base[(long)i * PAGE] = (char)(i & 0x7F);
+        eprint("LAZY holding 1500 pages\n");
+        unsigned until = sys_ticks() + 400;
+        while (sys_ticks() < until) sys_yield();
+        for (int i = 0; i < 1500; i++)
+            if (base[(long)i * PAGE] != (char)(i & 0x7F)) { eprint("LAZY FAIL held page\n"); return 6; }
+        eprint("LAZY held 1500 pages ok\n");
+        return 0;
+    }
     if (kread) {
         /* Two pages in, never touched by us: the first write to it is the
          * kernel's, inside the read syscall. */

@@ -2546,23 +2546,39 @@ static void cmd_clock(void) {
 
 /* ---- task/scheduler commands ---- */
 
+/* A right-aligned 5-wide number into a buffer, since t_printf's %5u would
+ * do it but the dash for "no figure" has to line up with it too. */
+static void fmt_u5(char out[8], uint32_t v) {
+    char d[11]; int n = 0;
+    do { d[n++] = (char)('0' + v % 10); v /= 10; } while (v && n < 10);
+    int pad = 5 - n, k = 0;
+    while (pad-- > 0) out[k++] = ' ';
+    while (n) out[k++] = d[--n];
+    out[k] = '\0';
+}
+
 static void cmd_ps(void) {
     task_t *head = task_list_head();
     if (!head) { t_puts("(no tasks)\n"); return; }
     t_color(VGA_YELLOW, VGA_BLACK);
-    t_puts("  ID  ST  CPU%  STACK  KIND   NAME\n");
+    t_puts("  ID  ST  CPU%  STACK  KIND    RES  SWAP  NAME\n");
     t_color(VGA_LIGHT_GREY, VGA_BLACK);
     task_t *t = head;
     do {
         /* cpu_last is ticks out of a 100-tick second, so it is already a
          * percentage. It says who HELD the cpu: a task halted at a prompt
          * still counts, which is why the shell reads high when idle. */
-        t_printf("  %2u   %c  %3u%%  %5u  %s   %s%s\n",
+        /* A program's memory in pages: resident (the cap is 1024) and on
+         * disk now. Kernel tasks live in the kernel's memory: no figure. */
+        char res[8] = "    -", sw[8] = "    -";
+        if (t->proc) { fmt_u5(res, t->proc->upages); fmt_u5(sw, t->proc->swapped); }
+        t_printf("  %2u   %c  %3u%%  %5u  %s  %s %s  %s%s\n",
                    t->id,
                    task_state_letter(t->state),
                    t->cpu_last > 100 ? 100 : t->cpu_last,
                    t->stack_size,
                    t->proc ? "ring3" : "task ",
+                   res, sw,
                    t->name,
                    (t == task_current()) ? " *" : "");
         t = t->next;
@@ -2615,14 +2631,16 @@ static void kitchen_frame(uint32_t frames) {
     t_puts("\n\n");
 
     t_color(VGA_YELLOW, VGA_BLACK);
-    t_puts("  ID  ST  CPU%  STACK  KIND   NAME\n");
+    t_puts("  ID  ST  CPU%  STACK  KIND    RES  SWAP  NAME\n");
     t_color(VGA_LIGHT_GREY, VGA_BLACK);
     task_t *head = task_list_head(), *t = head;
     if (head) do {
         if (t_row() >= rows - 1) break;              /* keep it on one screen */
-        t_printf("  %2u   %c  %3u%%  %5u  %s   %s%s\n", t->id, task_state_letter(t->state),
+        char res[8] = "    -", sw[8] = "    -";
+        if (t->proc) { fmt_u5(res, t->proc->upages); fmt_u5(sw, t->proc->swapped); }
+        t_printf("  %2u   %c  %3u%%  %5u  %s  %s %s  %s%s\n", t->id, task_state_letter(t->state),
                    t->cpu_last > 100 ? 100 : t->cpu_last, t->stack_size,
-                   t->proc ? "ring3" : "task ", t->name, t == task_current() ? " *" : "");
+                   t->proc ? "ring3" : "task ", res, sw, t->name, t == task_current() ? " *" : "");
         t = t->next;
     } while (t != head);
 }

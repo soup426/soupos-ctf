@@ -256,6 +256,7 @@ int usermode_run(proc_t *pr) {
 
     pr->upages = 0;
     pr->demand_pages = 0;     /* a reused slot must not carry the last program's counts */
+    pr->swapped      = 0;
     pr->stack_pages  = 0;
     pr->brk    = USER_HEAP;
     /* From 3 up only: 0-2 may hold the stdin/stdout the spawner bound (a pipe
