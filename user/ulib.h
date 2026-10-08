@@ -17,6 +17,8 @@ void *sys_sbrk(int incr);
 int  sys_args (char *buf, int max);
 void sys_yield(void);
 unsigned sys_ticks(void);            /* uptime in 100 Hz PIT ticks */
+/* Entry `index` of directory `path`: 1 written to *out, 0 past the end, -1 error. */
+int  sys_readdir(const char *path, int index, udirent_t *out);
 __attribute__((noreturn)) void sys_exit(int code);
 
 /* conveniences */

@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.43.0
+Current version: v0.44.0
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,19 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.44.0 (2026-10-07)  — PROGRAMS CAN READ DIRECTORIES
+  Fifth queue, item 5.
+  - SYS_READDIR (9): a path, an index and a udirent_t (name, size, is_dir);
+    1 for an entry, 0 past the end, -1 for an error. The path is copied out
+    of user memory a byte at a time, each byte checked, and the listing is
+    made into a per-call allocation rather than a static, because two
+    programs may list at once. The name is the long one when there is one.
+  - ls.elf lists a directory from ring 3. scripts/ls-test.sh (in check.sh)
+    runs it on the root, then has mtools list the same image: all 44
+    entries agree on name, size and type, long names included, and a
+    missing directory is an error rather than an empty listing. The boot
+    segment checks it ran and saw HELLO.TXT at 47 bytes. Gate 97.
 
 (2026-10-07, no version)  — QUEUE ITEM 5.4 CLOSED BY MEASUREMENT
   Interrupt-driven DMA completion would save ~4 status polls a request

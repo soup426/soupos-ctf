@@ -80,7 +80,7 @@ Measure idle% during the swap greedy run and during fatstress before and after.
 The fault path runs with interrupts off, so this is also the place to decide,
 with a measurement, whether swap I/O should turn them on.
 
-## 5. Programs can read directories
+## 5. Programs can read directories — DONE v0.44.0 (SYS_READDIR, ls.elf, agrees with mtools)
 
 Ring-3 programs can open, read and write files but cannot list a directory,
 so `ls` can only ever be a shell builtin. A `SYS_READDIR` returning one entry

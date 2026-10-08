@@ -21,6 +21,7 @@ gate_drive \
     "cook crash.elf" "WAIT:2" \
     "cook deep.elf" "WAIT:3" \
     "cook hotcold.elf" "WAIT:3" \
+    "cook ls.elf /" "WAIT:2" \
     "cook deep.elf forever" "WAIT:3" \
     "cook hello.elf" "WAIT:2" "cook hello.elf" "WAIT:2"
 
@@ -64,6 +65,10 @@ check "running off the stack hits the guard" '\[user\] /deep\.elf: stack overflo
 # fetches back 1,200 pages; approximate LRU fetches back 400 (one round's
 # worth, at the start). The bound sits between them.
 check "a working set survives a sweep" 'HOTCOLD done ok'
+# A ring-3 program can list a directory (SYS_READDIR). ls-test.sh compares
+# the whole listing with mtools; here, that it ran and saw a known file.
+check "a program lists a directory" 'LS f 47 HELLO.TXT'
+check "and reaches the end of it" 'LS end [0-9]+ entries'
 hc_in=$(grep -oE '\[swap\] /hotcold\.elf: [0-9]+ pages out, [0-9]+ back in' "$LOG" | grep -oE '[0-9]+ back in' | grep -oE '^[0-9]+')
 if [ -n "$hc_in" ] && [ "$hc_in" -lt 600 ]; then
     echo "  ok    the victim policy keeps a working set ($hc_in pages back in; FIFO took 1200)"

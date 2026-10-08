@@ -480,6 +480,40 @@ void syscall_dispatch(registers_t *r) {
             r->eax = 0;
             break;
 
+        case SYS_READDIR: {
+            /* Entry `index` of a directory. The path is copied out of user
+             * memory a byte at a time, each byte checked, and the listing is
+             * made into a per-call allocation, not a static: two programs may
+             * be listing at once. Index past the end gives 0, so a program
+             * loops until it sees that. */
+            char path[FAT_PATH_MAX];
+            uint32_t up = r->ebx, i = 0;
+            for (; i < sizeof(path) - 1; i++) {
+                if (!user_ok(up + i, 1)) { r->eax = (uint32_t)-1; goto rd_done; }
+                path[i] = *(const char *)(up + i);
+                if (!path[i]) break;
+            }
+            path[i] = '\0';
+            if (!user_ok(r->edx, sizeof(udirent_t))) { r->eax = (uint32_t)-1; break; }
+            fat_entry_t *list = kmalloc(FAT_LS_MAX * sizeof(fat_entry_t));
+            if (!list) { r->eax = (uint32_t)-1; break; }
+            int n = fat_ls(path[0] ? path : "/", list, FAT_LS_MAX);
+            uint32_t idx = r->ecx;
+            if (n < 0)                 r->eax = (uint32_t)-1;
+            else if (idx >= (uint32_t)n) r->eax = 0;
+            else {
+                udirent_t *out = (udirent_t *)r->edx;
+                const char *nm = fat_display_name(&list[idx]);
+                uint32_t k = 0;
+                for (; nm[k] && k < sizeof(out->name) - 1; k++) out->name[k] = nm[k];
+                out->name[k] = '\0';
+                out->size   = list[idx].size;
+                out->is_dir = (list[idx].attr & FAT_ATTR_DIR) ? 1 : 0;
+                r->eax = 1;
+            }
+            kfree(list);
+            rd_done: break;
+        }
         case SYS_TICKS:                   /* uptime in 100 Hz PIT ticks */
             r->eax = timer_get_ticks();
             break;

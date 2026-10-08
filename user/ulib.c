@@ -47,6 +47,12 @@ void sys_yield(void) {
     __asm__ volatile ("int $0x80" : : "a"(SYS_YIELD));
 }
 
+int sys_readdir(const char *path, int index, udirent_t *out) {
+    int ret;
+    __asm__ volatile ("int $0x80" : "=a"(ret) : "a"(SYS_READDIR), "b"(path), "c"(index), "d"(out) : "memory");
+    return ret;
+}
+
 unsigned sys_ticks(void) {
     unsigned ret;
     __asm__ volatile ("int $0x80" : "=a"(ret) : "a"(SYS_TICKS));
