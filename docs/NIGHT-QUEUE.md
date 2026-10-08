@@ -61,7 +61,7 @@ side of a pipe is the shell itself, reading the program's output as its
 input (take reads the pipe, not the keyboard). Compare with bash's
 `cat F | while read line; do echo got $line; done`.
 
-## 5. sift -n and -o
+## 5. sift -n and -o — DONE v0.60.35
 
 -n puts the line number before each line, -o prints only the matching part
 (each match on a line of its own). Compare with the host's grep.
