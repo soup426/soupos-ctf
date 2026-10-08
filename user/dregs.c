@@ -3,9 +3,13 @@
  *   cook dregs.elf RECIPE.TXT         the last 10 lines
  *   cook dregs.elf -n 3 RECIPE.TXT    the last 3
  *
- * The whole input is read into memory (a pipe cannot be read backwards),
- * then the last N lines are found from the end. A last line with no
- * newline counts as a line and comes out with none, as GNU tail does.
+ * A pipe cannot be read backwards, so the input is read forwards and only
+ * what could still be among the last N lines is kept (v0.60.11): when the
+ * buffer fills, everything before the start of the last N lines is dropped
+ * and the rest moved down. It grows only when N lines take most of it, so
+ * 14 MB through a pipe needs no more than the lines it prints (it used to
+ * keep it all, and that much filled swap). A last line with no newline
+ * counts as a line and comes out with none, as GNU tail does.
  */
 #include "ulib.h"
 
@@ -14,6 +18,20 @@ static int to_int(const char *s, int *out) {
     for (; *s >= '0' && *s <= '9'; s++) { v = v * 10 + (*s - '0'); any = 1; }
     if (!any || *s) return -1;
     *out = v; return 0;
+}
+
+/* Where the last `want` lines of buf[0..len) start. A final newline ends the
+ * last line rather than starting an empty one, so it is skipped first; an
+ * unfinished last line counts as one, which keeps a line too many at worst. */
+static int last_lines(const char *buf, int len, int want) {
+    int i = len;
+    if (i > 0 && buf[i - 1] == '\n') i--;
+    int lines = 0;
+    while (i > 0) {
+        if (buf[i - 1] == '\n' && ++lines == want) break;
+        i--;
+    }
+    return i;
 }
 
 int main(void) {
@@ -29,30 +47,30 @@ int main(void) {
         fd = sys_open(tok[t], O_READ);
         if (fd < 0) { print("dregs: cannot open "); print(tok[t]); print("\n"); return 1; }
     }
-    /* Read it all: grow by doubling (the bump allocator keeps the old). */
-    int cap = 4096, len = 0, got;
-    char *all = malloc((unsigned)cap);
+    int cap = 65536, len = 0, got;
+    char *buf = malloc((unsigned)cap);
     for (;;) {
         if (len == cap) {
-            char *bigger = malloc((unsigned)(cap * 2));
-            for (int i = 0; i < len; i++) bigger[i] = all[i];
-            all = bigger; cap *= 2;
+            int cut = want ? last_lines(buf, len, want) : len;
+            if (cut >= cap / 2) {
+                for (int i = cut; i < len; i++) buf[i - cut] = buf[i];
+                len -= cut;
+            } else {
+                /* The last N lines fill most of the buffer by themselves:
+                 * grow, rather than move nearly all of it for every small
+                 * read (the bump allocator keeps the old one, so only then). */
+                char *bigger = malloc((unsigned)(cap * 2));
+                for (int i = 0; i < len; i++) bigger[i] = buf[i];
+                buf = bigger; cap *= 2;
+            }
         }
-        got = sys_read(fd, all + len, cap - len);
+        got = sys_read(fd, buf + len, cap - len);
         if (got <= 0) break;
         len += got;
     }
     if (fd != FD_STDIN) sys_close(fd);
     if (want == 0 || len == 0) return 0;
-    /* From the end: a final newline ends the last line rather than starting
-     * an empty one, so skip it before counting. */
-    int i = len;
-    if (all[i - 1] == '\n') i--;
-    int lines = 0;
-    while (i > 0) {
-        if (all[i - 1] == '\n' && ++lines == want) break;
-        i--;
-    }
-    sys_write(FD_STDOUT, all + i, len - i);
+    int i = last_lines(buf, len, want);
+    sys_write(FD_STDOUT, buf + i, len - i);
     return 0;
 }

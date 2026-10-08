@@ -49,7 +49,7 @@ one fits (a builtin, or a program on the disk); after a later word it
 finishes a path in its bowl. More than one fit: complete the part they
 share, and a second Tab lists them. Test by typing.
 
-## 5. dregs keeps only the lines it will print
+## 5. dregs keeps only the lines it will print — DONE v0.60.11
 
 Measured 2026-10-08: `cook tally.elf 1000000 | label.elf | dregs.elf -n 1`
 (about 8 MB through the pipe) fills swap ("[swap] full: 4096 pages") and

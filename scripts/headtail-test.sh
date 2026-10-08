@@ -12,7 +12,8 @@ seq 1 25 | sed 's/^/line /' > "$WORK/F1.TXT"                      # 25 lines
 printf 'one\ntwo\nthree, no newline' > "$WORK/F2.TXT"              # 3 lines, no final newline
 : > "$WORK/F3.TXT"                                                 # empty
 seq 1 2000 | sed 's/$/ of the big one/' > "$WORK/BIG.TXT"         # past tail's first 4 KB
-for f in F1 F2 F3 BIG; do mcopy -i "$WORK/disk.img" "$WORK/$f.TXT" "::/$f.TXT"; done
+{ echo first; head -c 300000 /dev/zero | tr '\0' w; echo; echo last; } > "$WORK/WIDE.TXT"   # one 300 KB line
+for f in F1 F2 F3 BIG WIDE; do mcopy -i "$WORK/disk.img" "$WORK/$f.TXT" "::/$f.TXT"; done
 # name # soupOS command # host command  (# because the commands contain |)
 CASES=(
   "1#skim.elf /F1.TXT#head F1.TXT"
@@ -28,9 +29,12 @@ CASES=(
   "11#spoon.elf /F1.TXT | skim.elf -n 4#head -n 4 F1.TXT"
   "12#spoon.elf /BIG.TXT | dregs.elf -n 3#tail -n 3 BIG.TXT"
   "13#skim.elf -n 1500 /BIG.TXT | dregs.elf -n 2#head -n 1500 BIG.TXT | tail -n 2"
+  "14#tally.elf 1000000 | label.elf | dregs.elf -n 3#seq 1000000 | nl -ba | tail -n 3"
+  "15#dregs.elf -n 2 /WIDE.TXT#tail -n 2 WIDE.TXT"
+  "16#spoon.elf /WIDE.TXT | dregs.elf -n 1#tail -n 1 WIDE.TXT"
 )
 keys=("headchef" "rosemary" "WAIT:1")
-for c in "${CASES[@]}"; do IFS='#' read -r n soup host <<< "$c"; keys+=("cook $soup > /H$n.TXT" "WAIT:2"); done
+for c in "${CASES[@]}"; do IFS='#' read -r n soup host <<< "$c"; keys+=("cook $soup > /H$n.TXT" "UNTIL:headchef@soupOS:/> "); done
 qemu-system-i386 -accel kvm -cpu host -drive "file=$WORK/disk.img,format=raw,if=ide,index=0" \
     -cdrom soupOS.iso -boot d -m 128M -no-reboot -no-shutdown -display none \
     -serial "file:$WORK/serial.log" -monitor "unix:$WORK/mon.sock,server,nowait" >/dev/null 2>&1 &
@@ -44,6 +48,6 @@ for c in "${CASES[@]}"; do
     ( cd "$WORK" && bash -c "$host" < /dev/null ) > "$WORK/want$n"
     if ! cmp -s "$WORK/got$n" "$WORK/want$n"; then echo "        differs: $soup  (host: $host)"; bad=1; fi
 done
-[ "$bad" = 0 ] && echo "  ok    all ${#CASES[@]} forms match the host's head and tail byte for byte (short files, no final newline, empty, past 4 KB, -n 0, pipes)" \
+[ "$bad" = 0 ] && echo "  ok    all ${#CASES[@]} forms match the host's head and tail byte for byte (short files, no final newline, empty, past 4 KB, -n 0, pipes, a million lines, a 300 KB line)" \
     || { echo "  FAIL  head/tail differ from the host"; fail=1; }
 exit $fail

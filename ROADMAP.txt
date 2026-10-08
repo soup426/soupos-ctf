@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.10
+Current version: v0.60.11
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,17 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.11 (2026-10-08)  — DREGS KEEPS ONLY THE DREGS
+  - dregs.elf read its whole input into a buffer that doubled, and the bump
+    allocator kept every old copy: `tally.elf 1000000 | label.elf | dregs.elf
+    -n 3` (14 MB) filled swap and dregs died ("could not swap ... back in").
+    It now keeps only what could still be among the last N lines, dropping
+    the rest whenever its 64 KB buffer fills, and grows only when N lines
+    take most of the buffer by themselves.
+  - headtail-test.sh has that case (it failed before the change) and a
+    300 KB line from a file and through a pipe; it waits for each prompt
+    with UNTIL rather than a fixed two seconds.
 
 v0.60.10 (2026-10-08)  — TAB KNOWS WHERE IT IS
   - Tab used to offer the builtins and the current bowl's names for the
