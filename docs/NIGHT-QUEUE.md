@@ -35,7 +35,7 @@ builtins, inspect (type) and dish -v.
 
 ---
 
-## 1. A quoted glob character is itself, in patterns
+## 1. A quoted glob character is itself, in patterns — DONE v0.60.69
 
 ${NAME#"*"}, ${NAME/"?"/x} and case patterns ("*") take a quoted * ? [
 as glob syntax today (v0.60.64 wrote it down); sh takes it as the

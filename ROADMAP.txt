@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.68
+Current version: v0.60.69
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,16 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.69 (2026-10-08)  — A QUOTED * IS A *
+  - In ${NAME#pat} (and ##, %, %%), ${NAME/pat/rep} and case patterns, a
+    quoted * ? [ ] is the character itself and the rest of the pattern is
+    still a glob, as sh: ${v#"a*"}, "$p", \*, case "a"*) and a"["b). Case
+    used to take a pattern with any quote in it as wholly literal. The gap
+    v0.60.64 wrote down is closed.
+  - glob_match takes \x as x itself; glob_pattern makes an expanded
+    pattern ready for it (quoted glob characters escaped, quotes dropped).
+  - scripts/quoteglob-test.sh compares eight lines with bash.
 
 v0.60.68 (2026-10-08)  — HERE-DOCUMENTS AT THE PROMPT
   - A typed line with <<WORD asks for the document a line at a time with

@@ -1538,6 +1538,10 @@ static void unquote(char *w) {
  * them; a ] first is one of the set; a [ with no ] is just a [). */
 static int glob_match(const char *pat, const char *name) {
     if (*pat == '\0') return *name == '\0';
+    if (*pat == '\\' && pat[1]) {                 /* \x is x itself (v0.60.69) */
+        if (*name != pat[1]) return 0;
+        return glob_match(pat + 2, name + 1);
+    }
     if (*pat == '[') {
         const char *p = pat + 1;
         int neg = 0;
@@ -1565,6 +1569,22 @@ static int glob_match(const char *pat, const char *name) {
     if (!*name) return 0;
     if (*pat == '?' || *pat == *name) return glob_match(pat + 1, name + 1);
     return 0;
+}
+/* An expanded pattern made ready for glob_match (v0.60.69): what was
+ * quoted is itself, so a quoted * ? [ ] or \ gets a \ before it; the quotes
+ * go; a \ outside them (out of a value) stays, an escape as in sh. */
+static void glob_pattern(char *w) {
+    char tmp[INPUT_MAX]; int o = 0; char q = 0;
+    for (const char *r = w; *r && o < INPUT_MAX - 2; r++) {
+        if (q) {
+            if (*r == q) { q = 0; continue; }
+            if (*r == '*' || *r == '?' || *r == '[' || *r == ']' || *r == '\\') tmp[o++] = '\\';
+            tmp[o++] = *r;
+        } else if (*r == '\'' || *r == '"') q = *r;
+        else tmp[o++] = *r;
+    }
+    tmp[o] = '\0';
+    strcpy(w, tmp);
 }
 static int byte_cmp(const char *a, const char *b) {
     while (*a && *a == *b) { a++; b++; }
@@ -5771,7 +5791,7 @@ static int expand_into(const char *seg, char *ex, int max) {
                 }
                 raw[rn] = '\0';
                 if (expand_into(raw, pat, INPUT_MAX)) cut = 1;
-                unquote(pat);
+                glob_pattern(pat);
                 int rl = at < j ? j - at - 1 : 0;
                 if (rl > INPUT_MAX - 1) rl = INPUT_MAX - 1;
                 memcpy(raw, seg + at + 1, (uint32_t)rl); raw[rl] = '\0';
@@ -5831,7 +5851,7 @@ static int expand_into(const char *seg, char *ex, int max) {
                 int wl = j - wstart < INPUT_MAX - 1 ? j - wstart : INPUT_MAX - 1;
                 memcpy(word, seg + wstart, (uint32_t)wl); word[wl] = '\0';
                 if (expand_into(word, pat, INPUT_MAX)) cut = 1;
-                unquote(pat);
+                glob_pattern(pat);
                 const char *v = val ? val : "";
                 int L = (int)strlen(v), from = 0, to = L;            /* the kept part: v[from..to) */
                 if (op == 'H' || op == 'h') {                        /* a prefix v[0..n) */
@@ -6911,9 +6931,10 @@ static void exec_range(lseg_t *sg, int from, int to, int depth) {
                         while (*alt == ' ') alt++;
                         char *ae = alt + strlen(alt);
                         while (ae > alt && ae[-1] == ' ') *--ae = '\0';
-                        int quoted = strchr(alt, '\'') || strchr(alt, '"');
-                        if (quoted) { unquote(alt); matched = str_eq(alt, word); }
-                        else matched = glob_match(alt, word);
+                        char gp[INPUT_MAX];                   /* "a"* is a then anything (v0.60.69) */
+                        strncpy(gp, alt, sizeof(gp) - 1); gp[sizeof(gp) - 1] = '\0';
+                        glob_pattern(gp);
+                        matched = glob_match(gp, word);
                         alt = next;
                     }
                     if (matched) exec_range(sg, j + 1, b, depth + 1);
