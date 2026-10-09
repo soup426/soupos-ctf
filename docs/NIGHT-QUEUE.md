@@ -35,7 +35,7 @@ and here-documents inside a script's multi-line blocks.
 
 ---
 
-## 1. taste and [ ... ] as builtins
+## 1. taste and [ ... ] as builtins — DONE v0.60.79
 
 Conditions start a program today (`cook taste.elf`). taste (test) as a
 builtin, the same operators as taste.elf, and `[ EXPR ]` the same with a

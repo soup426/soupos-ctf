@@ -12,7 +12,7 @@ cd "$(dirname "$0")/.."
 HIDDEN="cat special"          # the CTF build's own, deliberately unlisted
 fail=0
 m=$(awk '/^static void cmd_menu\(void\) \{/,/^}/' src/shell.c | grep -o '{0, "    [a-z][a-z0-9_]*' | awk '{print $3}' | sort -u)
-d=$(awk '/^static void dispatch\(const char \*buf\) \{/,/^}/' src/shell.c | grep -o '(p, "[a-z]*' | sed 's/(p, "//' | sort -u)
+d=$(awk '/^static void dispatch\(const char \*buf\) \{/,/^}/' src/shell.c | grep -o '(p, "[a-z]*' | sed 's/(p, "//' | grep -v '^$' | sort -u)   # ([ is not a word: v0.60.79)
 for h in $HIDDEN; do d=$(echo "$d" | grep -vx "$h"); done
 missing=$(comm -23 <(echo "$m") <(echo "$d") | tr '\n' ' ')
 unlisted=$(comm -13 <(echo "$m") <(echo "$d") | tr '\n' ' ')

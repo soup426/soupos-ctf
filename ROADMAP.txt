@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.78
+Current version: v0.60.79
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,16 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.79 (2026-10-09)  — TASTE AND [ ] AS BUILTINS
+  - `taste EXPR` and `[ EXPR ]` are taste.elf's test without starting a
+    program: one word, !, -e -f -d (as SYS_STAT sees a path), -z -n, = !=,
+    -eq -ne -lt -le -gt -ge (64-bit now); 0 true, 1 false, 2 for a usage
+    error, a bad integer or a [ without its ]. A quoted "" is a word, so
+    [ -z "" ] is true. `cook taste.elf` still works.
+  - menu-test.sh skips the empty name its letters-only pattern takes from
+    `(p, "[`.
+  - scripts/tastebi-test.sh compares eleven lines with bash's test and [.
 
 v0.60.78 (2026-10-08)  — "$@" AND "$*"
   - "$@" was one word: its arguments were joined inside the quote, so

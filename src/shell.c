@@ -883,6 +883,7 @@ static void cmd_menu(void) {
         {0, "    inspect [-t] NAME  - what NAME is: keyword, function, builtin or program"},
         {0, "    seal NAME[=value]  - a variable nothing may change (sh's readonly)"},
         {0, "    pluck OPTS NAME    - the next -x option of $1.. (sh's getopts)"},
+        {0, "    taste EXPR, [ EXPR ] - a condition: -f -d -e -z -n = != -eq -lt ... (sh's test)"},
         {0, "    ! command          - run it and turn its status round"},
         {0, "    exit [N]           - leave a script (at the prompt, clockout)"},
         {0, "    kill <id>          - stop a background task"},
@@ -3145,6 +3146,7 @@ static void cmd_shift(const char *args);                  /* beside it (v0.60.59
 static void cmd_inspect(const char *args);                /* beside it (v0.60.72) */
 static void cmd_seal(const char *args);                   /* beside it (v0.60.76) */
 static void cmd_pluck(const char *args);                  /* beside it (v0.60.77) */
+static void cmd_taste(const char *args, int bracket);     /* beside it (v0.60.79) */
 static int status_before;
 static void cmd_read(const char *args);  /* beside run_line (v0.60.4) */
 
@@ -4651,7 +4653,7 @@ static const char *const cmd_names[] = {
     "takeout", "bgclock", "yieldbg", "spinbg", "sleeptest", "vfstest",
     "dmesg", "pwd", "cd", "mkbowl", "rmbowl", "bowltest",
     "whoami", "roster", "clockout", "hire", "fire", "perms", "secret",
-    "break", "continue", "return", "exit", "inspect", "seal", "pluck",
+    "break", "continue", "return", "exit", "inspect", "seal", "pluck", "taste", "[",
     "preempttest", "vmtest", "vgastress", "fatstress",
 };
 #define CMD_COUNT  (int)(sizeof(cmd_names) / sizeof(cmd_names[0]))
@@ -4896,6 +4898,8 @@ static void dispatch(const char *buf) {
     else if (str_eq(p, "inspect") || str_startswith(p, "inspect ")) cmd_inspect(p + 7);
     else if (str_eq(p, "seal") || str_startswith(p, "seal ")) cmd_seal(p + 4);
     else if (str_eq(p, "pluck") || str_startswith(p, "pluck ")) cmd_pluck(p + 5);
+    else if (str_eq(p, "taste") || str_startswith(p, "taste ")) cmd_taste(p + 5, 0);
+    else if (str_eq(p, "[") || str_startswith(p, "[ ")) cmd_taste(p + 1, 1);
     else if (str_eq(p, "break") || str_startswith(p, "break ")) cmd_break(p + 5, 0);
     else if (str_eq(p, "return") || str_startswith(p, "return ")) cmd_return(p + 6, 0);
     else if (str_eq(p, "exit") || str_startswith(p, "exit ")) cmd_return(p + 4, 1);
@@ -6734,6 +6738,85 @@ static int loop_after_body(shell_t *me) {
     }
     return 0;
 }
+/* taste EXPR and [ EXPR ] (v0.60.79): taste.elf's test, without starting
+ * a program. One word is true if it is not empty; ! in front turns it
+ * round; -e -f -d FILE (as SYS_STAT sees it: a file the cook may not read
+ * is there, one behind a bowl it may not search is not); -z -n STRING;
+ * S1 = S2, S1 != S2; -eq -ne -lt -le -gt -ge on integers. 0 true, 1
+ * false, 2 for a usage error or a bad integer, as test. [ wants its ]. */
+static int taste_path(const char *w, int want_dir) {     /* -1 either, 0 file, 1 bowl */
+    if (!*w) return 0;
+    char path[FAT_PATH_MAX];
+    resolve_path(w, path);
+#ifdef NO_CHALLENGE
+    if (!users_reach(path)) return 0;
+#endif
+    uint8_t owner, mode;
+    if (!fat_exists(path) || fat_stat(path, &owner, &mode) < 0) return 0;
+    int dir = fat_is_dir(path) ? 1 : 0;
+    return want_dir < 0 || dir == want_dir;
+}
+static int taste_int(const char *s, long long *out) {
+    int neg = 0, any = 0; long long v = 0;
+    while (*s == ' ') s++;
+    if (*s == '-' || *s == '+') { neg = *s == '-'; s++; }
+    for (; *s >= '0' && *s <= '9'; s++) { v = v * 10 + (*s - '0'); any = 1; }
+    if (!any || *s) return -1;
+    *out = neg ? -v : v;
+    return 0;
+}
+static int taste_eval(char (*a)[INPUT_MAX], int n) {     /* 1 true, 0 false, -1 usage */
+    if (n == 0) return 0;
+    if (n > 1 && str_eq(a[0], "!")) { int r = taste_eval(a + 1, n - 1); return r < 0 ? r : !r; }
+    if (n == 1) return a[0][0] != '\0';
+    if (n == 2) {
+        if (str_eq(a[0], "-z")) return a[1][0] == '\0';
+        if (str_eq(a[0], "-n")) return a[1][0] != '\0';
+        if (str_eq(a[0], "-e")) return taste_path(a[1], -1);
+        if (str_eq(a[0], "-f")) return taste_path(a[1], 0);
+        if (str_eq(a[0], "-d")) return taste_path(a[1], 1);
+        return -1;
+    }
+    if (n == 3) {
+        if (str_eq(a[1], "="))  return str_eq(a[0], a[2]);
+        if (str_eq(a[1], "!=")) return !str_eq(a[0], a[2]);
+        const char *op = a[1];
+        if (!(str_eq(op, "-eq") || str_eq(op, "-ne") || str_eq(op, "-lt") || str_eq(op, "-le") || str_eq(op, "-gt") || str_eq(op, "-ge"))) return -1;
+        long long x, y;
+        if (taste_int(a[0], &x) < 0 || taste_int(a[2], &y) < 0) return -1;
+        if (str_eq(op, "-eq")) return x == y;
+        if (str_eq(op, "-ne")) return x != y;
+        if (str_eq(op, "-lt")) return x < y;
+        if (str_eq(op, "-le")) return x <= y;
+        if (str_eq(op, "-gt")) return x > y;
+        return x >= y;
+    }
+    return -1;
+}
+static void cmd_taste(const char *args, int bracket) {
+    shell_t *me = cur_shell();
+    char (*w)[INPUT_MAX] = kmalloc(sizeof(char[INPUT_MAX]) * 8);
+    if (!w) { me->last_status = 2; return; }
+    int n = 0, over = 0;
+    const char *a = args;
+    while (*a == ' ') a++;
+    while (*a) {                                   /* "" is a word too */
+        if (n == 8) { over = 1; break; }
+        a = first_word(a, w[n], INPUT_MAX);
+        n++;
+        while (*a == ' ') a++;
+    }
+    const char *who = bracket ? "[" : "taste";
+    if (bracket) {
+        if (!n || !str_eq(w[n - 1], "]")) { t_puts("  [: missing `]'\n"); me->last_status = 2; kfree(w); return; }
+        n--;
+    }
+    int r = over ? -1 : taste_eval(w, n);
+    if (r < 0) { t_printf("  %s: usage error\n", who); me->last_status = 2; }
+    else me->last_status = r ? 0 : 1;
+    kfree(w);
+}
+
 /* pluck OPTSTRING NAME [ARGS] (v0.60.77): sh's getopts. Each call takes
  * the next option from ARGS, or from $1..$9 without them: NAME is its
  * letter, OPTARG its argument when OPTSTRING has a : after the letter
