@@ -1,10 +1,10 @@
 # Night queue
 
-Forty-third queue. The first forty-two are in `docs/queue-archive-2026-10-0*.md`.
+Forty-fourth queue. The first forty-three are in `docs/queue-archive-2026-10-0*.md`.
 Items wait on a person in three archives (the seventh, the thirteenth and
-the twenty-fourth). Each item below was checked against the menu and the
-programs first. Two pieces of syntax scripts lean on ([[ ]] and function),
-the shell's own switches (set), the jobs list, xargs, and shuf.
+the twenty-fourth). Checked against the menu and the programs first: no
+regular expressions anywhere yet (sift is fixed strings, [[ =~ ]] was left
+out), no read -a or mapfile, no diff, split or expr.
 
 ## Standing rules
 
@@ -38,53 +38,49 @@ the shell's own switches (set), the jobs list, xargs, and shuf.
 
 ---
 
-## 1. [[ EXPR ]] — DONE v0.60.113 (no =~)
+## 1. Regular expressions, and sift -E
 
-bash's conditional command, a keyword so it keeps its name: no word
-splitting or globbing of what is inside, `==` and `!=` against a glob
-pattern (an unquoted right side is a pattern, a quoted one is text), `<`
-and `>` comparing strings, `&&`, `||`, `!` and ( ) grouping, and taste's
-unary and binary tests (-f -d -e -z -n -eq ...). `=~` only if it measures
-cheap (sift has no regex): otherwise left out and said so. Test against
-bash: a variable holding spaces unquoted, patterns, && || ! ( ), in if,
-while and with && after it.
+A small POSIX ERE matcher in one file both sides can build (user/rx.c,
+included by programs and by the kernel): literals, `.`, `[...]` with ranges
+and `[^...]`, `*` `+` `?`, `{m,n}`, `^` `$`, `|`, `( )`, `\` escapes; a
+backtracking matcher is fine at these sizes, with a step limit so a bad
+pattern cannot hang a program. `sift -E PATTERN` uses it, with -v -c -i -n
+-o as sift already has them. Test against GNU grep -E over a list of
+patterns and lines (probe with `command grep`, not the ugrep wrapper).
 
-## 2. function NAME { ...; } and function NAME() { ...; } — DONE v0.60.114
+## 2. [[ STRING =~ REGEX ]] and BASH_REMATCH
 
-The other way bash writes a function; a keyword, so it keeps its name.
-Both forms, one line and over several, in a recipe, with stash, return
-and $1; inspect says it is a function. Test against bash.
+The same matcher in the shell: status 0/1/2 as bash's, the whole match in
+BASH_REMATCH[0] and each ( ) group in [1].. (an array), an unquoted right
+side a regex and a quoted one literal text. Test against bash.
 
-## 3. temper (set) — DONE v0.60.115
+## 3. take -a NAME and stock NAME (read -a, mapfile)
 
-sh's set under a kitchen name: `temper -e` / `+e` (errexit, which today
-only `follow -e` turns on), `-u` (an unset variable is an error, status 1
-and the command does not run), `-x` (each command written to stderr with
-a +, after expansion), `temper -- A B C` and `temper A B C` setting $1..
-and $#, `temper` alone listing variables. Test each against bash's set.
+`take -a NAME` reads a line's words into the array NAME. `stock [-t]
+NAME` (mapfile under a kitchen name) reads every line of its input into
+NAME, -t dropping the newlines. Both from a pipe (as runner reads one)
+and from <<<. Test against bash.
 
-## 4. rail (jobs) — DONE v0.60.116
+## 4. spot.elf (diff)
 
-The jobs this shell put in the background or set aside, as bash's jobs:
-`[N]+  Running   cmd &`, `-` for the one before, Stopped and Done (a done
-job shown once, then gone), -p for the PIDs only. Measure what job_add
-and the prompt's reporting already keep.
+What changed between two files, in diff's normal format (`2c2`, `< `,
+`---`, `> `, `a` and `d` with their ranges), from a longest common
+subsequence; status 0 same, 1 different, 2 trouble. Compare with GNU diff
+on edits at the start, middle and end, insertions, deletions, an empty
+file, and identical files.
 
-## 5. runner CMD (xargs) — DONE v0.60.117
+## 5. carve.elf (split)
 
-Lines (or blank-separated words) from stdin added as arguments to CMD,
-as xargs: in batches that fit (a program's arguments are 128 bytes at
-most), -n N per command, -I {} once per line with {} replaced; status
-123 if any run failed, as GNU. Measure first how a builtin reads a pipe
-(`| while take` works). Test against xargs with programs and builtins.
+A file (or stdin) into pieces: -l N lines (1000 by default) or -b N
+bytes, named PREFIX then aa, ab, ... (x by default). Compare the pieces
+with GNU split's byte for byte.
 
-## 6. tumble.elf (shuf) — DONE v0.60.118
+## 6. reckon.elf (expr)
 
-The lines of a file or stdin in a random order, as shuf; -n N the first N
-of them; -i LO-HI the numbers instead. Ring 3 has no randomness today:
-add SYS_RANDOM from the kernel's entropy pool (what $RANDOM uses). Test
-properties, not bytes: every line out once, -n N lines, two runs differ,
-and the CHALLENGE=1 build unaffected.
+expr under a kitchen name: + - * / % on integers, = != < <= > >= (as
+numbers when both are, else as text), | and &, length, substr, index,
+and STRING : REGEX through item 1's matcher. Output and status (0, 1 for
+a null or 0 result, 2 for a bad expression) as GNU's expr. Compare.
 
 ## 7. Doom at the framebuffer's own resolution — DEFERRED
 
