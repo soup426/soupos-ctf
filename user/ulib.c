@@ -107,6 +107,26 @@ void sys_sleep(unsigned ms) {
     (void)ret;
 }
 
+int sys_win_open(int w, int h, const char *title) {
+    int ret;
+    __asm__ volatile ("int $0x80" : "=a"(ret) : "a"(SYS_WIN_OPEN), "b"(w), "c"(h), "d"(title) : "memory");
+    return ret;
+}
+int sys_win_put(int id, const unsigned *px) {
+    int ret;
+    __asm__ volatile ("int $0x80" : "=a"(ret) : "a"(SYS_WIN_PUT), "b"(id), "c"(px) : "memory");
+    return ret;
+}
+int sys_win_event(int id, uwinev_t *ev, unsigned wait_ms) {
+    int ret;
+    __asm__ volatile ("int $0x80" : "=a"(ret) : "a"(SYS_WIN_EVENT), "b"(id), "c"(ev), "d"(wait_ms) : "memory");
+    return ret;
+}
+int sys_win_close(int id) {
+    int ret;
+    __asm__ volatile ("int $0x80" : "=a"(ret) : "a"(SYS_WIN_CLOSE), "b"(id) : "memory");
+    return ret;
+}
 int sys_random(void *buf, int len) {
     int ret;
     __asm__ volatile ("int $0x80" : "=a"(ret) : "a"(SYS_RANDOM), "b"(buf), "c"(len) : "memory");

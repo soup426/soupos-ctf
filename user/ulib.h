@@ -30,6 +30,11 @@ int  sys_readdir(const char *path, int index, udirent_t *out);
 int  sys_unlink(const char *path);      /* 0, or -1 (missing, a bowl, not yours) */
 int  sys_mkdir (const char *path);
 int  sys_stat  (const char *path, ustat_t *out);   /* 0, or -1 (v0.59.0) */
+/* Windows on the desktop (v0.60.146): see SYS_WIN_* in syscall_nr.h. */
+int  sys_win_open (int w, int h, const char *title);           /* an id, or -1 */
+int  sys_win_put  (int id, const unsigned *px);                /* the whole body; 0, or -1 */
+int  sys_win_event(int id, uwinev_t *ev, unsigned wait_ms);    /* 1, 0 none, -1 gone */
+int  sys_win_close(int id);
 __attribute__((noreturn)) void sys_exit(int code);
 
 /* conveniences */

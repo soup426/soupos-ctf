@@ -3,7 +3,7 @@
 ## What this is
 
 soupOS is a 32-bit x86 hobby OS written in C and NASM assembly (currently
-**v0.60.145**; ROADMAP.txt is the authority on the version). It boots via GRUB and runs in protected mode with paging, a
+**v0.60.146**; ROADMAP.txt is the authority on the version). It boots via GRUB and runs in protected mode with paging, a
 physical/heap allocator, and a cooperative scheduler. On top of that:
 
 - **Filesystem**: FAT16 read/write with subdirectories ("bowls") and a VFS shim
@@ -474,6 +474,20 @@ soupOS runs real ring-3 user programs with hardware memory protection.
   copies prove concurrency) and `hog` (loops forever making NO syscalls, so
   only the IRQ kill path can end it). Link them at `USER_BASE` with
   `user/user.ld`; the disk recipe mcopies each one.
+
+## Windows for programs (v0.60.146)
+
+`SYS_WIN_OPEN/PUT/EVENT/CLOSE` (16-19, `syscall_nr.h`, `uwinev_t`) give a
+ring-3 program a window on countertop; `user/frost.elf` (paint) is the
+first user. The calls run on the program's task and only touch a slot in
+countertop.c's `app[]` under `app_mtx`; the desktop loop is the only
+drawer (it shows new slots, repaints dirty ones, closes the windows of
+programs that closed them or ended). PUT copies the program's whole body
+into a kernel buffer (640x480 at most), so nothing is drawn from user
+memory. The close box only sends `WEV_CLOSE`: the program decides. With
+the desktop down every call gives -1. A program in a terminal window
+writes its stderr there, not to serial, so frost-test reads frost's
+`[frost]` lines from the terminal's cells.
 
 ## Networking (`src/rtl8139.c`, `src/net.c`, v0.9.0)
 

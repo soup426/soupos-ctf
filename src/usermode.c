@@ -32,6 +32,7 @@
 #include "task.h"
 #include "timer.h"
 #include "proc.h"
+#include "countertop.h"
 
 /* ---- user address-space layout ----
  *   0xC0000000  program image (PT_LOAD)
@@ -670,6 +671,37 @@ void syscall_dispatch(registers_t *r) {
             r->eax = len;
             break;
         }
+        case SYS_WIN_OPEN: {              /* (v0.60.146) a window on the desktop */
+            char title[FAT_PATH_MAX];
+            if (!pr || copy_user_path(r->edx, title) < 0) { r->eax = (uint32_t)-1; break; }
+            r->eax = (uint32_t)countertop_win_open(pr->pid, (int)r->ebx, (int)r->ecx, title);
+            break;
+        }
+        case SYS_WIN_PUT: {               /* its whole body, copied in: the desktop draws from the copy */
+            int w, h;
+            if (!pr || countertop_win_size(pr->pid, (int)r->ebx, &w, &h) < 0
+                    || !user_ok(r->ecx, (uint32_t)(w * h * 4))) { r->eax = (uint32_t)-1; break; }
+            r->eax = (uint32_t)countertop_win_put(pr->pid, (int)r->ebx, (const uint32_t *)r->ecx);
+            break;
+        }
+        case SYS_WIN_EVENT: {             /* the next event, waiting up to edx ms for one */
+            if (!pr || !user_ok(r->ecx, sizeof(uwinev_t))) { r->eax = (uint32_t)-1; break; }
+            __asm__ volatile ("sti");     /* the timer wakes the sleep, as SYS_SLEEP */
+            uint32_t ms = r->edx > 10000 ? 10000 : r->edx, t0 = timer_get_ticks();
+            uwinev_t ev;
+            int got;
+            for (;;) {
+                got = countertop_win_event(pr->pid, (int)r->ebx, &ev);
+                if (got || pr->killed || pr->stop_pending || (timer_get_ticks() - t0) * 10 >= ms) break;
+                task_sleep(10);
+            }
+            if (got == 1) memcpy((void *)r->ecx, &ev, sizeof(ev));
+            r->eax = (uint32_t)got;
+            break;
+        }
+        case SYS_WIN_CLOSE:
+            r->eax = (uint32_t)(pr ? countertop_win_close(pr->pid, (int)r->ebx) : -1);
+            break;
 
         default:
             r->eax = (uint32_t)-1;

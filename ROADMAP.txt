@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.145
+Current version: v0.60.146
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,23 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.146 (2026-10-09)  — COUNTERTOP: WINDOWS FOR PROGRAMS (STEP 7)
+  - SYS_WIN_OPEN (a width, height and title: an id), SYS_WIN_PUT (the
+    whole body, 0x00RRGGBB, copied into the kernel), SYS_WIN_EVENT (keys
+    while focused; a press, drag and release in the body, in its own
+    pixels; the close box; waiting up to N ms) and SYS_WIN_CLOSE. The
+    calls only fill a slot under a mutex; the desktop's loop draws, and
+    takes a window down when its program closes it or ends (Ctrl-C too).
+    -1 for everything when the desktop is not up. 640x480 at most; the
+    log gives the heap left at each open (7635 KB with one 400x300).
+  - frost.elf: a paint program. A palette of six (white rubs out), drag
+    to draw, c clears, q or the close box ends it; [frost] lines say
+    what it did.
+  - scripts/frost-test.sh: frost from the console says it needs the
+    desktop; on it, the strokes read back pixel by pixel, the clear, the
+    close box, its report in the terminal read against the font, Ctrl-C
+    taking the window down, Leave. Six-wide soak: 6 of 6.
 
 v0.60.145 (2026-10-09)  — COUNTERTOP: A FILES WINDOW (STEP 6)
   - The bar's Files button opens a window on /: its path, then .., its

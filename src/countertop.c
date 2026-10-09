@@ -47,6 +47,12 @@
  * click (or Enter, with the arrows to move) opens: a bowl in the same
  * window, a file in a new terminal with `pour PATH` typed into it, so what
  * may be read is the shell's to decide, as it always is.
+ *
+ * Programs' windows (v0.60.146, step 7). SYS_WIN_OPEN/PUT/EVENT/CLOSE: a
+ * ring-3 program asks for a window, hands over its whole body of pixels,
+ * and reads its events (keys while focused, a press/drag/release in its
+ * body, the close box). Those calls only fill a slot in app[]; this loop
+ * draws. A program's window goes when it closes it or ends (killed too).
  */
 #include "countertop.h"
 #include "fb.h"
@@ -65,6 +71,7 @@
 #include "fat.h"
 #include "users.h"
 #include "keyboard.h"
+#include "syscall_nr.h"
 
 #define MAX_H     1200
 #define BAR_H     24
@@ -168,6 +175,7 @@ typedef struct {
     void *sess;                         /* and the shell session on them */
     int min;                            /* minimised: on the taskbar only */
     struct files *files;                /* a files window's listing, or 0 */
+    int app;                            /* a program's window: its app[] slot, or -1 */
 } win_t;
 static win_t win[MAX_WIN];
 static int order[MAX_WIN], nwin;                 /* z-order, bottom first */
@@ -353,6 +361,126 @@ static void draw_files(const win_t *w, int focused) {
     }
 }
 
+/* ---- windows for ring-3 programs (v0.60.146) ---------------------------- */
+
+/* A program's window is a slot here. The SYS_WIN_* calls run on the
+ * program's task and only touch the slot (under app_mtx); this loop does
+ * all the drawing: it shows a new slot as a window, repaints one whose
+ * pixels changed, queues its events, and closes it when its program has
+ * ended. The pixels are the program's whole body, copied in by
+ * SYS_WIN_PUT; nothing is drawn from user memory. */
+#define APP_MAX  8
+#define APP_MAXW 640
+#define APP_MAXH 480
+#define APP_EVQ  64
+typedef struct {
+    int used, gone;                     /* gone: the desktop left; the program's calls get -1 */
+    uint32_t pid;
+    int w, h, win;                      /* the body's size; its window, -1 until shown */
+    char title[32];
+    uint32_t *px;
+    int dirty;
+    uwinev_t q[APP_EVQ];
+    int qh, qt;
+} app_t;
+static app_t app[APP_MAX];
+static mutex_t app_mtx;
+static int ct_running;                  /* countertop_run is in its loop (under app_mtx) */
+static int app_drag = -1, app_lx, app_ly;  /* a press in a program's body, held: that window */
+
+static void app_free(app_t *a) {        /* app_mtx held */
+    if (a->px) kfree(a->px);
+    memset(a, 0, sizeof(*a));
+    a->win = -1;
+}
+static void app_push(int i, unsigned type, unsigned key, int x, int y, unsigned b) {
+    mutex_lock(&app_mtx);
+    app_t *a = &app[i];
+    int nt = (a->qt + 1) % APP_EVQ;
+    if (a->used && nt != a->qh) {                      /* a full queue drops the newest */
+        uwinev_t *e = &a->q[a->qt];
+        e->type = type; e->key = key; e->x = x; e->y = y; e->buttons = b;
+        a->qt = nt;
+    }
+    mutex_unlock(&app_mtx);
+}
+static app_t *app_mine(uint32_t pid, int id) {    /* app_mtx held */
+    if (id < 0 || id >= APP_MAX) return 0;
+    app_t *a = &app[id];
+    return a->used && !a->gone && a->pid == pid && ct_running ? a : 0;
+}
+
+int countertop_win_open(uint32_t pid, int w, int h, const char *title) {
+    if (w < 1 || h < 1 || w > APP_MAXW || h > APP_MAXH) return -1;
+    mutex_lock(&app_mtx);
+    int id = -1;
+    if (ct_running) for (int i = 0; i < APP_MAX; i++) if (!app[i].used) { id = i; break; }
+    if (id >= 0) {
+        app_t *a = &app[id];
+        a->px = kmalloc((uint32_t)(w * h * 4));
+        if (!a->px) id = -1;
+        else {
+            for (int i = 0; i < w * h; i++) a->px[i] = 0x00FFFFFFu;
+            a->used = 1; a->gone = 0; a->pid = pid; a->w = w; a->h = h; a->win = -1; a->dirty = 1;
+            a->qh = a->qt = 0;
+            scopy(a->title, title, sizeof(a->title));
+        }
+    }
+    mutex_unlock(&app_mtx);
+    if (id >= 0) klog("[countertop] pid %u asks for a %dx%d window, heap %u KB free\n", pid, w, h, heap_free_bytes() / 1024);
+    return id;
+}
+int countertop_win_size(uint32_t pid, int id, int *w, int *h) {
+    mutex_lock(&app_mtx);
+    app_t *a = app_mine(pid, id);
+    if (a) { *w = a->w; *h = a->h; }
+    mutex_unlock(&app_mtx);
+    return a ? 0 : -1;
+}
+int countertop_win_put(uint32_t pid, int id, const uint32_t *px) {
+    mutex_lock(&app_mtx);
+    app_t *a = app_mine(pid, id);
+    if (a) { memcpy(a->px, px, (uint32_t)(a->w * a->h * 4)); a->dirty = 1; }
+    mutex_unlock(&app_mtx);
+    return a ? 0 : -1;
+}
+int countertop_win_event(uint32_t pid, int id, void *ev) {
+    mutex_lock(&app_mtx);
+    app_t *a = app_mine(pid, id);
+    int r = -1;
+    if (a) {
+        r = 0;
+        if (a->qh != a->qt) { memcpy(ev, &a->q[a->qh], sizeof(uwinev_t)); a->qh = (a->qh + 1) % APP_EVQ; r = 1; }
+    }
+    mutex_unlock(&app_mtx);
+    return r;
+}
+int countertop_win_close(uint32_t pid, int id) {
+    mutex_lock(&app_mtx);
+    int r = -1;
+    if (id >= 0 && id < APP_MAX && app[id].used && app[id].pid == pid) {
+        if (app[id].gone || !ct_running) app_free(&app[id]);   /* no window to take down */
+        else app[id].gone = 2;                                 /* the loop takes it down */
+        r = 0;
+    }
+    mutex_unlock(&app_mtx);
+    return r;
+}
+
+static void draw_app(const win_t *w) {                /* within the clip */
+    int x0 = w->x + BORDER, y0 = w->y + BORDER + TITLE_H;
+    mutex_lock(&app_mtx);
+    app_t *a = &app[w->app];
+    int xa = x0 < cx0 ? cx0 : x0, xb = x0 + a->w > cx1 ? cx1 : x0 + a->w;
+    int ya = y0 < cy0 ? cy0 : y0, yb = y0 + a->h > cy1 ? cy1 : y0 + a->h;
+    for (int j = ya; j < yb; j++) {
+        const uint32_t *src = a->px + (j - y0) * a->w + (xa - x0);
+        for (int i = xa; i < xb; i++) row[j][i] = *src++;
+    }
+    mutex_unlock(&app_mtx);
+    dirty(x0, y0, a->w, a->h);
+}
+
 static void draw_window(int k) {
     win_t *w = &win[k];
     int focused = k == topmost();
@@ -370,6 +498,7 @@ static void draw_window(int k) {
     int top = w->y + BORDER + TITLE_H;
     if (w->term) { draw_cells(w->term, w->x + BORDER, top, focused); return; }
     if (w->files) { draw_files(w, focused); return; }
+    if (w->app >= 0) { draw_app(w); return; }
     fill(w->x + BORDER, top, w->w - 2 * BORDER, w->h - 2 * BORDER - TITLE_H, w->body);
     for (int i = 0; i < 8 && w->lines[i]; i++) text(w->x + BORDER + 10, top + 8 + i * 18, w->lines[i], 0x00202020u);
 }
@@ -390,7 +519,7 @@ static void repaint_win(int k) { repaint(win[k].x, win[k].y, win[k].w, win[k].h)
 static int open_window(int x, int y, int w, int h, const char *title, uint32_t body, const char *const *lines) {
     for (int k = 0; k < MAX_WIN; k++) if (!win[k].used) {
         win_t *v = &win[k];
-        v->used = 1; v->x = x; v->y = y; v->w = w; v->h = h; v->body = body; v->term = 0; v->sess = 0; v->min = 0; v->files = 0;
+        v->used = 1; v->x = x; v->y = y; v->w = w; v->h = h; v->body = body; v->term = 0; v->sess = 0; v->min = 0; v->files = 0; v->app = -1;
         scopy(v->title, title, sizeof(v->title));
         for (int i = 0; i < 8; i++) v->lines[i] = lines && lines[i] ? lines[i] : 0;
         int was = topmost();
@@ -498,6 +627,13 @@ static void reap_dying(void) {
 }
 static void close_window(int k) {
     if (win[k].files) { kfree(win[k].files); win[k].files = 0; }
+    if (win[k].app >= 0) {                             /* its program ended, or closed it */
+        mutex_lock(&app_mtx);
+        app_free(&app[win[k].app]);
+        mutex_unlock(&app_mtx);
+        win[k].app = -1;
+        if (app_drag == k) app_drag = -1;
+    }
     if (win[k].term) {
         win[k].term->closed = 1;                       /* its shell's getc gives -1 */
         shell_session_hangup(win[k].sess);             /* its programs die with it */
@@ -514,6 +650,43 @@ static void close_window(int k) {
     repaint_win(k);                               /* what it covered */
     if (topmost() >= 0) repaint_win(topmost());   /* the new focus's title bar */
 }
+/* Once a loop: show new program windows, repaint changed ones, close
+ * those whose program closed them or has ended. */
+static void apps_tick(void) {
+    mutex_lock(&app_mtx);
+    for (int i = 0; i < APP_MAX; i++) {
+        app_t *a = &app[i];
+        if (!a->used) continue;
+        proc_t *p = proc_by_pid(a->pid);
+        int ended = !p || p->state == PROC_ZOMBIE;
+        if (a->win >= 0 && (ended || a->gone == 2)) {
+            klog("[countertop] %s %s\n", a->gone == 2 ? "program closed" : "program ended, close", a->title);
+            close_window(a->win);                      /* frees the slot */
+            continue;
+        }
+        if (a->win < 0 && (ended || a->gone == 2)) { app_free(a); continue; }
+        if (a->win < 0 && !a->gone) {
+            int n = 0;
+            for (int j = 0; j < APP_MAX; j++) if (j != i && app[j].used && app[j].win >= 0) n++;
+            int ww = a->w + 2 * BORDER, wh = a->h + 2 * BORDER + TITLE_H;
+            int x = 240 + n * 28, y = 70 + n * 28;
+            if (x + ww > W) x = W - ww;
+            if (y + wh > H - TASK_H) y = H - TASK_H - wh;
+            if (x < 0) x = 0;
+            if (y < BAR_H) y = BAR_H;
+            static const char *const none[] = { 0 };
+            int k = open_window(x, y, ww, wh, a->title, 0, none);
+            if (k < 0) continue;                       /* no room yet: next time */
+            win[k].app = i; a->win = k; a->dirty = 0;
+            klog("[countertop] open %s for pid %u at %d,%d\n", a->title, a->pid, x, y);
+            repaint_win(k);
+            continue;
+        }
+        if (a->win >= 0 && a->dirty) { a->dirty = 0; repaint_win(a->win); }
+    }
+    mutex_unlock(&app_mtx);
+}
+
 static int window_at(int x, int y) {
     for (int i = nwin - 1; i >= 0; i--) {
         win_t *w = &win[order[i]];
@@ -583,6 +756,13 @@ static uint32_t task_sig;                         /* the windows as the taskbar 
 static void pointer_buttons(int px, int py, int btn, int np) {
     int left = btn & 1;
     last_btn = btn;
+    if (app_drag >= 0) {                               /* a program's body, the button held */
+        win_t *w = &win[app_drag];
+        int x = px - (w->x + BORDER), y = py - (w->y + BORDER + TITLE_H);
+        if (x != app_lx || y != app_ly) { app_push(w->app, WEV_MOVE, 0, x, y, (unsigned)btn); app_lx = x; app_ly = y; }
+        if (!left || np) { app_push(w->app, WEV_UP, 0, x, y, (unsigned)btn); app_drag = -1; }
+        if (!np) return;
+    }
     if (np && py < BAR_H) {
         if (px >= BTN_TERM_X && px < BTN_TERM_X + BTN_TERM_W) open_terminal();
         else if (px >= BTN_LEAVE_X && px < BTN_LEAVE_X + BTN_LEAVE_W) leave_asked = 1;
@@ -602,9 +782,18 @@ static void pointer_buttons(int px, int py, int btn, int np) {
         if (k < 0) return;
         win_t *w = &win[k];
         int bx = w->x + w->w - BORDER - 3 - CLOSE_SZ, by = w->y + BORDER + (TITLE_H - CLOSE_SZ) / 2;
-        if (px >= bx && px < bx + CLOSE_SZ && py >= by && py < by + CLOSE_SZ) { close_window(k); return; }
+        if (px >= bx && px < bx + CLOSE_SZ && py >= by && py < by + CLOSE_SZ) {
+            if (w->app >= 0) { app_push(w->app, WEV_CLOSE, 0, 0, 0, 0); klog("[countertop] close asked of %s\n", w->title); }
+            else close_window(k);                      /* a program's window is the program's to close */
+            return;
+        }
         if (px >= bx - 4 - CLOSE_SZ && px < bx - 4 && py >= by && py < by + CLOSE_SZ) { minimise_window(k); return; }
         raise_window(k);
+        if (w->app >= 0 && py >= w->y + BORDER + TITLE_H) {      /* the body: the program's */
+            app_drag = k; app_lx = px - (w->x + BORDER); app_ly = py - (w->y + BORDER + TITLE_H);
+            app_push(w->app, WEV_DOWN, 0, app_lx, app_ly, (unsigned)(btn | 1));
+            return;
+        }
         if (w->files && py >= w->y + BORDER + TITLE_H + 28) {   /* a row: select, twice quickly: open */
             static int last_k = -1, last_r = -1;
             int r = w->files->top + (py - (w->y + BORDER + TITLE_H + 28)) / FROW_H;
@@ -719,6 +908,14 @@ int countertop_run(int (*avail)(void), int (*getch)(void), int uid) {
     bar();
     nwin = 0; drag = -1; last_btn = 0; leave_asked = 0; ct_uid = uid; nterm = 0; task_sig = 0xFFFFFFFFu;
     for (int k = 0; k < MAX_WIN; k++) win[k].used = 0;
+    app_drag = -1;
+    mutex_lock(&app_mtx);                            /* programs may ask for windows now */
+    for (int i = 0; i < APP_MAX; i++) {
+        proc_t *p = proc_by_pid(app[i].pid);
+        if (app[i].used && (!p || p->state == PROC_ZOMBIE)) app_free(&app[i]);   /* left from last time */
+    }
+    ct_running = 1;
+    mutex_unlock(&app_mtx);
     static const char *const welcome[] = { "Welcome to countertop.", "", "Drag a window by its title bar,",
                                            "click one to bring it forward,", "and the red box closes it.", "",
                                            "Esc gives the console back.", 0 };
@@ -743,7 +940,7 @@ int countertop_run(int (*avail)(void), int (*getch)(void), int uid) {
         uint32_t pc = mouse_presses(0, 0);
         int np = (int)(pc - presses_seen);
         presses_seen = pc;
-        if (np || b != last_btn || drag >= 0) pointer_buttons(px, py, b, np);
+        if (np || b != last_btn || drag >= 0 || app_drag >= 0) pointer_buttons(px, py, b, np);
         bar_clock();
         for (int i = 0; i < nwin; i++) {             /* terminals: drawn again, or gone */
             int k = order[i];
@@ -752,9 +949,11 @@ int countertop_run(int (*avail)(void), int (*getch)(void), int uid) {
             if (win[k].term->changed) { win[k].term->changed = 0; repaint_win(k); }
         }
         reap_dying();
+        apps_tick();
         while (avail()) {                            /* keys: the focused terminal's */
             int c = getch(), k = topmost();
             if (k >= 0 && win[k].term) wt_key(win[k].term, c);
+            else if (k >= 0 && win[k].app >= 0) app_push(win[k].app, WEV_KEY, (unsigned)c, 0, 0, 0);
             else if (k >= 0 && win[k].files && (c == KEY_UP || c == KEY_DOWN || c == '\n')) {
                 struct files *f = win[k].files;
                 if (c == '\n') files_open(k, f->sel);
@@ -778,6 +977,13 @@ int countertop_run(int (*avail)(void), int (*getch)(void), int uid) {
         flush();
         task_sleep(15);
     }
+    mutex_lock(&app_mtx);                            /* programs' windows: gone, their calls get -1 */
+    ct_running = 0;
+    for (int i = 0; i < APP_MAX; i++) if (app[i].used) {
+        if (app[i].gone == 2) app_free(&app[i]);
+        else { app[i].gone = 1; app[i].win = -1; }
+    }
+    mutex_unlock(&app_mtx);
     for (int i = 0; i < nwin; i++) {                 /* every session hung up, no window "closed" */
         win_t *w = &win[order[i]];
         if (!w->term) continue;

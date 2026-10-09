@@ -19,6 +19,14 @@
                         * NAME=value lines, as the shell handed them (v0.60.26) */
 #define SYS_SLEEP  14  /* ebx = ms (10 s at most a call): the task sleeps (v0.60.101) */
 #define SYS_RANDOM 15  /* ebx = buf, ecx = len (256 at most): bytes from the entropy pool; -> len (v0.60.118) */
+/* Windows on the desktop (v0.60.146): only while countertop is up. */
+#define SYS_WIN_OPEN  16 /* ebx = width, ecx = height (640x480 at most), edx = title;
+                          * -> a window id, or -1 (no desktop, too big, too many) */
+#define SYS_WIN_PUT   17 /* ebx = id, ecx = width*height 0x00RRGGBB pixels, row by row:
+                          * the window's whole body; -> 0, or -1                     */
+#define SYS_WIN_EVENT 18 /* ebx = id, ecx = uwinev_t*, edx = ms to wait (0: just look,
+                          * 10 s at most); -> 1 an event, 0 none, -1 the window is gone */
+#define SYS_WIN_CLOSE 19 /* ebx = id; -> 0, or -1. A program's windows close when it ends */
 
 /* One directory entry for SYS_READDIR (v0.44.0): the long name when the
  * entry has one, else the 8.3 name. Shared by the kernel and ulib. */
@@ -38,6 +46,20 @@ typedef struct {
     char     owner_name[16];   /* the owner's name (v0.59.1: programs cannot
                                 * read the roster to look it up)      */
 } ustat_t;
+
+/* One event from a window (v0.60.146). x and y are in the body's pixels
+ * (a drag may leave the body: they can be negative or past its size). */
+typedef struct {
+    unsigned type;      /* WEV_*                                         */
+    unsigned key;       /* WEV_KEY: the character, or KEY_UP etc. (256+) */
+    int      x, y;      /* WEV_DOWN / WEV_MOVE / WEV_UP                  */
+    unsigned buttons;   /* bit 0 left, 1 right, 2 middle                 */
+} uwinev_t;
+#define WEV_KEY    1   /* a key, while the window has the focus          */
+#define WEV_DOWN   2   /* a button pressed in the body                    */
+#define WEV_MOVE   3   /* the pointer moved with it held                  */
+#define WEV_UP     4   /* and let go                                      */
+#define WEV_CLOSE  5   /* its close box: the program decides              */
 
 /* Reserved file descriptors. fd >= 3 are returned by open(). */
 #define FD_STDIN   0   /* keyboard                                          */

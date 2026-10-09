@@ -99,12 +99,14 @@ text file). Test by screendump and by what the opened terminal shows.
 Built with pour for every file: jot in a terminal window is untested, and
 a pour of a .elf prints its bytes (a "cook it" for .elf is a later choice).
 
-## 7. Windows for ring-3 programs
+## 7. Windows for ring-3 programs — DONE v0.60.146
 
 Syscalls to make a window, put a buffer of pixels into it, and wait for its
 events (keys, the mouse in its coordinates, close); a first program that
 uses them (a paint program, `doodle.elf`, or a Mandelbrot viewer). Test:
 cook it, draw with injected drags, screendump, close.
+
+Built as frost.elf (doodle is not a kitchen name: icing a cake).
 
 ## 8. Later: layer -s and - (paste), tally with decimals (seq)
 
@@ -126,3 +128,12 @@ Skipped at the user's request: OS work only.
   alone passed (107 ok), and so did check.sh again (176 s). One failure
   in three runs; if it comes back, look at qemu_keys' connect and login
   waits under load before anything else.
+- v0.60.146: read from the code, not run: a syscall that copies from a
+  user address the program never mapped (inside the user range, outside
+  sbrk and the stack) would fault in the kernel, and isr.c would panic
+  rather than kill the program, since user_ok checks the range only.
+  Not new (SYS_WRITE and the rest share it); SYS_WIN_PUT copies up to 1.2 MB, so it is the
+  easiest way to hit it. Worth an item: prove it with a program, then
+  kill the caller instead.
+- v0.60.146: no test has a second program try another's window id
+  (countertop_win_* check the pid; nothing exercises it).
