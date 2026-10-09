@@ -84,7 +84,7 @@ give a remote session one). Several at once, each its own cwd and history.
 Test: open two, type a different command in each, screendump, compare the
 glyphs against the font as framebuffer-test does.
 
-## 5. A bar of its own: launcher and taskbar
+## 5. A bar of its own: launcher and taskbar — DONE v0.60.144
 
 Along the bottom: a button that opens a terminal, one per open window
 (click to raise, or to bring back a minimised one), and the clock. A

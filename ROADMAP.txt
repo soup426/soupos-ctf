@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.143
+Current version: v0.60.144
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,19 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.144 (2026-10-09)  — COUNTERTOP: THE TASKBAR (STEP 5)
+  - A taskbar along the bottom: a Terminal launcher, then a button for
+    every window in the order they opened (blue for the focus, dim for a
+    minimised one). A click restores a minimised window, minimises the
+    focused one, raises any other.
+  - Every window has a minimise box beside its close box. A minimised
+    window is not drawn, not hit and not the focus (the top one that is
+    shown is); windows live between the two bars now.
+  - scripts/ctbar-test.sh: the launcher, the minimise box, restore and
+    minimise from the button, another's button raising it, from
+    screendumps and the log. countertop-test's gradient rows stop above
+    the taskbar.
 
 v0.60.143 (2026-10-09)  — COUNTERTOP: TERMINAL WINDOWS (STEP 4)
   - The bar has Terminal and Leave buttons. Terminal opens a window with a

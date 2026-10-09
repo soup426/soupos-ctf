@@ -34,6 +34,13 @@
  * to its foreground program, as the console's IRQ does). Closing it hangs
  * the session up (its programs killed, its getc -1); typing clockout or
  * exit in it closes the window. Its memory goes only once its task is done.
+ *
+ * The taskbar (v0.60.144, step 5). Along the bottom: a Terminal launcher,
+ * then a button for every window (blue for the focused one, dim for a
+ * minimised one): a click restores a minimised window, minimises the
+ * focused one, raises any other. A window's minimise box hides it; hidden
+ * windows are not drawn, not hit, and not the focus. Windows live between
+ * the two bars.
  */
 #include "countertop.h"
 #include "fb.h"
@@ -63,6 +70,9 @@
 #define BTN_LEAVE_X (BTN_TERM_X + BTN_TERM_W + 10)
 #define BTN_LEAVE_W (8 * 7)
 #define BTN_RGB    0x003A3F48u
+#define TASK_H     28                    /* the taskbar, along the bottom (v0.60.144) */
+#define TBTN_W     150
+#define LAUNCH_W   (8 * 10 + 16)
 
 static uint32_t *row[MAX_H];
 static int W, H;
@@ -145,13 +155,17 @@ typedef struct {
     const char *lines[8];
     wterm_t *term;                      /* a terminal window's cells, or 0 */
     void *sess;                         /* and the shell session on them */
+    int min;                            /* minimised: on the taskbar only */
 } win_t;
 static win_t win[MAX_WIN];
 static int order[MAX_WIN], nwin;                 /* z-order, bottom first */
 static int drag = -1, drag_dx, drag_dy, drag_ox, drag_oy, last_btn;
 
 static void scopy(char *d, const char *s, int n) { int i = 0; for (; s[i] && i < n - 1; i++) d[i] = s[i]; d[i] = '\0'; }
-static int  topmost(void) { return nwin ? order[nwin - 1] : -1; }
+static int  topmost(void) {                      /* the focus: the top window not minimised */
+    for (int i = nwin - 1; i >= 0; i--) if (!win[order[i]].min) return order[i];
+    return -1;
+}
 
 /* ---- terminal windows (v0.60.143) --------------------------------------- */
 
@@ -281,6 +295,8 @@ static void draw_window(int k) {
         fill(bx + i, by + i, 1, 1, TEXT_RGB);
         fill(bx + CLOSE_SZ - 1 - i, by + i, 1, 1, TEXT_RGB);
     }
+    fill(bx - 4 - CLOSE_SZ, by, CLOSE_SZ, CLOSE_SZ, BTN_RGB);   /* the minimise box: a bar along its foot */
+    fill(bx - 4 - CLOSE_SZ + 4, by + CLOSE_SZ - 5, CLOSE_SZ - 8, 2, TEXT_RGB);
     int top = w->y + BORDER + TITLE_H;
     if (w->term) { draw_cells(w->term, w->x + BORDER, top, focused); return; }
     fill(w->x + BORDER, top, w->w - 2 * BORDER, w->h - 2 * BORDER - TITLE_H, w->body);
@@ -291,10 +307,10 @@ static void draw_window(int k) {
  * bottom to top, each clipped to it. The bar is left alone. */
 static void repaint(int x, int y, int w, int h) {
     cx0 = x < 0 ? 0 : x; cy0 = y < BAR_H ? BAR_H : y;
-    cx1 = x + w > W ? W : x + w; cy1 = y + h > H ? H : y + h;
+    cx1 = x + w > W ? W : x + w; cy1 = y + h > H - TASK_H ? H - TASK_H : y + h;
     if (cx0 < cx1 && cy0 < cy1) {
         background();
-        for (int i = 0; i < nwin; i++) draw_window(order[i]);
+        for (int i = 0; i < nwin; i++) if (!win[order[i]].min) draw_window(order[i]);
     }
     clip_all();
 }
@@ -303,7 +319,7 @@ static void repaint_win(int k) { repaint(win[k].x, win[k].y, win[k].w, win[k].h)
 static int open_window(int x, int y, int w, int h, const char *title, uint32_t body, const char *const *lines) {
     for (int k = 0; k < MAX_WIN; k++) if (!win[k].used) {
         win_t *v = &win[k];
-        v->used = 1; v->x = x; v->y = y; v->w = w; v->h = h; v->body = body; v->term = 0; v->sess = 0;
+        v->used = 1; v->x = x; v->y = y; v->w = w; v->h = h; v->body = body; v->term = 0; v->sess = 0; v->min = 0;
         scopy(v->title, title, sizeof(v->title));
         for (int i = 0; i < 8; i++) v->lines[i] = lines && lines[i] ? lines[i] : 0;
         int was = topmost();
@@ -377,6 +393,7 @@ static void close_window(int k) {
 static int window_at(int x, int y) {
     for (int i = nwin - 1; i >= 0; i--) {
         win_t *w = &win[order[i]];
+        if (w->min) continue;
         if (x >= w->x && x < w->x + w->w && y >= w->y && y < w->y + w->h) return order[i];
     }
     return -1;
@@ -384,7 +401,59 @@ static int window_at(int x, int y) {
 
 /* The mouse's buttons, once a tick: a press picks a window, a drag moves
  * it, the close box closes it. */
+/* ---- the taskbar (v0.60.144) ------------------------------------------- */
+
+static void taskbar(void) {
+    int y = H - TASK_H;
+    fill(0, y, W, TASK_H, BAR_RGB);
+    fill(8, y + 4, LAUNCH_W, TASK_H - 8, BTN_RGB);
+    text(16, y + (TASK_H - 16) / 2, "Terminal", TEXT_RGB);
+    int x = 8 + LAUNCH_W + 12, top = topmost();
+    for (int i = 0; i < MAX_WIN; i++) {             /* in the order they were opened */
+        if (!win[i].used) continue;
+        if (x + TBTN_W > W - 8) break;
+        uint32_t c = i == top ? FOCUS_RGB : win[i].min ? 0x002A2E34u : BTN_RGB;
+        fill(x, y + 4, TBTN_W, TASK_H - 8, c);
+        char t[18]; int n = 0;
+        for (; win[i].title[n] && n < 17; n++) t[n] = win[i].title[n];
+        t[n] = '\0';
+        text(x + 8, y + (TASK_H - 16) / 2, t, win[i].min ? DIM_RGB : TEXT_RGB);
+        x += TBTN_W + 6;
+    }
+}
+static int taskbar_hit(int px, int py) {           /* the window under a taskbar button, -2 the launcher */
+    int y = H - TASK_H;
+    if (py < y + 4 || py >= H - 4) return -1;
+    if (px >= 8 && px < 8 + LAUNCH_W) return -2;
+    int x = 8 + LAUNCH_W + 12;
+    for (int i = 0; i < MAX_WIN; i++) {
+        if (!win[i].used) continue;
+        if (px >= x && px < x + TBTN_W) return i;
+        x += TBTN_W + 6;
+    }
+    return -1;
+}
+static void minimise_window(int k) {
+    int was = topmost();
+    win[k].min = 1;
+    klog("[countertop] minimise %s\n", win[k].title);
+    repaint_win(k);
+    if (topmost() >= 0 && topmost() != was) repaint_win(topmost());
+}
+static void restore_window(int k) {
+    win[k].min = 0;
+    klog("[countertop] restore %s\n", win[k].title);
+    int at = -1, was = -1;
+    for (int i = 0; i < nwin; i++) if (order[i] == k) at = i;
+    for (int i = nwin - 1; i >= 0; i--) if (order[i] != k && !win[order[i]].min) { was = order[i]; break; }
+    for (int i = at; i < nwin - 1; i++) order[i] = order[i + 1];
+    order[nwin - 1] = k;
+    if (was >= 0) repaint_win(was);
+    repaint_win(k);
+}
+
 static int leave_asked;
+static uint32_t task_sig;                         /* the windows as the taskbar last showed them */
 static void pointer_buttons(int px, int py, int btn) {
     int left = btn & 1, was = last_btn & 1;
     last_btn = btn;
@@ -393,12 +462,21 @@ static void pointer_buttons(int px, int py, int btn) {
         else if (px >= BTN_LEAVE_X && px < BTN_LEAVE_X + BTN_LEAVE_W) leave_asked = 1;
         return;
     }
+    if (left && !was && py >= H - TASK_H) {
+        int k = taskbar_hit(px, py);
+        if (k == -2) open_terminal();
+        else if (k >= 0 && win[k].min) restore_window(k);
+        else if (k >= 0 && k == topmost()) minimise_window(k);
+        else if (k >= 0) raise_window(k);
+        return;
+    }
     if (left && !was) {
         int k = window_at(px, py);
         if (k < 0) return;
         win_t *w = &win[k];
         int bx = w->x + w->w - BORDER - 3 - CLOSE_SZ, by = w->y + BORDER + (TITLE_H - CLOSE_SZ) / 2;
         if (px >= bx && px < bx + CLOSE_SZ && py >= by && py < by + CLOSE_SZ) { close_window(k); return; }
+        if (px >= bx - 4 - CLOSE_SZ && px < bx - 4 && py >= by && py < by + CLOSE_SZ) { minimise_window(k); return; }
         raise_window(k);
         if (py < w->y + BORDER + TITLE_H) { drag = k; drag_dx = px - w->x; drag_dy = py - w->y; drag_ox = w->x; drag_oy = w->y; }
         return;
@@ -407,7 +485,7 @@ static void pointer_buttons(int px, int py, int btn) {
         win_t *w = &win[drag];
         int nx = px - drag_dx, ny = py - drag_dy;
         if (ny < BAR_H) ny = BAR_H;                       /* not under the bar */
-        if (ny > H - TITLE_H) ny = H - TITLE_H;           /* a title bar left to grab */
+        if (ny > H - TASK_H - TITLE_H) ny = H - TASK_H - TITLE_H;   /* a title bar left to grab, above the taskbar */
         if (nx > W - 40) nx = W - 40;
         if (nx < 40 - w->w) nx = 40 - w->w;
         if (nx != w->x || ny != w->y) {
@@ -498,7 +576,7 @@ int countertop_run(int (*avail)(void), int (*getch)(void), int uid) {
     clip_all();
     background();
     bar();
-    nwin = 0; drag = -1; last_btn = 0; leave_asked = 0; ct_uid = uid; nterm = 0;
+    nwin = 0; drag = -1; last_btn = 0; leave_asked = 0; ct_uid = uid; nterm = 0; task_sig = 0xFFFFFFFFu;
     for (int k = 0; k < MAX_WIN; k++) win[k].used = 0;
     static const char *const welcome[] = { "Welcome to countertop.", "", "Drag a window by its title bar,",
                                            "click one to bring it forward,", "and the red box closes it.", "",
@@ -535,6 +613,11 @@ int countertop_run(int (*avail)(void), int (*getch)(void), int uid) {
             else if (c == 27) leave_asked = 1;
         }
         if (leave_asked) break;
+        {                                            /* the taskbar, when the windows changed */
+            uint32_t sig = (uint32_t)topmost() * 2654435761u;
+            for (int i = 0; i < MAX_WIN; i++) sig = sig * 31u + (uint32_t)(win[i].used * 2 + win[i].min);
+            if (sig != task_sig) { task_sig = sig; taskbar(); }
+        }
         flush();
         task_sleep(15);
     }
