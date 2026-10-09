@@ -52,7 +52,7 @@ edge cases (trailing /, no /, /, //). Compare with the host's.
 Encode stdin or a file to base64, wrapped at 76 as GNU's; -d decodes.
 Compare with the host's base64, both ways, on text and on binary.
 
-## 4. brand.elf (sha256sum)
+## 4. brand.elf (sha256sum) — DONE v0.60.107
 
 The SHA-256 of a file or stdin, as `HASH  NAME` lines; several files.
 Compare with the host's sha256sum, the empty file and a large one too.

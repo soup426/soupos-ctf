@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.106
+Current version: v0.60.107
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,16 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.107 (2026-10-09)  — BRAND.ELF (SHA256SUM)
+  - brand.elf FILE... is sha256sum under a kitchen name (the batch's
+    mark): HASH, two spaces, the name, a line each; stdin (or -) as -; a
+    file it cannot open is said on stderr and skipped, status 1. Its own
+    SHA-256 in ring 3.
+  - brine.elf's errors go to stderr too now, as GNU's (they went to stdout,
+    into whatever it was writing).
+  - scripts/brand-test.sh compares with the host's sha256sum: empty, abc,
+    the 55/56/64-byte padding edges, 100 KB of random bytes, stdin.
 
 v0.60.106 (2026-10-09)  — BRINE.ELF (BASE64)
   - brine.elf [FILE] is base64 under a kitchen name (what keeps): FILE or

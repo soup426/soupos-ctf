@@ -75,7 +75,7 @@ static int decode(int fd) {
 bad:
     if (on2) sys_write(FD_STDOUT, o, on2);
 bad2:
-    print("brine.elf: invalid input\n");
+    eprint("brine.elf: invalid input\n");          /* stderr, as GNU */
     return 1;
 }
 
@@ -87,7 +87,7 @@ int main(void) {
     int fd = FD_STDIN;
     if (nt - a == 1) {
         fd = sys_open(tok[a], O_READ);
-        if (fd < 0) { print("brine.elf: cannot open "); print(tok[a]); print("\n"); return 1; }
+        if (fd < 0) { eprint("brine.elf: cannot open "); eprint(tok[a]); eprint("\n"); return 1; }
     }
     int st = 0;
     if (dec) st = decode(fd); else encode(fd);
