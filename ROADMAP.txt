@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.110
+Current version: v0.60.111
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,14 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.111 (2026-10-09)  — POTLUCK.ELF (COMM)
+  - potluck.elf [-123] A B is comm under a kitchen name (what two sorted
+    files brought): only in A, only in B a tab in, in both two tabs in,
+    in byte order; -1 -2 -3 leave columns out and combine; a repeated line
+    matches once for each time; - is stdin; a last line gets its newline.
+  - scripts/potluck-test.sh compares nine column choices, empty files, a
+    file with no last newline and stdin with the host's comm.
 
 v0.60.110 (2026-10-09)  — BREW WORDS (EVAL)
   - brew is sh's eval under a kitchen name: its words, expanded, lose one

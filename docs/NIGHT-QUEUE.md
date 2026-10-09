@@ -80,7 +80,7 @@ advanced; `?` for an unknown option, status 1 at the end; `-ab` bundled,
 `while prep ...; do case ...` loop with bash's getopts across a dozen
 argument lists, in a function and in a recipe.
 
-## 5. potluck.elf (comm)
+## 5. potluck.elf (comm) — DONE v0.60.111
 
 What two sorted files brought: lines only in the first, only in the
 second, and in both, in three tab-indented columns; -1 -2 -3 drop
