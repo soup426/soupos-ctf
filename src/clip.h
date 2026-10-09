@@ -3,10 +3,10 @@
 
 /* The clipboard: one per cook, shared by everything that edits text.
  *
- * There is no mouse driver and no window system, so selection is keyboard
- * driven: `jot` marks a span and copies or cuts it, the shell's line editor
- * fills it when you kill text with Ctrl+U or Ctrl+W, and either one can paste
- * it back. Cutting in the editor and pasting at the prompt works because both
+ * `jot` marks a span and copies or cuts it, the shell's line editor fills
+ * it when you kill text with Ctrl+U or Ctrl+W, and either one can paste it
+ * back; since v0.60.160 a drag in a desktop terminal window copies too, and
+ * a right or middle click there pastes. Cutting in the editor and pasting at the prompt works because both
  * sides are talking to this, not to each other. */
 
 #define CLIP_MAX 4096

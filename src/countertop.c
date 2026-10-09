@@ -78,6 +78,7 @@
 #include "keyboard.h"
 #include "syscall_nr.h"
 #include "timer.h"
+#include "clip.h"
 
 #define MAX_H     1200
 #define BAR_H     24
@@ -206,6 +207,7 @@ struct wterm {
     uint16_t cell[TROWS * TCOLS];       /* char | attribute << 8, as the console's */
     int row, col, attr;
     volatile int closed, changed;
+    int sel_a, sel_b;                   /* (v0.60.160) a selection, cell indices; sel_a -1: none */
     int ring[128];
     volatile uint32_t head, tail;
 };
@@ -289,6 +291,7 @@ static wterm_t *wt_new(void) {
     w->t.getc = wt_getc; w->t.available = wt_avail; w->t.flush_in = wt_flush; w->t.put_cell = wt_cell;
     w->t.ctx = w;
     w->attr = 0x07;
+    w->sel_a = w->sel_b = -1;
     wt_clear(&w->t);
     return w;
 }
@@ -302,6 +305,10 @@ static void draw_cells(wterm_t *w, int x, int y, int focused) {
             if (px + 8 <= cx0 || px >= cx1) continue;
             uint16_t cell = w->cell[r * TCOLS + c];
             uint32_t fg = vga_rgb[(cell >> 8) & 15], bg = vga_rgb[(cell >> 12) & 7];
+            if (w->sel_a >= 0) {                                /* selected: inverted */
+                int i = r * TCOLS + c, lo = w->sel_a < w->sel_b ? w->sel_a : w->sel_b, hi = w->sel_a ^ w->sel_b ^ lo;
+                if (i >= lo && i <= hi) { uint32_t t = fg; fg = bg; bg = t; }
+            }
             const uint8_t *g = font8x16[cell & 0xFF];
             int cur = focused && !w->closed && r == w->row && c == w->col;
             for (int j = 0; j < 16; j++) {
@@ -844,11 +851,66 @@ static void restore_window(int k) {
 
 static int leave_asked;
 static uint32_t task_sig;                         /* the windows as the taskbar last showed them */
+/* Copy and paste in terminal windows (v0.60.160). A left drag over a
+ * terminal's cells selects them in reading order; letting go copies them
+ * (each line's trailing blanks dropped, lines joined by newlines) to the
+ * cook's clipboard, the one jot and the shell's Ctrl+U share. A right or
+ * middle click types the clipboard into the terminal under it. A click
+ * with no drag, or new output, clears the selection. */
+static int sel_win = -1;
+static int cell_at(const win_t *w, int px, int py) {
+    int c = (px - w->x - BORDER) / 8, r = (py - w->y - BORDER - TITLE_H) / 16;
+    if (c < 0) c = 0;
+    if (c >= TCOLS) c = TCOLS - 1;
+    if (r < 0) r = 0;
+    if (r >= TROWS) r = TROWS - 1;
+    return r * TCOLS + c;
+}
+static void sel_copy(int k) {
+    wterm_t *t = win[k].term;
+    int lo = t->sel_a < t->sel_b ? t->sel_a : t->sel_b, hi = t->sel_a ^ t->sel_b ^ lo;
+    static char buf[TROWS * (TCOLS + 1)];
+    int n = 0;
+    for (int r = lo / TCOLS; r <= hi / TCOLS; r++) {
+        int c0 = r == lo / TCOLS ? lo % TCOLS : 0, c1 = r == hi / TCOLS ? hi % TCOLS : TCOLS - 1;
+        int start = n;
+        for (int c = c0; c <= c1; c++) buf[n++] = (char)(t->cell[r * TCOLS + c] & 0xFF);
+        while (n > start && buf[n - 1] == ' ') n--;          /* trailing blanks */
+        if (r < hi / TCOLS) buf[n++] = '\n';
+    }
+    clip_set(buf, (uint32_t)n);
+    klog("[countertop] copied %d bytes from %s\n", n, win[k].title);
+}
+
 /* np: the left presses since the last look (the IRQ counts them, so a click
  * shorter than the loop's nap still counts, v0.60.145). */
 static void pointer_buttons(int px, int py, int btn, int np) {
-    int left = btn & 1;
+    int left = btn & 1, was = last_btn;
     last_btn = btn;
+    if (sel_win >= 0) {                                /* a selection being dragged */
+        win_t *w = &win[sel_win];
+        if (w->term) {
+            int i = cell_at(w, px, py);
+            if (i != w->term->sel_b) { w->term->sel_b = i; repaint_win(sel_win); }
+            if (!left) {
+                if (w->term->sel_a != w->term->sel_b) sel_copy(sel_win);
+                else { w->term->sel_a = w->term->sel_b = -1; repaint_win(sel_win); }
+            }
+        }
+        if (!left || !w->term) sel_win = -1;
+        if (!np) return;
+    }
+    if ((btn & 6) && !(was & 6)) {                     /* right or middle: paste into a terminal */
+        int k = window_at(px, py);
+        if (k >= 0 && win[k].term && py >= win[k].y + BORDER + TITLE_H) {
+            raise_window(k);
+            uint32_t n = clip_len();
+            const char *d = clip_peek();
+            for (uint32_t i = 0; i < n; i++) wt_key(win[k].term, d[i]);
+            klog("[countertop] pasted %u bytes into %s\n", n, win[k].title);
+            return;
+        }
+    }
     if (app_drag >= 0) {                               /* a program's body, the button held */
         win_t *w = &win[app_drag];
         int x = px - (w->x + BORDER), y = py - (w->y + BORDER + TITLE_H);
@@ -899,6 +961,13 @@ static void pointer_buttons(int px, int py, int btn, int np) {
         }
         if (px >= bx - 4 - CLOSE_SZ && px < bx - 4 && py >= by && py < by + CLOSE_SZ) { minimise_window(k); return; }
         raise_window(k);
+        if (w->term && py >= w->y + BORDER + TITLE_H) {     /* a terminal's cells: a selection starts */
+            int had = w->term->sel_a >= 0;
+            w->term->sel_a = w->term->sel_b = cell_at(w, px, py);
+            sel_win = k;
+            if (had) repaint_win(k);
+            return;
+        }
         if (w->app >= 0 && py >= w->y + BORDER + TITLE_H) {      /* the body: the program's */
             app_drag = k; app_lx = px - (w->x + BORDER); app_ly = py - (w->y + BORDER + TITLE_H);
             app_push(w->app, WEV_DOWN, 0, app_lx, app_ly, (unsigned)(btn | 1));
@@ -1052,7 +1121,7 @@ int countertop_run(int (*avail)(void), int (*getch)(void), int uid) {
         uint32_t pc = mouse_presses(0, 0);
         int np = (int)(pc - presses_seen);
         presses_seen = pc;
-        if (np || b != last_btn || drag >= 0 || app_drag >= 0) pointer_buttons(px, py, b, np);
+        if (np || b != last_btn || drag >= 0 || app_drag >= 0 || sel_win >= 0) pointer_buttons(px, py, b, np);
         int wh = mouse_wheel(), dw = wh - wheel_seen;
         wheel_seen = wh;
         if (dw) {                                    /* the wheel: a files window under the pointer scrolls */
@@ -1073,7 +1142,11 @@ int countertop_run(int (*avail)(void), int (*getch)(void), int uid) {
             int k = order[i];
             if (!win[k].term) continue;
             if (shell_session_done(win[k].sess, 0)) { close_window(k); i = -1; continue; }
-            if (win[k].term->changed) { win[k].term->changed = 0; repaint_win(k); }
+            if (win[k].term->changed) {
+                win[k].term->changed = 0;
+                if (k != sel_win) win[k].term->sel_a = -1;      /* new output: the selection goes */
+                repaint_win(k);
+            }
         }
         reap_dying();
         apps_tick();

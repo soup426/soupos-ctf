@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.159
+Current version: v0.60.160
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,19 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.160 (2026-10-09)  — COPY AND PASTE IN TERMINAL WINDOWS
+  - A left drag over a terminal window's cells selects them in reading
+    order, drawn inverted; letting go copies them to the cook's
+    clipboard (the one jot and the shell's Ctrl+U share), each line's
+    trailing blanks dropped and lines joined by newlines. A right or
+    middle click types the clipboard into the terminal under it. A click
+    without a drag, or new output in that terminal, clears the
+    selection.
+  - scripts/ctcopy-test.sh: "slurp hello-paste" dragged in Terminal 1
+    (17 bytes, inverted where dragged and not beyond), pasted into
+    Terminal 2 with a right click and run with Enter (hello-paste comes
+    back), cleared by a plain click. Six-wide soak 6 of 6.
 
 v0.60.159 (2026-10-09)  — jot OVER SSH
   - The stream terminal has a put_cell: VT100 cursor addressing and SGR

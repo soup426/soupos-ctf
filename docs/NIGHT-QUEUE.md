@@ -96,7 +96,7 @@ SSH, where it is refused now. Measure first what a full redraw costs in
 bytes; if it is too much, send only the cells that changed. Test with
 the ssh tests' pexpect harness: open jot, type, save, read the file.
 
-## 6. Copy and paste in terminal windows
+## 6. Copy and paste in terminal windows — DONE v0.60.160
 
 The console has drag-select with the mouse (skewer's cells) into the
 shared clipboard. In a terminal window: a drag selects cells (shown
