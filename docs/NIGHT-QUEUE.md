@@ -52,7 +52,13 @@ kitchen-names rule wins). Test against bash: building a variable name
 (`brew "v$i=x"`), a pipeline in a string, `;` and `&&` inside, quoting
 that survives one round, nested brew, and its status.
 
-## 3. tend [%N|PID] (wait)
+## 3. tend [%N|PID] (wait) — CLOSED, already there
+
+Measured before building: `rest [pid|%N|-n]` has been sh's wait since
+v0.60.48 (v0.60.101 added -n), and rest-test, restn-test and jobspec-test
+already cover every case listed below ($!, a job's exit code, no
+argument, no such job 127, nothing running, %1, -n). Nothing to build.
+
 
 Waits for a background job (or all of them with no argument), status
 the job's exit code (127 for one that does not exist, as bash). Measure
@@ -60,7 +66,12 @@ how jobs are tracked first (job_spec, job_pid). Test: `cook marinate.elf
 1 & tend ; slurp $?`, a job that exits 3, `tend %1`, `tend` with nothing
 running, `$!`.
 
-## 4. prep OPTSTRING NAME (getopts)
+## 4. prep OPTSTRING NAME (getopts) — CLOSED, already there
+
+Measured before building: `pluck OPTS NAME [ARGS]` has been sh's getopts
+since v0.60.77, with OPTARG, OPTIND, bundling, -- and the leading-: silent
+mode (pluck-test). Nothing to build.
+
 
 getopts under a kitchen name: one option per call from $1.. (or the words
 given), NAME set to the letter, OPTARG to its value for `x:`, OPTIND
@@ -90,4 +101,6 @@ Skipped at the user's request: OS work only.
 
 ## Notes left by unattended runs
 
-(none yet)
+- Queue 42 was written checking names against cmd_names, not what the
+  commands do, so items 3 and 4 turned out to exist already (rest, pluck).
+  Before queuing an sh builtin, grep the menu for "(sh's NAME)".
