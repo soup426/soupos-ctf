@@ -38,7 +38,14 @@ entries), bash's $'...' quoting, and options the text programs lack.
 
 ---
 
-## 1. SYS_READDIR: one pass, not one per entry
+## 1. SYS_READDIR: one pass, not one per entry — CLOSED, measured cheap
+
+Measured on the 79-entry root: `cook peek.elf /` takes 4 to 9 ticks
+(40 to 90 ms) into a file and 6 to 7 to the screen (eggtimer: 0.08 s),
+the 79 passes included. Nothing worth a cache. The ls-test flake was the
+loaded full check against a flat two-second wait, not the listing; the
+v0.60.124 notes that blamed SYS_READDIR are corrected.
+
 
 Measured in v0.60.124: SYS_READDIR runs fat_ls over the whole directory
 for each index it is asked for, so `cook peek.elf /` on the 79-entry root

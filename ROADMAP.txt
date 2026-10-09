@@ -23,8 +23,10 @@ v0.60.124 (2026-10-09)  — RECKON.ELF (EXPR)
   - scripts/reckon-test.sh compares 52 expressions' output and status
     with GNU expr.
   - ls-test.sh waits for the prompt after each listing, not two seconds:
-    the 79-entry root (SYS_READDIR reads the whole directory per entry)
-    ran past the wait under a loaded check. The flake is logged.
+    under a loaded full check the listing ran past the wait. (Blamed here
+    at first on SYS_READDIR reading the directory once per entry; measured
+    in queue 45, the whole listing takes 40 to 90 ms, so it was the load.)
+    The flake is logged.
 
 v0.60.123 (2026-10-09)  — CARVE.ELF (SPLIT)
   - carve.elf [-l N | -b N] [FILE [PREFIX]] is split under a kitchen name:
