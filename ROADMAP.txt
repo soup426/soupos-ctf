@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.102
+Current version: v0.60.103
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,17 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.103 (2026-10-09)  — SELECT
+  - `select NAME in WORDS ; do ... ; done` is sh's: the words numbered,
+    the $PS3 prompt (or "#? "), a line read from the terminal or what the
+    loop is fed (done < F, X | select); NAME the word with that number,
+    empty if none, REPLY the line; a blank line shows the menu again; round
+    until break, or the end of input (status 1, as bash). A loop in every
+    way the others are: match_done, compound_end, compound_bar, follow's
+    joining, and inspect's and plain's keywords.
+  - scripts/select-test.sh compares a file-fed select with bash and types
+    one with $PS3 and break.
 
 v0.60.102 (2026-10-09)  — TAB FINISHES $NAME
   - A word whose last $ (or ${) is followed by name characters finishes

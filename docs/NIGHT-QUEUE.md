@@ -56,7 +56,7 @@ being that job's, as wait -n. Test with two jobs of different lengths.
 A word starting with $ (or ${) finishes from the shell's variable names,
 as bash's completion does. Test by typing.
 
-## 5. select NAME in WORDS ; do ... ; done
+## 5. select NAME in WORDS ; do ... ; done — DONE v0.60.103
 
 sh's select: a numbered menu of WORDS, a prompt ($PS3, or "#? "), the
 answer read; NAME is the chosen word (empty for a number out of range),

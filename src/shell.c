@@ -7394,7 +7394,7 @@ static void cmd_plain(const char *args) {
     char w[FAT_PATH_MAX];
     const char *rest = first_word(args, w, sizeof(w));
     if (str_eq(w, "-v")) {
-        static const char *const kws[] = { "if", "then", "elif", "else", "fi", "for", "while", "until",
+        static const char *const kws[] = { "if", "then", "elif", "else", "fi", "for", "select", "while", "until",
                                            "do", "done", "case", "esac", "in", "!", "{", "}", "eggtimer" };
         int missing = 0;
         while (*rest) {
@@ -7522,7 +7522,7 @@ static char *compound_bar(char *t) {
     for (const char *b = pipe_bar(t); b; b = pipe_bar(b + 1)) {
         const char *r = b + 1;
         while (*r == ' ') r++;
-        if (is_kw(r, "while") || is_kw(r, "until") || is_kw(r, "for") || is_kw(r, "if") || is_kw(r, "case") || is_kw(r, "{")) return (char *)b;
+        if (is_kw(r, "while") || is_kw(r, "until") || is_kw(r, "for") || is_kw(r, "select") || is_kw(r, "if") || is_kw(r, "case") || is_kw(r, "{")) return (char *)b;
     }
     return 0;
 }
@@ -7690,7 +7690,7 @@ static int match_end(lseg_t *sg, int from, int to, const char *open, const char 
 static int match_done(lseg_t *sg, int from, int to);
 static int compound_end(lseg_t *sg, int from, int to) {
     const char *c = sg[from].text;
-    if (is_kw(c, "for") || is_kw(c, "while") || is_kw(c, "until")) return match_done(sg, from, to);
+    if (is_kw(c, "for") || is_kw(c, "while") || is_kw(c, "until") || is_kw(c, "select")) return match_done(sg, from, to);
     if (is_kw(c, "if")) return match_end(sg, from, to, "if", "fi");
     if (is_kw(c, "case")) return match_end(sg, from, to, "case", "esac");
     return match_end(sg, from, to, "{", "}");
@@ -7729,7 +7729,7 @@ static int interrupted(void) {
 static int match_done(lseg_t *sg, int from, int to) {      /* for and while share done */
     int depth = 0;
     for (int i = from; i < to; i++) {
-        if (is_kw(sg[i].text, "for") || is_kw(sg[i].text, "while") || is_kw(sg[i].text, "until")) depth++;
+        if (is_kw(sg[i].text, "for") || is_kw(sg[i].text, "while") || is_kw(sg[i].text, "until") || is_kw(sg[i].text, "select")) depth++;
         else if (is_kw(sg[i].text, "done") && --depth == 0) return i;
     }
     return -1;
@@ -8112,7 +8112,7 @@ static void cmd_seal(const char *args) {
  * it); -t says only which, as type -t. A NAME that is none of them is
  * not found, and the status is 1. */
 static void cmd_inspect(const char *args) {
-    static const char *const kws[] = { "if", "then", "elif", "else", "fi", "for", "while", "until",
+    static const char *const kws[] = { "if", "then", "elif", "else", "fi", "for", "select", "while", "until",
                                        "do", "done", "case", "esac", "in", "!", "{", "}" };
     shell_t *me = cur_shell();
     int terse = 0, missing = 0, any = 0;
@@ -8309,7 +8309,7 @@ static void exec_range(lseg_t *sg, int from, int to, int depth) {
              * the whole compound runs feeding it, as `builtin | prog` does.
              * Not again for the compound the feed itself is running. */
             const char *c = sg[i].text;
-            int loopish = is_kw(c, "for") || is_kw(c, "while") || is_kw(c, "until");
+            int loopish = is_kw(c, "for") || is_kw(c, "while") || is_kw(c, "until") || is_kw(c, "select");
             if (run && &sg[i] != feeding_seg && (loopish || is_kw(c, "if") || is_kw(c, "case") || is_kw(c, "{"))) {
                 int e = compound_end(sg, i, to);
                 if (e >= 0 && sg[e].junk) {
@@ -8436,10 +8436,12 @@ static void exec_range(lseg_t *sg, int from, int to, int depth) {
             i = e + 1;
             continue;
         }
-        if (is_kw(sg[i].text, "for")) {
+        if (is_kw(sg[i].text, "for") || is_kw(sg[i].text, "select")) {
+            /* select NAME in WORDS (v0.60.103) shares for's NAME in WORDS */
+            int sel = is_kw(sg[i].text, "select");
             int d = match_done(sg, i, to);
             if (d < 0 || i + 1 >= d || !is_kw(sg[i + 1].text, "do")) {
-                t_puts("  for: expected `for NAME in WORDS ; do ... ; done`.\n");
+                t_puts(sel ? "  select: expected `select NAME in WORDS ; do ... ; done`.\n" : "  for: expected `for NAME in WORDS ; do ... ; done`.\n");
                 cur_shell()->last_status = 2; return;
             }
             if (run) {
@@ -8448,7 +8450,7 @@ static void exec_range(lseg_t *sg, int from, int to, int depth) {
                 if (!ex || !wl) { if (ex) kfree(ex); if (wl) kfree(wl); t_puts("  for: out of memory.\n"); cur_shell()->last_status = 1; return; }
                 wl->used = wl->n = wl->cut = 0;
                 {
-                    const char *ft = sg[i].text + 3;
+                    const char *ft = sg[i].text + (sel ? 6 : 3);
                     char *fb = 0;
                     if (strchr(ft, '{') && (fb = kmalloc(FOR_TEXT)) != 0) { brace_line(ft, fb, FOR_TEXT); ft = fb; }   /* (v0.60.89) */
                     if (expand_into(ft, ex, FOR_TEXT)) wl->cut = 1;
@@ -8474,6 +8476,33 @@ static void exec_range(lseg_t *sg, int from, int to, int depth) {
                 cur_shell()->last_status = 0;
                 shell_t *me = cur_shell();
                 me->loops++;
+                if (sel) {
+                    /* sh's select: the menu, $PS3 (or "#? "), a line read
+                     * (the terminal, or a pipe or file the loop is fed);
+                     * NAME the word numbered so (empty if none is), REPLY
+                     * the line; a blank line shows the menu again; the end
+                     * of input ends it, status 1, as bash. */
+                    int show = 1;
+                    for (;;) {
+                        if (show) { for (int w = 0; w < wl->n; w++) t_printf("%d) %s\n", w + 1, wl->list[w]); show = 0; }
+                        const char *ps3 = get_var("PS3");
+                        t_puts(ps3 && *ps3 ? ps3 : "#? ");
+                        char line[INPUT_MAX]; int len = 0;
+                        int eof = take_line(me, line, &len, INPUT_MAX, 0, 0);
+                        line[len] = '\0';
+                        if (eof && len == 0) { t_putc('\n'); me->last_status = 1; break; }
+                        if (me->in_pipe) t_putc('\n');          /* a fed line is not echoed */
+                        set_var("REPLY", line);
+                        if (len == 0) { show = 1; continue; }
+                        int n = 0, num = 1;
+                        for (const char *c = line; *c; c++) { if (*c < '0' || *c > '9') { num = 0; break; } n = n * 10 + (*c - '0'); }
+                        set_var(name, num && n >= 1 && n <= wl->n ? wl->list[n - 1] : "");
+                        if (me->last_status) break;          /* sealed */
+                        exec_range(sg, i + 2, d, depth + 1);
+                        if (loop_after_body(me) || interrupted() || me->exiting) break;
+                        if (eof) { me->last_status = 1; break; }
+                    }
+                } else
                 for (int w = 0; w < wl->n && !me->exiting && !interrupted(); w++) {
                     set_var(name, wl->list[w]);
                     if (me->last_status) break;             /* sealed: the loop stops, status 1 (v0.60.76) */
@@ -8495,7 +8524,7 @@ static void exec_range(lseg_t *sg, int from, int to, int depth) {
             int until = is_kw(sg[i].text, "until");
             int d = match_done(sg, i, to), dd = -1, dep = 0;
             for (int j = i; d >= 0 && j < d; j++) {
-                if (is_kw(sg[j].text, "for") || is_kw(sg[j].text, "while") || is_kw(sg[j].text, "until")) dep++;
+                if (is_kw(sg[j].text, "for") || is_kw(sg[j].text, "while") || is_kw(sg[j].text, "until") || is_kw(sg[j].text, "select")) dep++;
                 else if (is_kw(sg[j].text, "done")) dep--;
                 else if (dep == 1 && is_kw(sg[j].text, "do")) { dd = j; break; }
             }
@@ -8861,7 +8890,7 @@ static int compound_depth(const char *s) {
         #define WORD_IS(k) (n == (int)strlen(k) && strncmp(w, k, (uint32_t)n) == 0)
         if (cmdpos) {
             if (WORD_IS("if") || WORD_IS("while") || WORD_IS("until") || WORD_IS("{")) { d++; continue; }
-            if (WORD_IS("for") || WORD_IS("case")) { d++; cmdpos = 0; continue; }
+            if (WORD_IS("for") || WORD_IS("case") || WORD_IS("select")) { d++; cmdpos = 0; continue; }
             if (WORD_IS("fi") || WORD_IS("done") || WORD_IS("esac") || WORD_IS("}")) { d--; continue; }
             if (WORD_IS("then") || WORD_IS("do") || WORD_IS("else") || WORD_IS("elif") || WORD_IS("!")) continue;
         }
