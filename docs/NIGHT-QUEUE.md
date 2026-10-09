@@ -1,13 +1,13 @@
 # Night queue
 
-Forty-ninth queue: the desktop, carried on. The first forty-eight are in
-`docs/queue-archive-2026-10-0*.md`; queue 48 (`-09n`) built countertop up
-to windows for ring-3 programs (frost.elf), the files window and the
-taskbar. This one closes the two holes those items found (kernel copies
-from user memory nobody mapped; window calls nobody has attacked), then
-the wheel, a second graphical program, keyboard switching, and the test
-suite's typing time. Written by an unattended run when queue 48 ran out,
-as the loop it runs in asks; the user has not seen it.
+Fiftieth queue. The first forty-nine are in `docs/queue-archive-2026-10-0*.md`;
+queue 49 (`-09o`) closed the bad-pointer panic, attacked the window calls,
+added the wheel, swirl.elf, jot in windows and Alt+Tab, measured drawing,
+and cut the suite's typing. The full check now runs on CT 123 on atlas
+(scripts/remote-check.sh), never on the laptop. This queue: the check's
+own wall time, then the desktop carried on. Written by an unattended run
+when queue 49 ran out, as the loop it runs in asks; the user has not
+seen it.
 
 ## Standing rules
 
@@ -47,90 +47,52 @@ as the loop it runs in asks; the user has not seen it.
 
 ---
 
-## 1. A bad user pointer kills the caller, not the kernel — DONE v0.60.149
+## 1. The longest jobs first
 
-Read from the code in v0.60.146, not yet run: user_ok checks that a
-pointer is inside the user range, nothing more, so a syscall copying from
-an address the program never had (above its break, below its stack) would
-fault in ring 0, and isr.c's demand-paging hook would decline it and
-panic. Prove it first with a program that hands SYS_WRITE such a pointer
-(the smallest reproduction), then make that fault kill the program the
-way a ring-3 fault does, with the same "[user] fault" log line. Test:
-the program is killed, the kernel lives, the next command runs.
+check.sh starts its ~205 jobs in list order, so users-test, testcmd-test,
+bowls-test and cooks-test (115-124 s under load) can start late and set
+the wall time: 353 s against ~258 s of work at 32 wide. Keep each job's
+time from the last run (on the machine that ran it) and start the
+longest first. Measure check.sh's wall time before and after, twice each.
 
-Proven (all four of write, the image gap, read, stat panicked), then
-built as -1 from the call rather than a kill: user_ok checks the pages
-before the copy, because a kill from inside the fault could unwind a
-call holding FAT's or the desktop's mutex.
+## 2. How many jobs at once
 
-## 2. prod.elf: the window calls, attacked — DONE v0.60.150
+At 64 jobs the check took 266 s but peaked at 7722 MB of CT 123's 8192.
+Measure peak memory at 32 and 48 (a sampler in the CT, started so that
+it does not kill itself), and set remote-check's default to what leaves
+a gigabyte spare. Do not grow the CT without asking: atlas's other
+guests share its memory.
 
-A program that does what frost would never: SYS_WIN_* with another
-program's id (opened by a second copy of itself), sizes of 0 and 641,
-a pixel pointer past the user range and one half past it, a title that
-is not terminated, an event pointer into kernel memory, calls after the
-desktop has gone. Each must give -1 and change nothing (screendump the
-other program's window before and after). Kitchen name: prod.
+## 3. The wheel for programs
 
-## 3. The wheel — DONE v0.60.151
+A WEV_WHEEL event (notches, signed, and where the pointer was) for the
+window under the pointer when it is a program's; swirl zooms with it.
+Test: injected notches over swirl's window, the view compared with the
+host's as swirl-test does.
 
-The PS/2 IntelliMouse handshake (sample rates 200, 100, 80; ID 3 means a
-wheel, 4-byte packets), with the 3-byte mouse kept working when the ID
-stays 0. QEMU's `mouse_move dx dy dz` turns it. The files window scrolls
-by it. Measure first that QEMU's PS/2 mouse answers ID 3. Test: the
-handshake's ID in the log, and a files window scrolled by dz (screendump).
+## 4. A menu of programs on the bar
 
-## 4. How fast can a program draw? — MEASURED, CLOSED v0.60.152
+A "Kitchen" button on the top bar listing the programs that open
+windows (frost, swirl), each opening in a new terminal as the files
+window does with pour and jot. Test by screendump and the log.
 
-Measure before building anything: a program that puts N frames of
-640x480 and of 320x240 and reports ticks per frame, idle and with a
-terminal busy. If a full-body put is too slow for something like 30
-frames a second, add a put of a rectangle and measure again; if it is
-fast enough, close the item with the numbers.
+## 5. jot over SSH
 
-Measured with sear.elf: a 640x480 put costs 1.7 ms idle, 3.1 ms with a
-CPU hog (300-550 a second); the desktop draws one in ~0.8 ms and shows
-45-50 frames a second, held by its 15 ms nap. Fast enough: no rectangle
-put. Numbers in ROADMAP v0.60.152.
+The stream terminal could implement put_cell with VT100 cursor
+addressing (ESC[row;colH) and SGR colours; then jot would work over
+SSH, where it is refused now. Measure first what a full redraw costs in
+bytes; if it is too much, send only the cells that changed. Test with
+the ssh tests' pexpect harness: open jot, type, save, read the file.
 
-## 5. swirl.elf: a Mandelbrot set in fixed point — DONE v0.60.153
+## 6. Copy and paste in terminal windows
 
-A second program on the window calls: Mandelbrot in 16.16 fixed point
-(no FPU in ring 3), drawn row by row so the window fills as it computes;
-a click zooms in on that point, - zooms out, q quits. Test: the host
-computes the same fixed-point image in Python and the screendump matches
-it pixel for pixel; a click's zoom matches the host's too.
+The console has drag-select with the mouse (skewer's cells) into the
+shared clipboard. In a terminal window: a drag selects cells (shown
+inverted), the selection goes to the clipboard, and a middle or right
+click pastes into the focused terminal. Test by screendump and by what
+a pasted command does.
 
-## 6. jot in a terminal window — DONE v0.60.154
-
-Does the editor work in a wterm (cursor moves, full-screen redraw, its
-keys)? Measure by running it there. If it does, the files window opens
-text files (.txt .md .sc .sh) in jot and the rest in pour; if it does
-not, fix what wterm lacks first, and test the edit by screendump and by
-the file on disk afterwards.
-
-## 7. Switching windows from the keyboard — DONE v0.60.155
-
-Alt+Tab raises the next window down (keyboard_key_pressed gives Alt;
-measure that Tab with Alt held arrives as '\t'). Minimised windows are
-skipped. Test: three windows, Alt+Tab twice, the focus on the third
-(screendump of the title bars and the taskbar's blue button).
-
-## 8. The suite's typing time — DONE v0.60.156
-
-seq-test went from 188 s to 7 s when its cases ran from a script on the
-disk instead of typed lines (v0.60.148). Measure which tests in
-check.sh's full run take longest and how much of that is typing; move
-the slowest such tests to scripts and measure check.sh's wall time
-before and after. A test whose point is the typing (line editing,
-history, keys) stays typed.
-
-Fifteen tests moved to scripts (869 s to 194 s between them, eight at a
-time on the laptop); quote-test waits for prompts now. check.sh on CT
-123: 372 s to 353 s. The rest is its longest jobs and the job cap: at
-64 jobs it took 266 s but peaked at 7722 MB of the CT's 8192.
-
-## 9. Doom at the framebuffer's own resolution — DEFERRED
+## 7. Doom at the framebuffer's own resolution — DEFERRED
 
 Skipped at the user's request (queue 48): OS work only.
 
