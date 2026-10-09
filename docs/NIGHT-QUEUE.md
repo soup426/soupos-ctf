@@ -41,7 +41,7 @@ Conditions start a program today (`cook taste.elf`). taste (test) as a
 builtin, the same operators as taste.elf, and `[ EXPR ]` the same with a
 closing ] required, as sh. Compare with bash's test and [.
 
-## 2. Builtins read <<< and <<WORD
+## 2. Builtins read <<< and <<WORD — DONE v0.60.80
 
 `take a <<< x` reads the terminal (v0.60.76 noted it). A here-string or a
 here-document on a builtin's line, take above all, is its input. Compare

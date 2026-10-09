@@ -1695,12 +1695,47 @@ static void loopfeed_task(void *arg) {
     task_exit();
 }
 
+/* A pipe whose reader gets buf's len bytes, then the end (v0.60.80): a
+ * task writes them. buf is owned from here on. 0 if there was no room. */
+static vfs_node_t *feed_text(char *buf, int len) {
+    vfs_node_t *rd = 0, *wr = 0;
+    loopfeed_t *f = kmalloc(sizeof(loopfeed_t));
+    if (!f || vfs_pipe(&rd, &wr) < 0) { if (f) kfree(f); kfree(buf); return 0; }
+    f->wr = wr; f->buf = buf; f->len = len;
+    if (!task_spawn("herestr", loopfeed_task, f)) { vfs_close(wr); vfs_close(rd); kfree(buf); kfree(f); return 0; }
+    return rd;
+}
+
 static void build_env(char *out, int max);   /* with hand (v0.60.26) */
 static vfs_node_t *pending_in;   /* stdin for the next cook's first stage (v0.60.27, pipe_into) */
 static char *pending_here;        /* a here-document's body for the next cook (v0.60.52) */
 static int pending_here_len;
 static int pending_here_expand;   /* not quoted: expand it as the cook starts (v0.60.68) */
+static int here_armed;            /* the command now running is the one the document was on (v0.60.80) */
 static void heredoc_expand(const char *in, char *out, int max);
+/* The pending document, expanded unless its WORD was quoted, as a new
+ * buffer of *len bytes; the pending one is gone (v0.60.80, out of cook). */
+static char *here_take(int *len) {
+    char *b = kmalloc(8193 + 2);
+    *len = 0;
+    if (!b) { if (pending_here) kfree(pending_here); pending_here = 0; return 0; }
+    char *src = pending_here; int sl = pending_here_len, ex_it = pending_here_expand;
+    pending_here = 0;                          /* a cook inside a $( ) must not take it */
+    int o = 0;
+    if (!ex_it) { memcpy(b, src, (uint32_t)sl); o = sl; }
+    else for (int i = 0; i < sl; ) {
+        char bline[INPUT_MAX], ex[INPUT_MAX]; int m = 0;
+        while (i < sl && src[i] != '\n') { if (m < INPUT_MAX - 1) bline[m++] = src[i]; i++; }
+        bline[m] = '\0';
+        if (i < sl) i++;
+        heredoc_expand(bline, ex, sizeof(ex));
+        for (const char *c = ex; *c && o < 8190; c++) b[o++] = *c;
+        if (o < 8191) b[o++] = '\n';
+    }
+    kfree(src);
+    *len = o;
+    return b;
+}
 static void (*pending_feed)(void);   /* run once the pipeline is up (v0.60.33, pipe_into) */
 static vfs_node_t *pending_out;        /* stdout for the next cook's last stage (v0.60.34) */
 static int pending_nowait;             /* ... and do not wait: leave the pids here */
@@ -1837,33 +1872,19 @@ static void cmd_cook(const char *args) {
     /* Redirections. The process that receives one owns it and closes it on
      * exit, so nothing here is closed on the success path. */
     vfs_node_t *fin = 0, *fout = 0;
-    int use_doc = !have_here && !infile[0] && pending_here;     /* <<WORD in a script (v0.60.52) */
+    int use_doc = !have_here && !infile[0] && pending_here && here_armed;   /* <<WORD (v0.60.52), on this command (v0.60.80) */
     if (have_here || use_doc) {
         vfs_node_t *rd = 0, *wr = 0;
         loopfeed_t *f = kmalloc(sizeof(loopfeed_t));
         int hl = use_doc ? pending_here_len : (int)strlen(herestr);
         char *b = kmalloc((uint32_t)hl + 2);
         if (!f || !b || vfs_pipe(&rd, &wr) < 0) { if (f) kfree(f); if (b) kfree(b); cook_err("Out of pipes."); return; }
-        if (use_doc && pending_here_expand) {
-            /* expanded now, as the line runs, not as it was read: so
-             * `v=1 ; cook x.elf <<EOF` sees v (v0.60.68) */
+        if (use_doc) {                       /* expanded now, as the line runs (v0.60.68) */
             kfree(b);
-            b = kmalloc(8193 + 2);
+            b = here_take(&hl);
+            here_armed = 0;
             if (!b) { kfree(f); vfs_close(rd); vfs_close(wr); cook_err("Out of memory."); return; }
-            int o = 0;
-            for (int i = 0; i < pending_here_len; ) {
-                char bline[INPUT_MAX], ex[INPUT_MAX]; int m = 0;
-                while (i < pending_here_len && pending_here[i] != '\n') { if (m < INPUT_MAX - 1) bline[m++] = pending_here[i]; i++; }
-                bline[m] = '\0';
-                if (i < pending_here_len) i++;
-                heredoc_expand(bline, ex, sizeof(ex));
-                for (const char *c = ex; *c && o < 8190; c++) b[o++] = *c;
-                if (o < 8191) b[o++] = '\n';
-            }
-            hl = o;
-            kfree(pending_here); pending_here = 0;
         }
-        else if (use_doc) { memcpy(b, pending_here, (uint32_t)hl); kfree(pending_here); pending_here = 0; }
         else { memcpy(b, herestr, (uint32_t)hl); b[hl++] = '\n'; }
         f->wr = wr; f->buf = b; f->len = hl;
         if (!task_spawn("herestr", loopfeed_task, f)) { vfs_close(wr); vfs_close(rd); kfree(b); kfree(f); cook_err("Out of memory."); return; }
@@ -6340,6 +6361,7 @@ static int dish_into(const char *q) {
     return 1;
 }
 
+static void run_ex(char *ex);
 static void run_one(const char *seg) {
     const char *q = seg; while (*q == ' ') q++;
     if (!*q) return;
@@ -6394,6 +6416,46 @@ static void run_one(const char *seg) {
             return;
         }
     }
+    /* <<WORD's mark (v0.60.80): this command is the one the document was
+     * on; the mark goes. A builtin, a function or an assignment on it, or
+     * one with <<< WORD, gets the text as its input, as a program does. */
+    here_armed = 0;
+    for (char *m = ex; *m; m++) if (*m == '\x01') { *m = ' '; if (pending_here) here_armed = 1; }
+    const char *h = ex; while (*h == ' ') h++;
+    const char *h2 = h + 4; while (*h2 == ' ') h2++;
+    int is_cook = is_kw(h, "cook") || (is_kw(h, "chef") && is_kw(h2, "cook"));
+    char *text = 0; int tl = 0;
+    if (!is_cook) {
+        char qq = 0;
+        for (char *c = ex; *c; c++) {
+            if (qq) { if (*c == qq) qq = 0; continue; }
+            if (*c == '\'' || *c == '"') { qq = *c; continue; }
+            if (c[0] == '<' && c[1] == '<' && c[2] == '<') {
+                char word[INPUT_MAX];
+                const char *after = first_word(c + 3, word, sizeof(word));
+                tl = (int)strlen(word);
+                text = kmalloc((uint32_t)tl + 2);
+                if (text) { memcpy(text, word, (uint32_t)tl); text[tl++] = '\n'; }
+                memmove(c, after, strlen(after) + 1);
+                break;
+            }
+        }
+        if (!text && here_armed) { text = here_take(&tl); here_armed = 0; }
+    }
+    if (!text) { run_ex(ex); return; }
+    shell_t *me = cur_shell();
+    vfs_node_t *rd = feed_text(text, tl);
+    if (!rd) { cook_err("Out of pipes."); return; }
+    vfs_node_t *was_in = me->in_pipe;
+    int was_pos = me->in_pos, was_len = me->in_len;
+    me->in_pipe = rd; me->in_pos = me->in_len = 0;
+    run_ex(ex);
+    me->in_pipe = was_in; me->in_pos = was_pos; me->in_len = was_len;
+    vfs_close(rd);
+}
+
+/* The rest of running one command, once expanded. */
+static void run_ex(char *ex) {
     if (prefix_assigns(ex)) return;
     if (try_assign(ex)) return;
     if (call_function(ex)) return;
@@ -6498,6 +6560,12 @@ static void split_closer(lseg_t *g, char *t) {
                 t[kl] = '\0';
                 r++; while (*r == ' ') r++;
                 g->out = r;
+            } else if (r[0] == '\x01') {               /* done <<WORD (v0.60.80) */
+                t[kl] = '\0'; g->redir = r; g->rkind = 'D';
+                for (const char *c = r + 1; *c; c++) if (*c != ' ') g->junk = 1;
+            } else if (r[0] == '<' && r[1] == '<' && r[2] == '<') {   /* done <<< WORD (v0.60.80) */
+                r += 3; while (*r == ' ') r++;
+                if (!*r) g->junk = 1; else { t[kl] = '\0'; g->redir = r; g->rkind = 'H'; }
             } else if (r[0] == '<' || r[0] == '>') {   /* done > F, >> F, < F (v0.60.61) */
                 char kind = r[0] == '<' ? '<' : r[1] == '>' ? 'a' : '>';
                 r += kind == 'a' ? 2 : 1;
@@ -7074,6 +7142,17 @@ static void range_feed(void *arg) {
     feeding_seg = was;
 }
 
+/* A buffer to feed a compound through a pipe (v0.60.80): into_compound's
+ * starter. The buffer is the feeding task's from here on. */
+typedef struct { char *buf; int len; } feed_buf_t;
+static void start_buf(void *ctx, vfs_node_t *wr) {
+    feed_buf_t *fb = ctx;
+    loopfeed_t *f = kmalloc(sizeof(loopfeed_t));
+    if (!f || !fb->buf) { if (f) kfree(f); if (fb->buf) kfree(fb->buf); vfs_close(wr); return; }
+    f->wr = wr; f->buf = fb->buf; f->len = fb->len;
+    if (!task_spawn("herestr", loopfeed_task, f)) { vfs_close(wr); kfree(fb->buf); kfree(f); }
+}
+
 /* done > F: range_feed, noting the compound's status before spoon's
  * replaces it (v0.60.61). */
 static int redir_status, redir_ran;
@@ -7111,6 +7190,27 @@ static void exec_range(lseg_t *sg, int from, int to, int depth) {
                      * reads the file into the compound, as `X | while` does.
                      * The status is the compound's, as sh's. */
                     const char *rw = sg[e].redir; char kind = sg[e].rkind;
+                    if (kind == 'D' || kind == 'H') {
+                        /* done <<WORD, done <<< WORD (v0.60.80): the text feeds
+                         * the compound, as done < F does with a file */
+                        char *text = 0; int tl = 0;
+                        if (kind == 'D') { if (pending_here) text = here_take(&tl); }
+                        else {
+                            char wx[INPUT_MAX], word[INPUT_MAX];
+                            expand_into(rw, wx, INPUT_MAX);
+                            first_word(wx, word, sizeof(word));
+                            tl = (int)strlen(word);
+                            text = kmalloc((uint32_t)tl + 2);
+                            if (text) { memcpy(text, word, (uint32_t)tl); text[tl++] = '\n'; }
+                        }
+                        if (!text) { text = kmalloc(1); tl = 0; }
+                        sg[e].redir = 0;
+                        feed_buf_t fb = { text, tl };
+                        into_compound(sg, i, e, depth, start_buf, &fb);
+                        sg[e].redir = rw;
+                        i = e + 1;
+                        continue;
+                    }
                     char line[INPUT_MAX]; int n = 0;
                     const char *pre = kind == '<' ? "cook spoon.elf " : kind == 'a' ? "spoon.elf >> " : "spoon.elf > ";
                     while (*pre && n < INPUT_MAX - 1) line[n++] = *pre++;
@@ -7452,6 +7552,7 @@ static char *heredoc_mark(char *line, char *word, int max, int *quoted) {
             if (wq && *r == wq) r++;
             if (!n) return 0;
             while (start < r) *start++ = ' ';
+            *s = '\x01';            /* where it was: its command takes it (v0.60.80) */
             return s;
         }
     }

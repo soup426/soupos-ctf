@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.79
+Current version: v0.60.80
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,17 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.80 (2026-10-09)  — BUILTINS READ <<< AND <<WORD
+  - A builtin, a function or an if condition with <<< WORD or a
+    here-document on its line reads the text as its input, take above all
+    (`take a <<< x` read the terminal, v0.60.76 noted it). `done <<< WORD`
+    and `done <<WORD` (and fi, esac, }) feed a whole loop, as done < F.
+  - heredoc_mark leaves a mark where <<WORD was, so the document goes to
+    the command it was on: before, the first cook of the line took it,
+    even `cook a.elf ; cook b.elf <<EOF`, leaving b.elf the terminal.
+  - here_take() (out of cook) and feed_text() are what all of them use.
+  - scripts/bihere-test.sh compares ten commands with bash.
 
 v0.60.79 (2026-10-09)  — TASTE AND [ ] AS BUILTINS
   - `taste EXPR` and `[ EXPR ]` are taste.elf's test without starting a
