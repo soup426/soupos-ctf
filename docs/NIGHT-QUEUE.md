@@ -64,7 +64,7 @@ screen is kept as far as it fits. Measure first what the shell does with
 cols() today when the line is longer than the width. Test: resize, run
 something that fills a line, screendump against the font.
 
-## 3. Drag a file onto a terminal
+## 3. Drag a file onto a terminal — DONE v0.60.163
 
 Dragging a row of the files window onto a terminal window types that
 file's path there, quoted as files_open quotes it. Test: drag HELLO.TXT

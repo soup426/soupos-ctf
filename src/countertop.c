@@ -687,22 +687,37 @@ static int is_text(const char *p) {
 /* Open what row r of files window k names: a bowl here, a file in a new
  * terminal with `jot 'PATH'` typed into it for text, `pour 'PATH'` for the
  * rest. */
-static void files_open(int k, int r) {
-    struct files *f = win[k].files;
-    if (r < 0 || r >= f->n) return;
-    char p[FAT_PATH_MAX];
+/* Row r's path: the bowl above for "..". 0, or -1 if it will not fit. */
+static int files_path(const struct files *f, int r, char p[FAT_PATH_MAX]) {
     if (!strcmp(f->name[r], "..")) {
         strcpy(p, f->path);
         int l = (int)strlen(p);
         while (l > 1 && p[l - 1] != '/') l--;
         p[l > 1 ? l - 1 : 1] = '\0';
-    } else {
-        int l = (int)strlen(f->path);
-        if (l + 1 + (int)strlen(f->name[r]) >= FAT_PATH_MAX) return;
-        strcpy(p, f->path);
-        if (l > 1) p[l++] = '/';
-        strcpy(p + l, f->name[r]);
+        return 0;
     }
+    int l = (int)strlen(f->path);
+    if (l + 1 + (int)strlen(f->name[r]) >= FAT_PATH_MAX) return -1;
+    strcpy(p, f->path);
+    if (l > 1) p[l++] = '/';
+    strcpy(p + l, f->name[r]);
+    return 0;
+}
+/* A path typed into a terminal, single-quoted (a ' inside as '\''), as the
+ * shell reads it back: names have spaces. */
+static void type_path(wterm_t *t, const char *p) {
+    wt_key(t, '\'');
+    for (const char *c = p; *c; c++) {
+        if (*c == '\'') { wt_key(t, '\''); wt_key(t, '\\'); wt_key(t, '\''); }
+        wt_key(t, *c);
+    }
+    wt_key(t, '\'');
+}
+static void files_open(int k, int r) {
+    struct files *f = win[k].files;
+    if (r < 0 || r >= f->n) return;
+    char p[FAT_PATH_MAX];
+    if (files_path(f, r, p) < 0) return;
     if (f->dir[r]) {
         strcpy(f->path, p);
         files_load(f);
@@ -713,15 +728,9 @@ static void files_open(int k, int r) {
     int t = open_terminal();
     if (t < 0) return;
     const char *verb = is_text(p) ? "jot" : "pour";   /* text to the editor (v0.60.154) */
-    const char *c = verb;
-    while (*c) wt_key(win[t].term, *c++);
-    c = " '";                                          /* quoted: names have spaces */
-    while (*c) wt_key(win[t].term, *c++);
-    for (c = p; *c; c++) {
-        if (*c == '\'') { wt_key(win[t].term, '\''); wt_key(win[t].term, '\\'); wt_key(win[t].term, '\''); }
-        wt_key(win[t].term, *c);
-    }
-    wt_key(win[t].term, '\'');
+    for (const char *c = verb; *c; c++) wt_key(win[t].term, *c);
+    wt_key(win[t].term, ' ');
+    type_path(win[t].term, p);
     wt_key(win[t].term, '\n');
     klog("[countertop] %s %s\n", verb, p);
 }
@@ -921,6 +930,10 @@ static void maximise_window(int k) {
  * middle click types the clipboard into the terminal under it. A click
  * with no drag, or new output, clears the selection. */
 static int sel_win = -1;
+/* A row of a files window dragged (v0.60.163): let go over a terminal, its
+ * path is typed there, quoted, with no Enter; let go anywhere else, or
+ * hardly moved, nothing happens. */
+static int fd_win = -1, fd_row, fd_x, fd_y;
 static int rs_win = -1, rs_dx, rs_dy;            /* a terminal being resized from its corner (v0.60.162) */
 #define GRIP 12
 static int cell_at(const win_t *w, int px, int py) {
@@ -957,6 +970,20 @@ static void sel_copy(int k) {
 static void pointer_buttons(int px, int py, int btn, int np) {
     int left = btn & 1, was = last_btn;
     last_btn = btn;
+    if (fd_win >= 0 && (!left || np)) {                /* a files row let go */
+        int k = window_at(px, py), from = fd_win;
+        fd_win = -1;
+        int moved = (px - fd_x) * (px - fd_x) + (py - fd_y) * (py - fd_y) > 64;
+        if (moved && k >= 0 && k != from && win[k].term && win[from].files) {
+            char p[FAT_PATH_MAX];
+            if (files_path(win[from].files, fd_row, p) == 0) {
+                raise_window(k);
+                type_path(win[k].term, p);
+                klog("[countertop] dropped %s on %s\n", p, win[k].title);
+            }
+        }
+        if (!np) return;
+    }
     if (rs_win >= 0) {                                 /* a corner being dragged: whole cells */
         win_t *w = &win[rs_win];
         if (w->term) {
@@ -1084,6 +1111,7 @@ static void pointer_buttons(int px, int py, int btn, int np) {
                 w->files->sel = r; repaint_win(k);
                 last_k = k; last_r = r;
                 if (twice) { last_k = -1; files_open(k, r); }
+                else if (strcmp(w->files->name[r], "..")) { fd_win = k; fd_row = r; fd_x = px; fd_y = py; }   /* maybe a drag */
             }
             return;
         }
@@ -1194,7 +1222,7 @@ int countertop_run(int (*avail)(void), int (*getch)(void), int uid) {
     clip_all();
     background();
     bar();
-    nwin = 0; drag = -1; last_btn = 0; leave_asked = 0; menu_open = 0; rs_win = -1; sel_win = -1; ct_uid = uid; nterm = 0; task_sig = 0xFFFFFFFFu;
+    nwin = 0; drag = -1; last_btn = 0; leave_asked = 0; menu_open = 0; rs_win = -1; sel_win = -1; fd_win = -1; ct_uid = uid; nterm = 0; task_sig = 0xFFFFFFFFu;
     for (int k = 0; k < MAX_WIN; k++) win[k].used = 0;
     app_drag = -1;
     mutex_lock(&app_mtx);                            /* programs may ask for windows now */
@@ -1229,7 +1257,7 @@ int countertop_run(int (*avail)(void), int (*getch)(void), int uid) {
         uint32_t pc = mouse_presses(0, 0);
         int np = (int)(pc - presses_seen);
         presses_seen = pc;
-        if (np || b != last_btn || drag >= 0 || app_drag >= 0 || sel_win >= 0 || rs_win >= 0) pointer_buttons(px, py, b, np);
+        if (np || b != last_btn || drag >= 0 || app_drag >= 0 || sel_win >= 0 || rs_win >= 0 || fd_win >= 0) pointer_buttons(px, py, b, np);
         int wh = mouse_wheel(), dw = wh - wheel_seen;
         wheel_seen = wh;
         if (dw) {                                    /* the wheel: a files window under the pointer scrolls */

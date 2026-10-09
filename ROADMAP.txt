@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.162
+Current version: v0.60.163
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,16 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.163 (2026-10-09)  — DRAG A FILE ONTO A TERMINAL
+  - A row of a files window dragged more than a few pixels and let go
+    over a terminal window types that file's path there, single-quoted
+    as opening it does (files_path() and type_path() are shared now),
+    with no Enter, and raises the terminal. Let go anywhere else, or
+    hardly moved, nothing happens; a double click still opens.
+  - scripts/ctdrop-test.sh: "pour " typed, HELLO.TXT dropped on the
+    terminal, Enter pours it (read back against the font); a row let go
+    over the background types nothing. Six-wide soak 6 of 6.
 
 v0.60.162 (2026-10-09)  — TERMINALS THAT CHANGE SIZE
   - A terminal window's bottom-right corner (12 pixels square) drags it
