@@ -50,7 +50,7 @@ environment), leaving the shell's NAME as it was; several prefixes may
 come first. try_assign says this is not supported; support it. Compare
 with bash's `NAME=value env | grep NAME` and the shell's value after.
 
-## 3. ${VAR:-word}, ${VAR:=word} and ${#VAR}
+## 3. ${VAR:-word}, ${VAR:=word} and ${#VAR} — DONE v0.60.42
 
 The default when unset or empty, the default that also sets it, and the
 length. Compare with bash.

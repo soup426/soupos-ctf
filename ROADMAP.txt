@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.41
+Current version: v0.60.42
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,13 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.42 (2026-10-08)  — ${NAME:-WORD}, ${NAME:=WORD}, ${#NAME}
+  - The default when unset or empty, the same that also sets the variable,
+    and the length; for a name or a script argument (${1:-none}). The word
+    is expanded first, so ${U:-$S-x} and ${U:-"q r"} work as in sh; any
+    other form in braces is left as typed.
+  - scripts/param-test.sh compares twelve lines with bash.
 
 v0.60.41 (2026-10-08)  — A=1 CMD: A VARIABLE FOR ONE COMMAND
   - `NAME=value [NAME=value...] CMD`, as sh: each is set and handed to

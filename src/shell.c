@@ -5277,6 +5277,60 @@ static int expand_into(const char *seg, char *ex, int max) {
             i++;
             continue;
         }
+        /* ${NAME}, ${#NAME}, ${NAME:-word}, ${NAME:=word} (v0.60.42), with a
+         * name or a script argument 1..9: the value, its length, the word
+         * when it is unset or empty, and the same setting it. The word is
+         * expanded first ($X, quotes), as sh does. Anything else in braces
+         * is left as typed. */
+        if (seg[i] == '$' && seg[i + 1] == '{' && sq != '\'') {
+            int j = i + 2, len_of = 0;
+            if (seg[j] == '#' && seg[j + 1] != '}') { len_of = 1; j++; }
+            char name[16]; int nn = 0;
+            if (seg[j] >= '1' && seg[j] <= '9') name[nn++] = seg[j++];
+            else while ((seg[j] == '_' || (seg[j] >= 'A' && seg[j] <= 'Z') || (seg[j] >= 'a' && seg[j] <= 'z') ||
+                         (nn && seg[j] >= '0' && seg[j] <= '9')) && nn < 15) name[nn++] = seg[j++];
+            name[nn] = '\0';
+            char op = 0;
+            if (nn && !len_of && seg[j] == ':' && (seg[j + 1] == '-' || seg[j + 1] == '=')) { op = seg[j + 1]; j += 2; }
+            int wstart = j;
+            if (op) {                                    /* the word: to the matching } */
+                int dep = 0; char q = 0;
+                while (seg[j] && (q || dep || seg[j] != '}')) {
+                    if (q) { if (seg[j] == q) q = 0; }
+                    else if (seg[j] == '\'' || seg[j] == '"') q = seg[j];
+                    else if (seg[j] == '$' && seg[j + 1] == '{') { dep++; j++; }
+                    else if (seg[j] == '}') dep--;
+                    j++;
+                }
+            }
+            if (!nn || seg[j] != '}') { ex[k++] = seg[i]; continue; }
+            shell_t *me = cur_shell();
+            const char *val = 0;
+            if (name[0] >= '1' && name[0] <= '9') { if (name[0] - '1' < me->npargs) val = me->parg[name[0] - '1']; }
+            else for (int v = 0; v < me->nvars; v++) if (str_eq(me->vname[v], name)) { val = me->vval[v]; break; }
+            int mode = sq == '"' ? 1 : in_assign_value(ex, k) ? 2 : 0;
+            if (len_of) {
+                char d[12]; int nd = 0; unsigned v = val ? (unsigned)strlen(val) : 0;
+                do { d[nd++] = (char)('0' + v % 10); v /= 10; } while (v);
+                while (nd && k < max - 1) ex[k++] = d[--nd];
+            } else if (op && (!val || !*val)) {
+                char word[INPUT_MAX], wex[INPUT_MAX];
+                int wl = j - wstart < INPUT_MAX - 1 ? j - wstart : INPUT_MAX - 1;
+                memcpy(word, seg + wstart, (uint32_t)wl); word[wl] = '\0';
+                if (expand_into(word, wex, INPUT_MAX)) cut = 1;
+                for (const char *w = wex; *w && k < max - 1; w++) ex[k++] = *w;   /* its own quotes stand */
+                if (op == '=' && !(name[0] >= '1' && name[0] <= '9')) {
+                    char v2[INPUT_MAX];
+                    strcpy(v2, wex);
+                    unquote(v2);
+                    set_var(name, v2);
+                }
+            } else if (val) {
+                for (; *val; val++) if (!put_lit(ex, &k, max, *val, mode)) { cut = 1; break; }
+            }
+            i = j;
+            continue;
+        }
         /* $NAME and ${NAME} (v0.58.0): a shell variable, empty if unset;
          * not inside '...'. */
         if (seg[i] == '$' && sq != '\'' &&
