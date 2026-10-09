@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.133
+Current version: v0.60.134
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,17 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.134 (2026-10-09)  — SIFT OVER SEVERAL FILES, -L -H -H -W -X
+  - sift.elf PATTERN FILE...: each line, -o match and -c count after
+    NAME: when there is more than one file (-H always, -h never); -l the
+    names of the files with a selected line, each once (reading stops at
+    the first); -w a whole-word match (a later one tried when the first is
+    not), -x the whole line (^( )$ round an -E pattern). A file that will
+    not open is said and the rest read; status 2. Stdin is
+    "(standard input)" to -l.
+  - scripts/siftfiles-test.sh compares 17 cases and stdin, statuses
+    included, with GNU grep; every earlier sift test still passes.
 
 v0.60.133 (2026-10-09)  — RACK -F AND -B
   - rack.elf -f folds lower case to upper when comparing keys (so _ and [

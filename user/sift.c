@@ -15,6 +15,13 @@
  * -E (v0.60.119): the pattern is a POSIX extended regular expression, as
  * grep -E's, through rx.c; -o then prints each leftmost-longest match.
  *
+ * Several FILEs (v0.60.134), as GNU grep: each line (and -o match, and -c
+ * count) after NAME: when there is more than one, -H always, -h never; -l
+ * the names of the files with a selected line, each once; -w a match
+ * that is a whole word (a later one tried when one is not), -x one that
+ * is the whole line. A file that will not open is said on stderr and the
+ * rest still read; the status is then 2.
+ *
  * -n and -o (v0.60.35) as GNU grep 3.12 does them, measured: -n puts "N:"
  * before each line or match; -o prints each match (non-overlapping, as
  * written in the line when -i folds) on a line of its own. With -v, or an
@@ -28,7 +35,9 @@
 #define RX_FREE(p)  ((void)(p))              /* the bump allocator keeps all */
 #include "rx.c"
 
-static int  invert, count_only, nocase, numbers, only, ere;
+static int  invert, count_only, nocase, numbers, only, ere, names_only, whole_word, whole_line;
+static int  show_name;                 /* NAME: before what is printed */
+static const char *fname;
 static rx_t rx;                       /* -E (v0.60.119) */
 static int  sub[RX_NCAP];
 static char *line;
@@ -45,10 +54,34 @@ static int find_at(const char *hay, int hn, const char *pat, int pn, int from) {
     }
     return -1;
 }
+static int wordc(char c) { return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '_'; }
+/* The next match at or after from, as [*ms, *me): honouring -w (both ends
+ * at a word's edge; else the search goes on from the next place) and -x
+ * (the whole line). 1 found, 0 not. */
+static int match_at(const char *hay, int hn, const char *pat, int pn, int from, int *ms, int *me) {
+    while (from <= hn) {
+        int s0, e0;
+        if (ere) {
+            if (rx_exec(&rx, hay, hn, from, sub) <= 0) return 0;
+            s0 = sub[0]; e0 = sub[1];
+        } else {
+            int at = pn ? find_at(hay, hn, pat, pn, from) : from;
+            if (at < 0) return 0;
+            s0 = at; e0 = at + pn;
+        }
+        if (whole_line && !ere && (s0 != 0 || e0 != hn)) return 0;   /* -E has ^( )$ */
+        if (whole_word && ((s0 > 0 && wordc(hay[s0 - 1])) || (e0 < hn && wordc(hay[e0])) || (s0 == e0 && pn))) {
+            from = s0 + 1;
+            continue;
+        }
+        *ms = s0; *me = e0;
+        return 1;
+    }
+    return 0;
+}
 static int contains(const char *hay, int hn, const char *pat, int pn) {
-    if (ere) return rx_exec(&rx, hay, hn, 0, sub) > 0;
-    if (pn == 0) return 1;
-    return find_at(hay, hn, pat, pn, 0) >= 0;
+    int a, b;
+    return match_at(hay, hn, pat, pn, 0, &a, &b);
 }
 
 static void put_number(int n) {
@@ -58,6 +91,11 @@ static void put_number(int n) {
     while (k) o[m++] = d[--k];
     o[m++] = ':';
     sys_write(FD_STDOUT, o, m);
+}
+static void put_name(void) {
+    if (!show_name) return;
+    sys_write(FD_STDOUT, fname, strlen_(fname));
+    sys_write(FD_STDOUT, ":", 1);
 }
 
 static void grow(int need) {
@@ -69,35 +107,13 @@ static void grow(int need) {
     line = n; cap = ncap;
 }
 
-int main(void) {
-    char *tok[8];
-    int nt = uargv(tok, 8);        /* sh's splitting, quotes kept together (v0.57.2) */
-    int t = 0;
-    for (; t < nt && tok[t][0] == '-' && tok[t][1]; t++) {
-        for (char *f = tok[t] + 1; *f; f++) {
-            if      (*f == 'v') invert = 1;
-            else if (*f == 'c') count_only = 1;
-            else if (*f == 'i') nocase = 1;
-            else if (*f == 'n') numbers = 1;
-            else if (*f == 'o') only = 1;
-            else if (*f == 'E') ere = 1;
-            else { print("sift: unknown flag -"); char c[2] = { *f, 0 }; print(c); print("\n"); return 2; }
-        }
-    }
-    if (t >= nt) { print("usage: sift.elf [-vcinoE] word [file]\n"); return 2; }
-    const char *pat = tok[t++];
-    int pn = strlen_(pat);
-    if (ere && rx_compile(&rx, pat, nocase) < 0) { eprint("sift: "); eprint(rx.err); eprint("\n"); return 2; }
-    int fd = FD_STDIN;
-    if (t < nt) {
-        fd = sys_open(tok[t], O_READ);
-        if (fd < 0) { print("sift: cannot open "); print(tok[t]); print("\n"); return 2; }
-    }
-
+/* One input; how many lines it selected. */
+static int sift_fd(int fd, const char *pat, int pn) {
     int selected = 0, lineno = 0;
     int matches = only && !invert && (pn > 0 || ere);   /* -o in force */
     char buf[512];
     int got, eof = 0;
+    len = 0;
     grow(256);
     while (!eof) {
         got = sys_read(fd, buf, sizeof(buf));
@@ -109,23 +125,22 @@ int main(void) {
             lineno++;
             if (contains(line, len, pat, pn) != invert) {
                 selected++;
+                if (names_only) return selected;           /* -l: one is enough */
                 if (count_only) { len = 0; continue; }
-                if (matches && ere) {
-                    /* each leftmost-longest match after the last; an empty
-                     * one is passed over, not printed, as grep's -o */
-                    for (int from = 0; from <= len && rx_exec(&rx, line, len, from, sub) > 0; ) {
-                        if (sub[1] > sub[0]) {
+                if (matches) {
+                    /* each match after the last; an empty one passed over,
+                     * not printed, as grep's -o */
+                    int ms, me;
+                    for (int from = 0; from <= len && match_at(line, len, pat, pn, from, &ms, &me); ) {
+                        if (me > ms) {
+                            put_name();
                             if (numbers) put_number(lineno);
-                            sys_write(FD_STDOUT, line + sub[0], sub[1] - sub[0]); sys_write(FD_STDOUT, "\n", 1);
-                            from = sub[1];
-                        } else from = sub[0] + 1;
-                    }
-                } else if (matches) {
-                    for (int at = find_at(line, len, pat, pn, 0); at >= 0; at = find_at(line, len, pat, pn, at + pn)) {
-                        if (numbers) put_number(lineno);
-                        sys_write(FD_STDOUT, line + at, pn); sys_write(FD_STDOUT, "\n", 1);
+                            sys_write(FD_STDOUT, line + ms, me - ms); sys_write(FD_STDOUT, "\n", 1);
+                            from = me;
+                        } else from = ms + 1;
                     }
                 } else if (!only) {
+                    put_name();
                     if (numbers) put_number(lineno);
                     sys_write(FD_STDOUT, line, len); sys_write(FD_STDOUT, "\n", 1);
                 }
@@ -133,7 +148,59 @@ int main(void) {
             len = 0;
         }
     }
-    if (fd != FD_STDIN) sys_close(fd);
-    if (count_only) { print_int(selected); print("\n"); }
-    return selected ? 0 : 1;
+    return selected;
+}
+
+int main(void) {
+    char *tok[16];
+    int nt = uargv(tok, 16);       /* sh's splitting, quotes kept together (v0.57.2) */
+    int t = 0, force_name = -1;
+    for (; t < nt && tok[t][0] == '-' && tok[t][1]; t++) {
+        for (char *f = tok[t] + 1; *f; f++) {
+            if      (*f == 'v') invert = 1;
+            else if (*f == 'c') count_only = 1;
+            else if (*f == 'i') nocase = 1;
+            else if (*f == 'n') numbers = 1;
+            else if (*f == 'o') only = 1;
+            else if (*f == 'E') ere = 1;
+            else if (*f == 'l') names_only = 1;
+            else if (*f == 'w') whole_word = 1;
+            else if (*f == 'x') whole_line = 1;
+            else if (*f == 'H') force_name = 1;
+            else if (*f == 'h') force_name = 0;
+            else { print("sift: unknown flag -"); char c[2] = { *f, 0 }; print(c); print("\n"); return 2; }
+        }
+    }
+    if (t >= nt) { print("usage: sift.elf [-vcinoElwxHh] PATTERN [file...]\n"); return 2; }
+    const char *pat = tok[t++];
+    int pn = strlen_(pat);
+    if (ere) {
+        const char *use = pat;
+        if (whole_line) {                            /* -x: ^( )$ around it */
+            char *w = malloc((unsigned)pn + 5);
+            w[0] = '^'; w[1] = '(';
+            for (int i = 0; i < pn; i++) w[2 + i] = pat[i];
+            w[pn + 2] = ')'; w[pn + 3] = '$'; w[pn + 4] = '\0';
+            use = w;
+        }
+        if (rx_compile(&rx, use, nocase) < 0) { eprint("sift: "); eprint(rx.err); eprint("\n"); return 2; }
+    }
+    int nfiles = nt - t;
+    show_name = force_name >= 0 ? force_name : nfiles > 1;
+    int total = 0, trouble = 0;
+    for (int f = 0; f < (nfiles ? nfiles : 1); f++) {
+        int fd = FD_STDIN;
+        fname = "(standard input)";
+        if (nfiles) {
+            fname = tok[t + f];
+            fd = sys_open(fname, O_READ);
+            if (fd < 0) { eprint("sift: "); eprint(fname); eprint(": cannot open\n"); trouble = 1; continue; }
+        }
+        int n = sift_fd(fd, pat, pn);
+        if (fd != FD_STDIN) sys_close(fd);
+        total += n;
+        if (names_only) { if (n) { print(fname); print("\n"); } }
+        else if (count_only) { put_name(); print_int(n); print("\n"); }
+    }
+    return trouble ? 2 : total ? 0 : 1;
 }

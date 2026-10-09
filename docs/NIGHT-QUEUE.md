@@ -69,7 +69,7 @@ first set) with -d and -s. Compare with GNU tr.
 (in keys with -k too); with -r -n -u -k -t as they are. Compare with GNU
 sort, LC_ALL=C.
 
-## 5. sift over several files, -l -H -h -w -x (grep)
+## 5. sift over several files, -l -H -h -w -x (grep) — DONE v0.60.134
 
 Several FILEs: each line prefixed NAME: when more than one (-H always,
 -h never), -l the names of files with a match, -w whole words, -x whole
