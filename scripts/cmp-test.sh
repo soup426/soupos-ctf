@@ -16,7 +16,7 @@ cd - >/dev/null
 for f in c1 c2 c3 c4 c5 c6 c7; do mcopy -i "$WORK/disk.img" "$WORK/host/$f.txt" "::/$f.txt"; done
 PAIRS=("c1.txt c2.txt" "c2.txt c1.txt" "c1.txt c4.txt" "c3.txt c1.txt" "c1.txt c3.txt" "c5.txt c1.txt" "c1.txt nope.txt" "c6.txt c7.txt")
 keys=("headchef" "rosemary" "WAIT:1")
-i=0; for pr in "${PAIRS[@]}"; do i=$((i+1)); keys+=("cook pair.elf $pr > /K$i.OUT ; cook call.elf \$? > /K$i.ST" "WAIT:2"); done
+i=0; for pr in "${PAIRS[@]}"; do i=$((i+1)); keys+=("cook pair.elf $pr > /K$i.OUT ; cook call.elf \$? > /K$i.ST" "UNTIL:headchef@soupOS:/> "); done
 qemu-system-i386 -accel kvm -cpu host -drive "file=$WORK/disk.img,format=raw,if=ide,index=0" \
     -cdrom soupOS.iso -boot d -m 128M -no-reboot -no-shutdown -display none \
     -serial "file:$WORK/serial.log" -monitor "unix:$WORK/mon.sock,server,nowait" >/dev/null 2>&1 &
