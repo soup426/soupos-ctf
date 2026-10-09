@@ -1,10 +1,10 @@
 # Night queue
 
-Forty-second queue. The first forty-one are in `docs/queue-archive-2026-10-0*.md`.
+Forty-third queue. The first forty-two are in `docs/queue-archive-2026-10-0*.md`.
 Items wait on a person in three archives (the seventh, the thirteenth and
-the twenty-fourth). A quoting bug the forty-first found, then three
-builtins scripts reach for (eval, wait, getopts) and two programs
-(comm and factor).
+the twenty-fourth). Each item below was checked against the menu and the
+programs first. Two pieces of syntax scripts lean on ([[ ]] and function),
+the shell's own switches (set), the jobs list, xargs, and shuf.
 
 ## Standing rules
 
@@ -30,70 +30,61 @@ builtins scripts reach for (eval, wait, getopts) and two programs
     changing anything the Makefile embeds.
 12. Do not edit the tree while check.sh runs: it builds once at its start
     and reads each test script when that test starts.
-13. If an item is blocked or needs a decision that is not written down, leave
+13. **Check it is not already there**: grep the menu for "(sh's NAME)"
+    and read the first lines of user/*.c before queuing an sh feature or
+    a Unix tool (queue 42 queued wait and getopts, already rest and pluck).
+14. If an item is blocked or needs a decision that is not written down, leave
     a note at the bottom and move on.
 
 ---
 
-## 1. "$(cmd)" keeps its newlines — DONE v0.60.109
+## 1. [[ EXPR ]]
 
-Found in v0.60.105: inside double quotes, `"$(cmd)"` turns cmd's inner
-newlines into spaces, where bash keeps them (only trailing newlines go).
-`slurp "$(cook stalk.elf a/b c/d)"` should be two lines. Unquoted `$(cmd)`
-still splits into words. Prove it first, then a test against bash: two
-and three lines, trailing newlines stripped, assigned to a variable
-(`x=$(...)` keeps them too), and inside a longer quoted string.
+bash's conditional command, a keyword so it keeps its name: no word
+splitting or globbing of what is inside, `==` and `!=` against a glob
+pattern (an unquoted right side is a pattern, a quoted one is text), `<`
+and `>` comparing strings, `&&`, `||`, `!` and ( ) grouping, and taste's
+unary and binary tests (-f -d -e -z -n -eq ...). `=~` only if it measures
+cheap (sift has no regex): otherwise left out and said so. Test against
+bash: a variable holding spaces unquoted, patterns, && || ! ( ), in if,
+while and with && after it.
 
-## 2. brew WORDS (eval) — DONE v0.60.110
+## 2. function NAME { ...; } and function NAME() { ...; }
 
-Its words joined by spaces and run as a command line, status that line's.
-Under a kitchen name (eval is a special builtin in POSIX, but the
-kitchen-names rule wins). Test against bash: building a variable name
-(`brew "v$i=x"`), a pipeline in a string, `;` and `&&` inside, quoting
-that survives one round, nested brew, and its status.
+The other way bash writes a function; a keyword, so it keeps its name.
+Both forms, one line and over several, in a recipe, with stash, return
+and $1; inspect says it is a function. Test against bash.
 
-## 3. tend [%N|PID] (wait) — CLOSED, already there
+## 3. temper (set)
 
-Measured before building: `rest [pid|%N|-n]` has been sh's wait since
-v0.60.48 (v0.60.101 added -n), and rest-test, restn-test and jobspec-test
-already cover every case listed below ($!, a job's exit code, no
-argument, no such job 127, nothing running, %1, -n). Nothing to build.
+sh's set under a kitchen name: `temper -e` / `+e` (errexit, which today
+only `follow -e` turns on), `-u` (an unset variable is an error, status 1
+and the command does not run), `-x` (each command written to stderr with
+a +, after expansion), `temper -- A B C` and `temper A B C` setting $1..
+and $#, `temper` alone listing variables. Test each against bash's set.
 
+## 4. rail (jobs)
 
-Waits for a background job (or all of them with no argument), status
-the job's exit code (127 for one that does not exist, as bash). Measure
-how jobs are tracked first (job_spec, job_pid). Test: `cook marinate.elf
-1 & tend ; slurp $?`, a job that exits 3, `tend %1`, `tend` with nothing
-running, `$!`.
+The jobs this shell put in the background or set aside, as bash's jobs:
+`[N]+  Running   cmd &`, `-` for the one before, Stopped and Done (a done
+job shown once, then gone), -p for the PIDs only. Measure what job_add
+and the prompt's reporting already keep.
 
-## 4. prep OPTSTRING NAME (getopts) — CLOSED, already there
+## 5. runner CMD (xargs)
 
-Measured before building: `pluck OPTS NAME [ARGS]` has been sh's getopts
-since v0.60.77, with OPTARG, OPTIND, bundling, -- and the leading-: silent
-mode (pluck-test). Nothing to build.
+Lines (or blank-separated words) from stdin added as arguments to CMD,
+as xargs: in batches that fit (a program's arguments are 128 bytes at
+most), -n N per command, -I {} once per line with {} replaced; status
+123 if any run failed, as GNU. Measure first how a builtin reads a pipe
+(`| while take` works). Test against xargs with programs and builtins.
 
+## 6. tumble.elf (shuf)
 
-getopts under a kitchen name: one option per call from $1.. (or the words
-given), NAME set to the letter, OPTARG to its value for `x:`, OPTIND
-advanced; `?` for an unknown option, status 1 at the end; `-ab` bundled,
-`--` ends. A leading `:` in OPTSTRING is silent mode. Compare a
-`while prep ...; do case ...` loop with bash's getopts across a dozen
-argument lists, in a function and in a recipe.
-
-## 5. potluck.elf (comm) — DONE v0.60.111
-
-What two sorted files brought: lines only in the first, only in the
-second, and in both, in three tab-indented columns; -1 -2 -3 drop
-columns (and combine, -12). Compare with the host's comm on files with
-repeated lines, an empty file, and stdin as -.
-
-## 6. portion.elf (factor) — DONE v0.60.112
-
-N: its prime factors in order, a line per number, from the words or
-stdin, as GNU's factor. Find out whether ulib can divide 64-bit numbers
-first (libgcc's __udivdi3); if not, 32-bit and say so in the usage. Test
-against the host's factor: 1, primes, squares, 2^31-1, 4294967295, and
-bad input (status 1).
+The lines of a file or stdin in a random order, as shuf; -n N the first N
+of them; -i LO-HI the numbers instead. Ring 3 has no randomness today:
+add SYS_RANDOM from the kernel's entropy pool (what $RANDOM uses). Test
+properties, not bytes: every line out once, -n N lines, two runs differ,
+and the CHALLENGE=1 build unaffected.
 
 ## 7. Doom at the framebuffer's own resolution — DEFERRED
 
@@ -101,6 +92,4 @@ Skipped at the user's request: OS work only.
 
 ## Notes left by unattended runs
 
-- Queue 42 was written checking names against cmd_names, not what the
-  commands do, so items 3 and 4 turned out to exist already (rest, pluck).
-  Before queuing an sh builtin, grep the menu for "(sh's NAME)".
+(none yet)
