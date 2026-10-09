@@ -1,10 +1,10 @@
 # Night queue
 
-Forty-fourth queue. The first forty-three are in `docs/queue-archive-2026-10-0*.md`.
+Forty-fifth queue. The first forty-four are in `docs/queue-archive-2026-10-0*.md`.
 Items wait on a person in three archives (the seventh, the thirteenth and
-the twenty-fourth). Checked against the menu and the programs first: no
-regular expressions anywhere yet (sift is fixed strings, [[ =~ ]] was left
-out), no read -a or mapfile, no diff, split or expr.
+the twenty-fourth). Two the forty-fourth turned up (a directory listing
+that reads the directory once per entry, and what happens past 128
+entries), bash's $'...' quoting, and options the text programs lack.
 
 ## Standing rules
 
@@ -38,49 +38,44 @@ out), no read -a or mapfile, no diff, split or expr.
 
 ---
 
-## 1. Regular expressions, and sift -E — DONE v0.60.119
+## 1. SYS_READDIR: one pass, not one per entry
 
-A small POSIX ERE matcher in one file both sides can build (user/rx.c,
-included by programs and by the kernel): literals, `.`, `[...]` with ranges
-and `[^...]`, `*` `+` `?`, `{m,n}`, `^` `$`, `|`, `( )`, `\` escapes; a
-backtracking matcher is fine at these sizes, with a step limit so a bad
-pattern cannot hang a program. `sift -E PATTERN` uses it, with -v -c -i -n
--o as sift already has them. Test against GNU grep -E over a list of
-patterns and lines (probe with `command grep`, not the ugrep wrapper).
+Measured in v0.60.124: SYS_READDIR runs fat_ls over the whole directory
+for each index it is asked for, so `cook peek.elf /` on the 79-entry root
+reads it 79 times. Measure peek.elf's ticks on the root first, keep the
+last listing per process (the path, and a generation the FAT bumps on any
+change, so a stale one is never handed out), and measure again. ls-test
+and the rest must agree with mtools as before.
 
-## 2. [[ STRING =~ REGEX ]] and BASH_REMATCH — DONE v0.60.120
+## 2. Past 128 entries
 
-The same matcher in the shell: status 0/1/2 as bash's, the whole match in
-BASH_REMATCH[0] and each ( ) group in [1].. (an array), an unquoted right
-side a regex and a quoted one literal text. Test against bash.
+fat_ls fills arrays of FAT_LS_MAX (128). Measure what a directory of 200
+files does to peek.elf, serve, forage.elf, globs and Tab: if entries are
+lost silently, make them all reachable (a larger or growing array, or
+listing in pieces) and test with 200 and 300 files against mtools.
 
-## 3. take -a NAME and stock NAME (read -a, mapfile) — DONE v0.60.121
+## 3. $'...' (ANSI-C quoting)
 
-`take -a NAME` reads a line's words into the array NAME. `stock [-t]
-NAME` (mapfile under a kitchen name) reads every line of its input into
-NAME, -t dropping the newlines. Both from a pipe (as runner reads one)
-and from <<<. Test against bash.
+bash's $'...': \n \t \r \\ \' \" \a \b \e \f \v \0NNN \xHH, the
+result one word as '...' is, and nothing else expanded inside. In
+commands, assignments, case patterns and [[ ]]. Test against bash.
 
-## 4. spot.elf (diff) — DONE v0.60.122
+## 4. slice -c LIST and -s (cut -c, cut -s)
 
-What changed between two files, in diff's normal format (`2c2`, `< `,
-`---`, `> `, `a` and `d` with their ranges), from a longest common
-subsequence; status 0 same, 1 different, 2 trouble. Compare with GNU diff
-on edits at the start, middle and end, insertions, deletions, an empty
-file, and identical files.
+-c LIST picks characters (bytes) by position, with N, N-M, N- and -M
+ranges as -f's; -s drops lines with no delimiter when -f is given.
+Compare with GNU cut.
 
-## 5. carve.elf (split) — DONE v0.60.123
+## 5. skim -c N, dregs -c N, dregs -n +N, skim -n -N
 
-A file (or stdin) into pieces: -l N lines (1000 by default) or -b N
-bytes, named PREFIX then aa, ab, ... (x by default). Compare the pieces
-with GNU split's byte for byte.
+head and tail's byte counts, tail's "from line N on", and head's "all but
+the last N". Compare with GNU head and tail, binary input included.
 
-## 6. reckon.elf (expr) — DONE v0.60.124
+## 6. cull -u and -i (uniq -u, uniq -i)
 
-expr under a kitchen name: + - * / % on integers, = != < <= > >= (as
-numbers when both are, else as text), | and &, length, substr, index,
-and STRING : REGEX through item 1's matcher. Output and status (0, 1 for
-a null or 0 result, 2 for a bad expression) as GNU's expr. Compare.
+-u only the lines that are not repeated, -i comparing without case
+(printing the first of each run as GNU's does). With -c and -d as they
+are. Compare with GNU uniq.
 
 ## 7. Doom at the framebuffer's own resolution — DEFERRED
 
@@ -88,7 +83,4 @@ Skipped at the user's request: OS work only.
 
 ## Notes left by unattended runs
 
-- v0.60.124: SYS_READDIR runs fat_ls over the whole directory for every
-  entry it hands back, so peek.elf on the 79-entry root lists 79 x 79; it
-  ran past ls-test's flat two-second wait under a loaded check. The test
-  now waits for the prompt; the quadratic listing is worth an item.
+(none yet)
