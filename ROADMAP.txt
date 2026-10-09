@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.98
+Current version: v0.60.99
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,15 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.99 (2026-10-09)  — SHELVE, UNSHELVE, SHELF (PUSHD, POPD, DIRS)
+  - `shelve BOWL` goes there and keeps where it was on a stack (alone it
+    swaps with the top), `unshelve` goes back to the top and takes it off
+    (status 1 on an empty shelf), `shelf` lists the bowl it is in and then
+    the stack, `shelf -c` clears it; each says the stack after, as bash's
+    pushd, popd and dirs. Eight deep; no ~ for home (the headchef's is /).
+    A clockout clears it.
+  - scripts/shelf-test.sh compares two files and two statuses with bash.
 
 v0.60.98 (2026-10-09)  — ${!A[@]} AND ${!PREFIX*}
   - ${!a[@]} and ${!a[*]} are an array's indexes (0 up, the arrays being

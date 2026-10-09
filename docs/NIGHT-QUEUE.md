@@ -34,7 +34,7 @@ the builtin, rest -n, Tab for variables, and select.
 
 ---
 
-## 1. shelve, unshelve, shelf (pushd, popd, dirs)
+## 1. shelve, unshelve, shelf (pushd, popd, dirs) — DONE v0.60.99
 
 `shelve BOWL` goes there and keeps where it was on a stack; `unshelve`
 goes back to the top one; `shelf` lists the stack (the current bowl

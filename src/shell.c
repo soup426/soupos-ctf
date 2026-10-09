@@ -88,6 +88,8 @@ typedef struct {
     int     dots;                /* . FILE running (v0.60.91): return leaves it */
     int     dot_fns;             /* ... at this function depth: deeper, return is a function's */
     uint32_t self_id, parent_id; /* $$ and $PPID (v0.60.95): the shell's task, its starter's */
+    char     shelf[8][FAT_PATH_MAX]; /* shelve's stack, top first (v0.60.99) */
+    int      nshelf;
     uint32_t sec_base;           /* $SECONDS counts from here, plus sec_off */
     int      sec_off;
     int      lineno;             /* $LINENO: the follow script's line now running */
@@ -821,6 +823,9 @@ static void cmd_menu(void) {
         {0, "    jot <file>         - edit a file (full-screen text editor)"},
         {0, "    pwd                - print the current bowl (directory)"},
         {0, "    cd <bowl> / cd -   - change bowl; - goes back ($PWD, $OLDPWD)"},
+        {0, "    shelve <bowl>      - go there, keeping where you were (sh's pushd)"},
+        {0, "    unshelve           - back to the last shelved bowl (sh's popd)"},
+        {0, "    shelf [-c]         - the shelved bowls (sh's dirs)"},
         {0, "    mkbowl <name>      - make a new bowl (directory)"},
         {0, "    rmbowl <name>      - remove an empty bowl"},
         {0, "    bowltest           - self-test the bowl/filesystem layer"},
@@ -3323,6 +3328,9 @@ static void cmd_pluck(const char *args);                  /* beside it (v0.60.77
 static void cmd_taste(const char *args, int bracket);     /* beside it (v0.60.79) */
 static void cmd_eggtimer(const char *args);               /* beside it (v0.60.87) */
 static void cmd_nickname(const char *args);               /* beside it (v0.60.90) */
+static void cmd_shelve(const char *args);                 /* beside it (v0.60.99) */
+static void cmd_unshelve(const char *args);
+static void cmd_shelf(const char *args);
 static void run_file(const char *args, int dot);          /* . FILE (v0.60.91) */
 static void cmd_forget(const char *args);
 static int nick_find(const char *name);
@@ -3425,6 +3433,7 @@ static void cmd_clockout(void) {
     smoke_exit();                              /* the prompt's EXIT smoke (v0.60.82) */
     cur_shell()->trap_set[0] = cur_shell()->trap_set[1] = 0;
     cur_shell()->nnicks = 0;                   /* nicknames are the cook's own (v0.60.90) */
+    cur_shell()->nshelf = 0;                   /* and the shelf (v0.60.99) */
     hist_save();                               /* the shift's leftovers, kept */
     if (cur_shell() != &the_shell) {           /* a session: clocking out leaves */
         t_printf("  %s clocks out. Goodbye.\n", users_current_name());
@@ -4909,7 +4918,7 @@ static const char *const cmd_names[] = {
     "takeout", "bgclock", "yieldbg", "spinbg", "sleeptest", "vfstest",
     "dmesg", "pwd", "cd", "mkbowl", "rmbowl", "bowltest",
     "whoami", "roster", "clockout", "hire", "fire", "perms", "secret",
-    "break", "continue", "return", "exit", "inspect", "seal", "pluck", "taste", "[", "smoke", "eggtimer", "nickname", "forget", ".",
+    "break", "continue", "return", "exit", "inspect", "seal", "pluck", "taste", "[", "smoke", "eggtimer", "nickname", "forget", ".", "shelve", "unshelve", "shelf",
     "preempttest", "vmtest", "vgastress", "fatstress",
 };
 #define CMD_COUNT  (int)(sizeof(cmd_names) / sizeof(cmd_names[0]))
@@ -5158,6 +5167,9 @@ static void dispatch(const char *buf) {
     else if (str_eq(p, "eggtimer") || str_startswith(p, "eggtimer ")) cmd_eggtimer(p + 8);
     else if (str_eq(p, ".") || str_startswith(p, ". ")) run_file(p + 1, 1);   /* (v0.60.91) */
     else if (str_eq(p, "nickname") || str_startswith(p, "nickname ")) cmd_nickname(p + 8);
+    else if (str_eq(p, "shelve") || str_startswith(p, "shelve ")) cmd_shelve(p + 6);
+    else if (str_eq(p, "unshelve") || str_startswith(p, "unshelve ")) cmd_unshelve(p + 8);
+    else if (str_eq(p, "shelf") || str_startswith(p, "shelf ")) cmd_shelf(p + 5);
     else if (str_eq(p, "forget") || str_startswith(p, "forget ")) cmd_forget(p + 6);
     else if (str_eq(p, "taste") || str_startswith(p, "taste ")) cmd_taste(p + 5, 0);
     else if (str_eq(p, "[") || str_startswith(p, "[ ")) cmd_taste(p + 1, 1);
@@ -7668,6 +7680,60 @@ static int loop_after_body(shell_t *me) {
     }
     return 0;
 }
+/* shelve [BOWL], unshelve, shelf [-c] (v0.60.99): sh's pushd, popd and
+ * dirs under kitchen names. shelve goes to BOWL and keeps where it was on
+ * a stack (alone, it swaps with the top); unshelve goes back to the top
+ * and takes it off; shelf lists the bowl it is in, then the stack, as dirs
+ * does (no ~ for home: the headchef's is /). Each says the stack after. */
+static void cmd_cd(const char *args);
+static void shelf_show(void) {
+    shell_t *me = cur_shell();
+    t_puts(me->cwd);
+    for (int k = 0; k < me->nshelf; k++) { t_putc(' '); t_puts(me->shelf[k]); }
+    t_putc('\n');
+}
+static void cmd_shelve(const char *args) {
+    shell_t *me = cur_shell();
+    while (*args == ' ') args++;
+    char was[FAT_PATH_MAX], dest[FAT_PATH_MAX];
+    strcpy(was, me->cwd);
+    if (!*args) {
+        if (!me->nshelf) { t_puts("  shelve: no other bowl\n"); me->last_status = 1; return; }
+        strcpy(dest, me->shelf[0]);
+    } else {
+        char w[FAT_PATH_MAX]; first_word(args, w, sizeof(w)); strcpy(dest, w);
+        if (me->nshelf >= 8) { t_puts("  shelve: the shelf is full (8)\n"); me->last_status = 1; return; }
+    }
+    cmd_cd(dest);
+    if (me->last_status) return;
+    if (!*args) strcpy(me->shelf[0], was);
+    else {
+        for (int k = me->nshelf; k > 0; k--) strcpy(me->shelf[k], me->shelf[k - 1]);
+        strcpy(me->shelf[0], was);
+        me->nshelf++;
+    }
+    shelf_show();
+}
+static void cmd_unshelve(const char *args) {
+    shell_t *me = cur_shell();
+    (void)args;
+    if (!me->nshelf) { t_puts("  unshelve: the shelf is empty\n"); me->last_status = 1; return; }
+    char dest[FAT_PATH_MAX];
+    strcpy(dest, me->shelf[0]);
+    cmd_cd(dest);
+    if (me->last_status) return;
+    for (int k = 1; k < me->nshelf; k++) strcpy(me->shelf[k - 1], me->shelf[k]);
+    me->nshelf--;
+    shelf_show();
+}
+static void cmd_shelf(const char *args) {
+    shell_t *me = cur_shell();
+    while (*args == ' ') args++;
+    me->last_status = 0;
+    if (str_eq(args, "-c")) { me->nshelf = 0; return; }
+    shelf_show();
+}
+
 /* nickname [NAME[=TEXT]]... and forget NAME... (v0.60.90): sh's alias and
  * unalias, under kitchen names. A command typed at the prompt whose first
  * word is a nickname runs its text in that word's place, read again (so
