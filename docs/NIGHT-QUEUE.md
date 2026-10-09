@@ -108,7 +108,7 @@ cook it, draw with injected drags, screendump, close.
 
 Built as frost.elf (doodle is not a kitchen name: icing a cake).
 
-## 8. Later: layer -s and - (paste), tally with decimals (seq)
+## 8. Later: layer -s and - (paste), tally with decimals (seq) — layer DONE v0.60.147
 
 Moved from queue 47 so the desktop comes first; as written there.
 

@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.146
+Current version: v0.60.147
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,18 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.147 (2026-10-09)  — LAYER -s, AND - MORE THAN ONCE (paste)
+  - Every - is now the same stdin, so `layer.elf - -` takes its lines in
+    turn as paste does. Each - had its own 2 KB buffer, so the first read
+    the lot: `spoon.elf N.TXT | layer.elf - -` gave "1<TAB>" on each of
+    five lines, not "1<TAB>2", "3<TAB>4", "5<TAB>".
+  - -s (serial): each file's lines on one line, the -d list starting over
+    for each file, an empty file giving an empty line. Options cluster
+    (-sd:) and -- ends them.
+  - layer-test.sh: nine more forms against GNU paste byte for byte (- -,
+    - FILE -, - - - past a read, -s over uneven and empty files, -s -d,
+    -sd:, -s with - twice, -s past a read, -d '\0' -s); 19 in all.
 
 v0.60.146 (2026-10-09)  — COUNTERTOP: WINDOWS FOR PROGRAMS (STEP 7)
   - SYS_WIN_OPEN (a width, height and title: an id), SYS_WIN_PUT (the
