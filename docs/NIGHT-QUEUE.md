@@ -40,7 +40,7 @@ the builtin, rest -n, Tab for variables, and select.
 goes back to the top one; `shelf` lists the stack (the current bowl
 first, as dirs). Kitchen names. Compare with bash's pushd/popd/dirs.
 
-## 2. plain CMD (command)
+## 2. plain CMD (command) — DONE v0.60.100
 
 Runs CMD as the builtin or the program it names, skipping a function or a
 nickname of the same name, as sh's command does; `plain -v NAME` says

@@ -903,6 +903,7 @@ static void cmd_menu(void) {
         {0, "    stash NAME[=value] - a function's own variable (sh's local)"},
         {0, "    shift [N]          - drop the first N arguments ($2 becomes $1)"},
         {0, "    inspect [-t] NAME  - what NAME is: keyword, function, builtin or program"},
+        {0, "    plain CMD / -v NAME - the builtin or program, not a function (sh's command)"},
         {0, "    seal NAME[=value]  - a variable nothing may change (sh's readonly)"},
         {0, "    pluck OPTS NAME    - the next -x option of $1.. (sh's getopts)"},
         {0, "    taste EXPR, [ EXPR ] - a condition: -f -d -e -z -n = != -eq -lt ... (sh's test)"},
@@ -3331,6 +3332,7 @@ static void cmd_nickname(const char *args);               /* beside it (v0.60.90
 static void cmd_shelve(const char *args);                 /* beside it (v0.60.99) */
 static void cmd_unshelve(const char *args);
 static void cmd_shelf(const char *args);
+static void cmd_plain(const char *args);                  /* v0.60.100 */
 static void run_file(const char *args, int dot);          /* . FILE (v0.60.91) */
 static void cmd_forget(const char *args);
 static int nick_find(const char *name);
@@ -4918,7 +4920,7 @@ static const char *const cmd_names[] = {
     "takeout", "bgclock", "yieldbg", "spinbg", "sleeptest", "vfstest",
     "dmesg", "pwd", "cd", "mkbowl", "rmbowl", "bowltest",
     "whoami", "roster", "clockout", "hire", "fire", "perms", "secret",
-    "break", "continue", "return", "exit", "inspect", "seal", "pluck", "taste", "[", "smoke", "eggtimer", "nickname", "forget", ".", "shelve", "unshelve", "shelf",
+    "break", "continue", "return", "exit", "inspect", "seal", "pluck", "taste", "[", "smoke", "eggtimer", "nickname", "forget", ".", "shelve", "unshelve", "shelf", "plain",
     "preempttest", "vmtest", "vgastress", "fatstress",
 };
 #define CMD_COUNT  (int)(sizeof(cmd_names) / sizeof(cmd_names[0]))
@@ -5170,6 +5172,7 @@ static void dispatch(const char *buf) {
     else if (str_eq(p, "shelve") || str_startswith(p, "shelve ")) cmd_shelve(p + 6);
     else if (str_eq(p, "unshelve") || str_startswith(p, "unshelve ")) cmd_unshelve(p + 8);
     else if (str_eq(p, "shelf") || str_startswith(p, "shelf ")) cmd_shelf(p + 5);
+    else if (str_eq(p, "plain") || str_startswith(p, "plain ")) cmd_plain(p + 5);
     else if (str_eq(p, "forget") || str_startswith(p, "forget ")) cmd_forget(p + 6);
     else if (str_eq(p, "taste") || str_startswith(p, "taste ")) cmd_taste(p + 5, 0);
     else if (str_eq(p, "[") || str_startswith(p, "[ ")) cmd_taste(p + 1, 1);
@@ -7323,8 +7326,72 @@ static void run_one(const char *seg) {
     vfs_close(rd);
 }
 
+/* plain CMD [ARGS] and plain -v NAME... (v0.60.100): sh's command under a
+ * kitchen name. CMD runs as the builtin, or the program, it names, and
+ * not as a function of the same name (a nickname is the typed first word's
+ * only, so plain's never is one): the way a function wraps a builtin and
+ * still calls it. -v says what a word would run, as command -v: a
+ * keyword's, builtin's or function's name, a nickname's definition, a
+ * program's path; nothing and status 1 for none. */
+static int plain_program(const char *w, char *path) {
+    resolve_path(w, path);
+    if ((!fat_exists(path) || fat_is_dir(path)) && w[0] != '/') {
+        char alt[FAT_PATH_MAX];
+        alt[0] = '/'; strncpy(alt + 1, w, sizeof(alt) - 2); alt[sizeof(alt) - 1] = '\0';
+        if (fat_exists(alt) && !fat_is_dir(alt)) strcpy(path, alt);
+    }
+    return fat_exists(path) && !fat_is_dir(path);
+}
+static int is_builtin_name(const char *w) {
+    for (unsigned k = 0; k < sizeof(cmd_names) / sizeof(cmd_names[0]); k++) if (str_eq(w, cmd_names[k])) return 1;
+    return 0;
+}
+static void dispatch(const char *buf);
+static void cmd_plain(const char *args) {
+    shell_t *me = cur_shell();
+    while (*args == ' ') args++;
+    if (!*args) { me->last_status = 0; return; }
+    char w[FAT_PATH_MAX];
+    const char *rest = first_word(args, w, sizeof(w));
+    if (str_eq(w, "-v")) {
+        static const char *const kws[] = { "if", "then", "elif", "else", "fi", "for", "while", "until",
+                                           "do", "done", "case", "esac", "in", "!", "{", "}", "eggtimer" };
+        int missing = 0;
+        while (*rest) {
+            char n[FAT_PATH_MAX], path[FAT_PATH_MAX];
+            rest = first_word(rest, n, sizeof(n));
+            if (!n[0]) break;
+            int kw = 0, fn = 0;
+            for (unsigned k = 0; k < sizeof(kws) / sizeof(kws[0]); k++) if (str_eq(n, kws[k])) kw = 1;
+            for (int f = 0; f < me->nfuncs; f++) if (str_eq(me->fname[f], n)) fn = 1;
+            int nk = nick_find(n);
+            if (nk >= 0) t_printf("nickname %s='%s'\n", n, me->nick_text[nk]);
+            else if (kw || fn || is_builtin_name(n)) t_printf("%s\n", n);
+            else if (plain_program(n, path)) t_printf("%s\n", path);
+            else missing = 1;
+        }
+        me->last_status = missing;
+        return;
+    }
+    if (is_builtin_name(w)) { dispatch(args); return; }
+    char path[FAT_PATH_MAX];
+    if (plain_program(w, path)) {
+        char line[INPUT_MAX]; int n = 0;
+        for (const char *c = "cook "; *c; c++) line[n++] = *c;
+        for (const char *c = args; *c && n < INPUT_MAX - 1; c++) line[n++] = *c;
+        line[n] = '\0';
+        dispatch(line);
+        return;
+    }
+    dispatch(args);                                /* says it is not there, 127 */
+}
+
 /* The rest of running one command, once expanded. */
 static void run_ex(char *ex) {
+    {
+        const char *h = ex; while (*h == ' ') h++;
+        if (is_kw(h, "plain")) { cmd_plain(h + 5); return; }   /* not a function's (v0.60.100) */
+    }
     if (prefix_assigns(ex)) return;
     if (try_assign(ex)) return;
     if (call_function(ex)) return;

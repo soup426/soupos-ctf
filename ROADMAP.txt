@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.99
+Current version: v0.60.100
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,17 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.100 (2026-10-09)  — PLAIN (COMMAND)
+  - `plain CMD [ARGS]` is sh's command under a kitchen name: CMD runs as
+    the builtin or the program it names, never a function of that name
+    (a nickname is only ever the typed first word's), so
+    `slurp() { plain slurp "[$@]" ; }` wraps the builtin and still calls
+    it. A program is found as cook finds it; none is 127. `plain -v NAME`
+    says what NAME would run, as command -v: a keyword's, builtin's or
+    function's name, a nickname's definition, a program's path, nothing
+    and status 1 for none.
+  - scripts/plain-test.sh compares four files and five lines with bash.
 
 v0.60.99 (2026-10-09)  — SHELVE, UNSHELVE, SHELF (PUSHD, POPD, DIRS)
   - `shelve BOWL` goes there and keeps where it was on a stack (alone it
