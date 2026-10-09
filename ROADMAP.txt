@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.64
+Current version: v0.60.65
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,17 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.65 (2026-10-08)  — ${NAME/PAT/REP} AND ${NAME:OFF:LEN}
+  - ${NAME/pat/rep} replaces the first longest match of a glob, //
+    every one, /# one at the front and /% one at the back; an empty
+    pattern changes nothing, except anchored, where it puts rep at that
+    end, as bash. \/ is a / in the pattern; the replacement is expanded,
+    $X and ${X} in it.
+  - ${NAME:off} and ${NAME:off:len} slice it; both are arithmetic, so n,
+    $n and 2+1 work; a negative offset (written `: -2` or `:(-2)`) counts
+    from the end, and so does a negative length; past the end is empty.
+  - scripts/subst-test.sh compares twelve lines with bash.
 
 v0.60.64 (2026-10-08)  — ${NAME#PAT} AND ${NAME%PAT}
   - ${NAME#pat} and ${NAME##pat} take the shortest or longest match of a

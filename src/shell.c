@@ -5638,6 +5638,13 @@ static int expand_into(const char *seg, char *ex, int max) {
                 op = seg[j] == '#' ? (twice ? 'h' : 'H') : (twice ? 't' : 'T');
                 j += twice ? 2 : 1;
             }
+            /* ${NAME/pat/rep}, //, /#, /% and ${NAME:off[:len]} (v0.60.65):
+             * R first, G every, P anchored at the front, S at the back; O a slice */
+            else if (nn && !len_of && seg[j] == '/') {
+                op = seg[j + 1] == '/' ? 'G' : seg[j + 1] == '#' ? 'P' : seg[j + 1] == '%' ? 'S' : 'R';
+                j += op == 'R' ? 1 : 2;
+            }
+            else if (nn && !len_of && seg[j] == ':') { op = 'O'; j++; }
             int wstart = j;
             if (op) {                                    /* the word: to the matching } */
                 int dep = 0; char q = 0;
@@ -5660,6 +5667,75 @@ static int expand_into(const char *seg, char *ex, int max) {
                 char d[12]; int nd = 0; unsigned v = val ? (unsigned)strlen(val) : 0;
                 do { d[nd++] = (char)('0' + v % 10); v /= 10; } while (v);
                 while (nd && k < max - 1) ex[k++] = d[--nd];
+            } else if (op == 'R' || op == 'G' || op == 'P' || op == 'S') {
+                char raw[INPUT_MAX], pat[INPUT_MAX], rep[INPUT_MAX], part[INPUT_MAX];
+                int rn = 0, at = j, dep = 0; char q = 0;
+                for (int c = wstart; c < j; c++) {           /* pat ends at the first bare / */
+                    if (q) { if (seg[c] == q) q = 0; }
+                    else if (seg[c] == '\\' && seg[c + 1] == '/') { raw[rn++] = '/'; c++; continue; }
+                    else if (seg[c] == '\'' || seg[c] == '"') q = seg[c];
+                    else if (seg[c] == '$' && seg[c + 1] == '{') dep++;
+                    else if (seg[c] == '}') dep--;
+                    else if (seg[c] == '/' && !dep) { at = c; break; }
+                    if (rn < INPUT_MAX - 1) raw[rn++] = seg[c];
+                }
+                raw[rn] = '\0';
+                if (expand_into(raw, pat, INPUT_MAX)) cut = 1;
+                unquote(pat);
+                int rl = at < j ? j - at - 1 : 0;
+                if (rl > INPUT_MAX - 1) rl = INPUT_MAX - 1;
+                memcpy(raw, seg + at + 1, (uint32_t)rl); raw[rl] = '\0';
+                if (expand_into(raw, rep, INPUT_MAX)) cut = 1;
+                unquote(rep);
+                const char *v = val ? val : "";
+                int L = (int)strlen(v), c = 0, done = 0;
+                while (c <= L) {
+                    int got = -1;                             /* the longest match at c */
+                    if (!done && (op != 'P' || c == 0) && (pat[0] || op == 'P' || op == 'S')) {
+                        for (int e2 = (op == 'S' ? L : L); e2 >= c; e2--) {
+                            if (op == 'S' && e2 != L) break;
+                            int n = e2 - c;
+                            memcpy(part, v + c, (uint32_t)n); part[n] = '\0';
+                            if (glob_match(pat, part)) { got = n; break; }
+                        }
+                        if (got == 0 && (op == 'R' || op == 'G')) got = -1;   /* empty: no match */
+                    }
+                    if (got >= 0) {
+                        for (const char *w = rep; *w; w++) if (!put_lit(ex, &k, max, *w, mode)) { cut = 1; break; }
+                        c += got;
+                        if (op != 'G') done = 1;
+                        if (got == 0) { if (c < L && !put_lit(ex, &k, max, v[c], mode)) cut = 1; c++; }
+                        continue;
+                    }
+                    if (c < L && !put_lit(ex, &k, max, v[c], mode)) { cut = 1; break; }
+                    c++;
+                }
+            } else if (op == 'O') {
+                char raw[INPUT_MAX], ox[INPUT_MAX];
+                int at = j, dep = 0;
+                for (int c = wstart; c < j; c++) {
+                    if (seg[c] == '(') dep++;
+                    else if (seg[c] == ')') dep--;
+                    else if (seg[c] == ':' && !dep) { at = c; break; }
+                }
+                const char *v = val ? val : "";
+                long L = (long)strlen(v), off, len = L;
+                int ol = at - wstart < INPUT_MAX - 1 ? at - wstart : INPUT_MAX - 1;
+                memcpy(raw, seg + wstart, (uint32_t)ol); raw[ol] = '\0';
+                if (expand_into(raw, ox, INPUT_MAX)) cut = 1;
+                off = arith(ox);
+                if (off < 0) off += L;
+                if (off < 0 || off > L) off = L;           /* out of range: nothing, as bash */
+                if (at < j) {
+                    int ll = j - at - 1 < INPUT_MAX - 1 ? j - at - 1 : INPUT_MAX - 1;
+                    memcpy(raw, seg + at + 1, (uint32_t)ll); raw[ll] = '\0';
+                    if (expand_into(raw, ox, INPUT_MAX)) cut = 1;
+                    len = arith(ox);
+                    if (len < 0) len = L + len - off;         /* a negative length counts from the end */
+                    if (len < 0) len = 0;
+                }
+                if (off + len > L) len = L - off;
+                for (long c = off; c < off + len; c++) if (!put_lit(ex, &k, max, v[c], mode)) { cut = 1; break; }
             } else if (op == 'H' || op == 'h' || op == 'T' || op == 't') {
                 char word[INPUT_MAX], pat[INPUT_MAX], part[INPUT_MAX];
                 int wl = j - wstart < INPUT_MAX - 1 ? j - wstart : INPUT_MAX - 1;

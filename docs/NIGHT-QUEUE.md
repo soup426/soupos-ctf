@@ -41,7 +41,7 @@ Strip the shortest or longest match of a glob pattern from the front or
 the back of a value, as sh. The pattern is a glob ([abc] included) and
 may hold $X. Compare with bash.
 
-## 2. ${NAME/pat/rep}, ${NAME//pat/rep}, ${NAME:off:len}
+## 2. ${NAME/pat/rep}, ${NAME//pat/rep}, ${NAME:off:len} — DONE v0.60.65
 
 The first or every match replaced (# and % anchors too), and a slice.
 Compare with bash.
