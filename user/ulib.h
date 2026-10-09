@@ -23,6 +23,7 @@ int  sys_env  (char *buf, int max);   /* NAME=value lines (v0.60.26) */
 int  uargv(char **argv, int max);
 void sys_yield(void);
 unsigned sys_ticks(void);            /* uptime in 100 Hz PIT ticks */
+void     sys_sleep(unsigned ms);        /* sleep, ten seconds at most a call (v0.60.101) */
 /* Entry `index` of directory `path`: 1 written to *out, 0 past the end, -1 error. */
 int  sys_readdir(const char *path, int index, udirent_t *out);
 int  sys_unlink(const char *path);      /* 0, or -1 (missing, a bowl, not yours) */

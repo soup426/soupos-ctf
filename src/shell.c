@@ -843,7 +843,7 @@ static void cmd_menu(void) {
         {0, "    cook <prog.elf> &  - ... in the background (Ctrl+C kills the"},
         {0, "                         foreground one; kill <pid> any of them)"},
         {0, "    orders             - list processes and their exit codes"},
-        {0, "    rest [pid]         - wait for background jobs ($! is the last one)"},
+        {0, "    rest [pid|%N|-n]   - wait for background jobs (-n: the next to end)"},
         {0, "    scraps             - show the clipboard (^U/^W fill it, ^V pastes)"},
         {0, "    plate [pid]        - bring a job back to the foreground"},
         {0, "    steep [pid]        - resume a stopped job in the background"},
@@ -3134,6 +3134,28 @@ static void cmd_rest(const char *args) {
     shell_t *me = cur_shell();
     while (*args == ' ') args++;
     me->last_status = 0;
+    if (args[0] == '-' && args[1] == 'n' && (!args[2] || args[2] == ' ')) {
+        /* rest -n (v0.60.101), as wait -n: the next background job of this
+         * shell's to end, whichever it is; its status. None: 127. */
+        for (;;) {
+            proc_t *q, *ended = 0;
+            int idx = 0, live = 0;
+            while ((q = proc_next(&idx)) != 0) {
+                if (!q->background || !my_job_term(q->term)) continue;
+                if (q->state == PROC_ZOMBIE) { ended = q; break; }
+                if (q->state != PROC_STOPPED) live = 1;
+            }
+            if (ended) {
+                int code = 0;
+                proc_wait(ended->pid, &code);
+                me->last_status = job_status(code);
+                return;
+            }
+            if (!live) { me->last_status = 127; return; }
+            if (interrupted()) { me->last_status = 130; return; }
+            task_sleep(10);
+        }
+    }
     if (*args) {
         uint32_t pid = 0;
         int js = job_spec(args, &pid);              /* rest %N (v0.60.92) */

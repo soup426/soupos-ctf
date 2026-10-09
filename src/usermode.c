@@ -652,6 +652,13 @@ void syscall_dispatch(registers_t *r) {
         case SYS_TICKS:                   /* uptime in 100 Hz PIT ticks */
             r->eax = timer_get_ticks();
             break;
+        case SYS_SLEEP:                   /* (v0.60.101) the task sleeps, ten seconds at most a call */
+            /* The interrupt gate cleared IF, and only the timer's ticks wake a
+             * sleeper: on again first, as SYS_YIELD does. */
+            __asm__ volatile ("sti");
+            task_sleep(r->ebx > 10000 ? 10000 : r->ebx);
+            r->eax = 0;
+            break;
 
         default:
             r->eax = (uint32_t)-1;

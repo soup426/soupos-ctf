@@ -46,7 +46,7 @@ Runs CMD as the builtin or the program it names, skipping a function or a
 nickname of the same name, as sh's command does; `plain -v NAME` says
 what it would run. A kitchen name. Compare with bash's command.
 
-## 3. rest -n
+## 3. rest -n — DONE v0.60.101 (with SYS_SLEEP and marinate.elf)
 
 Waits for the next background job to end, whichever it is, its status
 being that job's, as wait -n. Test with two jobs of different lengths.

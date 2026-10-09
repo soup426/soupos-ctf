@@ -17,6 +17,7 @@
 #define SYS_STAT   12  /* ebx = path, ecx = ustat_t*; -> 0, or -1 (v0.59.0)   */
 #define SYS_ENV    13  /* ebx = buf, ecx = max; -> length of the environment:
                         * NAME=value lines, as the shell handed them (v0.60.26) */
+#define SYS_SLEEP  14  /* ebx = ms (10 s at most a call): the task sleeps (v0.60.101) */
 
 /* One directory entry for SYS_READDIR (v0.44.0): the long name when the
  * entry has one, else the 8.3 name. Shared by the kernel and ulib. */

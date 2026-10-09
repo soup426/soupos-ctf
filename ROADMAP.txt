@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.100
+Current version: v0.60.101
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,25 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.101 (2026-10-09)  — REST -N, MARINATE.ELF AND SYS_SLEEP
+  - `rest -n` is wait -n: the next of this shell's background jobs to end,
+    whichever it is, and its status; none, 127; Ctrl-C, 130.
+  - SYS_SLEEP (14): a program's task sleeps, ten seconds at most a call;
+    ulib's sys_sleep. It turns interrupts back on first, as SYS_YIELD does
+    (the int 0x80 gate clears IF, and only the timer wakes a sleeper: the
+    first try hung for that).
+  - marinate.elf SECONDS (tenths too) is sleep under a kitchen name, a
+    tenth of a second a step so a kill lands within one; a word is
+    status 2.
+  - scripts/restn-test.sh checks rest -n's order and statuses and that it
+    waits for the quicker of two jobs, and times marinate.
+  - qemu_keys.py: UNTIL now counts only what comes after the typed line's
+    own echo. Under a loaded full check heredoc-test typed its line while
+    the login was still being checked, and the prompt printed after the
+    login (before the line ran) satisfied UNTIL; QEMU was killed with the
+    script half run. A line that never echoes (a secret) falls back to
+    the old rule after 10 s. Every typed test gets it.
 
 v0.60.100 (2026-10-09)  — PLAIN (COMMAND)
   - `plain CMD [ARGS]` is sh's command under a kitchen name: CMD runs as

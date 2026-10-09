@@ -101,6 +101,12 @@ int sys_mkdir(const char *path) {
     return ret;
 }
 
+void sys_sleep(unsigned ms) {
+    unsigned ret;
+    __asm__ volatile ("int $0x80" : "=a"(ret) : "a"(SYS_SLEEP), "b"(ms) : "memory");
+    (void)ret;
+}
+
 unsigned sys_ticks(void) {
     unsigned ret;
     __asm__ volatile ("int $0x80" : "=a"(ret) : "a"(SYS_TICKS));

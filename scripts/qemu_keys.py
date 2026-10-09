@@ -83,6 +83,7 @@ if not os.environ.get('QEMU_KEYS_NOWAIT'):
 # guess (v0.60.9). It needs the log, so it is an error without one.
 log_path = serial_log()
 typed_at = 0
+typed_line = b''
 def log_size():
     try: return os.path.getsize(log_path)
     except OSError: return 0
@@ -93,11 +94,22 @@ for item in SCRIPT:
         continue
     if item.startswith('UNTIL:'):
         if not log_path: sys.exit('UNTIL needs a -serial file: log')
-        want, end = item[6:].encode(), time.time() + 120
+        # Only what comes after the typed line's own echo counts (2026-10-09):
+        # under load a line typed while the login was still being checked had
+        # the next prompt, printed before the line even ran, satisfy UNTIL.
+        # A line that never echoes (a secret, shown as *s) falls back to
+        # everything after the typing once 10 s have gone by.
+        want, start, end = item[6:].encode(), time.time(), time.time() + 120
+        echo = typed_line[:20]
         while time.time() < end:
             with open(log_path, 'rb') as f:
                 f.seek(typed_at)
-                if want in f.read(): break
+                seen = f.read()
+            at = seen.find(echo) if echo else -1
+            if at >= 0:
+                if want in seen[at + len(echo):]: break
+            elif not echo or time.time() - start > 10:
+                if want in seen: break
             time.sleep(0.1)
         else:
             sys.exit('never saw %r in %s' % (item[6:], log_path))
@@ -122,6 +134,7 @@ for item in SCRIPT:
         time.sleep(0.5)
         continue
     if log_path: typed_at = log_size()
+    typed_line = item.encode('latin-1', 'replace')
     for ch in item:
         for k in keys_for(ch):
             cmd('sendkey ' + k)
