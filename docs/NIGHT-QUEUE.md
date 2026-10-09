@@ -1,11 +1,11 @@
 # Night queue
 
-Fifty-first queue. The first fifty are in `docs/queue-archive-2026-10-0*.md`;
-queue 50 (`-09p`) cut the check's wall time (longest first, 48 jobs on the
-CT), gave programs the wheel, put a Kitchen menu on the bar, ran jot over
-SSH and added copy and paste to terminal windows. This one: windows that
-change size, dragging between windows, a third program, and a guard on
-Leave. Written by an unattended run when queue 50 ran out, as the loop it
+Fifty-second queue. The first fifty-one are in `docs/queue-archive-2026-10-0*.md`;
+queue 51 (`-09q`) made windows maximise, terminals resize, files drop onto
+terminals, added oven.elf (and SYS_TONE) and made Leave ask first. This
+one: terminal scrollback, snapping windows to halves, a window that lists
+and ends processes, settings that persist, and notes from programs on the
+bar. Written by an unattended run when queue 51 ran out, as the loop it
 runs in asks; the user has not seen it.
 
 ## Standing rules
@@ -47,46 +47,44 @@ runs in asks; the user has not seen it.
 
 ---
 
-## 1. Maximise and restore — DONE v0.60.161
+## 1. Scrollback in terminal windows
 
-A double click on a title bar fills the space between the bars with that
-window, and another puts it back where and how big it was. Terminal
-windows keep their 80x25 cells for now (centred in the space); files
-and program windows keep their bodies too, so this item is the frame and
-the bookkeeping. Test by screendump: maximised, restored, both logged.
+A terminal window keeps the lines that scroll off its top (a few hundred,
+per window) and the wheel over it scrolls back through them; typing, or
+new output, puts it back at the bottom. Test: fill a terminal past its
+height, wheel up, read the earlier lines back against the font, type a
+key, the bottom again.
 
-## 2. Terminals that change size — DONE v0.60.162
+## 2. Snap to halves
 
-Drag a terminal window's bottom-right corner to resize it, in whole
-cells (40x10 at least, as many as fit at most): the wterm's cells and
-rows/cols change, the shell (and jot) see the new size, and what was on
-screen is kept as far as it fits. Measure first what the shell does with
-cols() today when the line is longer than the width. Test: resize, run
-something that fills a line, screendump against the font.
+A window dragged by its title bar until the pointer reaches the left or
+right edge of the screen fills that half (between the bars), as maximise
+does; dragged off again it goes back to its own size. Test by
+screendump: snapped left, snapped right, unsnapped.
 
-## 3. Drag a file onto a terminal — DONE v0.60.163
+## 3. expo.elf: the processes, in a window
 
-Dragging a row of the files window onto a terminal window types that
-file's path there, quoted as files_open quotes it. Test: drag HELLO.TXT
-onto a terminal, then `pour` and Enter; the terminal shows the file.
+SYS_PROCS (a list of the processes: pid, name, cook, state, pages) and
+expo.elf showing it as rows, refreshed every second, with a click on a
+row and k to end that process; only the cook's own processes, or any for
+the headchef, as `kill` already decides (the kernel checks, not expo).
+Named for the expediter, who runs the pass. Test: glutton.elf running,
+expo lists it, k ends it; as saucier, the headchef's process is refused.
 
-## 4. oven.elf: a kitchen timer in a window — DONE v0.60.164
+## 4. Settings that stay
 
-A small window counting down a time given as an argument (`cook oven.elf
-90` is a minute and a half), big digits drawn by the program, a beep
-from the mixer at the end (if there is a sound device), and the window
-going red. `eggtimer` the shell builtin already exists: this is the
-windowed one, named for the oven. Test: a short time, screendumps of
-the count and the end, the log of the beep.
+The desktop's background (a choice of a few gradients, from a Kitchen
+menu entry or a small window) saved in the cook's home (.countertop)
+and read back the next time countertop starts. Test: choose one, Leave,
+countertop again, the background is the chosen one (screendump), and
+another cook's desktop is not.
 
-## 5. Leave asks first when programs have windows — DONE v0.60.165
+## 5. Notes from programs on the bar
 
-Leave with program windows open ends those programs with the desktop.
-The first click on Leave with any open says how many (in the bar) and a
-second within a few seconds leaves; none open, it leaves at once.
-(Built with 5 s: 3 s lapsed before a test's second click, QEMU's monitor
-taking half a second a command.) Test:
-frost open, Leave once (still up, the bar says so), Leave again (down).
+SYS_NOTE: a program puts a short line on the bar for a few seconds
+(queued if another is showing); oven.elf says "oven: done" there too,
+which matters when its window is minimised. Test: oven minimised, the
+note on the bar at zero (read against the font).
 
 ## 6. Doom at the framebuffer's own resolution — DEFERRED
 
