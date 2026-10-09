@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.105
+Current version: v0.60.106
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,18 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.106 (2026-10-09)  — BRINE.ELF (BASE64)
+  - brine.elf [FILE] is base64 under a kitchen name (what keeps): FILE or
+    stdin, lines of 76 and a newline after the last, nothing for an empty
+    input, = and == padding; -d decodes, skipping newlines, and stops at
+    anything else not base64 (status 1), as GNU's.
+  - scripts/brine-test.sh compares encodings and decodings with the
+    host's base64 byte for byte, every byte value included.
+  - sound-test.sh waits for the prompt after each sound command and then
+    for the sound, not a flat wait from the keystrokes: under a loaded full
+    check the next command cut the pistol short (212 ms of its 553), as
+    mixer-test did in v0.60.93.
 
 v0.60.105 (2026-10-09)  — PEEL.ELF AND STALK.ELF (BASENAME, DIRNAME)
   - peel.elf NAME [SUFFIX] is a name's last part (the suffix off unless

@@ -13,6 +13,9 @@
 # what is actually played; it caught me out once already when the third sound
 # was added and a 513 ms effect read as 853.
 set -uo pipefail
+# v0.60.106: each sound command waits for the prompt and then for its sound,
+# not a flat wait from the keystrokes; under a loaded full check (2026-10-09)
+# the next command's keys arrived while a sound still played and cut it short.
 cd "$(dirname "$0")/.."
 
 LOG=$(mktemp /tmp/soupos-sound.XXXXXX.log)
@@ -35,8 +38,8 @@ PID=$!
 sleep 5
 
 python3 scripts/qemu_keys.py "$MON" "headchef" "rosemary" "WAIT:1" \
-    "whistle 440 300" "WAIT:4" "sizzle DSPISTOL" "WAIT:5" \
-    "hush 50" "WAIT:1" "whistle 440 300" "WAIT:4" >/dev/null 2>&1 \
+    "whistle 440 300" "UNTIL:@soupOS:" "WAIT:2" "sizzle DSPISTOL" "UNTIL:@soupOS:" "WAIT:3" \
+    "hush 50" "UNTIL:@soupOS:" "WAIT:1" "whistle 440 300" "UNTIL:@soupOS:" "WAIT:2" >/dev/null 2>&1 \
     || { echo "  FAIL  could not drive QEMU"; exit 1; }
 sleep 1; kill "$PID" 2>/dev/null; PID=""
 

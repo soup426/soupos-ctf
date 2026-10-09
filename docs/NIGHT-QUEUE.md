@@ -47,7 +47,7 @@ Programs: peel.elf NAME [SUFFIX] the last part (the suffix off), stalk.elf
 NAME what leads to it, as the host's basename and dirname do with their
 edge cases (trailing /, no /, /, //). Compare with the host's.
 
-## 3. brine.elf (base64)
+## 3. brine.elf (base64) — DONE v0.60.106
 
 Encode stdin or a file to base64, wrapped at 76 as GNU's; -d decodes.
 Compare with the host's base64, both ways, on text and on binary.
