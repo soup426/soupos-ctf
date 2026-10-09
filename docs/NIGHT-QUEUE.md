@@ -61,13 +61,19 @@ after that. lint-test now also fails when a test script is in no list:
 rewrapping the list split 13 names at their hyphens and the old checks
 passed without them.
 
-## 2. How many jobs at once
+## 2. How many jobs at once — DONE (remote-check.sh, 2026-10-09)
 
 At 64 jobs the check took 266 s but peaked at 7722 MB of CT 123's 8192.
 Measure peak memory at 32 and 48 (a sampler in the CT, started so that
 it does not kill itself), and set remote-check's default to what leaves
 a gigabyte spare. Do not grow the CT without asking: atlas's other
 guests share its memory.
+
+Measured on CT 123 with the longest-first order: 32 jobs 297 s, peak
+5193 MB; 48 jobs 217 s, peak 6714 MB; 64 jobs 266 s (before that order),
+peak 7722 MB of 8192. remote-check.sh now asks for 48. The one failure
+at 48 (prodwin-test) was a background job's line split by the prompt,
+fixed in prod.elf.
 
 ## 3. The wheel for programs
 

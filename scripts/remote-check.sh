@@ -37,4 +37,7 @@ rsync -a --delete --exclude .git --exclude '*.o' --exclude '*.d' --exclude '*.is
 # pct exec starts its command with SIGPIPE ignored, and a shell cannot undo
 # an ignore it was born with: bash then shows `trap -- '' SIGPIPE` and
 # dot-test and trap-test, which compare with bash, differ. env puts it back.
-X env --default-signal=PIPE bash -c "'cd $DIR && KEEP=${KEEP:-0} ${CHECK_JOBS:+CHECK_JOBS=$CHECK_JOBS} scripts/check.sh ${1:-full}'"
+# 48 at once by default (2026-10-09, measured on the CT): 32 took 297 s and
+# peaked at 5193 MB, 48 took 217 s at 6714 MB, 64 took 266 s at 7722 MB of
+# its 8192, too close. 48 leaves about a gigabyte and a half.
+X env --default-signal=PIPE bash -c "'cd $DIR && KEEP=${KEEP:-0} CHECK_JOBS=${CHECK_JOBS:-48} scripts/check.sh ${1:-full}'"
