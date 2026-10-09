@@ -122,6 +122,11 @@ int sys_win_event(int id, uwinev_t *ev, unsigned wait_ms) {
     __asm__ volatile ("int $0x80" : "=a"(ret) : "a"(SYS_WIN_EVENT), "b"(id), "c"(ev), "d"(wait_ms) : "memory");
     return ret;
 }
+int sys_tone(unsigned hz, unsigned ms) {
+    int ret;
+    __asm__ volatile ("int $0x80" : "=a"(ret) : "a"(SYS_TONE), "b"(hz), "c"(ms) : "memory");
+    return ret;
+}
 int sys_win_close(int id) {
     int ret;
     __asm__ volatile ("int $0x80" : "=a"(ret) : "a"(SYS_WIN_CLOSE), "b"(id) : "memory");

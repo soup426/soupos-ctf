@@ -590,6 +590,7 @@ static void draw_window(int k) {
 static const char *const menu_item[][3] = {      /* name, what it is, what to cook */
     { "frost", "paint", "frost.elf" },
     { "swirl", "the Mandelbrot set", "swirl.elf" },
+    { "oven", "a minute's timer", "oven.elf 60" },          /* (v0.60.164) */
 };
 #define MENU_N (int)(sizeof(menu_item) / sizeof(menu_item[0]))
 #define MENU_H (MENU_N * MENU_IH + 4)

@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.163
+Current version: v0.60.164
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,21 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.164 (2026-10-09)  — oven.elf: A KITCHEN TIMER IN A WINDOW
+  - `cook oven.elf 90`: MM:SS in seven-segment digits the program draws
+    itself, counted down by the ticks (not naps, so no drift). At zero
+    the window goes red, the mixer beeps and it prints "oven: done"; q
+    or the close box ends it, early ("oven: stopped at MM:SS") or after.
+    The Kitchen menu has it as "oven, a minute's timer".
+  - SYS_TONE (20): a tone of 20-20000 Hz for up to 2 s through the mixer,
+    not waited for; -1 with no sound card. The first sound a ring-3
+    program can make.
+  - scripts/ctoven-test.sh (QEMU with an AC97): three seconds counting
+    (dark, the colon lit) then done (red, 00:00 in white with the middle
+    segments dark, "[mixer] tone 880 Hz for 600 ms"); sixty seconds
+    stopped early. ctkitchen-test reads oven in the menu too. Six-wide
+    soak 6 of 6.
 
 v0.60.163 (2026-10-09)  — DRAG A FILE ONTO A TERMINAL
   - A row of a files window dragged more than a few pixels and let go

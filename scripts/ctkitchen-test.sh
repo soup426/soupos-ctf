@@ -53,7 +53,7 @@ MENU = 0xF4F1EA
 bad = []
 s1 = ppm('s1')
 if s1(600, 40) != MENU: bad.append(f's1: no menu at 600,40 ({s1(600,40):06x})')
-for i, name in enumerate(('frost', 'swirl')):
+for i, name in enumerate(('frost', 'swirl', 'oven')):
     got = word(s1, 402, 24 + 2 + i * 24 + 4, 5)
     if got != name: bad.append(f's1: menu row {i} reads "{got}", not "{name}"')
 s2 = ppm('s2')
@@ -69,6 +69,6 @@ grep -E '^\[countertop\] (kitchen|open Terminal|open swirl|program closed swirl)
 printf '[countertop] kitchen menu open\n[countertop] kitchen menu closed\n[countertop] open Terminal 1\n[countertop] kitchen: swirl\n[countertop] open swirl\n[countertop] program closed swirl\n[countertop] kitchen menu open\n[countertop] kitchen menu closed\n' | cmp -s - "$WORK/events" \
     || { echo "        the events: $(tr '\n' ';' < "$WORK/events")"; fail=1; }
 grep -x '\[countertop\] down' "$WORK/log" >/dev/null || { echo "        Leave did not end the desktop"; fail=1; }
-[ "$fail" = 0 ] && echo "  ok    the Kitchen menu: frost and swirl listed, swirl picked opens a terminal cooking it, a click away closes the menu" \
+[ "$fail" = 0 ] && echo "  ok    the Kitchen menu: frost, swirl and oven listed, swirl picked opens a terminal cooking it, a click away closes the menu" \
     || echo "  FAIL  the Kitchen menu"
 exit $fail

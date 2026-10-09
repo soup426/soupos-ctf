@@ -33,6 +33,7 @@
 #include "timer.h"
 #include "proc.h"
 #include "countertop.h"
+#include "mixer.h"
 
 /* ---- user address-space layout ----
  *   0xC0000000  program image (PT_LOAD)
@@ -718,6 +719,10 @@ void syscall_dispatch(registers_t *r) {
             r->eax = (uint32_t)got;
             break;
         }
+        case SYS_TONE:                    /* (v0.60.164) a beep for oven.elf */
+            if (r->ebx < 20 || r->ebx > 20000) { r->eax = (uint32_t)-1; break; }
+            r->eax = (uint32_t)mixer_tone(r->ebx, r->ecx > 2000 ? 2000 : r->ecx);
+            break;
         case SYS_WIN_CLOSE:
             r->eax = (uint32_t)(pr ? countertop_win_close(pr->pid, (int)r->ebx) : -1);
             break;

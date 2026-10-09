@@ -27,6 +27,8 @@
 #define SYS_WIN_EVENT 18 /* ebx = id, ecx = uwinev_t*, edx = ms to wait (0: just look,
                           * 10 s at most); -> 1 an event, 0 none, -1 the window is gone */
 #define SYS_WIN_CLOSE 19 /* ebx = id; -> 0, or -1. A program's windows close when it ends */
+#define SYS_TONE   20  /* ebx = Hz (20-20000), ecx = ms (2000 at most): a tone through the mixer,
+                        * not waited for; -> 0, or -1 with no sound card (v0.60.164)   */
 
 /* One directory entry for SYS_READDIR (v0.44.0): the long name when the
  * entry has one, else the 8.3 name. Shared by the kernel and ulib. */

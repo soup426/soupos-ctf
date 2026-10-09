@@ -70,7 +70,7 @@ Dragging a row of the files window onto a terminal window types that
 file's path there, quoted as files_open quotes it. Test: drag HELLO.TXT
 onto a terminal, then `pour` and Enter; the terminal shows the file.
 
-## 4. oven.elf: a kitchen timer in a window
+## 4. oven.elf: a kitchen timer in a window — DONE v0.60.164
 
 A small window counting down a time given as an argument (`cook oven.elf
 90` is a minute and a half), big digits drawn by the program, a beep
