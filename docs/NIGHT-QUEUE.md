@@ -1,9 +1,9 @@
 # Night queue
 
-Thirty-eighth queue. The first thirty-seven are in `docs/queue-archive-2026-10-0*.md`.
+Thirty-ninth queue. The first thirty-eight are in `docs/queue-archive-2026-10-0*.md`.
 Items wait on a person in three archives (the seventh, the thirteenth and
-the twenty-fourth). Brace expansion, nicknames (aliases), the dot command,
-job numbers, and history expansion at the prompt.
+the twenty-fourth). Builtins learn redirections at last, the shell's own
+variables, take's options, case's fall-through, and array keys.
 
 ## Standing rules
 
@@ -34,38 +34,34 @@ job numbers, and history expansion at the prompt.
 
 ---
 
-## 1. Brace expansion — DONE v0.60.89
+## 1. Redirections on builtins and functions
 
-{a,b,c} and {1..5}, {a..e}, {5..1}, {01..10} and a step {1..10..2},
-nested and with a prefix and suffix (x{a,b}y), not in quotes, before the
-other expansions, as bash. Compare with bash.
+`slurp hi > /f.txt` prints "hi > /f.txt" today: only cook and a loop's
+done (or a { } group) take > F. A builtin's or a function's line takes
+> F, >> F and < F as `{ cmd ; } > F` would, wherever the redirection
+sits in the line. Compare the files with bash's.
 
-## 2. nickname NAME=TEXT (alias) — DONE v0.60.90
+## 2. $$, $PPID, $SECONDS, $LINENO
 
-The first word of a command that is a nickname is replaced by its text
-(again, for the text's own first word, but not a nickname inside
-itself); bare `nickname` lists them, `nickname NAME` shows one, and
-`forget NAME` removes one (unalias). A kitchen name. Compare with bash's
-alias where bash can be driven the same way (bash -i or shopt -s
-expand_aliases).
+The shell's own number, its parent's, the seconds since it started (and
+SECONDS=N resets the count from N), and the line of the follow script
+being run. Test against what is known (two reads of $$ agree, $SECONDS
+moves with sleeptest, $LINENO counts a script's lines as bash does).
 
-## 3. . FILE — DONE v0.60.91
+## 3. take -p PROMPT, -n N, -t SECS
 
-POSIX's dot command, a special builtin, so it keeps its name: follow FILE
-in this shell, as follow already does. Compare with bash's . on a script
-that sets variables.
+read's prompt, its N characters and no more, and its timeout (status
+above 128 when it runs out, as bash). Test by typing and by not typing.
 
-## 4. Job numbers — DONE v0.60.92
+## 4. case ;& and ;;&
 
-kill, plate, steep and rest take %N (the Nth background job, as orders
-lists them), %% and %+ (the newest), %- (the one before); orders shows
-the numbers. Test with two jobs.
+;& runs the next arm's commands too, without testing it; ;;& goes on
+testing the arms after. Compare with bash.
 
-## 5. History expansion at the prompt — DONE v0.60.93
+## 5. ${!a[@]} and ${!prefix*}
 
-!! (the last line), !N, !-N, !word (the last line starting so), and !$ (the
-last word of the last line), shown before they run, as bash does at its
-prompt. Test by typing.
+An array's indexes, and the names of the variables starting with prefix.
+Compare with bash.
 
 ## 6. Doom at the framebuffer's own resolution — DEFERRED
 
