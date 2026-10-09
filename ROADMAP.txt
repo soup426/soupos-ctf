@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.171
+Current version: v0.60.172
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,20 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.172 (2026-10-09)  — NEW BOWLS AND REMOVING FILES FROM THE FILES WINDOW
+  - A right click in a files window drops a small menu where it was:
+    "new bowl" (bowl, bowl2, ... in the bowl shown) and, on a row,
+    "remove NAME", which asks again ("really remove NAME?") on the first
+    click and removes on the second. The shell's rules decide, as the
+    cook running the desktop: users_may 'w' on the bowl for a new bowl
+    or a bowl removed, on the file for a file (mkbowl, rmbowl, strain);
+    a bowl that is not empty is kept (fat_rmdir's refusal, not
+    exercised by the test). Every outcome is logged.
+  - scripts/ctfilesmenu-test.sh, as saucier: a bowl made and note.txt
+    removed in /home/saucier (the second ask read back), the empty bowl
+    removed; in / both refused; the listing, the disk after, the log.
+    Six-wide soak 6 of 6.
 
 v0.60.171 (2026-10-09)  — KEYBOARD SHORTCUTS
   - F1-F12 are key codes now (KEY_F1.. KEY_F12, 265-276): the scancode

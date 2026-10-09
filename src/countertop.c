@@ -631,6 +631,29 @@ static const char *const menu_item[][3] = {      /* name, what it is, what to co
 #define MENU_N (int)(sizeof(menu_item) / sizeof(menu_item[0]))
 #define MENU_H (MENU_N * MENU_IH + 4)
 static int menu_open;
+/* A files window's right-click menu (v0.60.172): "new bowl" in the bowl it
+ * shows, and on a row "remove NAME", which asks again on the first click
+ * (as Leave does) and removes on the second. The shell's rules decide:
+ * users_may 'w' on the bowl for a new one or a bowl removed, on the file
+ * for a file; a bowl that is not empty is not removed. */
+#define CTX_W  260
+#define CTX_IH 22
+static int ctx_win = -1, ctx_row = -1, ctx_x, ctx_y, ctx_armed;
+static int ctx_items(void) { return ctx_row >= 0 ? 2 : 1; }
+static void draw_ctx(void) {                       /* within the clip */
+    int h = ctx_items() * CTX_IH + 4;
+    fill(ctx_x, ctx_y, CTX_W, h, EDGE_RGB);
+    fill(ctx_x + 1, ctx_y + 1, CTX_W - 2, h - 2, 0x00F4F1EAu);
+    text(ctx_x + 10, ctx_y + 2 + (CTX_IH - 16) / 2, "new bowl", 0x00202020u);
+    if (ctx_row >= 0 && win[ctx_win].files) {
+        char line[96] = "remove ";
+        if (ctx_armed) scopy(line, "really remove ", (int)sizeof(line));
+        int l = (int)strlen(line);
+        scopy(line + l, win[ctx_win].files->name[ctx_row], (int)sizeof(line) - l - 2);
+        if (ctx_armed) strcat(line, "?");
+        text(ctx_x + 10, ctx_y + 2 + CTX_IH + (CTX_IH - 16) / 2, line, ctx_armed ? 0x00C0504Du : 0x00202020u);
+    }
+}
 static void draw_menu(void) {                     /* within the clip */
     fill(MENU_X, MENU_Y, MENU_W, MENU_H, EDGE_RGB);
     fill(MENU_X + 1, MENU_Y, MENU_W - 2, MENU_H - 1, 0x00F4F1EAu);
@@ -647,6 +670,7 @@ static void repaint(int x, int y, int w, int h) {
         background();
         for (int i = 0; i < nwin; i++) if (!win[order[i]].min) draw_window(order[i]);
         if (menu_open) draw_menu();
+        if (ctx_win >= 0) draw_ctx();
     }
     clip_all();
 }
@@ -777,6 +801,60 @@ static void type_path(wterm_t *t, const char *p) {
     }
     wt_key(t, '\'');
 }
+static void ctx_close(void) {
+    if (ctx_win < 0) return;
+    int h = ctx_items() * CTX_IH + 4;
+    ctx_win = -1; ctx_armed = 0;
+    repaint(ctx_x, ctx_y, CTX_W, h);
+}
+static void ctx_open(int k, int r, int x, int y) {
+    ctx_close();
+    ctx_win = k; ctx_row = r; ctx_armed = 0;
+    ctx_x = x + CTX_W > W ? W - CTX_W : x;
+    ctx_y = y + 2 * CTX_IH + 4 > H - TASK_H ? H - TASK_H - 2 * CTX_IH - 4 : y;
+    repaint(ctx_x, ctx_y, CTX_W, ctx_items() * CTX_IH + 4);
+}
+static void ctx_new_bowl(struct files *f) {
+    char p[FAT_PATH_MAX];
+    int l = (int)strlen(f->path);
+    for (int n = 1; n < 100; n++) {                    /* bowl, bowl2, bowl3 ... */
+        strcpy(p, f->path);
+        if (l > 1) strcat(p, "/");
+        strcat(p, "bowl");
+        if (n > 1) { char d[4] = { (char)('0' + n / 10), (char)('0' + n % 10), 0, 0 }; strcat(p, n < 10 ? d + 1 : d); }
+        if (!fat_exists(p)) break;
+    }
+    if (!users_may(f->path, 'w')) { klog("[countertop] may not make %s\n", p); return; }
+    klog("[countertop] %s %s\n", fat_mkdir(p) == 0 ? "new bowl" : "could not make", p);
+}
+static void ctx_remove(struct files *f, int r) {
+    char p[FAT_PATH_MAX];
+    if (files_path(f, r, p) < 0) return;
+    int bowl = f->dir[r];
+    if (!users_may(bowl ? f->path : p, 'w')) { klog("[countertop] may not remove %s\n", p); return; }
+    int ok = bowl ? fat_rmdir(p) : fat_delete(p);
+    klog("[countertop] %s %s\n", ok == 0 ? "removed" : bowl ? "not empty, kept" : "could not remove", p);
+}
+/* A click with the menu up: 1 if it was on the menu. */
+static int ctx_click(int px, int py) {
+    int h = ctx_items() * CTX_IH + 4;
+    if (px < ctx_x || px >= ctx_x + CTX_W || py < ctx_y || py >= ctx_y + h) { ctx_close(); return 0; }
+    int i = (py - ctx_y - 2) / CTX_IH, k = ctx_win;
+    struct files *f = win[k].files;
+    if (!f) { ctx_close(); return 1; }
+    if (i == 1 && ctx_row >= 0 && !ctx_armed) {        /* remove: ask again */
+        ctx_armed = 1;
+        repaint(ctx_x, ctx_y, CTX_W, h);
+        return 1;
+    }
+    if (i == 0) ctx_new_bowl(f);
+    else if (i == 1 && ctx_row >= 0) ctx_remove(f, ctx_row);
+    ctx_close();
+    files_load(f);
+    repaint_win(k);
+    return 1;
+}
+
 static void files_open(int k, int r) {
     struct files *f = win[k].files;
     if (r < 0 || r >= f->n) return;
@@ -838,6 +916,7 @@ static void reap_dying(void) {
         }
 }
 static void close_window(int k) {
+    if (ctx_win == k) ctx_close();
     if (win[k].files) { kfree(win[k].files); win[k].files = 0; }
     if (win[k].app >= 0) {                             /* its program ended, or closed it */
         mutex_lock(&app_mtx);
@@ -1181,6 +1260,15 @@ static void pointer_buttons(int px, int py, int btn, int np) {
     }
     if ((btn & 6) && !(was & 6)) {                     /* right or middle: paste into a terminal */
         int k = window_at(px, py);
+        if (k >= 0 && win[k].files && py >= win[k].y + BORDER + TITLE_H) {   /* a files window's menu (v0.60.172) */
+            struct files *f = win[k].files;
+            int y0 = win[k].y + BORDER + TITLE_H + 28, r = -1;
+            if (py >= y0) r = f->top + (py - y0) / FROW_H;
+            if (r >= f->n || (r >= 0 && !strcmp(f->name[r], ".."))) r = -1;
+            raise_window(k);
+            ctx_open(k, r, px, py);
+            return;
+        }
         if (k >= 0 && win[k].term && py >= win[k].y + BORDER + TITLE_H) {
             raise_window(k);
             uint32_t n = clip_len();
@@ -1199,6 +1287,7 @@ static void pointer_buttons(int px, int py, int btn, int np) {
         if (!left || np) { app_push(w->app, WEV_UP, 0, x, y, (unsigned)btn); app_drag = -1; }
         if (!np) return;
     }
+    if (np && ctx_win >= 0 && ctx_click(px, py)) return;   /* the files menu (v0.60.172) */
     if (np && menu_open) {                             /* a click with the menu down: an item, or away */
         int i = (py - MENU_Y - 2) / MENU_IH;
         int on_button = py < BAR_H && px >= BTN_KITCHEN_X && px < BTN_KITCHEN_X + BTN_KITCHEN_W;
@@ -1398,7 +1487,7 @@ int countertop_run(int (*avail)(void), int (*getch)(void), int uid) {
     load_settings();                                 /* before the first background (v0.60.169) */
     background();
     bar();
-    nwin = 0; drag = -1; last_btn = 0; leave_asked = 0; leave_armed = 0; note_h = note_t = note_showing = 0; menu_open = 0; rs_win = -1; sel_win = -1; fd_win = -1; ct_uid = uid; nterm = 0; task_sig = 0xFFFFFFFFu;
+    nwin = 0; drag = -1; last_btn = 0; leave_asked = 0; leave_armed = 0; note_h = note_t = note_showing = 0; menu_open = 0; rs_win = -1; sel_win = -1; fd_win = -1; ctx_win = -1; ct_uid = uid; nterm = 0; task_sig = 0xFFFFFFFFu;
     for (int k = 0; k < MAX_WIN; k++) win[k].used = 0;
     app_drag = -1;
     mutex_lock(&app_mtx);                            /* programs may ask for windows now */

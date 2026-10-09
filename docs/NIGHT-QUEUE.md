@@ -55,7 +55,7 @@ keyboard delivers for F4 (there is no KEY_F4 yet) and whether Ctrl+Alt+T
 arrives as Ctrl+T with Alt held. Test: both shortcuts, screendumps and
 the log.
 
-## 2. New bowls and removing files from the files window
+## 2. New bowls and removing files from the files window — DONE v0.60.172
 
 A right click in a files window: a small menu with "new bowl" (named
 bowl, bowl2, ... in the shown one) and, on a row, "remove" (asked twice,
