@@ -11,6 +11,7 @@
  * program at a time: a second program would have overwritten the first one's
  * fd table, heap break, args and exit code.
  */
+#include "random.h"
 #include "usermode.h"
 #include "term.h"
 #include "swap.h"
@@ -659,6 +660,13 @@ void syscall_dispatch(registers_t *r) {
             task_sleep(r->ebx > 10000 ? 10000 : r->ebx);
             r->eax = 0;
             break;
+        case SYS_RANDOM: {                /* (v0.60.118) what $RANDOM draws from, for tumble.elf */
+            uint32_t len = r->ecx > 256 ? 256 : r->ecx;
+            if (!user_ok(r->ebx, len)) { r->eax = (uint32_t)-1; break; }
+            random_bytes((void *)r->ebx, len);
+            r->eax = len;
+            break;
+        }
 
         default:
             r->eax = (uint32_t)-1;

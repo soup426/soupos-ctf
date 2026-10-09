@@ -18,6 +18,7 @@
 #define SYS_ENV    13  /* ebx = buf, ecx = max; -> length of the environment:
                         * NAME=value lines, as the shell handed them (v0.60.26) */
 #define SYS_SLEEP  14  /* ebx = ms (10 s at most a call): the task sleeps (v0.60.101) */
+#define SYS_RANDOM 15  /* ebx = buf, ecx = len (256 at most): bytes from the entropy pool; -> len (v0.60.118) */
 
 /* One directory entry for SYS_READDIR (v0.44.0): the long name when the
  * entry has one, else the 8.3 name. Shared by the kernel and ulib. */

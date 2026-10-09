@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.117
+Current version: v0.60.118
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,18 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.118 (2026-10-09)  — TUMBLE.ELF (SHUF) AND SYS_RANDOM
+  - SYS_RANDOM (15): up to 256 bytes a call from the kernel's entropy pool
+    (what $RANDOM draws from) into a buffer the program owns; ulib's
+    sys_random. Ring 3 had no randomness before.
+  - tumble.elf [-n N] [-i LO-HI | FILE] is shuf under a kitchen name:
+    lines of a file or stdin in a random order, every order as likely
+    (Fisher-Yates, the uneven top of each draw thrown back), N of them with
+    -n, the numbers LO..HI with -i; a bad range or count is status 1.
+  - scripts/tumble-test.sh checks properties, not bytes: permutations,
+    two runs differ, -n, -i, empty, and over 200 draws each of four lines
+    comes first a fair share (46/44/56/54 here).
 
 v0.60.117 (2026-10-09)  — RUNNER (XARGS)
   - X | runner [-n N] [-I R] [-r] CMD is xargs under a kitchen name (the

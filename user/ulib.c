@@ -107,6 +107,12 @@ void sys_sleep(unsigned ms) {
     (void)ret;
 }
 
+int sys_random(void *buf, int len) {
+    int ret;
+    __asm__ volatile ("int $0x80" : "=a"(ret) : "a"(SYS_RANDOM), "b"(buf), "c"(len) : "memory");
+    return ret;
+}
+
 unsigned sys_ticks(void) {
     unsigned ret;
     __asm__ volatile ("int $0x80" : "=a"(ret) : "a"(SYS_TICKS));

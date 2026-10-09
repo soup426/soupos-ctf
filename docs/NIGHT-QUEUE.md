@@ -78,7 +78,7 @@ most), -n N per command, -I {} once per line with {} replaced; status
 123 if any run failed, as GNU. Measure first how a builtin reads a pipe
 (`| while take` works). Test against xargs with programs and builtins.
 
-## 6. tumble.elf (shuf)
+## 6. tumble.elf (shuf) — DONE v0.60.118
 
 The lines of a file or stdin in a random order, as shuf; -n N the first N
 of them; -i LO-HI the numbers instead. Ring 3 has no randomness today:
