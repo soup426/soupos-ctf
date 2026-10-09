@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.77
+Current version: v0.60.78
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,17 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.78 (2026-10-08)  — "$@" AND "$*"
+  - "$@" was one word: its arguments were joined inside the quote, so
+    `for x in "$@"` went round once and a program got one argument for
+    them all. It is a word for each argument now, as sh (the quote closed
+    and opened between them, so "x$@y" is xa..., ...y), and no word at all
+    when there are none. After NAME= it is joined, as sh joins it.
+  - $* was not known. Now bare it is split as $@ is, "$*" is one word
+    joined by spaces, and one empty word when there are none.
+  - Here-documents know $@, $* and $#.
+  - scripts/atstar-test.sh compares ten lines and a script with bash.
 
 v0.60.77 (2026-10-08)  — PLUCK (GETOPTS)
   - `pluck OPTSTRING NAME [ARGS]` is sh's getopts under a kitchen name:

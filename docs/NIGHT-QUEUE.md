@@ -57,7 +57,7 @@ sh's getopts under a kitchen name: OPTIND, OPTARG, a : after a letter for
 an argument, ? for one not known, a leading : for the quiet form; in a
 script or a function, over $1..$9. Compare with bash.
 
-## 5. "$@" and "$*"
+## 5. "$@" and "$*" — DONE v0.60.78
 
 Check them against bash in every place a word can be: arguments, for
 lists, assignments, here-documents, with IFS's default; fix what

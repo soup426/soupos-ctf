@@ -5773,18 +5773,34 @@ static int expand_into(const char *seg, char *ex, int max) {
             i = j;
             continue;
         }
-        /* $1..$9, $# and $@: a script's arguments (v0.60.2); not in '...'. */
-        if (seg[i] == '$' && sq != '\'' && ((seg[i + 1] >= '1' && seg[i + 1] <= '9') || seg[i + 1] == '#' || seg[i + 1] == '@')) {
+        /* $1..$9, $#, $@ and $* (v0.60.78): a script's arguments (v0.60.2);
+         * not in '...'. "$@" is a word for each argument, as sh: between
+         * them the quote is closed and opened again, so "x$@y" is two words;
+         * with none it is no word at all. "$*" is one word, joined by
+         * spaces, and so is either after NAME=. Bare, both are split. */
+        if (seg[i] == '$' && sq != '\'' && ((seg[i + 1] >= '1' && seg[i + 1] <= '9') || seg[i + 1] == '#' || seg[i + 1] == '@' || seg[i + 1] == '*')) {
             shell_t *me = cur_shell();
             char c = seg[i + 1];
             if (c == '#') {
                 char d[4]; int nd = 0; int v = me->npargs;
                 do { d[nd++] = (char)('0' + v % 10); v /= 10; } while (v);
                 while (nd && k < max - 1) ex[k++] = d[--nd];
-            } else if (c == '@') {
+            } else if (c == '@' || c == '*') {
+                int assign = in_assign_value(ex, k);
+                int each = c == '@' && sq == '"' && !assign;
+                if (each && me->npargs == 0 && k > 0 && ex[k - 1] == '"' && seg[i + 2] == '"' &&
+                    (k == 1 || ex[k - 2] == ' ') && (seg[i + 3] == '\0' || seg[i + 3] == ' ')) {
+                    k--; sq = 0; i += 2;                     /* "$@" with nothing: no word */
+                    continue;
+                }
                 for (int a = 0; a < me->npargs; a++) {
-                    if (a && k < max - 1) ex[k++] = ' ';
-                    for (const char *v = me->parg[a]; *v; v++) if (!put_lit(ex, &k, max, *v, sq == '"')) { cut = 1; break; }
+                    if (a) {
+                        if (each) { if (k < max - 3) { ex[k++] = '"'; ex[k++] = ' '; ex[k++] = '"'; } }
+                        else if (sq == '"' || !assign) { if (k < max - 1) ex[k++] = ' '; }
+                        else if (!put_lit(ex, &k, max, ' ', 2)) { cut = 1; break; }
+                    }
+                    int mode = sq == '"' ? 1 : assign ? 2 : 0;
+                    for (const char *v = me->parg[a]; *v; v++) if (!put_lit(ex, &k, max, *v, mode)) { cut = 1; break; }
                 }
             } else if (c - '1' < me->npargs) {
                 int mode = sq == '"' ? 1 : in_assign_value(ex, k) ? 2 : 0;
@@ -7442,6 +7458,18 @@ static void heredoc_expand(const char *in, char *out, int max) {
         } else if (in[i] == '$' && in[i + 1] >= '1' && in[i + 1] <= '9') {
             val = (in[i + 1] - '1' < me->npargs) ? me->parg[in[i + 1] - '1'] : "";
             i++;
+        } else if (in[i] == '$' && (in[i + 1] == '@' || in[i + 1] == '*')) {   /* (v0.60.78) */
+            for (int a = 0; a < me->npargs && k < max - 1; a++) {
+                if (a) out[k++] = ' ';
+                for (const char *v = me->parg[a]; *v && k < max - 1; v++) out[k++] = *v;
+            }
+            i++;
+            continue;
+        } else if (in[i] == '$' && in[i + 1] == '#') {
+            int v = me->npargs, nd = 0; char d[4];
+            do { d[nd++] = (char)('0' + v % 10); v /= 10; } while (v);
+            int m = 0; while (nd) num[m++] = d[--nd]; num[m] = '\0';
+            val = num; i++;
         } else if (in[i] == '$' && (in[i + 1] == '{' || in[i + 1] == '_' || (in[i + 1] >= 'A' && in[i + 1] <= 'Z') || (in[i + 1] >= 'a' && in[i + 1] <= 'z'))) {
             int j = i + 1, br = in[j] == '{', n = 0; char name[16];
             if (br) j++;
