@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.80
+Current version: v0.60.81
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,17 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.81 (2026-10-09)  — THE PROMPT WAITS FOR THE REST
+  - A typed line that leaves an if, for, while, until, case, { or a
+    function open, or that ends in && || or |, asks for more with a >
+    prompt until it is whole, as sh, joins the lines as follow joins a
+    script's, and runs them as one. Ctrl-C drops it (130); Ctrl-D, or the
+    terminal going, is "unexpected end of file" (2). History keeps the
+    joined line, so the up arrow runs the whole again.
+  - join_onto() and more_line() came out of follow and the typed
+    here-document so both use them.
+  - scripts/cont-test.sh types eleven such commands.
 
 v0.60.80 (2026-10-09)  — BUILTINS READ <<< AND <<WORD
   - A builtin, a function or an if condition with <<< WORD or a

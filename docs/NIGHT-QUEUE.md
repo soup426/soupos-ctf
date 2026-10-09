@@ -47,7 +47,7 @@ closing ] required, as sh. Compare with bash's test and [.
 here-document on a builtin's line, take above all, is its input. Compare
 with bash.
 
-## 3. The prompt waits for the rest
+## 3. The prompt waits for the rest — DONE v0.60.81
 
 `for x in a b` and Enter runs nothing useful today. An unfinished if,
 for, while, until, case or { asks for more lines with a > prompt until it

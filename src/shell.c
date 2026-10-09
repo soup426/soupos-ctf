@@ -7698,6 +7698,26 @@ static int compound_depth(const char *s) {
     return d;
 }
 
+/* Join line t onto line[0..*ll) (v0.60.74; a helper since v0.60.81): with
+ * ; between, or a space after then, do, else, in, ;;, {, |, && and ||. */
+static void join_onto(char *line, int *llp, const char *t) {
+    int ll = *llp, tl = ll;
+    while (tl > 0 && line[tl - 1] == ' ') tl--;
+    static const char *const soft[] = { "then", "do", "else", "in", ";;", "{", "|", "&&", "||", ";" };
+    int sp = 0;
+    for (unsigned k = 0; k < sizeof(soft) / sizeof(soft[0]); k++) {
+        int kl = (int)strlen(soft[k]);
+        if (tl >= kl && strncmp(line + tl - kl, soft[k], (uint32_t)kl) == 0 &&
+            (tl == kl || line[tl - kl - 1] == ' ' || soft[k][0] == ';' || soft[k][0] == '|' || soft[k][0] == '&')) sp = 1;
+    }
+    const char *join = sp ? " " : " ; ";
+    ll = tl;
+    for (const char *c = join; *c && ll < INPUT_MAX - 1; c++) line[ll++] = *c;
+    for (const char *c = t; *c && ll < INPUT_MAX - 1; c++) line[ll++] = *c;
+    line[ll] = '\0';
+    *llp = ll;
+}
+
 static void cmd_run(const char *args) {
     static int depth;
     /* run FILE [ARGS...] (v0.60.2): the words after the file are the
@@ -7769,20 +7789,7 @@ static void cmd_run(const char *args) {
                 next = e2 + 1;
                 const char *t = nl; while (*t == ' ' || *t == '\t') t++;
                 if (!*t || *t == '#') continue;
-                int tl = ll;
-                while (tl > 0 && line[tl - 1] == ' ') tl--;
-                static const char *const soft[] = { "then", "do", "else", "in", ";;", "{", "|", "&&", "||", ";" };
-                int sp = 0;
-                for (unsigned k = 0; k < sizeof(soft) / sizeof(soft[0]); k++) {
-                    int kl = (int)strlen(soft[k]);
-                    if (tl >= kl && strncmp(line + tl - kl, soft[k], (uint32_t)kl) == 0 &&
-                        (tl == kl || line[tl - kl - 1] == ' ' || soft[k][0] == ';' || soft[k][0] == '|' || soft[k][0] == '&')) sp = 1;
-                }
-                const char *join = sp ? " " : " ; ";
-                ll = tl;
-                for (const char *c = join; *c && ll < INPUT_MAX - 1; c++) line[ll++] = *c;
-                for (const char *c = t; *c && ll < INPUT_MAX - 1; c++) line[ll++] = *c;
-                line[ll] = '\0';
+                join_onto(line, &ll, t);
                 dd += compound_depth(t);
                 joined = 1;
             }
@@ -7900,30 +7907,73 @@ void shell_run(void) {
  * cook's stdin, expanded unless WORD was quoted, as in a follow script.
  * Ctrl-C drops the lot (status 130); Ctrl-D on an empty line, or the
  * terminal going, ends the document where it is, as bash does, saying so. */
+/* One more line at a > prompt (v0.60.81, out of run_typed): its length,
+ * -1 for Ctrl-C, -2 for Ctrl-D on an empty line or the terminal gone. */
+static int more_line(char *bline, int max) {
+    int n = 0;
+    t_puts("> ");
+    for (;;) {
+        int c = t_getc();
+        if (c < 0 || (c == 4 && n == 0)) { t_putc('\n'); return -2; }
+        if (c == 3) { t_puts("^C\n"); return -1; }
+        if (c == '\n') { t_putc('\n'); break; }
+        if (c == '\b') { if (n > 0) { n--; t_putc('\b'); } continue; }
+        if (((c >= ' ' && c < 127) || c == '\t') && n < max - 1) { bline[n++] = (char)c; t_putc((char)c); }
+    }
+    bline[n] = '\0';
+    return n;
+}
+
+/* A line ending in && || or | (outside quotes) wants the next, as sh's. */
+static int ends_open(const char *s) {
+    char q = 0; int last = 0;              /* 1 &&, 2 ||, 3 | as the last thing */
+    for (const char *c = s; *c; c++) {
+        if (q) { if (*c == q) q = 0; last = 0; continue; }
+        if (*c == '\'' || *c == '"') { q = *c; last = 0; continue; }
+        if (*c == '\\' && c[1]) { c++; last = 0; continue; }
+        if (*c == ' ' || *c == '\t') continue;
+        if (c[0] == '&' && c[1] == '&') { last = 1; c++; continue; }
+        if (c[0] == '|' && c[1] == '|') { last = 2; c++; continue; }
+        if (c[0] == '|') { last = 3; continue; }
+        last = 0;
+    }
+    return last != 0;
+}
+
+/* A typed line that leaves an if, for, while, until, case or { open,
+ * or ends in && || | (v0.60.81): sh asks for more with a > prompt until it closes, and runs
+ * the whole, joined as follow joins a script's. Ctrl-C drops it (130);
+ * the end of input is sh's "unexpected end of file" (2). */
 static void run_typed(const char *input) {
     char cmd[INPUT_MAX], word[32];
     int quoted = 0;
     strncpy(cmd, input, sizeof(cmd) - 1); cmd[sizeof(cmd) - 1] = '\0';
-    if (!heredoc_mark(cmd, word, sizeof(word), &quoted)) { run_line(input); return; }
+    int dd = compound_depth(cmd), ll = (int)strlen(cmd);
+    while (dd > 0 || ends_open(cmd)) {
+        char more[INPUT_MAX];
+        int n = more_line(more, sizeof(more));
+        if (n == -1) { cur_shell()->last_status = 130; return; }
+        if (n == -2) { t_puts("  syntax error: unexpected end of file\n"); cur_shell()->last_status = 2; return; }
+        const char *t = more; while (*t == ' ' || *t == '\t') t++;
+        if (!*t || *t == '#') continue;
+        join_onto(cmd, &ll, t);
+        dd += compound_depth(t);
+    }
+    hist_push(cmd);
+    input = cmd;
+    char line_copy[INPUT_MAX];
+    strcpy(line_copy, cmd);
+    if (!heredoc_mark(cmd, word, sizeof(word), &quoted)) { run_line(line_copy); return; }
     char *body = kmalloc(8193);
     int bl = 0, ended = 0;
     while (!ended) {
-        char bline[INPUT_MAX]; int n = 0, eof = 0;
-        t_puts("> ");
-        for (;;) {
-            int c = t_getc();
-            if (c < 0 || (c == 4 && n == 0)) { eof = 1; t_putc('\n'); break; }
-            if (c == 3) {                                   /* Ctrl-C */
-                t_puts("^C\n");
-                if (body) kfree(body);
-                cur_shell()->last_status = 130;
-                return;
-            }
-            if (c == '\n') { t_putc('\n'); break; }
-            if (c == '\b') { if (n > 0) { n--; t_putc('\b'); } continue; }
-            if (((c >= ' ' && c < 127) || c == '\t') && n < INPUT_MAX - 1) { bline[n++] = (char)c; t_putc((char)c); }
+        char bline[INPUT_MAX];
+        int n = more_line(bline, sizeof(bline)), eof = n == -2;
+        if (n == -1) {                                      /* Ctrl-C */
+            if (body) kfree(body);
+            cur_shell()->last_status = 130;
+            return;
         }
-        bline[n] = '\0';
         if (eof) {
             t_printf("  warning: here-document delimited by end-of-file (wanted `%s')\n", word);
             break;
@@ -7968,8 +8018,7 @@ static void shell_loop(char *input, char *saved, int *pos_p, int *len_p, int *hb
             cursor_to(len);
             t_putc('\n');
             input[len] = '\0';
-            hist_push(input);
-            run_typed(input);
+            run_typed(input);                      /* it keeps the line in history (v0.60.81) */
             if (cur_shell()->exiting) break;
             pos = len = hist_browse = 0;
             input[0] = saved[0] = '\0';
