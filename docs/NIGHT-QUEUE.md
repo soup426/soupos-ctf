@@ -59,7 +59,7 @@ now so skewer, drag-select and the gate are unchanged. Test: injected moves
 land on the pixel expected (screendump not needed; a shell command or the
 serial log can say where).
 
-## 2. countertop: the surface
+## 2. countertop: the surface — DONE v0.60.141
 
 `countertop` takes the framebuffer (as mode 13h programs do: fbcon paused,
 then resumed): a desktop background, a bar along the top with "soupOS" and

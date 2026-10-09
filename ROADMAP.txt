@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.140
+Current version: v0.60.141
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,23 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.141 (2026-10-09)  — COUNTERTOP: THE DESKTOP'S SURFACE (STEP 2)
+  - `countertop` (src/countertop.c) takes the framebuffer as mode 13h
+    programs do and gives it back on Esc: a blue-to-orange gradient, a bar
+    along the top with "soupOS countertop" and the RTC's time ticking, and
+    an arrow pointer that follows the mouse in pixels.
+  - Measured first: the back buffer is 3 MB, most of the 8 MB heap. A
+    1024-pixel row is exactly a 4 KB page and RAM is identity-mapped, so it
+    is 768 pages from the physical allocator behind an array of row
+    pointers (of ~29 850 free), the heap untouched. Drawing goes to it; one
+    dirty rectangle goes out to the framebuffer; the pointer is laid over
+    the rows on their way out, never drawn into the buffer, so nothing
+    under it is saved or restored.
+  - scripts/countertop-test.sh reads screendumps: the bar, "soupOS" glyph
+    for glyph against font8x16, the gradient's exact colours, the pointer's
+    outline and fill before and after a move with nothing left behind, the
+    console back after Esc.
 
 v0.60.140 (2026-10-09)  — THE POINTER IN PIXELS (DESKTOP, STEP 1)
   - The desktop begins (queue 48, at the user's request). mouse.c keeps a

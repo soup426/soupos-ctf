@@ -38,6 +38,7 @@
 #include "doomsnd.h"
 #include "wad.h"
 #endif
+#include "countertop.h"
 #include "fb.h"
 #include "vfs.h"
 #include "klog.h"
@@ -887,6 +888,7 @@ static void cmd_menu(void) {
         {0, "    wipe               - animated screen clear"},
         {0, "    fortune            - random line from FORTUNE.TXT"},
         {0, "    bounce             - VGA bouncing-ball screensaver"},
+        {0, "    countertop         - the desktop (Esc to leave)"},
 #ifndef NO_DOOM
         {0, "    doom               - it runs Doom (needs DOOM1.WAD, no bg tasks)"},
 #endif
@@ -4804,6 +4806,20 @@ static void cmd_cat(void) {
     #undef CAT_WIDTH
 }
 
+/* countertop (v0.60.141): the desktop. See countertop.c. */
+static int ct_avail(void) { return t_avail(); }
+static int ct_getch(void) { return t_getc(); }
+static void cmd_countertop(void) {
+    if (needs_console("countertop")) return;
+    t_flush_in();
+    int r = countertop_run(ct_avail, ct_getch);
+    t_flush_in();
+    if (r == -1) { t_puts("  countertop needs the framebuffer (the default image has it).\n"); cur_shell()->last_status = 1; return; }
+    if (r == -2) { t_puts("  countertop: no memory for its back buffer.\n"); cur_shell()->last_status = 1; return; }
+    t_cursor(t_row(), t_col());
+    cur_shell()->last_status = 0;
+}
+
 static void cmd_bounce(void) {
     if (needs_console("bounce")) return;
     /* Screensaver: four colored balls ricochet around mode 13h. */
@@ -5177,7 +5193,7 @@ static const char *const cmd_names[] = {
     "takeout", "bgclock", "yieldbg", "spinbg", "sleeptest", "vfstest",
     "dmesg", "pwd", "cd", "mkbowl", "rmbowl", "bowltest",
     "whoami", "roster", "clockout", "hire", "fire", "perms", "secret",
-    "break", "continue", "return", "exit", "inspect", "seal", "pluck", "taste", "[", "smoke", "eggtimer", "nickname", "forget", ".", "shelve", "unshelve", "shelf", "plain", "brew", "temper", "rail", "runner", "stock", ":", "fresh", "spoiled",
+    "break", "continue", "return", "exit", "inspect", "seal", "pluck", "taste", "[", "smoke", "eggtimer", "nickname", "forget", ".", "shelve", "unshelve", "shelf", "plain", "brew", "temper", "rail", "runner", "stock", "countertop", ":", "fresh", "spoiled",
     "preempttest", "vmtest", "vgastress", "fatstress",
 };
 #define CMD_COUNT  (int)(sizeof(cmd_names) / sizeof(cmd_names[0]))
@@ -5451,6 +5467,7 @@ static void dispatch(const char *buf) {
     else if (str_eq(p, "brew") || str_startswith(p, "brew ")) cmd_brew(p + 4);
     else if (str_eq(p, "temper") || str_startswith(p, "temper ")) cmd_temper(p + 6);
     else if (str_eq(p, "rail") || str_startswith(p, "rail ")) cmd_rail(p + 4);
+    else if (str_eq(p, "countertop")) cmd_countertop();
     else if (str_eq(p, "stock") || str_startswith(p, "stock ")) cmd_stock(p + 5);
     else if (str_eq(p, "runner") || str_startswith(p, "runner ")) cmd_runner(p + 6);
     /* : (POSIX's special builtin, its name kept), fresh and spoiled (true and
