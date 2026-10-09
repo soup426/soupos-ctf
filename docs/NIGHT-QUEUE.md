@@ -1,10 +1,10 @@
 # Night queue
 
-Forty-fifth queue. The first forty-four are in `docs/queue-archive-2026-10-0*.md`.
+Forty-sixth queue. The first forty-five are in `docs/queue-archive-2026-10-0*.md`.
 Items wait on a person in three archives (the seventh, the thirteenth and
-the twenty-fourth). Two the forty-fourth turned up (a directory listing
-that reads the directory once per entry, and what happens past 128
-entries), bash's $'...' quoting, and options the text programs lack.
+the twenty-fourth). A glob the forty-fifth found falling back silently,
+then what the text programs and expiry still lack against their GNU
+counterparts (each checked first).
 
 ## Standing rules
 
@@ -30,59 +30,56 @@ entries), bash's $'...' quoting, and options the text programs lack.
     changing anything the Makefile embeds.
 12. Do not edit the tree while check.sh runs: it builds once at its start
     and reads each test script when that test starts.
-13. **Check it is not already there**: grep the menu for "(sh's NAME)"
+13. **Guard every new file**: `[ -e scripts/X-test.sh ] && { echo EXISTS;
+    exit 1; }` before writing it (v0.60.128 wrote over headtail-test.sh
+    after an `ls` printed that it was there).
+14. **Check it is not already there**: grep the menu for "(sh's NAME)"
     and read the first lines of user/*.c before queuing an sh feature or
     a Unix tool (queue 42 queued wait and getopts, already rest and pluck).
-14. If an item is blocked or needs a decision that is not written down, leave
+15. If an item is blocked or needs a decision that is not written down, leave
     a note at the bottom and move on.
 
 ---
 
-## 1. SYS_READDIR: one pass, not one per entry — CLOSED, measured cheap
+## 1. A builtin's glob too big for the line
 
-Measured on the 79-entry root: `cook peek.elf /` takes 4 to 9 ticks
-(40 to 90 ms) into a file and 6 to 7 to the screen (eggtimer: 0.08 s),
-the 79 passes included. Nothing worth a cache. The ls-test flake was the
-loaded full check against a flat two-second wait, not the listing; the
-v0.60.124 notes that blamed SYS_READDIR are corrected.
+Found in v0.60.125: `slurp /big/*` over 302 names prints `/big/*`, the
+pattern as typed, because the words do not fit the 256-byte line. bash
+prints them all. Measure where it falls back (builtins, cook, for), then
+either fit them (a builtin's arguments in a larger buffer) or say the
+line is too long with status 1, as a cut expansion already does; never
+the pattern as if nothing matched. Test with 302 names.
 
+## 2. expiry +FORMAT (date +FORMAT)
 
-Measured in v0.60.124: SYS_READDIR runs fat_ls over the whole directory
-for each index it is asked for, so `cook peek.elf /` on the 79-entry root
-reads it 79 times. Measure peek.elf's ticks on the root first, keep the
-last listing per process (the path, and a generation the FAT bumps on any
-change, so a stale one is never handed out), and measure again. ls-test
-and the rest must agree with mtools as before.
+`expiry +FORMAT`: %Y %m %d %H %M %S %y %e %j %a %A %b %B %p %I %s %F %T
+%D %R %n %t %%, as GNU date's in the C locale, for the RTC's time. Test:
+print %s beside each format and compare with the host's `date -u -d @S`.
 
-## 2. Past 128 entries — DONE v0.60.125
+## 3. swap [:class:] and -c (tr)
 
-fat_ls fills arrays of FAT_LS_MAX (128). Measure what a directory of 200
-files does to peek.elf, serve, forage.elf, globs and Tab: if entries are
-lost silently, make them all reachable (a larger or growing array, or
-listing in pieces) and test with 200 and 300 files against mtools.
+Classes in a set ([:alpha:] [:digit:] [:alnum:] [:upper:] [:lower:]
+[:space:] [:punct:] [:blank:] [:xdigit:] [:cntrl:] [:print:] [:graph:]),
+[:lower:] to [:upper:] and back in order, and -c (the complement of the
+first set) with -d and -s. Compare with GNU tr.
 
-## 3. $'...' (ANSI-C quoting) — DONE v0.60.126
+## 4. rack -f and -b (sort)
 
-bash's $'...': \n \t \r \\ \' \" \a \b \e \f \v \0NNN \xHH, the
-result one word as '...' is, and nothing else expanded inside. In
-commands, assignments, case patterns and [[ ]]. Test against bash.
+-f folds lower case to upper for comparing, -b ignores leading blanks
+(in keys with -k too); with -r -n -u -k -t as they are. Compare with GNU
+sort, LC_ALL=C.
 
-## 4. slice -c LIST and -s (cut -c, cut -s) — DONE v0.60.127
+## 5. sift over several files, -l -H -h -w -x (grep)
 
--c LIST picks characters (bytes) by position, with N, N-M, N- and -M
-ranges as -f's; -s drops lines with no delimiter when -f is given.
-Compare with GNU cut.
+Several FILEs: each line prefixed NAME: when more than one (-H always,
+-h never), -l the names of files with a match, -w whole words, -x whole
+lines; with -E, -c (NAME:N), -n (NAME:N:line), -v -i -o. Compare with
+GNU grep (by its path, not the ugrep wrapper).
 
-## 5. skim -c N, dregs -c N, dregs -n +N, skim -n -N — DONE v0.60.128
+## 6. weigh over several files, and -L (wc)
 
-head and tail's byte counts, tail's "from line N on", and head's "all but
-the last N". Compare with GNU head and tail, binary input included.
-
-## 6. cull -u and -i (uniq -u, uniq -i) — DONE v0.60.129
-
--u only the lines that are not repeated, -i comparing without case
-(printing the first of each run as GNU's does). With -c and -d as they
-are. Compare with GNU uniq.
+Several FILEs, a line each and a `total` line, widths as GNU wc's; -L
+the longest line. Compare with GNU wc.
 
 ## 7. Doom at the framebuffer's own resolution — DEFERRED
 
@@ -90,7 +87,4 @@ Skipped at the user's request: OS work only.
 
 ## Notes left by unattended runs
 
-- v0.60.125: `slurp /big/*` over 302 names prints `/big/*` as typed: the
-  glob's words do not fit the 256-byte line, and a builtin's argument glob
-  falls back to the pattern instead of saying the line is too long (bash
-  prints them all). A for loop's glob has its own 32 KB and is fine.
+(none yet)
