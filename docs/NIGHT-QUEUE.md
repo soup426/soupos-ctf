@@ -1,10 +1,10 @@
 # Night queue
 
-Forty-sixth queue. The first forty-five are in `docs/queue-archive-2026-10-0*.md`.
+Forty-seventh queue. The first forty-six are in `docs/queue-archive-2026-10-0*.md`.
 Items wait on a person in three archives (the seventh, the thirteenth and
-the twenty-fourth). A glob the forty-fifth found falling back silently,
-then what the text programs and expiry still lack against their GNU
-counterparts (each checked first).
+the twenty-fourth). bash's C-style for loop and read -d, then what nl,
+cmp, paste and seq can do that label, pair, layer and tally cannot (each
+checked against the menu and the programs first).
 
 ## Standing rules
 
@@ -41,45 +41,43 @@ counterparts (each checked first).
 
 ---
 
-## 1. A builtin's glob too big for the line — DONE v0.60.130 (builtins did not glob at all)
+## 1. for (( INIT ; COND ; STEP )) ; do ... ; done
 
-Found in v0.60.125: `slurp /big/*` over 302 names prints `/big/*`, the
-pattern as typed, because the words do not fit the 256-byte line. bash
-prints them all. Measure where it falls back (builtins, cook, for), then
-either fit them (a builtin's arguments in a larger buffer) or say the
-line is too long with status 1, as a cut expansion already does; never
-the pattern as if nothing matched. Test with 302 names.
+bash's arithmetic for loop (a keyword form, its own name): INIT once,
+COND before each pass (empty is true), STEP after; break, continue and N
+of each; nested; over several lines and in a recipe; its status the
+last command's (0 if none ran). Test against bash.
 
-## 2. expiry +FORMAT (date +FORMAT) — DONE v0.60.131 (with -d @SECONDS)
+## 2. take -d DELIM (read -d)
 
-`expiry +FORMAT`: %Y %m %d %H %M %S %y %e %j %a %A %b %B %p %I %s %F %T
-%D %R %n %t %%, as GNU date's in the C locale, for the RTC's time. Test:
-print %s beside each format and compare with the host's `date -u -d @S`.
+Read up to DELIM instead of a newline (its first character; -d '' to the
+end of input, as bash reads to a NUL), with -r -a -n -p and from a pipe,
+<<< and < FILE. Test against bash.
 
-## 3. swap [:class:] and -c (tr) — DONE v0.60.132
+## 3. label: nl's options
 
-Classes in a set ([:alpha:] [:digit:] [:alnum:] [:upper:] [:lower:]
-[:space:] [:punct:] [:blank:] [:xdigit:] [:cntrl:] [:print:] [:graph:]),
-[:lower:] to [:upper:] and back in order, and -c (the complement of the
-first set) with -d and -s. Compare with GNU tr.
+-b a (number every line) or t (non-empty, the default) or n, -w WIDTH,
+-s SEP, -v START, -i STEP, -n ln, rn or rz. Compare with GNU nl (single
+logical page; no section delimiters).
 
-## 4. rack -f and -b (sort) — DONE v0.60.133
+## 4. pair -l, -s and the EOF message (cmp)
 
--f folds lower case to upper for comparing, -b ignores leading blanks
-(in keys with -k too); with -r -n -u -k -t as they are. Compare with GNU
-sort, LC_ALL=C.
+-l every differing byte (number, then both values in octal), -s nothing
+said, only the status; a shorter file: "cmp: EOF on NAME after byte N,
+line M" as GNU's (on stderr), status 1. Compare with GNU cmp.
 
-## 5. sift over several files, -l -H -h -w -x (grep) — DONE v0.60.134
+## 5. layer -s and - (paste)
 
-Several FILEs: each line prefixed NAME: when more than one (-H always,
--h never), -l the names of files with a match, -w whole words, -x whole
-lines; with -E, -c (NAME:N), -n (NAME:N:line), -v -i -o. Compare with
-GNU grep (by its path, not the ugrep wrapper).
+-s each file's lines joined into one line (with -d's list cycling); - for
+stdin, more than once taking turns. Compare with GNU paste.
 
-## 6. weigh over several files, and -L (wc) — DONE v0.60.135
+## 6. tally with decimals (seq)
 
-Several FILEs, a line each and a `total` line, widths as GNU wc's; -L
-the longest line. Compare with GNU wc.
+FIRST, STEP and LAST may have fractions: computed in scaled integers
+(user programs have no floating point) to the most decimals any of them
+has, printed with that many, as GNU seq does (seq 0 0.5 2 gives 0.0 to
+2.0); negatives, a step that does not land on LAST, -w and -s with
+them. Compare with GNU seq.
 
 ## 7. Doom at the framebuffer's own resolution — DEFERRED
 
