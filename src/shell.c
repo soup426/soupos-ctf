@@ -6317,6 +6317,84 @@ static int in_assign_value(const char *ex, int k) {
     return 1;
 }
 
+/* $'...' (v0.60.126), bash's ANSI-C quoting, at seg[*ip] (the $): \n \t
+ * \r \\ \' \" \? \a \b \e \E \f \v, \NNN in octal, \xHH in hex, \cX a
+ * control, nothing else expanded. Written into ex as '...' (a ' as
+ * '"'"'), so it is one word whatever it holds, a newline included; *ip
+ * left on its closing '. A NUL ends it. Bytes 1, 2 and 31 are the
+ * shell's own markers (here-documents, an array's elements) and do not
+ * come through as themselves. 1 if it did not fit. */
+static int ansi_quote(const char *seg, int *ip, char *ex, int *kp, int max) {
+    int j = *ip + 2, k = *kp, stop = 0, cut = 0;
+    if (k < max - 1) ex[k++] = '\'';
+    while (seg[j] && seg[j] != '\'') {
+        int c = (unsigned char)seg[j++];
+        if (c == '\\' && seg[j]) {
+            char e = seg[j++];
+            switch (e) {
+            case 'n': c = '\n'; break;   case 't': c = '\t'; break;   case 'r': c = '\r'; break;
+            case 'a': c = 7; break;       case 'b': c = 8; break;       case 'f': c = 12; break;
+            case 'v': c = 11; break;      case 'e': case 'E': c = 27; break;
+            case '\\': c = '\\'; break;   case '\'': c = '\''; break;   case '"': c = '"'; break;
+            case '?': c = '?'; break;
+            case 'x': {
+                int v = 0, d = 0;
+                while (d < 2) {
+                    char h = seg[j];
+                    int x = h >= '0' && h <= '9' ? h - '0' : h >= 'a' && h <= 'f' ? h - 'a' + 10 : h >= 'A' && h <= 'F' ? h - 'A' + 10 : -1;
+                    if (x < 0) break;
+                    v = v * 16 + x; j++; d++;
+                }
+                if (!d) { c = '\\'; j--; } else c = v;
+                break;
+            }
+            case 'c': if (seg[j]) { c = seg[j++] & 0x1f; } else { c = '\\'; j--; } break;
+            default:
+                if (e >= '0' && e <= '7') {          /* up to three octal digits */
+                    int v = e - '0', d = 1;
+                    while (d < 3 && seg[j] >= '0' && seg[j] <= '7') { v = v * 8 + (seg[j++] - '0'); d++; }
+                    c = v & 0xff;
+                } else {                             /* not an escape: both stay */
+                    if (k < max - 1) ex[k++] = '\\';
+                    c = (unsigned char)e;
+                }
+            }
+        }
+        if (c == 0) stop = 1;
+        if (stop) continue;
+        if (c == '\'') {
+            if (k + 5 >= max - 1) { cut = 1; break; }
+            ex[k++] = '\''; ex[k++] = '"'; ex[k++] = '\''; ex[k++] = '"'; ex[k++] = '\'';
+        } else if (k < max - 1) ex[k++] = (char)c;
+        else { cut = 1; break; }
+    }
+    if (k < max - 1) ex[k++] = '\'';
+    *ip = seg[j] ? j : j - 1;
+    *kp = k;
+    return cut;
+}
+
+/* Every $'...' in a line made '...' as it comes in (v0.60.126), before
+ * anything else reads it: the readers after (the splitter, redirections,
+ * pipes, history, the > prompt) all know '...', and none has to learn that
+ * \' does not close a $'...'. Not inside "..." or '...', where it is text. */
+static __attribute__((noinline)) void ansi_line(char *buf, int max) {
+    char *out = kmalloc((uint32_t)max);
+    if (!out) return;
+    int o = 0, did = 0; char q = 0;
+    for (int i = 0; buf[i] && o < max - 1; i++) {
+        char c = buf[i];
+        if (q) { if (c == q) q = 0; else if (q == '"' && c == '\\' && buf[i + 1]) { out[o++] = c; c = buf[++i]; } out[o++] = c; continue; }
+        if (c == '\\' && buf[i + 1]) { out[o++] = c; out[o++] = buf[++i]; continue; }
+        if (c == '$' && buf[i + 1] == '\'') { if (ansi_quote(buf, &i, out, &o, max)) break; did = 1; continue; }
+        if (c == '\'' || c == '"') q = c;
+        out[o++] = c;
+    }
+    out[o] = '\0';
+    if (did) strcpy(buf, out);
+    kfree(out);
+}
+
 static int expand_into(const char *seg, char *ex, int max) {
     int cut = 0;
     int  k = 0;
@@ -6329,6 +6407,10 @@ static int expand_into(const char *seg, char *ex, int max) {
     if (cur_shell()->uid == 0) strcpy(home, "/");
     else { strcpy(home, "/home/"); strncpy(home + 6, users_name_of(cur_shell()->uid), sizeof(home) - 7); home[sizeof(home) - 1] = '\0'; }
     for (int i = 0; seg[i] && k < max - 1; i++) {
+        if (seg[i] == '$' && seg[i + 1] == '\'' && !sq) {   /* $'...' (v0.60.126) */
+            if (ansi_quote(seg, &i, ex, &k, max)) { cut = 1; break; }
+            continue;
+        }
         /* Backslash (v0.60.53), as sh: outside quotes \X is X as text,
          * written single-quoted so every reader after takes it so; inside
          * "..." \\ \" \$ and \` are the character, other pairs stay as
@@ -8037,6 +8119,7 @@ static int split_segs(char *buf, lseg_t *sg, int max) {
     char *s = buf;
     while (n < max) {
         char *start = s, inq = 0;
+        int ansi = 0;                             /* the '...' is a $'...' (v0.60.126) */
         int next_op = 0, pdepth = 0, dsemi = 0;   /* inside $( ... ): no splitting (v0.60.4) */
         int amp = 0, n_was = n;                   /* ended by a lone & (v0.60.62) */
         int dbr = 0;                              /* inside [[ ... ]]: && || < > are its own (v0.60.113) */
@@ -8044,10 +8127,11 @@ static int split_segs(char *buf, lseg_t *sg, int max) {
         if (defend) s = defend;
         while (*s) {
             if (inq) {
-                if (inq == '"' && *s == '\\' && s[1]) { s += 2; continue; }   /* \" inside "..." (v0.60.53) */
-                if (*s == inq) inq = 0;
+                if ((inq == '"' || ansi) && *s == '\\' && s[1]) { s += 2; continue; }   /* \" inside "..." (v0.60.53), \' inside $'...' (v0.60.126) */
+                if (*s == inq) inq = 0, ansi = 0;
                 s++; continue;
             }
+            if (s[0] == '$' && s[1] == '\'') { inq = '\''; ansi = 1; s += 2; continue; }
             if (*s == '\\' && s[1]) { s += 2; continue; }      /* \; \| \' are not syntax (v0.60.53) */
             if (*s == '\'' || *s == '"') { inq = *s; s++; continue; }
             if (!pdepth && !dbr && s[0] == '[' && s[1] == '[' && (s[2] == ' ' || s[2] == '\t') &&
@@ -8487,7 +8571,12 @@ static __attribute__((noinline)) void db_pattern(const char *raw, char *out, int
     const char *c = raw;
     while (*c && o < INPUT_MAX - 1) {
         int pl = 0, quoted = 0;
-        if (*c == '\'' || *c == '"') {               /* one quoted stretch, quotes and all */
+        if (c[0] == '$' && c[1] == '\'') {              /* $'...' (v0.60.126): one quoted stretch, its \' inside */
+            quoted = 1;
+            piece[pl++] = *c++; piece[pl++] = *c++;
+            while (*c && *c != '\'' && pl < INPUT_MAX - 3) { if (*c == '\\' && c[1]) piece[pl++] = *c++; piece[pl++] = *c++; }
+            if (*c) piece[pl++] = *c++;
+        } else if (*c == '\'' || *c == '"') {        /* one quoted stretch, quotes and all */
             char q = *c; quoted = 1;
             piece[pl++] = *c++;
             while (*c && *c != q && pl < INPUT_MAX - 2) piece[pl++] = *c++;
@@ -8495,7 +8584,7 @@ static __attribute__((noinline)) void db_pattern(const char *raw, char *out, int
         } else {                                        /* up to the next quote, $( ) whole */
             int depth = 0;
             while (*c && pl < INPUT_MAX - 2) {
-                if (!depth && (*c == '\'' || *c == '"')) break;
+                if (!depth && (*c == '\'' || *c == '"' || (c[0] == '$' && c[1] == '\''))) break;
                 if (c[0] == '$' && c[1] == '(') { depth++; piece[pl++] = *c++; piece[pl++] = *c++; continue; }
                 if (depth && *c == '(') depth++;
                 if (depth && *c == ')') depth--;
@@ -9432,6 +9521,8 @@ static void run_line(const char *line) {
     lseg_t *sg = kmalloc(sizeof(lseg_t) * LSEG_MAX);
     if (!buf || !sg) { if (buf) kfree(buf); if (sg) kfree(sg); return; }
     strncpy(buf, line, INPUT_MAX * 2 - 1); buf[INPUT_MAX * 2 - 1] = '\0';
+    for (const char *f = buf; *f; f++)
+        if (f[0] == '$' && f[1] == '\'') { ansi_line(buf, INPUT_MAX * 2); break; }
     for (const char *f = buf; *f; f++)
         if (f[0] == 'f' && strncmp(f, "function", 8) == 0) { fn_keyword(buf, INPUT_MAX * 2); break; }
     int n = split_segs(buf, sg, LSEG_MAX);

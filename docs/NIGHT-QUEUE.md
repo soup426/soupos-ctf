@@ -61,7 +61,7 @@ files does to peek.elf, serve, forage.elf, globs and Tab: if entries are
 lost silently, make them all reachable (a larger or growing array, or
 listing in pieces) and test with 200 and 300 files against mtools.
 
-## 3. $'...' (ANSI-C quoting)
+## 3. $'...' (ANSI-C quoting) — DONE v0.60.126
 
 bash's $'...': \n \t \r \\ \' \" \a \b \e \f \v \0NNN \xHH, the
 result one word as '...' is, and nothing else expanded inside. In

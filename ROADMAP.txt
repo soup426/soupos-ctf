@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.125
+Current version: v0.60.126
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,19 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.126 (2026-10-09)  — $'...' (ANSI-C QUOTING)
+  - bash's $'...': \n \t \r \\ \' \" \? \a \b \e \f \v, \NNN octal,
+    \xHH hex, \cX a control, an unknown escape kept as typed, a NUL ending
+    it, nothing else expanded inside; literal inside "...".
+  - Each $'...' becomes '...' as a line comes into run_line, so every
+    reader after (splitter, redirections, pipes, [[ ]], case) sees plain
+    single quotes and none has to know \' does not close it. (A first try
+    decoded it only in expansion: a > after $'it\'s' was taken as text.)
+  - Bytes 1, 2 and 31 cannot be made this way: the shell uses them as its
+    own markers (here-documents, array elements).
+  - scripts/ansic-test.sh compares 18 lines with bash byte for byte, and
+    one typed at the prompt with a redirection.
 
 v0.60.125 (2026-10-09)  — BOWLS PAST 128 ENTRIES
   - Measured: every listing read the first FAT_LS_MAX (128) entries and
