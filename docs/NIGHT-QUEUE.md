@@ -1,22 +1,22 @@
 # Night queue
 
-Fiftieth queue. The first forty-nine are in `docs/queue-archive-2026-10-0*.md`;
-queue 49 (`-09o`) closed the bad-pointer panic, attacked the window calls,
-added the wheel, swirl.elf, jot in windows and Alt+Tab, measured drawing,
-and cut the suite's typing. The full check now runs on CT 123 on atlas
-(scripts/remote-check.sh), never on the laptop. This queue: the check's
-own wall time, then the desktop carried on. Written by an unattended run
-when queue 49 ran out, as the loop it runs in asks; the user has not
-seen it.
+Fifty-first queue. The first fifty are in `docs/queue-archive-2026-10-0*.md`;
+queue 50 (`-09p`) cut the check's wall time (longest first, 48 jobs on the
+CT), gave programs the wheel, put a Kitchen menu on the bar, ran jot over
+SSH and added copy and paste to terminal windows. This one: windows that
+change size, dragging between windows, a third program, and a guard on
+Leave. Written by an unattended run when queue 50 ran out, as the loop it
+runs in asks; the user has not seen it.
 
 ## Standing rules
 
 1. **One item, one commit**, and split when an item splits naturally.
 2. **`scripts/check.sh` must pass before every commit** (five configurations
    in parallel copies, the gate's eight segments, every test script), run
-   on the test container with `scripts/remote-check.sh` (about six
-   minutes), never on the laptop: the user asked (2026-10-09). Soaks and
-   single tests may run here; keep soaks six wide at most. Commit with
+   with `scripts/check.sh` here (the user allowed the laptop again later on
+   2026-10-09; it runs at most CHECK_JOBS at once) or on the test container
+   with `scripts/remote-check.sh` if the laptop is wanted for other things.
+   Keep soaks six wide at most. Commit with
    explicit paths when other work is in the tree.
 3. **Measure before building, and measure the fix.** An item whose premise
    measures false is closed with the numbers, not built anyway.
@@ -47,64 +47,46 @@ seen it.
 
 ---
 
-## 1. The longest jobs first — DONE (check.sh, 2026-10-09)
+## 1. Maximise and restore
 
-check.sh starts its ~205 jobs in list order, so users-test, testcmd-test,
-bowls-test and cooks-test (115-124 s under load) can start late and set
-the wall time: 353 s against ~258 s of work at 32 wide. Keep each job's
-time from the last run (on the machine that ran it) and start the
-longest first. Measure check.sh's wall time before and after, twice each.
+A double click on a title bar fills the space between the bars with that
+window, and another puts it back where and how big it was. Terminal
+windows keep their 80x25 cells for now (centred in the space); files
+and program windows keep their bodies too, so this item is the frame and
+the bookkeeping. Test by screendump: maximised, restored, both logged.
 
-Measured on CT 123 at 32 jobs: 353 s and 352 s before; 356 s on the
-first run after (no times yet, so it only records them); 297 s and 298 s
-after that. lint-test now also fails when a test script is in no list:
-rewrapping the list split 13 names at their hyphens and the old checks
-passed without them.
+## 2. Terminals that change size
 
-## 2. How many jobs at once — DONE (remote-check.sh, 2026-10-09)
+Drag a terminal window's bottom-right corner to resize it, in whole
+cells (40x10 at least, as many as fit at most): the wterm's cells and
+rows/cols change, the shell (and jot) see the new size, and what was on
+screen is kept as far as it fits. Measure first what the shell does with
+cols() today when the line is longer than the width. Test: resize, run
+something that fills a line, screendump against the font.
 
-At 64 jobs the check took 266 s but peaked at 7722 MB of CT 123's 8192.
-Measure peak memory at 32 and 48 (a sampler in the CT, started so that
-it does not kill itself), and set remote-check's default to what leaves
-a gigabyte spare. Do not grow the CT without asking: atlas's other
-guests share its memory.
+## 3. Drag a file onto a terminal
 
-Measured on CT 123 with the longest-first order: 32 jobs 297 s, peak
-5193 MB; 48 jobs 217 s, peak 6714 MB; 64 jobs 266 s (before that order),
-peak 7722 MB of 8192. remote-check.sh now asks for 48. The one failure
-at 48 (prodwin-test) was a background job's line split by the prompt,
-fixed in prod.elf.
+Dragging a row of the files window onto a terminal window types that
+file's path there, quoted as files_open quotes it. Test: drag HELLO.TXT
+onto a terminal, then `pour` and Enter; the terminal shows the file.
 
-## 3. The wheel for programs — DONE v0.60.157
+## 4. oven.elf: a kitchen timer in a window
 
-A WEV_WHEEL event (notches, signed, and where the pointer was) for the
-window under the pointer when it is a program's; swirl zooms with it.
-Test: injected notches over swirl's window, the view compared with the
-host's as swirl-test does.
+A small window counting down a time given as an argument (`cook oven.elf
+90` is a minute and a half), big digits drawn by the program, a beep
+from the mixer at the end (if there is a sound device), and the window
+going red. `eggtimer` the shell builtin already exists: this is the
+windowed one, named for the oven. Test: a short time, screendumps of
+the count and the end, the log of the beep.
 
-## 4. A menu of programs on the bar — DONE v0.60.158
+## 5. Leave asks first when programs have windows
 
-A "Kitchen" button on the top bar listing the programs that open
-windows (frost, swirl), each opening in a new terminal as the files
-window does with pour and jot. Test by screendump and the log.
+Leave with program windows open ends those programs with the desktop.
+The first click on Leave with any open says how many (in the bar) and a
+second within a few seconds leaves; none open, it leaves at once. Test:
+frost open, Leave once (still up, the bar says so), Leave again (down).
 
-## 5. jot over SSH — DONE v0.60.159
-
-The stream terminal could implement put_cell with VT100 cursor
-addressing (ESC[row;colH) and SGR colours; then jot would work over
-SSH, where it is refused now. Measure first what a full redraw costs in
-bytes; if it is too much, send only the cells that changed. Test with
-the ssh tests' pexpect harness: open jot, type, save, read the file.
-
-## 6. Copy and paste in terminal windows — DONE v0.60.160
-
-The console has drag-select with the mouse (skewer's cells) into the
-shared clipboard. In a terminal window: a drag selects cells (shown
-inverted), the selection goes to the clipboard, and a middle or right
-click pastes into the focused terminal. Test by screendump and by what
-a pasted command does.
-
-## 7. Doom at the framebuffer's own resolution — DEFERRED
+## 6. Doom at the framebuffer's own resolution — DEFERRED
 
 Skipped at the user's request (queue 48): OS work only.
 
