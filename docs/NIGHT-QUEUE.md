@@ -61,7 +61,7 @@ bash, nested calls and a recursive function included.
 counting a condition of if/while/until, or a command before && or ||),
 with that command's status, as `bash -e` does. Compare with bash -e.
 
-## 5. $RANDOM
+## 5. $RANDOM — DONE v0.60.58
 
 A number from 0 to 32767, new at each expansion, from the entropy pool.
 Test that it stays in range and does not repeat in a run of a hundred.

@@ -1,40 +1,38 @@
 #!/usr/bin/env bash
-# Does the entropy pool actually vary between boots?
-#
-# `sample` checks the output looks balanced, but a pool seeded from nothing
-# would pass that too: SHA-256 of a constant is just as balanced as SHA-256 of
-# a secret. The property that matters is that two boots draw different bytes,
-# so this boots twice and compares the draw each `sample` logs.
+# random-test.sh - $RANDOM (v0.60.58): in range, new each time, everywhere a
+# variable is read. A hundred draws from 32768 repeat by chance about one
+# run in seven (the birthday problem), so the test asks for 95 distinct,
+# which chance misses about once in a few billion runs.
 set -uo pipefail
 cd "$(dirname "$0")/.."
-
-draw() {
-    local log mon disk pid
-    log=$(mktemp /tmp/soupos-rnd.XXXXXX.log)
-    mon=$(mktemp -u /tmp/soupos-rnd.XXXXXX.sock)
-    disk=$(mktemp /tmp/soupos-rnddisk.XXXXXX.img)
-    cp disk.img "$disk"
-    qemu-system-i386 -accel kvm -cpu host \
-        -drive "file=$disk,format=raw,if=ide,index=0" \
-        -cdrom soupOS.iso -boot d \
-        -m 128M -no-reboot -no-shutdown -display none \
-        -serial "file:$log" -monitor "unix:$mon,server,nowait" >/dev/null 2>&1 &
-    pid=$!
-    sleep 4
-    python3 scripts/qemu_keys.py "$mon" "headchef" "rosemary" "WAIT:1" "sample" >/dev/null 2>&1
-    # Until sample's own last line, not a fixed 8 s (2026-10-08).
-    for i in $(seq 1 120); do grep -qE "^\[sample\] [0-9]+ tests, [0-9]+ failed" "$log" && break; sleep 0.5; done
-    kill "$pid" 2>/dev/null
-    grep -oE "^\[sample\] random draw: [0-9a-f]{16}" "$log" | awk '{print $4}'
-    rm -f "$log" "$mon" "$disk"
-}
-
-a=$(draw); b=$(draw)
 fail=0
-[ ${#a} -eq 16 ] && [ ${#b} -eq 16 ] \
-    && echo "  ok    both boots logged a draw ($a, $b)" \
-    || { echo "  FAIL  a boot logged no draw ('$a', '$b')"; fail=1; }
-[ -n "$a" ] && [ "$a" != "$b" ] \
-    && echo "  ok    two boots drew different bytes" \
-    || { echo "  FAIL  two boots drew the same bytes"; fail=1; }
+WORK=$(mktemp -d /tmp/soupos-random.XXXXXX)
+PID=""
+cleanup() { [ -n "$PID" ] && kill "$PID" 2>/dev/null; if [ "$fail" != 0 ] || [ "${KEEP:-0}" = 1 ]; then echo "  kept $WORK"; else rm -rf "$WORK"; fi; }
+trap cleanup EXIT
+cp disk.img "$WORK/disk.img"
+LINES=(
+  'n=0 ; while (( n < 100 )) ; do slurp R:$RANDOM:${RANDOM}:$((RANDOM % 6)) ; n=$((n+1)) ; done'
+  'slurp "Q:$RANDOM"'
+)
+keys=("headchef" "rosemary" "WAIT:1")
+for l in "${LINES[@]}"; do keys+=("$l" "UNTIL:@soupOS:"); done
+qemu-system-i386 -accel kvm -cpu host -drive "file=$WORK/disk.img,format=raw,if=ide,index=0" \
+    -cdrom soupOS.iso -boot d -m 128M -no-reboot -no-shutdown -display none \
+    -serial "file:$WORK/serial.log" -monitor "unix:$WORK/mon.sock,server,nowait" >/dev/null 2>&1 &
+PID=$!
+python3 scripts/qemu_keys.py "$WORK/mon.sock" "${keys[@]}" >/dev/null 2>&1 || { echo "  FAIL  could not drive QEMU"; fail=1; }
+kill "$PID" 2>/dev/null; wait "$PID" 2>/dev/null; PID=""
+tr -d '\r' < "$WORK/serial.log" | grep -E '^[RQ]:' > "$WORK/got"
+rows=$(grep -c '^R:' "$WORK/got")
+bad=$(awk -F: '/^R:/ && !($2 ~ /^[0-9]+$/ && $2 <= 32767 && $3 ~ /^[0-9]+$/ && $3 <= 32767 && $4 ~ /^[0-5]$/)' "$WORK/got" | wc -l)
+distinct=$(awk -F: '/^R:/ {print $2}' "$WORK/got" | sort -u | wc -l)
+same=$(awk -F: '/^R:/ && $2 == $3' "$WORK/got" | wc -l)
+faces=$(awk -F: '/^R:/ {print $4}' "$WORK/got" | sort -u | wc -l)
+q=$(grep -cE '^Q:[0-9]+$' "$WORK/got")
+if [ "$rows" = 100 ] && [ "$bad" = 0 ]; then echo "  ok    100 rows, every \$RANDOM and \${RANDOM} in 0..32767, every \$((RANDOM % 6)) in 0..5"
+else echo "  FAIL  $rows rows, $bad out of range"; fail=1; fi
+if [ "$distinct" -ge 95 ] && [ "$same" -le 2 ] && [ "$faces" = 6 ]; then echo "  ok    $distinct of 100 distinct, two in one line the same $same times, all six faces of the die"
+else echo "  FAIL  $distinct distinct, $same same in a line, $faces faces"; fail=1; fi
+[ "$q" = 1 ] && echo "  ok    quoted \"\$RANDOM\" too" || { echo "  FAIL  quoted \$RANDOM"; fail=1; }
 exit $fail

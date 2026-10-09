@@ -29,6 +29,7 @@
 #include "remote.h"
 #include "ssh.h"
 #include "logins.h"
+#include "random.h"
 #include "swap.h"
 #ifndef NO_DOOM
 #include "music.h"
@@ -868,7 +869,7 @@ static void cmd_menu(void) {
         {0, "    logbook            - who clocked in, and who was refused, newest first"},
         {0, "    portions [bowl]    - clusters and bytes under each entry, and the total"},
         {0, "    follow [-e] <file> [..] - follow a recipe (a script); $1..$9 its args; -e stops at a failure"},
-        {0, "    NAME=value, $NAME  - shell variables"},
+        {0, "    NAME=value, $NAME  - shell variables ($RANDOM: 0 to 32767)"},
         {0, "    discard NAME       - remove a variable"},
         {0, "    take NAME...       - take a line from the terminal into variables"},
         {0, "    hand NAME[=value]  - hand a variable to programs (their getenv)"},
@@ -5167,8 +5168,23 @@ static int arith_err;
 static const char *ap;               /* where the parser is */
 static long a_eq(void);
 static void a_sp(void) { while (*ap == ' ') ap++; }
+/* $RANDOM (v0.60.58): 0..32767, new at each expansion, from the kernel's
+ * entropy pool. Always a new one: unlike bash, assigning RANDOM does not
+ * seed it, there being nothing to seed. Returns a static buffer. */
+static const char *random_text(void) {
+    static char out[8];
+    uint16_t r;
+    random_bytes(&r, sizeof(r));
+    unsigned v = r & 0x7fff;
+    char d[8]; int nd = 0, n = 0;
+    do { d[nd++] = (char)('0' + v % 10); v /= 10; } while (v);
+    while (nd) out[n++] = d[--nd];
+    out[n] = '\0';
+    return out;
+}
 static long a_var(const char *name) {
     shell_t *me = cur_shell();
+    if (str_eq(name, "RANDOM")) { const char *x = random_text(); long n = 0; while (*x) n = n * 10 + (*x++ - '0'); return n; }
     for (int v = 0; v < me->nvars; v++)
         if (str_eq(me->vname[v], name)) {
             const char *x = me->vval[v]; long n = 0; int neg = 0;
@@ -5579,6 +5595,7 @@ static int expand_into(const char *seg, char *ex, int max) {
             shell_t *me = cur_shell();
             const char *val = 0;
             if (name[0] >= '1' && name[0] <= '9') { if (name[0] - '1' < me->npargs) val = me->parg[name[0] - '1']; }
+            else if (str_eq(name, "RANDOM")) val = random_text();
             else for (int v = 0; v < me->nvars; v++) if (str_eq(me->vname[v], name)) { val = me->vval[v]; break; }
             int mode = sq == '"' ? 1 : in_assign_value(ex, k) ? 2 : 0;
             if (len_of) {
@@ -5615,6 +5632,12 @@ static int expand_into(const char *seg, char *ex, int max) {
             name[nn] = '\0';
             if (braced) { if (seg[j] != '}') { ex[k++] = seg[i]; continue; } j++; }
             shell_t *me = cur_shell();
+            if (str_eq(name, "RANDOM")) {
+                for (const char *val = random_text(); *val; val++)
+                    if (!put_lit(ex, &k, max, *val, 0)) { cut = 1; break; }
+                i = j - 1;
+                continue;
+            }
             for (int v = 0; v < me->nvars; v++)
                 if (str_eq(me->vname[v], name)) {
                     int mode = sq == '"' ? 1 : in_assign_value(ex, k) ? 2 : 0;

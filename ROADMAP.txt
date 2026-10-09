@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.57
+Current version: v0.60.58
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,15 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.58 (2026-10-08)  — $RANDOM
+  - $RANDOM, ${RANDOM} and RANDOM in arithmetic give a number from 0 to
+    32767, new at each expansion, from the kernel's entropy pool. Assigning
+    RANDOM does not seed it, unlike bash: there is nothing to seed.
+  - scripts/random-test.sh draws a hundred: all in range, at least 95
+    distinct (a hundred from 32768 repeat by chance about one run in
+    seven, so the queue's "no repeats" would have been a flake), and all
+    six faces of $((RANDOM % 6)).
 
 v0.60.57 (2026-10-08)  — FOLLOW -E
   - `follow -e FILE` stops the script at the first command that fails, with
