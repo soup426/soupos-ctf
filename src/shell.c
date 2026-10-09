@@ -5242,6 +5242,7 @@ static long a_prim(void) {
         return v;
     }
     if (*ap == '!') { ap++; return !a_prim(); }
+    if (*ap == '~') { ap++; return ~a_prim(); }               /* (v0.60.66) */
     if (*ap == '(') { ap++; long v = a_comma(); a_sp(); if (*ap == ')') ap++; else arith_err = 1; return v; }   /* a whole expression (v0.60.63; was a_eq: no && || = ?:) */
     if (*ap == '-') { ap++; return -a_prim(); }
     if (*ap == '+') { ap++; return a_prim(); }
@@ -5263,14 +5264,29 @@ static long a_prim(void) {
     arith_err = 1;
     return 0;
 }
-static long a_mul(void) {
+/* a ** b (v0.60.66): right to left, below the unary signs as in bash, so
+ * -2**2 is 4; a negative power is an error. */
+static long a_pow(void) {
     long v = a_prim();
+    a_sp();
+    if (ap[0] == '*' && ap[1] == '*') {
+        ap += 2;
+        long r = a_pow();
+        if (r < 0) { if (!a_skip) arith_err = 1; return 0; }
+        long out = 1;
+        while (r-- > 0) { out *= v; if (out == 0 || v == 1 || v == 0) break; }
+        return out;
+    }
+    return v;
+}
+static long a_mul(void) {
+    long v = a_pow();
     for (;;) {
         a_sp();
         char o = *ap;
         if (o != '*' && o != '/' && o != '%') return v;
         ap++;
-        long r = a_prim();
+        long r = a_pow();
         if (o == '*') v *= r;
         else if (r == 0) { if (a_skip) r = 1; else { arith_err = 2; return 0; } }
         else if (o == '/') v /= r;
@@ -5281,14 +5297,23 @@ static long a_add(void) {
     long v = a_mul();
     for (;;) { a_sp(); if (*ap == '+') { ap++; v += a_mul(); } else if (*ap == '-') { ap++; v -= a_mul(); } else return v; }
 }
-static long a_rel(void) {
+static long a_shift(void) {               /* << >> (v0.60.66) */
     long v = a_add();
     for (;;) {
         a_sp();
-        if (ap[0] == '<' && ap[1] == '=') { ap += 2; v = v <= a_add(); }
-        else if (ap[0] == '>' && ap[1] == '=') { ap += 2; v = v >= a_add(); }
-        else if (ap[0] == '<') { ap++; v = v < a_add(); }
-        else if (ap[0] == '>') { ap++; v = v > a_add(); }
+        if (ap[0] == '<' && ap[1] == '<') { ap += 2; v = (long)((unsigned long)v << (a_add() & 31)); }
+        else if (ap[0] == '>' && ap[1] == '>') { ap += 2; v = v >> (a_add() & 31); }
+        else return v;
+    }
+}
+static long a_rel(void) {
+    long v = a_shift();
+    for (;;) {
+        a_sp();
+        if (ap[0] == '<' && ap[1] == '=') { ap += 2; v = v <= a_shift(); }
+        else if (ap[0] == '>' && ap[1] == '=') { ap += 2; v = v >= a_shift(); }
+        else if (ap[0] == '<') { ap++; v = v < a_shift(); }
+        else if (ap[0] == '>') { ap++; v = v > a_shift(); }
         else return v;
     }
 }
@@ -5301,14 +5326,26 @@ static long a_eq(void) {
         else return v;
     }
 }
-static long a_and(void) {                /* the right side only if the left is true */
+static long a_band(void) {               /* & ^ | (v0.60.66), each below the last */
     long v = a_eq();
+    for (;;) { a_sp(); if (ap[0] == '&' && ap[1] != '&' && ap[1] != '=') { ap++; v &= a_eq(); } else return v; }
+}
+static long a_bxor(void) {
+    long v = a_band();
+    for (;;) { a_sp(); if (ap[0] == '^' && ap[1] != '=') { ap++; v ^= a_band(); } else return v; }
+}
+static long a_bor(void) {
+    long v = a_bxor();
+    for (;;) { a_sp(); if (ap[0] == '|' && ap[1] != '|' && ap[1] != '=') { ap++; v |= a_bxor(); } else return v; }
+}
+static long a_and(void) {                /* the right side only if the left is true */
+    long v = a_bor();
     for (;;) {
         a_sp();
         if (ap[0] == '&' && ap[1] == '&') {
             ap += 2;
             if (!v) a_skip++;
-            long r = a_eq();
+            long r = a_bor();
             if (!v) a_skip--;
             v = v && r;
         } else return v;
@@ -5354,11 +5391,16 @@ static long a_assign(void) {
         a_sp();
         char op = 0;
         if (ap[0] == '=' && ap[1] != '=') { op = '='; ap++; }
-        else if ((ap[0] == '+' || ap[0] == '-' || ap[0] == '*' || ap[0] == '/' || ap[0] == '%') && ap[1] == '=') { op = ap[0]; ap += 2; }
+        else if ((ap[0] == '+' || ap[0] == '-' || ap[0] == '*' || ap[0] == '/' || ap[0] == '%' ||
+                  ap[0] == '&' || ap[0] == '|' || ap[0] == '^') && ap[1] == '=') { op = ap[0]; ap += 2; }
+        else if (ap[0] == '<' && ap[1] == '<' && ap[2] == '=') { op = 'L'; ap += 3; }   /* <<= >>= (v0.60.66) */
+        else if (ap[0] == '>' && ap[1] == '>' && ap[2] == '=') { op = 'R'; ap += 3; }
         if (op) {
             long r = a_assign(), v = a_var(name);
             if ((op == '/' || op == '%') && r == 0) { if (a_skip) r = 1; else { arith_err = 2; return 0; } }
-            v = op == '=' ? r : op == '+' ? v + r : op == '-' ? v - r : op == '*' ? v * r : op == '/' ? v / r : v % r;
+            v = op == '=' ? r : op == '+' ? v + r : op == '-' ? v - r : op == '*' ? v * r : op == '/' ? v / r :
+                op == '%' ? v % r : op == '&' ? (v & r) : op == '|' ? (v | r) : op == '^' ? (v ^ r) :
+                op == 'L' ? (long)((unsigned long)v << (r & 31)) : v >> (r & 31);
             a_set(name, v);
             return v;
         }
@@ -5918,6 +5960,7 @@ static const char *pipe_bar(const char *seg) {
         if (*s == '\\' && s[1]) { s++; continue; }           /* \| is not a pipe (v0.60.53) */
         if (*s == '\'' || *s == '"') { q = *s; continue; }
         if (s[0] == '$' && s[1] == '(') { dep++; s++; continue; }
+        if (s[0] == '(' && s[1] == '(') { dep += 2; s++; continue; }   /* (( a | b )) (v0.60.66) */
         if (dep && *s == '(') { dep++; continue; }
         if (dep && *s == ')') { dep--; continue; }
         if (!dep && *s == '|' && s[1] != '|' && (s == seg || s[-1] != '|')) return s;

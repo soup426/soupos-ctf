@@ -46,7 +46,7 @@ may hold $X. Compare with bash.
 The first or every match replaced (# and % anchors too), and a slice.
 Compare with bash.
 
-## 3. & | ^ ~ << >> and ** in arithmetic
+## 3. & | ^ ~ << >> and ** in arithmetic — DONE v0.60.66
 
 With their op= forms where sh has them, at sh's precedence. Compare with
 bash.
