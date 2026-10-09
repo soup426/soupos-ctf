@@ -7355,6 +7355,9 @@ static char *case_header_end(char *t) {
 }
 
 static const char *const DSEMI = ";;";
+static const char *const DSEMI_FALL = ";&";    /* the next arm's commands too, untested (v0.60.97) */
+static const char *const DSEMI_CONT = ";;&";   /* go on testing the arms after (v0.60.97) */
+static int is_dsemi(const char *t) { return t == DSEMI || t == DSEMI_FALL || t == DSEMI_CONT; }
 
 /* `X | while ...` (and for, if, case): the | before a compound (v0.60.34). */
 static char *compound_bar(char *t) {
@@ -7421,7 +7424,9 @@ static int split_segs(char *buf, lseg_t *sg, int max) {
             if (pdepth && *s == '(') { pdepth++; s++; continue; }
             if (pdepth && *s == ')') { pdepth--; s++; continue; }
             if (pdepth) { s++; continue; }
+            if (s[0] == ';' && s[1] == ';' && s[2] == '&') { next_op = ';'; dsemi = 3; *s = '\0'; s += 3; break; }
             if (s[0] == ';' && s[1] == ';') { next_op = ';'; dsemi = 1; *s = '\0'; s += 2; break; }
+            if (s[0] == ';' && s[1] == '&') { next_op = ';'; dsemi = 2; *s = '\0'; s += 2; break; }
             if (s[0] == ';')                { next_op = ';'; *s = '\0'; s += 1; break; }
             if (s[0] == '&' && s[1] == '&') { next_op = 'A'; *s = '\0'; s += 2; break; }
             if (s[0] == '|' && s[1] == '|') { next_op = 'O'; *s = '\0'; s += 2; break; }
@@ -7506,7 +7511,7 @@ static int split_segs(char *buf, lseg_t *sg, int max) {
             n++;
         }
         if (amp && n > n_was) sg[n - 1].bg = 1;
-        if (dsemi && n < max) { sg[n].text = DSEMI; sg[n].op = ';'; n++; arm_next = 1; }
+        if (dsemi && n < max) { sg[n].text = dsemi == 3 ? DSEMI_CONT : dsemi == 2 ? DSEMI_FALL : DSEMI; sg[n].op = ';'; n++; arm_next = 1; }
         if (!next_op) break;
         op = next_op;
     }
@@ -8324,16 +8329,17 @@ static void exec_range(lseg_t *sg, int from, int to, int depth) {
                 word[k] = '\0';
                 unquote(word);
                 cur_shell()->last_status = 0;
-                int j = i + 1, matched = 0;
-                while (j < e && !matched) {
-                    /* the arm: its pattern at j, its commands up to ;; or esac */
+                int j = i + 1, matched = 0, fall = 0, done = 0;
+                while (j < e && !done) {
+                    /* the arm: its pattern at j, its commands up to ;; ;& ;;& or esac */
                     int b = j + 1, dep = 0;
                     while (b < e) {
                         if (is_kw(sg[b].text, "case")) dep++;
                         else if (is_kw(sg[b].text, "esac")) dep--;
-                        else if (dep == 0 && sg[b].text == DSEMI) break;
+                        else if (dep == 0 && is_dsemi(sg[b].text)) break;
                         b++;
                     }
+                    matched = fall;                          /* ;& before: in without a test */
                     char pat[INPUT_MAX];
                     const char *pt = sg[j].text;
                     if (*pt == '(') pt++;                         /* (PAT) is sh too */
@@ -8353,14 +8359,19 @@ static void exec_range(lseg_t *sg, int from, int to, int depth) {
                         matched = glob_match(gp, word);
                         alt = next;
                     }
-                    if (matched) exec_range(sg, j + 1, b, depth + 1);
+                    if (matched) {
+                        exec_range(sg, j + 1, b, depth + 1);
+                        const char *term = b < e ? sg[b].text : DSEMI;
+                        fall = term == DSEMI_FALL;           /* ;& the next arm's too */
+                        done = term == DSEMI;                /* ;; stops; ;;& tests on */
+                    } else fall = 0;
                     j = b + 1;
                 }
             }
             i = e + 1;
             continue;
         }
-        if (sg[i].text == DSEMI) { i++; continue; }
+        if (is_dsemi(sg[i].text)) { i++; continue; }
         if (run && fndef_end((char *)sg[i].text)) {
             /* A definition: kept as written, expanded only when called. */
             shell_t *sh = cur_shell();

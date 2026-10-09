@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.96
+Current version: v0.60.97
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,16 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.97 (2026-10-09)  — CASE ;& AND ;;&
+  - An arm ended by ;& runs the next arm's commands too, untested, and on
+    down while they end so; one ended by ;;& goes on testing the arms
+    after it. ;; stops, as before. On a line, in a loop and in a script's
+    case over lines.
+  - scripts/casefall-test.sh compares six lines and a script with bash.
+  - x25519-test.sh measures again, once, when its thousand rounds go over
+    the limit: the ticks are guest wall time a busy host stretches (1790
+    and 1146 in two loaded full checks, ~150 alone).
 
 v0.60.96 (2026-10-09)  — TAKE -P, -N, -T
   - take learns read's options: -p PROMPT shown before it reads (not when

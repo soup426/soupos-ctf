@@ -53,7 +53,7 @@ moves with sleeptest, $LINENO counts a script's lines as bash does).
 read's prompt, its N characters and no more, and its timeout (status
 above 128 when it runs out, as bash). Test by typing and by not typing.
 
-## 4. case ;& and ;;&
+## 4. case ;& and ;;& — DONE v0.60.97
 
 ;& runs the next arm's commands too, without testing it; ;;& goes on
 testing the arms after. Compare with bash.
