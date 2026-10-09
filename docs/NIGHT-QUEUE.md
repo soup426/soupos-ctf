@@ -47,7 +47,7 @@ loop it runs in asks; the user has not seen it.
 
 ---
 
-## 1. Keyboard shortcuts
+## 1. Keyboard shortcuts — DONE v0.60.171
 
 Ctrl+Alt+T opens a terminal and Alt+F4 closes the focused window (a
 program's gets WEV_CLOSE, as its close box sends). Measure first what the

@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.170
+Current version: v0.60.171
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,23 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.171 (2026-10-09)  — KEYBOARD SHORTCUTS
+  - F1-F12 are key codes now (KEY_F1.. KEY_F12, 265-276): the scancode
+    table has 0 for them, so they reached no one. Consumers that take
+    only printable characters ignore them, as they do the arrows.
+  - On the desktop: Ctrl+Alt+T opens a terminal; Alt+F4 closes the
+    focused window as its close box would (a program's gets WEV_CLOSE
+    and decides).
+  - The Alt combinations (and Alt+Tab, v0.60.155) are decided in the
+    keyboard IRQ when the key goes down: KEY_ALT_TAB, KEY_ALT_F4,
+    KEY_CTRL_ALT_T. First built reading Alt's state when the desktop
+    took the key, as Alt+Tab did: a six-wide soak lost one Alt+F4 in six
+    (Alt already up by then). Twelve at once after: 12 of 12. Alt+Tab
+    at the console no longer types a tab.
+  - scripts/ctkeys-test.sh: Ctrl+Alt+T (a command typed there), Alt+F4
+    on the terminal and then Pantry, Ctrl+Alt+T again, frost asked to
+    close by Alt+F4 and closing; the log and a screendump.
 
 v0.60.170 (2026-10-09)  — NOTES FROM PROGRAMS ON THE BAR
   - SYS_NOTE (23): a program puts a line (47 characters kept, control

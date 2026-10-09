@@ -11,6 +11,14 @@
 #define KEY_END   262
 #define KEY_PGUP  263
 #define KEY_PGDN  264
+#define KEY_F1    265           /* F1-F12: KEY_F1 + n - 1 (v0.60.171) */
+#define KEY_F4    268
+#define KEY_F12   276
+/* Alt combinations, decided in the IRQ when the key goes down (v0.60.171):
+ * read later, Alt may already be up (under load an Alt+F4 was lost). */
+#define KEY_ALT_TAB     277
+#define KEY_ALT_F4      278
+#define KEY_CTRL_ALT_T  279
 
 /* Set-1 scancode constants for keyboard_key_pressed().
  * Extended (0xE0-prefix) keys are stored with bit 7 set (sc | 0x80). */

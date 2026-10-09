@@ -801,9 +801,10 @@ static void files_open(int k, int r) {
 
 /* Alt+Tab (v0.60.155): the focused window goes to the back, so the next one
  * down has the focus; a second press reaches the third. Minimised windows
- * are skipped because the focus skips them. Alt is read when the Tab
- * arrives: measured held for QEMU's alt-tab (it holds keys 100 ms; the
- * loop reads within ~20), as it is for a hand on the keys. */
+ * are skipped because the focus skips them. Alt was read when the Tab
+ * arrived here, measured held for QEMU's alt-tab; since v0.60.171 the
+ * keyboard IRQ decides it (KEY_ALT_TAB), since under load an Alt+F4 read
+ * that way was lost. */
 static void lower_window(int k) {
     int at = -1;
     for (int i = 0; i < nwin; i++) if (order[i] == k) at = i;
@@ -1476,7 +1477,18 @@ int countertop_run(int (*avail)(void), int (*getch)(void), int uid) {
         apps_tick();
         while (avail()) {                            /* keys: the focused terminal's */
             int c = getch(), k = topmost();
-            if (c == '\t' && keyboard_key_pressed(KEY_SC_LALT) && k >= 0) {   /* Alt+Tab (v0.60.155) */
+            if (c == KEY_CTRL_ALT_T) {                         /* Ctrl+Alt+T: a terminal (v0.60.171) */
+                klog("[countertop] ctrl-alt-t\n");
+                open_terminal();
+                continue;
+            }
+            if (c == KEY_ALT_F4 && k >= 0) {                  /* Alt+F4: as its close box (v0.60.171) */
+                klog("[countertop] alt-f4 %s\n", win[k].title);
+                if (win[k].app >= 0) app_push(win[k].app, WEV_CLOSE, 0, 0, 0, 0);
+                else close_window(k);
+                continue;
+            }
+            if (c == KEY_ALT_TAB && k >= 0) {                  /* Alt+Tab (v0.60.155; decided in the IRQ, v0.60.171) */
                 lower_window(k);
                 continue;
             }
