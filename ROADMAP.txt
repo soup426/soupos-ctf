@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.101
+Current version: v0.60.102
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,14 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.102 (2026-10-09)  — TAB FINISHES $NAME
+  - A word whose last $ (or ${) is followed by name characters finishes
+    from the shell's variable names: one fit is finished (and closed with
+    } after ${), several as far as they agree and listed on the second
+    Tab, as bash's completion does. A name's case is its own: $mi does
+    not finish to Mixed. Commands, programs and paths as before.
+  - scripts/tabvar-test.sh types five.
 
 v0.60.101 (2026-10-09)  — REST -N, MARINATE.ELF AND SYS_SLEEP
   - `rest -n` is wait -n: the next of this shell's background jobs to end,

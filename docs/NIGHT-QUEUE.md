@@ -51,7 +51,7 @@ what it would run. A kitchen name. Compare with bash's command.
 Waits for the next background job to end, whichever it is, its status
 being that job's, as wait -n. Test with two jobs of different lengths.
 
-## 4. Tab finishes $NAME
+## 4. Tab finishes $NAME — DONE v0.60.102
 
 A word starting with $ (or ${) finishes from the shell's variable names,
 as bash's completion does. Test by typing.

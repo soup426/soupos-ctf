@@ -5023,7 +5023,7 @@ static void shell_tab_complete(char *input, int *pos, int *len) {
     int word_len = *pos - ws;
 
     /* Where it stands. */
-    enum { AT_CMD, AT_PROG, AT_PATH } at = AT_PATH;
+    enum { AT_CMD, AT_PROG, AT_PATH, AT_VAR } at = AT_PATH;
     int j = ws;
     while (j > 0 && input[j - 1] == ' ') j--;
     if (j == 0) at = AT_CMD;
@@ -5047,10 +5047,27 @@ static void shell_tab_complete(char *input, int *pos, int *len) {
     const char *leaf = word + slash + 1;
     int leaf_len = word_len - (slash + 1);
 
+    /* $NAME and ${NAME (v0.60.102): a name after the word's last $ */
+    int brace = 0;
+    {
+        int d = -1;
+        for (int i = 0; i < word_len; i++) if (word[i] == '$') d = i;
+        if (d >= 0 && d > slash) {
+            int b = d + 1 < word_len && word[d + 1] == '{';
+            int ok = 1;
+            for (int i = d + 1 + b; i < word_len; i++)
+                if (!(word[i] == '_' || (word[i] >= 'A' && word[i] <= 'Z') || (word[i] >= 'a' && word[i] <= 'z') || (word[i] >= '0' && word[i] <= '9'))) ok = 0;
+            if (ok) { at = AT_VAR; brace = b; leaf = word + d + 1 + b; leaf_len = word_len - (d + 1 + b); }
+        }
+    }
+
     tab_fits_t *t = kmalloc(sizeof(tab_fits_t));
     if (!t) return;
     t->n = 0;
-    if (at == AT_CMD) {
+    if (at == AT_VAR) {
+        for (int i = 0; i < sh->nvars; i++)
+            if (strncmp(sh->vname[i], leaf, (uint32_t)leaf_len) == 0) tab_add(t, sh->vname[i], 0);
+    } else if (at == AT_CMD) {
         for (int i = 0; i < CMD_COUNT; i++)
             if (prefix_match_ci(cmd_names[i], leaf, leaf_len)) tab_add(t, cmd_names[i], 0);
     } else if (at == AT_PROG) {
@@ -5079,7 +5096,7 @@ static void shell_tab_complete(char *input, int *pos, int *len) {
     int typed_lower = 0, fit_lower = 0;
     for (int i = 0; i < leaf_len; i++) if (leaf[i] >= 'a' && leaf[i] <= 'z') typed_lower = 1;
     for (const char *c = t->name[0]; *c; c++) if (*c >= 'a' && *c <= 'z') fit_lower = 1;
-    int fold = typed_lower && !fit_lower;
+    int fold = typed_lower && !fit_lower && at != AT_VAR;   /* a variable's case is its own */
 
     if (common > leaf_len) {
         for (int i = leaf_len; i < common; i++) {
@@ -5089,6 +5106,7 @@ static void shell_tab_complete(char *input, int *pos, int *len) {
         sh->tabs = 1;           /* it did what it could: the next Tab lists */
     }
     if (t->n == 1) {
+        if (at == AT_VAR && brace) { shell_insert(input, pos, len, '}'); sh->tabs = 0; kfree(t); return; }
         if (t->is_dir[0]) shell_insert(input, pos, len, '/');
         else if (*pos == *len || input[*pos] != ' ') shell_insert(input, pos, len, ' ');
         sh->tabs = 0;
