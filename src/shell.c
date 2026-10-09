@@ -88,6 +88,9 @@ typedef struct {
     int     loops;               /* loops open now, for break and continue (v0.60.44) */
     int     brk, cont;           /* loops still to break out of / continue past */
     int     fns, scripts;        /* functions and follow scripts running (v0.60.47) */
+    struct { char name[16]; char val[96]; uint8_t had, handed; } stashed[32];
+    int     nstash;              /* stash (local): what to give back as functions return (v0.60.56) */
+    int     stash_floor;         /* where the running call's own stashes begin */
     uint32_t last_bg;            /* the last job started with &: $! (v0.60.48) */
     uint32_t done_pid[16];       /* finished jobs the prompt reported, and their */
     uint8_t  done_st[16];        /* statuses, for a rest that comes after (as sh) */
@@ -871,6 +874,7 @@ static void cmd_menu(void) {
         {0, "    break [N]          - leave a for, while or until loop"},
         {0, "    continue [N]       - go round it again"},
         {0, "    return [N]         - leave a function"},
+        {0, "    stash NAME[=value] - a function's own variable (sh's local)"},
         {0, "    exit [N]           - leave a script (at the prompt, clockout)"},
         {0, "    kill <id>          - stop a background task"},
         {0, "    larder             - room left on the disk"},
@@ -3082,6 +3086,7 @@ static void cmd_unset(const char *args); /* beside run_line (v0.58.0) */
 static void cmd_hand(const char *args);  /* beside it (v0.60.26) */
 static void cmd_break(const char *args, int is_continue);   /* with the loops (v0.60.44) */
 static void cmd_return(const char *args, int is_exit);     /* beside it (v0.60.47) */
+static void cmd_stash(const char *args);                  /* beside it (v0.60.56) */
 static int status_before;
 static void cmd_read(const char *args);  /* beside run_line (v0.60.4) */
 
@@ -4580,7 +4585,7 @@ static const char *const cmd_names[] = {
     "jot", "ai", "cook", "soup", "hash",
     "beep", "mandelbrot", "vgademo", "uname", "cal",
     "clock", "wipe", "fortune", "bounce", "recipe", "leftovers", "spill",
-    "freeze", "reheat", "ps", "kitchen", "brigade", "logbook", "portions", "follow", "discard", "take", "orders", "plate", "steep", "hand", "rest", "kill", "scraps", "sample", "skewer", "larder", "whistle", "hatch", "hush", "pass", "vault",
+    "freeze", "reheat", "ps", "kitchen", "brigade", "logbook", "portions", "follow", "discard", "take", "orders", "plate", "steep", "hand", "rest", "stash", "kill", "scraps", "sample", "skewer", "larder", "whistle", "hatch", "hush", "pass", "vault",
 #ifndef NO_DOOM
     "sizzle", "hum",
 #endif
@@ -4826,6 +4831,7 @@ static void dispatch(const char *buf) {
     else if (str_startswith(p, "discard ")) cmd_unset(uq_args(p + 8));
     else if (str_eq(p, "hand") || str_startswith(p, "hand ")) cmd_hand(p + 4 + (p[4] == ' '));
     else if (str_eq(p, "rest") || str_startswith(p, "rest ")) cmd_rest(p + 4);
+    else if (str_eq(p, "stash") || str_startswith(p, "stash ")) cmd_stash(p + 5);
     else if (str_eq(p, "break") || str_startswith(p, "break ")) cmd_break(p + 5, 0);
     else if (str_eq(p, "return") || str_startswith(p, "return ")) cmd_return(p + 6, 0);
     else if (str_eq(p, "exit") || str_startswith(p, "exit ")) cmd_return(p + 4, 1);
@@ -5402,6 +5408,18 @@ static int put_lit(char *ex, int *k, int max, char c, int in_dq) {
 static int in_assign_value(const char *ex, int k) {
     int a = 0;
     while (a < k && ex[a] == ' ') a++;
+    /* stash/hand NAME=value...: each NAME= word is an assignment too, as
+     * sh's local and export take theirs whole (v0.60.56). Start from the
+     * word being expanded into. */
+    if ((strncmp(ex + a, "stash ", 6) == 0 || strncmp(ex + a, "hand ", 5) == 0)) {
+        int w = a; char q2 = 0;
+        for (int b = a; b < k; b++) {
+            if (q2) { if (ex[b] == q2) q2 = 0; }
+            else if (ex[b] == '\'' || ex[b] == '"') q2 = ex[b];
+            else if (ex[b] == ' ') w = b + 1;
+        }
+        if (w > a) a = w;
+    }
     if (a >= k || !(ex[a] == '_' || (ex[a] >= 'A' && ex[a] <= 'Z') || (ex[a] >= 'a' && ex[a] <= 'z'))) return 0;
     while (a < k && (ex[a] == '_' || (ex[a] >= 'A' && ex[a] <= 'Z') || (ex[a] >= 'a' && ex[a] <= 'z') || (ex[a] >= '0' && ex[a] <= '9'))) a++;
     if (a >= k || ex[a] != '=') return 0;
@@ -5654,10 +5672,25 @@ static int call_function(const char *ex) {
     me->last_status = 0;
     depth++;
     me->fns++;
+    int stash_mark = me->nstash;                /* stash: put these back on return */
+    int floor_was = me->stash_floor;
+    me->stash_floor = me->nstash;
     int loops = me->loops;
     me->loops = 0;                              /* a loop out here is not the body's to break */
     run_line(body);
     me->loops = loops;
+    int st_after = me->last_status;
+    while (me->nstash > stash_mark) {
+        me->nstash--;
+        if (!me->stashed[me->nstash].had) cmd_unset(me->stashed[me->nstash].name);
+        else {
+            set_var(me->stashed[me->nstash].name, me->stashed[me->nstash].val);
+            for (int v = 0; v < me->nvars; v++)
+                if (str_eq(me->vname[v], me->stashed[me->nstash].name)) me->vhand[v] = me->stashed[me->nstash].handed;
+        }
+    }
+    me->last_status = st_after;
+    me->stash_floor = floor_was;
     me->fns--;
     me->ret = 0;                                /* a return ends here; an exit goes on */
     depth--;
@@ -6249,6 +6282,40 @@ static int loop_after_body(shell_t *me) {
     }
     return 0;
 }
+/* stash NAME[=value]... (v0.60.56): sh's local, under a kitchen name. In a
+ * function, NAME becomes the function's own: what it was (or that it was
+ * not set) comes back when the function returns, and anything it calls
+ * sees the function's, as sh's dynamic scope has it. Without a value it is
+ * unset. Outside a function it is an error, status 1. */
+static void cmd_stash(const char *args) {
+    shell_t *me = cur_shell();
+    me->last_status = 0;
+    if (!me->fns) { t_puts("  stash: only in a function\n"); me->last_status = 1; return; }
+    const char *a = args;
+    while (*a) {
+        char w[INPUT_MAX];
+        a = first_word(a, w, sizeof(w));
+        if (!w[0]) break;
+        char *eq = strchr(w, '=');
+        if (eq) *eq = '\0';
+        if (!w[0] || strlen(w) > 15) { t_printf("  stash: not a name: %s\n", w); me->last_status = 1; continue; }
+        int done = 0;                          /* once per call: again just sets it */
+        for (int i = me->stash_floor; i < me->nstash; i++) if (str_eq(me->stashed[i].name, w)) done = 1;
+        if (!done) {
+            if (me->nstash >= 32) { t_puts("  stash: too many (32)\n"); me->last_status = 1; continue; }
+            int slot = -1;
+            for (int v = 0; v < me->nvars; v++) if (str_eq(me->vname[v], w)) slot = v;
+            strcpy(me->stashed[me->nstash].name, w);
+            me->stashed[me->nstash].had = slot >= 0;
+            me->stashed[me->nstash].handed = slot >= 0 && me->vhand[slot];
+            if (slot >= 0) strcpy(me->stashed[me->nstash].val, me->vval[slot]);
+            me->nstash++;
+        }
+        if (eq) set_var(w, eq + 1);
+        else cmd_unset(w);
+    }
+}
+
 /* return [N] and exit [N] (v0.60.47): leave a function, or a follow
  * script, with status N (the last command's without one). */
 static void cmd_return(const char *args, int is_exit) {
@@ -6539,7 +6606,8 @@ static void run_line(const char *line) {
     if (!buf || !sg) { if (buf) kfree(buf); if (sg) kfree(sg); return; }
     strncpy(buf, line, INPUT_MAX * 2 - 1); buf[INPUT_MAX * 2 - 1] = '\0';
     int n = split_segs(buf, sg, LSEG_MAX);
-    if (run_depth == 0) { cur_shell()->brk = cur_shell()->cont = 0; cur_shell()->loops = 0; cur_shell()->ret = cur_shell()->quit = 0; }
+    if (run_depth == 0) { cur_shell()->brk = cur_shell()->cont = 0; cur_shell()->loops = 0; cur_shell()->ret = cur_shell()->quit = 0;
+                          cur_shell()->nstash = cur_shell()->stash_floor = 0; }
     if (run_depth++ == 0 && cur_shell()->term) intr_mark = cur_shell()->term->intr;
     exec_range(sg, 0, n, 0);
     run_depth--;

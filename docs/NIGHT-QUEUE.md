@@ -48,7 +48,7 @@ each.
 glob_match knows * and ? only. Add bracket expressions, ranges and [!x],
 for file globs and case patterns alike. Compare with bash.
 
-## 3. stash (local)
+## 3. stash (local) — DONE v0.60.56
 
 `stash NAME[=value]` inside a function: the variable is the function's
 own, the caller's (or its absence) back when it returns, as sh's local.
