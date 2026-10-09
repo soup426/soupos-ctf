@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.86
+Current version: v0.60.87
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,16 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.87 (2026-10-09)  — EGGTIMER (TIME)
+  - `eggtimer CMD` is sh's time under a kitchen name, and a keyword as
+    time is: it times the next command, a whole loop, if, case or { },
+    or a pipeline, then says `real` to the hundredth (the timer's grain,
+    100 Hz; no user or sys here). What it times prints and ends as it
+    would, its status kept, expanded once; && and || skip it with what it
+    times.
+  - scripts/eggtimer-test.sh checks seven uses, and sleeptest's 500 ms
+    timed as 0.50 s.
 
 v0.60.86 (2026-10-09)  — $(< FILE)
   - $(< FILE) is the file's text, read by the shell with no program

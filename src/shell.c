@@ -887,6 +887,7 @@ static void cmd_menu(void) {
         {0, "    pluck OPTS NAME    - the next -x option of $1.. (sh's getopts)"},
         {0, "    taste EXPR, [ EXPR ] - a condition: -f -d -e -z -n = != -eq -lt ... (sh's test)"},
         {0, "    smoke 'CMD' EXIT|INT - run CMD when a script ends or is Ctrl-C'd (sh's trap)"},
+        {0, "    eggtimer CMD       - run CMD and say how long it took (sh's time)"},
         {0, "    ! command          - run it and turn its status round"},
         {0, "    exit [N]           - leave a script (at the prompt, clockout)"},
         {0, "    kill <id>          - stop a background task"},
@@ -3239,6 +3240,7 @@ static void cmd_inspect(const char *args);                /* beside it (v0.60.72
 static void cmd_seal(const char *args);                   /* beside it (v0.60.76) */
 static void cmd_pluck(const char *args);                  /* beside it (v0.60.77) */
 static void cmd_taste(const char *args, int bracket);     /* beside it (v0.60.79) */
+static void cmd_eggtimer(const char *args);               /* beside it (v0.60.87) */
 static int status_before;
 static void cmd_read(const char *args);  /* beside run_line (v0.60.4) */
 
@@ -4807,7 +4809,7 @@ static const char *const cmd_names[] = {
     "takeout", "bgclock", "yieldbg", "spinbg", "sleeptest", "vfstest",
     "dmesg", "pwd", "cd", "mkbowl", "rmbowl", "bowltest",
     "whoami", "roster", "clockout", "hire", "fire", "perms", "secret",
-    "break", "continue", "return", "exit", "inspect", "seal", "pluck", "taste", "[", "smoke",
+    "break", "continue", "return", "exit", "inspect", "seal", "pluck", "taste", "[", "smoke", "eggtimer",
     "preempttest", "vmtest", "vgastress", "fatstress",
 };
 #define CMD_COUNT  (int)(sizeof(cmd_names) / sizeof(cmd_names[0]))
@@ -5053,6 +5055,7 @@ static void dispatch(const char *buf) {
     else if (str_eq(p, "seal") || str_startswith(p, "seal ")) cmd_seal(p + 4);
     else if (str_eq(p, "pluck") || str_startswith(p, "pluck ")) cmd_pluck(p + 5);
     else if (str_eq(p, "smoke") || str_startswith(p, "smoke ")) cmd_smoke(p + 5);
+    else if (str_eq(p, "eggtimer") || str_startswith(p, "eggtimer ")) cmd_eggtimer(p + 8);
     else if (str_eq(p, "taste") || str_startswith(p, "taste ")) cmd_taste(p + 5, 0);
     else if (str_eq(p, "[") || str_startswith(p, "[ ")) cmd_taste(p + 1, 1);
     else if (str_eq(p, "break") || str_startswith(p, "break ")) cmd_break(p + 5, 0);
@@ -6568,6 +6571,7 @@ static void run_one(const char *seg) {
     const char *q = seg; while (*q == ' ') q++;
     if (!*q) return;
     if (dish_into(q)) return;
+    if (is_kw(q, "eggtimer")) { cmd_eggtimer(q + 8); return; }   /* the line as typed: expanded once, by what it runs */
     /* ! COMMAND (v0.60.60): the status turned round, 0 to 1 and anything
      * else to 0; of the whole pipeline, so before the | is looked for. A
      * bare ! is 1, as the empty command it turns round is 0. */
@@ -6840,11 +6844,11 @@ static int split_segs(char *buf, lseg_t *sg, int max) {
          * repeatedly, since X may start with a keyword too (`do if ...`,
          * `then for ...`, `else if ...`). */
         {
-            static const char *const kws[] = { "do", "then", "else", "elif", "if", "while", "until", "{" };
+            static const char *const kws[] = { "do", "then", "else", "elif", "if", "while", "until", "{", "eggtimer" };
             int more = 1;
             while (more && n < max - 1) {
                 more = 0;
-                for (int k = 0; k < 8; k++) {
+                for (int k = 0; k < 9; k++) {
                     int kl = (int)strlen(kws[k]);
                     if (strncmp(t, kws[k], (uint32_t)kl) == 0 && t[kl] == ' ') {
                         t[kl] = '\0';
@@ -7010,6 +7014,24 @@ static int loop_after_body(shell_t *me) {
     }
     return 0;
 }
+/* eggtimer CMD (v0.60.87): sh's time under a kitchen name. Runs CMD (a
+ * pipeline, a loop, anything a line can hold) and then says how long it
+ * took, wall time to the hundredth (the timer's own grain, 100 Hz), as
+ * bash's `real`; there is no user or sys to give. CMD's output and status
+ * are its own. */
+static void cmd_eggtimer(const char *args) {
+    shell_t *me = cur_shell();
+    uint32_t t0 = timer_get_ticks();
+    while (*args == ' ') args++;
+    me->last_status = 0;
+    if (*args) run_line(args);
+    uint32_t dt = timer_get_ticks() - t0;
+    int st = me->last_status;
+    uint32_t cs = dt * 100 / TIMER_HZ, sec = cs / 100;
+    t_printf("\nreal\t%um%u.%02us\n", sec / 60, sec % 60, cs % 100);
+    me->last_status = st;
+}
+
 /* taste EXPR and [ EXPR ] (v0.60.79): taste.elf's test, without starting
  * a program. One word is true if it is not empty; ! in front turns it
  * round; -e -f -d FILE (as SYS_STAT sees it: a file the cook may not read
@@ -7471,6 +7493,31 @@ static void exec_range(lseg_t *sg, int from, int to, int depth) {
             if (e < 0) { t_puts("  |: the loop after it never ends (no done, fi, esac or }).\n"); cur_shell()->last_status = 2; return; }
             if (run) into_compound(sg, i + 1, e, depth, start_text, (void *)sg[i].text);
             i = e + 1;
+            continue;
+        }
+        if (str_eq(sg[i].text, "eggtimer")) {
+            /* eggtimer (v0.60.87), a keyword as sh's time is: the next
+             * command, a whole loop, if, case or { }, or X | while ..., is
+             * what it times; skipped whole when && or || say so. */
+            int b = i + 1, e = b;
+            if (b < to) {
+                const char *c = sg[b].text;
+                int compound = is_kw(c, "for") || is_kw(c, "while") || is_kw(c, "until") || is_kw(c, "if") || is_kw(c, "case") || is_kw(c, "{");
+                if (compound) e = compound_end(sg, b, to);
+                else if (sg[b].into && b + 1 < to) e = compound_end(sg, b + 1, to);
+                if (e < 0) { t_puts("  eggtimer: what it times never ends (no done, fi, esac or }).\n"); cur_shell()->last_status = 2; return; }
+            }
+            if (run) {
+                shell_t *me = cur_shell();
+                uint32_t t0 = timer_get_ticks();
+                me->last_status = 0;
+                if (b < to) { int bop = sg[b].op; sg[b].op = ';'; exec_range(sg, b, e + 1, depth + 1); sg[b].op = bop; }
+                uint32_t dt = timer_get_ticks() - t0, cs = dt * 100 / TIMER_HZ, sec = cs / 100;
+                int st = me->last_status;
+                t_printf("\nreal\t%um%u.%02us\n", sec / 60, sec % 60, cs % 100);
+                me->last_status = st;
+            }
+            i = (b < to ? e : i) + 1;
             continue;
         }
         if (is_kw(sg[i].text, "{")) {

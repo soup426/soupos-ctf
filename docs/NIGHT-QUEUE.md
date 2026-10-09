@@ -50,7 +50,7 @@ Upper and lower case, the first letter or all of them, and indirection
 The file's contents, as $(spoon.elf FILE) gives them but without starting
 a program, as bash. Compare with bash.
 
-## 4. eggtimer CMD (time)
+## 4. eggtimer CMD (time) — DONE v0.60.87
 
 Runs CMD and says how long it took, real time in seconds to the
 hundredth, as bash's time says real (no user and sys here). A kitchen
