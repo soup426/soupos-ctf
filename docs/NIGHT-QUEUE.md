@@ -1,10 +1,10 @@
 # Night queue
 
-Thirty-second queue. The first thirty-one are in `docs/queue-archive-2026-10-0*.md`.
+Thirty-third queue. The first thirty-two are in `docs/queue-archive-2026-10-0*.md`.
 Items wait on a person in three archives (the seventh, the thirteenth and
-the twenty-fourth). Scripts get shift, a command can be turned around with
-!, a whole loop or if can go to a file, & separates commands, and
-arithmetic learns to stop early and to choose.
+the twenty-fourth). Variables learn to trim and replace, arithmetic gets
+its bit operators and powers, take learns -r, and here-documents come to
+the prompt.
 
 ## Standing rules
 
@@ -35,33 +35,31 @@ arithmetic learns to stop early and to choose.
 
 ---
 
-## 1. shift [N] — DONE v0.60.59
+## 1. ${NAME#pat} ${NAME##pat} ${NAME%pat} ${NAME%%pat}
 
-Drops the first N (default 1) of a script's or function's arguments, so
-$1 is what $2 was, and $# and $@ follow. Status 1 when there are fewer
-than N. A special builtin in sh, so it keeps its name. Compare with bash.
+Strip the shortest or longest match of a glob pattern from the front or
+the back of a value, as sh. The pattern is a glob ([abc] included) and
+may hold $X. Compare with bash.
 
-## 2. ! COMMAND — DONE v0.60.60
+## 2. ${NAME/pat/rep}, ${NAME//pat/rep}, ${NAME:off:len}
 
-`! cmd` runs cmd and turns its status round: 0 becomes 1, anything else 0.
-Works on a pipeline, in if and while conditions, and with && and ||; and
-follow -e does not stop on it, as bash -e does not. Compare with bash.
+The first or every match replaced (# and % anchors too), and a slice.
+Compare with bash.
 
-## 3. done > FILE, fi > FILE — DONE v0.60.61 (with < FILE; 2> refused, see ROADMAP)
+## 3. & | ^ ~ << >> and ** in arithmetic
 
-A loop's or an if's whole output to a file (>, >>, and 2> with them),
-which the shell refuses today. Compare the file with bash's.
+With their op= forms where sh has them, at sh's precedence. Compare with
+bash.
 
-## 4. & between commands — DONE v0.60.62
+## 4. take -r
 
-`a & b` runs a in the background and b at once, as `a & ; b` does today.
-$! is a's. Compare with bash.
+take turns \x into x today, as read does; -r keeps backslashes, as
+read -r. Compare with bash.
 
-## 5. && || and ?: in arithmetic — DONE v0.60.63
+## 5. Here-documents at the prompt
 
-$(( )) and (( )) evaluate both sides of && and || today; sh evaluates the
-right only when it counts, which matters for assignments and ++. Add
-c ? a : b, which evaluates one side only. Compare with bash.
+`cook x.elf <<EOF` typed at the prompt asks for lines (a > prompt) until
+EOF, as sh does; today only follow scripts have them. Test by typing.
 
 ## 6. Doom at the framebuffer's own resolution — DEFERRED
 
