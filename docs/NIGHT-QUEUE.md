@@ -34,7 +34,7 @@ seal (readonly), pluck (getopts), and a check of "$@" and "$*".
 
 ---
 
-## 1. elif
+## 1. elif — DONE v0.60.74 (and compounds over lines in scripts)
 
 `if A ; then X ; elif B ; then Y ; else Z ; fi`, any number of elifs, as
 sh. Compare with bash, nested ifs and follow scripts included.

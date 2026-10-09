@@ -6522,11 +6522,11 @@ static int split_segs(char *buf, lseg_t *sg, int max) {
          * repeatedly, since X may start with a keyword too (`do if ...`,
          * `then for ...`, `else if ...`). */
         {
-            static const char *const kws[] = { "do", "then", "else", "if", "while", "until" };
+            static const char *const kws[] = { "do", "then", "else", "elif", "if", "while", "until" };
             int more = 1;
             while (more && n < max - 1) {
                 more = 0;
-                for (int k = 0; k < 6; k++) {
+                for (int k = 0; k < 7; k++) {
                     int kl = (int)strlen(kws[k]);
                     if (strncmp(t, kws[k], (uint32_t)kl) == 0 && t[kl] == ' ') {
                         t[kl] = '\0';
@@ -6687,7 +6687,7 @@ static int loop_after_body(shell_t *me) {
  * it); -t says only which, as type -t. A NAME that is none of them is
  * not found, and the status is 1. */
 static void cmd_inspect(const char *args) {
-    static const char *const kws[] = { "if", "then", "else", "fi", "for", "while", "until",
+    static const char *const kws[] = { "if", "then", "elif", "else", "fi", "for", "while", "until",
                                        "do", "done", "case", "esac", "in", "!" };
     shell_t *me = cur_shell();
     int terse = 0, missing = 0, any = 0;
@@ -7095,22 +7095,41 @@ static void exec_range(lseg_t *sg, int from, int to, int depth) {
             continue;
         }
         if (is_kw(sg[i].text, "if")) {
+            /* if C ; then B [; elif C ; then B]... [; else B] ; fi (elif
+             * v0.60.74): the markers at this if's own depth, in order. */
             int f = match_end(sg, i, to, "if", "fi");
-            int th = -1, el = -1, dep = 0;
-            for (int j = i; f >= 0 && j < f; j++) {
+            int cond[9], th[9], nb = 0, el = -1, dep = 0, bad = f < 0;
+            cond[0] = i + 1; th[0] = -1;
+            for (int j = i; !bad && j < f; j++) {
                 if (is_kw(sg[j].text, "if")) dep++;
                 else if (is_kw(sg[j].text, "fi")) dep--;
-                else if (dep == 1 && is_kw(sg[j].text, "then") && th < 0) th = j;
-                else if (dep == 1 && is_kw(sg[j].text, "else") && th >= 0 && el < 0) el = j;
+                else if (dep != 1) continue;
+                else if (is_kw(sg[j].text, "then")) { if (th[nb] >= 0 || el >= 0) bad = 1; else th[nb] = j; }
+                else if (is_kw(sg[j].text, "elif")) {
+                    if (th[nb] < 0 || el >= 0 || nb == 8) bad = 1;
+                    else { nb++; cond[nb] = j + 1; th[nb] = -1; }
+                }
+                else if (is_kw(sg[j].text, "else")) { if (th[nb] < 0 || el >= 0) bad = 1; else el = j; }
             }
-            if (f < 0 || th < 0) { t_puts("  if: expected `if ... ; then ... ; fi`.\n"); cur_shell()->last_status = 2; return; }
+            if (bad || th[nb] < 0) { t_puts("  if: expected `if ... ; then ... ; [elif ... ; then ... ;] fi`.\n"); cur_shell()->last_status = 2; return; }
             if (run) {
-                cur_shell()->in_cond++;
-                exec_range(sg, i + 1, th, depth + 1);
-                cur_shell()->in_cond--;
-                if (cur_shell()->last_status == 0) exec_range(sg, th + 1, el >= 0 ? el : f, depth + 1);
-                else if (el >= 0)                  exec_range(sg, el + 1, f, depth + 1);
-                else                               cur_shell()->last_status = 0;
+                int taken = 0;
+                for (int b = 0; b <= nb && !taken; b++) {
+                    cur_shell()->in_cond++;
+                    exec_range(sg, cond[b], th[b], depth + 1);
+                    cur_shell()->in_cond--;
+                    shell_t *me = cur_shell();
+                    if (me->exiting || me->brk || me->cont || me->ret || me->quit) { taken = 1; break; }
+                    if (me->last_status == 0) {
+                        int end = b < nb ? cond[b + 1] - 1 : (el >= 0 ? el : f);
+                        exec_range(sg, th[b] + 1, end, depth + 1);
+                        taken = 1;
+                    }
+                }
+                if (!taken) {
+                    if (el >= 0) exec_range(sg, el + 1, f, depth + 1);
+                    else cur_shell()->last_status = 0;
+                }
             }
             i = f + 1;
             continue;
@@ -7299,6 +7318,34 @@ static void heredoc_expand(const char *in, char *out, int max) {
     out[k] = '\0';
 }
 
+/* How far a script line opens compounds (v0.60.74): +1 for an if, for,
+ * while, until, case or { where a command starts, -1 for a fi, done,
+ * esac or }. follow joins lines while it is above 0, so an if or a loop
+ * may run over several lines, as in sh. */
+static int compound_depth(const char *s) {
+    int d = 0, cmdpos = 1; char q = 0;
+    while (*s) {
+        if (q) { if (*s == q) q = 0; s++; continue; }
+        if (*s == '\'' || *s == '"') { q = *s; cmdpos = 0; s++; continue; }
+        if (*s == '\\' && s[1]) { s += 2; cmdpos = 0; continue; }
+        if (*s == ' ' || *s == '\t') { s++; continue; }
+        if (*s == ';' || *s == '&' || *s == '|' || *s == '(' || *s == ')') { cmdpos = 1; s++; continue; }
+        const char *w = s;
+        while (*s && *s != ' ' && *s != '\t' && *s != ';' && *s != '&' && *s != '|' && *s != '(' && *s != ')' && *s != '\'' && *s != '"') s++;
+        int n = (int)(s - w);
+        #define WORD_IS(k) (n == (int)strlen(k) && strncmp(w, k, (uint32_t)n) == 0)
+        if (cmdpos) {
+            if (WORD_IS("if") || WORD_IS("while") || WORD_IS("until") || WORD_IS("{")) { d++; continue; }
+            if (WORD_IS("for") || WORD_IS("case")) { d++; cmdpos = 0; continue; }
+            if (WORD_IS("fi") || WORD_IS("done") || WORD_IS("esac") || WORD_IS("}")) { d--; continue; }
+            if (WORD_IS("then") || WORD_IS("do") || WORD_IS("else") || WORD_IS("elif") || WORD_IS("!")) continue;
+        }
+        #undef WORD_IS
+        cmdpos = 0;
+    }
+    return d;
+}
+
 static void cmd_run(const char *args) {
     static int depth;
     /* run FILE [ARGS...] (v0.60.2): the words after the file are the
@@ -7348,12 +7395,46 @@ static void cmd_run(const char *args) {
         const char *l = line;
         while (*l == ' ') l++;
         uint32_t next = e + 1;
+        int joined = 0;
+        if (*l && *l != '#') {
+            /* An if or a loop over lines (v0.60.74): the lines after it are
+             * joined on until it closes, with ; between, or a space after
+             * then, do, else, in, ;;, {, |, && and ||. */
+            int dd = compound_depth(l);
+            int ll = (int)strlen(line);
+            while (dd > 0 && next < size) {
+                uint32_t e2 = next;
+                while (e2 < size && text[e2] != '\n' && text[e2] != '\r') e2++;
+                char nl[INPUT_MAX];
+                uint32_t m = e2 - next < INPUT_MAX - 1 ? e2 - next : INPUT_MAX - 1;
+                memcpy(nl, text + next, m); nl[m] = '\0';
+                next = e2 + 1;
+                const char *t = nl; while (*t == ' ' || *t == '\t') t++;
+                if (!*t || *t == '#') continue;
+                int tl = ll;
+                while (tl > 0 && line[tl - 1] == ' ') tl--;
+                static const char *const soft[] = { "then", "do", "else", "in", ";;", "{", "|", "&&", "||", ";" };
+                int sp = 0;
+                for (unsigned k = 0; k < sizeof(soft) / sizeof(soft[0]); k++) {
+                    int kl = (int)strlen(soft[k]);
+                    if (tl >= kl && strncmp(line + tl - kl, soft[k], (uint32_t)kl) == 0 &&
+                        (tl == kl || line[tl - kl - 1] == ' ' || soft[k][0] == ';' || soft[k][0] == '|' || soft[k][0] == '&')) sp = 1;
+                }
+                const char *join = sp ? " " : " ; ";
+                ll = tl;
+                for (const char *c = join; *c && ll < INPUT_MAX - 1; c++) line[ll++] = *c;
+                for (const char *c = t; *c && ll < INPUT_MAX - 1; c++) line[ll++] = *c;
+                line[ll] = '\0';
+                dd += compound_depth(t);
+                joined = 1;
+            }
+        }
         if (*l && *l != '#') {
             /* <<WORD (v0.60.52): the lines up to one that is WORD are the
              * stdin of the cook on this line, $NAME, ${NAME}, $1.. and $?
              * expanded in them unless WORD was quoted (<<'WORD'). */
             char word[32]; int quoted = 0;
-            char *mark = heredoc_mark(line, word, sizeof(word), &quoted);
+            char *mark = joined ? 0 : heredoc_mark(line, word, sizeof(word), &quoted);   /* not in a joined block */
             if (mark) {
                 char *body = kmalloc(8193);
                 int bl = 0;
