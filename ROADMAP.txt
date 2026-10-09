@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.56
+Current version: v0.60.57
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,16 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.57 (2026-10-08)  — FOLLOW -E
+  - `follow -e FILE` stops the script at the first command that fails, with
+    that command's status, as bash -e does. Not counted: the condition of an
+    if, while or until, and a command an && or || follows. A failure in a
+    function the script calls stops the script too. The flag is the
+    script's own: it is put back when the script ends, so the prompt and a
+    script without -e run on as before.
+  - scripts/errexit-test.sh runs two scripts with -e and one without,
+    against bash -e and bash.
 
 v0.60.56 (2026-10-08)  — STASH (LOCAL)
   - `stash NAME[=value]` in a function is sh's local under a kitchen name:

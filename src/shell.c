@@ -91,6 +91,7 @@ typedef struct {
     struct { char name[16]; char val[96]; uint8_t had, handed; } stashed[32];
     int     nstash;              /* stash (local): what to give back as functions return (v0.60.56) */
     int     stash_floor;         /* where the running call's own stashes begin */
+    int     errexit, in_cond;    /* follow -e, and how deep in a condition (v0.60.57) */
     uint32_t last_bg;            /* the last job started with &: $! (v0.60.48) */
     uint32_t done_pid[16];       /* finished jobs the prompt reported, and their */
     uint8_t  done_st[16];        /* statuses, for a rest that comes after (as sh) */
@@ -866,7 +867,7 @@ static void cmd_menu(void) {
         {0, "    brigade            - every shell: its cook, where, up, idle"},
         {0, "    logbook            - who clocked in, and who was refused, newest first"},
         {0, "    portions [bowl]    - clusters and bytes under each entry, and the total"},
-        {0, "    follow <file> [..] - follow a recipe (a script); $1..$9, $#, $@ are its args"},
+        {0, "    follow [-e] <file> [..] - follow a recipe (a script); $1..$9 its args; -e stops at a failure"},
         {0, "    NAME=value, $NAME  - shell variables"},
         {0, "    discard NAME       - remove a variable"},
         {0, "    take NAME...       - take a line from the terminal into variables"},
@@ -6485,7 +6486,9 @@ static void exec_range(lseg_t *sg, int from, int to, int depth) {
                 me->loops++;
                 for (;;) {
                     if (interrupted() || me->exiting) break;
+                    me->in_cond++;
                     exec_range(sg, i + 1, dd, depth + 1);
+                    me->in_cond--;
                     if (loop_after_body(me)) break;
                     if (interrupted() || (me->last_status != 0) != until) break;
                     exec_range(sg, dd + 1, d, depth + 1);
@@ -6587,7 +6590,9 @@ static void exec_range(lseg_t *sg, int from, int to, int depth) {
             }
             if (f < 0 || th < 0) { t_puts("  if: expected `if ... ; then ... ; fi`.\n"); cur_shell()->last_status = 2; return; }
             if (run) {
+                cur_shell()->in_cond++;
                 exec_range(sg, i + 1, th, depth + 1);
+                cur_shell()->in_cond--;
                 if (cur_shell()->last_status == 0) exec_range(sg, th + 1, el >= 0 ? el : f, depth + 1);
                 else if (el >= 0)                  exec_range(sg, el + 1, f, depth + 1);
                 else                               cur_shell()->last_status = 0;
@@ -6595,7 +6600,15 @@ static void exec_range(lseg_t *sg, int from, int to, int depth) {
             i = f + 1;
             continue;
         }
-        if (run) run_one(sg[i].text);
+        if (run) {
+            run_one(sg[i].text);
+            /* follow -e (v0.60.57): a failing command ends the script, but
+             * not in a condition, nor one an && or || follows, as bash -e. */
+            shell_t *me = cur_shell();
+            int next_op = (i + 1 < to) ? sg[i + 1].op : ';';
+            if (me->errexit && !me->in_cond && me->last_status != 0 && next_op != 'A' && next_op != 'O')
+                me->quit = 1;
+        }
         i++;
     }
 }
@@ -6687,7 +6700,9 @@ static void cmd_run(const char *args) {
      * script's $1..$9; quotes group them, as everywhere. */
     char file[FAT_PATH_MAX];
     const char *rest = first_word(args, file, sizeof(file));
-    if (!file[0]) { t_puts("Usage: follow <file> [args...]\n"); cur_shell()->last_status = 2; return; }
+    int errexit = 0;
+    if (str_eq(file, "-e")) { errexit = 1; rest = first_word(rest, file, sizeof(file)); }   /* follow -e (v0.60.57) */
+    if (!file[0]) { t_puts("Usage: follow [-e] <file> [args...]\n"); cur_shell()->last_status = 2; return; }
     char path[FAT_PATH_MAX];
     resolve_path(file, path);
     if (!fat_exists(path) || fat_is_dir(path)) { cook_err("No such script."); return; }
@@ -6715,6 +6730,8 @@ static void cmd_run(const char *args) {
     while (*rest && me->npargs < 9) { rest = first_word(rest, me->parg[me->npargs], 64); me->npargs++; }
     depth++;
     me->scripts++;
+    int errexit_was = me->errexit, cond_was = me->in_cond;
+    me->errexit = errexit; me->in_cond = 0;     /* -e is this script's alone */
     cur_shell()->last_status = 0;
     uint32_t i = 0;
     while (i < size && !cur_shell()->exiting && !me->quit) {
@@ -6767,6 +6784,7 @@ static void cmd_run(const char *args) {
     }
     depth--;
     me->scripts--;
+    me->errexit = errexit_was; me->in_cond = cond_was;
     me->quit = 0;                               /* exit ends this script, not its caller */
     memcpy(me->parg, saved, sizeof(me->parg));
     me->npargs = saved_n;

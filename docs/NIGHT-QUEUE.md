@@ -55,7 +55,7 @@ own, the caller's (or its absence) back when it returns, as sh's local.
 A kitchen name, since local is a builtin, not a keyword. Compare with
 bash, nested calls and a recursive function included.
 
-## 4. follow -e
+## 4. follow -e — DONE v0.60.57
 
 `follow -e FILE` stops the script at the first command that fails (not
 counting a condition of if/while/until, or a command before && or ||),
