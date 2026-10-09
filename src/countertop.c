@@ -96,6 +96,8 @@
 #define TBTN_W     150
 #define BTN_FILES_X (BTN_LEAVE_X + BTN_LEAVE_W + 10)
 #define BTN_FILES_W (8 * 7)
+#define BTN_KITCHEN_X (BTN_FILES_X + BTN_FILES_W + 10)   /* (v0.60.158) the programs */
+#define BTN_KITCHEN_W (8 * 9)
 #define LAUNCH_W   (8 * 10 + 16)
 
 static uint32_t *row[MAX_H];
@@ -530,14 +532,43 @@ static void draw_window(int k) {
 
 /* Everything in [x,y,w,h) drawn again: the background, then the windows
  * bottom to top, each clipped to it. The bar is left alone. */
+/* The Kitchen menu (v0.60.158): the programs that open windows, dropped
+ * down from its button over everything else while it is open. */
+#define MENU_X  BTN_KITCHEN_X
+#define MENU_Y  BAR_H
+#define MENU_W  240
+#define MENU_IH 24
+static const char *const menu_item[][3] = {      /* name, what it is, what to cook */
+    { "frost", "paint", "frost.elf" },
+    { "swirl", "the Mandelbrot set", "swirl.elf" },
+};
+#define MENU_N (int)(sizeof(menu_item) / sizeof(menu_item[0]))
+#define MENU_H (MENU_N * MENU_IH + 4)
+static int menu_open;
+static void draw_menu(void) {                     /* within the clip */
+    fill(MENU_X, MENU_Y, MENU_W, MENU_H, EDGE_RGB);
+    fill(MENU_X + 1, MENU_Y, MENU_W - 2, MENU_H - 1, 0x00F4F1EAu);
+    for (int i = 0; i < MENU_N; i++) {
+        int y = MENU_Y + 2 + i * MENU_IH + (MENU_IH - 16) / 2;
+        text(MENU_X + 10, y, menu_item[i][0], 0x00202020u);
+        text(MENU_X + 10 + 8 * 8, y, menu_item[i][1], 0x00606870u);
+    }
+}
 static void repaint(int x, int y, int w, int h) {
     cx0 = x < 0 ? 0 : x; cy0 = y < BAR_H ? BAR_H : y;
     cx1 = x + w > W ? W : x + w; cy1 = y + h > H - TASK_H ? H - TASK_H : y + h;
     if (cx0 < cx1 && cy0 < cy1) {
         background();
         for (int i = 0; i < nwin; i++) if (!win[order[i]].min) draw_window(order[i]);
+        if (menu_open) draw_menu();
     }
     clip_all();
+}
+static void menu_set(int open) {
+    if (menu_open == open) return;
+    menu_open = open;
+    repaint(MENU_X, MENU_Y, MENU_W, MENU_H);
+    klog("[countertop] kitchen menu %s\n", open ? "open" : "closed");
 }
 static void repaint_win(int k) { repaint(win[k].x, win[k].y, win[k].w, win[k].h); }
 
@@ -825,7 +856,24 @@ static void pointer_buttons(int px, int py, int btn, int np) {
         if (!left || np) { app_push(w->app, WEV_UP, 0, x, y, (unsigned)btn); app_drag = -1; }
         if (!np) return;
     }
+    if (np && menu_open) {                             /* a click with the menu down: an item, or away */
+        int i = (py - MENU_Y - 2) / MENU_IH;
+        int on_button = py < BAR_H && px >= BTN_KITCHEN_X && px < BTN_KITCHEN_X + BTN_KITCHEN_W;
+        menu_set(0);
+        if (px >= MENU_X && px < MENU_X + MENU_W && py >= MENU_Y + 2 && i >= 0 && i < MENU_N) {
+            int t = open_terminal();
+            if (t >= 0) {
+                char line[40] = "cook ";
+                scopy(line + 5, menu_item[i][2], (int)sizeof(line) - 6);
+                for (const char *c = line; *c; c++) wt_key(win[t].term, *c);
+                wt_key(win[t].term, '\n');
+                klog("[countertop] kitchen: %s\n", menu_item[i][0]);
+            }
+        }
+        if (on_button || (px >= MENU_X && px < MENU_X + MENU_W && py < MENU_Y + MENU_H)) return;
+    }
     if (np && py < BAR_H) {
+        if (px >= BTN_KITCHEN_X && px < BTN_KITCHEN_X + BTN_KITCHEN_W) { menu_set(1); return; }
         if (px >= BTN_TERM_X && px < BTN_TERM_X + BTN_TERM_W) open_terminal();
         else if (px >= BTN_LEAVE_X && px < BTN_LEAVE_X + BTN_LEAVE_W) leave_asked = 1;
         else if (px >= BTN_FILES_X && px < BTN_FILES_X + BTN_FILES_W) open_files("/");
@@ -917,6 +965,7 @@ static void bar(void) {
     button(BTN_TERM_X, BTN_TERM_W, "Terminal");
     button(BTN_LEAVE_X, BTN_LEAVE_W, "Leave");
     button(BTN_FILES_X, BTN_FILES_W, "Files");
+    button(BTN_KITCHEN_X, BTN_KITCHEN_W, "Kitchen");
     clock_sec = -1;
     bar_clock();
 }
@@ -968,7 +1017,7 @@ int countertop_run(int (*avail)(void), int (*getch)(void), int uid) {
     clip_all();
     background();
     bar();
-    nwin = 0; drag = -1; last_btn = 0; leave_asked = 0; ct_uid = uid; nterm = 0; task_sig = 0xFFFFFFFFu;
+    nwin = 0; drag = -1; last_btn = 0; leave_asked = 0; menu_open = 0; ct_uid = uid; nterm = 0; task_sig = 0xFFFFFFFFu;
     for (int k = 0; k < MAX_WIN; k++) win[k].used = 0;
     app_drag = -1;
     mutex_lock(&app_mtx);                            /* programs may ask for windows now */

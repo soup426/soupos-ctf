@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.157
+Current version: v0.60.158
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,16 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.158 (2026-10-09)  — THE KITCHEN MENU
+  - A Kitchen button on the top bar drops down the programs that open
+    windows (frost, paint; swirl, the Mandelbrot set), drawn over
+    everything while it is down. Picking one opens a terminal with
+    `cook NAME.elf` typed into it; a click anywhere else, or on the
+    button again, puts it away.
+  - scripts/ctkitchen-test.sh: the menu read back against the font,
+    swirl picked (a terminal, then swirl's window, q), a click away
+    closing it again; screendumps and the log. Six-wide soak 6 of 6.
 
 v0.60.157 (2026-10-09)  — THE WHEEL FOR PROGRAMS
   - WEV_WHEEL: the wheel over a program's window body is its event, the

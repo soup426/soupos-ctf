@@ -82,7 +82,7 @@ window under the pointer when it is a program's; swirl zooms with it.
 Test: injected notches over swirl's window, the view compared with the
 host's as swirl-test does.
 
-## 4. A menu of programs on the bar
+## 4. A menu of programs on the bar — DONE v0.60.158
 
 A "Kitchen" button on the top bar listing the programs that open
 windows (frost, swirl), each opening in a new terminal as the files
