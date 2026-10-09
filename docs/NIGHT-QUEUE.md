@@ -69,7 +69,7 @@ with bash.
 `cook rack.elf <<< "c b a"`: the word, with a newline, as the first
 stage's stdin. Compare with bash.
 
-## 8. A loop, a program, then a loop: done | prog | while ...
+## 8. A loop, a program, then a loop: done | prog | while ... — DONE v0.60.46
 
 Found with item 4: `until ... ; done | stack.elf | while take x ; do ... ;
 done` hangs the shell (the same with while). split_segs looks for the |

@@ -26,6 +26,9 @@ LINES=(
   'cook spoon.elf /E.TXT | while take x ; do slurp L6:never ; done ; slurp L6:after:$?'
   'cook tally.elf 100000 | if take x ; then slurp L7:$x ; fi ; slurp L7:done'
   'cook spoon.elf /F.TXT | while take line ; do case $line in a*) slurp L8:A ;; *) slurp L8:other ;; esac ; done'
+  'n=0 ; until cook taste.elf $n -eq 3 ; do slurp $n ; n=$((n+1)) ; done | stack.elf | while take x ; do slurp L9:$x ; done'
+  'for x in b a c ; do slurp $x ; done | rack.elf | while take y ; do slurp L9:$y ; done'
+  'if cook taste.elf 1 = 1 ; then slurp yes ; fi | raise.elf | case z in z) take w ; slurp L9:$w ;; esac'
 )
 keys=("headchef" "rosemary" "WAIT:1")
 for l in "${LINES[@]}"; do keys+=("$l" "UNTIL:@soupOS:"); done
@@ -40,11 +43,12 @@ tr -d '\r' < "$WORK/serial.log" | grep -E '^L[0-9]:' > "$WORK/got"
 script=""
 for l in "${LINES[@]}"; do
     b=${l//cook spoon.elf \//cat }; b=${b//cook tally.elf/seq}; b=${b//take/read}; b=${b//slurp/echo}
+    b=${b//cook taste.elf/test}; b=${b//stack.elf/tac}; b=${b//rack.elf/sort}; b=${b//raise.elf/tr a-z A-Z}
     script+="$b"$'\n'
 done
 ( cd "$WORK/host" && bash -O lastpipe -c "$script" ) | grep -E '^L[0-9]:' > "$WORK/want"
 if cmp -s "$WORK/got" "$WORK/want"; then
-    echo "  ok    all ${#LINES[@]} lines print what bash (lastpipe) prints ($(wc -l < "$WORK/want") lines: a file, two words, if, a count kept, a builtin, empty, a reader that stops at one of 100000, case inside)"
+    echo "  ok    all ${#LINES[@]} lines print what bash (lastpipe) prints ($(wc -l < "$WORK/want") lines: a file, two words, if, a count kept, a builtin, empty, a reader that stops at one of 100000, case inside, a loop | prog | a loop)"
 else echo "  FAIL  a program into a loop differs from bash:"; diff "$WORK/want" "$WORK/got" | sed 's/^/        /'; fail=1; fi
 grep -q 'TESTOUT args=after-loops' "$WORK/serial.log" && echo "  ok    programs still run after all that" \
     || { echo "  FAIL  a program did not run after the loops"; fail=1; }

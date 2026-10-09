@@ -5551,6 +5551,8 @@ static void pipe_into(const char *left, const char *right) {
  * line runs alongside the loop (its pids are left in pending_pids); anything
  * else runs first with its output captured, and a task feeds it in. Either
  * way wr is owned from here on. */
+static void run_line_cb(void *ctx);
+static void start_into_run(void (*run)(void *), void *ctx, vfs_node_t *wr);
 static void start_into(const char *left) {
     vfs_node_t *wr = pending_out;
     pending_npids = 0;
@@ -5563,6 +5565,14 @@ static void start_into(const char *left) {
         return;
     }
     pending_out = 0;
+    start_into_run(run_line_cb, (void *)q, wr);
+}
+
+/* Run run(ctx) with its output captured, then feed the capture into wr for
+ * a shell loop to read (v0.60.34; a callback since v0.60.46, so a piped
+ * compound can be the left side too). wr is owned from here on. */
+static void run_line_cb(void *ctx) { run_line((const char *)ctx); }
+static void start_into_run(void (*run)(void *), void *ctx, vfs_node_t *wr) {
     shell_t *me = cur_shell();
     capterm_t cap;
     cap.t.name = "subst"; cap.t.puts = cap_puts; cap.t.putc = cap_putc; cap.t.set_color = cap_color;
@@ -5578,7 +5588,7 @@ static void start_into(const char *left) {
     cap.t.ctx = was_tk ? was_tk : &term_vga;
     me->term = &cap.t; tk->term = &cap.t;
     subst_depth++;
-    run_line(q);
+    run(ctx);
     subst_depth--;
     me->term = was_sh; tk->term = was_tk;
     f->wr = wr; f->buf = cap.buf; f->len = cap.len;
@@ -5771,6 +5781,24 @@ static char *compound_bar(char *t) {
     return 0;
 }
 
+/* done | PROG, fi | PROG, esac | PROG (v0.60.37): the compound's output
+ * goes to PROG. The word stands alone; PROG is noted in out. */
+static void split_closer(lseg_t *g, char *t) {
+    static const char *const closers[] = { "done", "fi", "esac" };
+    for (int k = 0; k < 3; k++) {
+        int kl = (int)strlen(closers[k]);
+        if (strncmp(t, closers[k], (uint32_t)kl) == 0 && t[kl] == ' ') {
+            char *r = t + kl; while (*r == ' ') r++;
+            if (r[0] == '|' && r[1] != '|') {
+                t[kl] = '\0';
+                r++; while (*r == ' ') r++;
+                g->out = r;
+            } else if (*r) g->junk = 1;          /* done > F, done foo: said, not ignored */
+            return;
+        }
+    }
+}
+
 static int split_segs(char *buf, lseg_t *sg, int max) {
     int n = 0, op = ';', arm_next = 0;
     memset(sg, 0, sizeof(lseg_t) * (uint32_t)max);
@@ -5803,7 +5831,9 @@ static int split_segs(char *buf, lseg_t *sg, int max) {
                 char *e = cb;
                 *cb = '\0';
                 while (e > t && e[-1] == ' ') *--e = '\0';
-                sg[n].text = t; sg[n].op = op; sg[n].into = 1; n++;
+                sg[n].text = t; sg[n].op = op; sg[n].into = 1;
+                split_closer(&sg[n], t);            /* done | PROG | while ... (v0.60.46) */
+                n++;
                 op = ';';
                 t = cb + 1; while (*t == ' ') t++;
             }
@@ -5861,21 +5891,7 @@ static int split_segs(char *buf, lseg_t *sg, int max) {
         }
         if (*t && n < max) {
             sg[n].text = t; sg[n].op = op;
-            /* done | PROG, fi | PROG, esac | PROG (v0.60.37): the compound's
-             * output goes to PROG. The word stands alone; PROG is noted. */
-            static const char *const closers[] = { "done", "fi", "esac" };
-            for (int k = 0; k < 3; k++) {
-                int kl = (int)strlen(closers[k]);
-                if (strncmp(t, closers[k], (uint32_t)kl) == 0 && t[kl] == ' ') {
-                    char *r = t + kl; while (*r == ' ') r++;
-                    if (r[0] == '|' && r[1] != '|') {
-                        t[kl] = '\0';
-                        r++; while (*r == ' ') r++;
-                        sg[n].out = r;
-                    } else if (*r) sg[n].junk = 1;      /* done > F, done foo: said, not ignored */
-                    break;
-                }
-            }
+            split_closer(&sg[n], t);
             n++;
         }
         if (dsemi && n < max) { sg[n].text = DSEMI; sg[n].op = ';'; n++; arm_next = 1; }
@@ -5932,6 +5948,45 @@ static int match_done(lseg_t *sg, int from, int to) {      /* for and while shar
     }
     return -1;
 }
+
+static void exec_range(lseg_t *sg, int from, int to, int depth);
+
+/* The compound at sg[b..e] reads, through take, what start(ctx) writes
+ * into the pipe it is handed (v0.60.34; a helper since v0.60.46). */
+static void start_text(void *ctx, vfs_node_t *wr) { pending_out = wr; start_into((const char *)ctx); }
+static void into_compound(lseg_t *sg, int b, int e, int depth, void (*start)(void *, vfs_node_t *), void *ctx) {
+    shell_t *me = cur_shell();
+    vfs_node_t *rd = 0, *wr = 0;
+    if (vfs_pipe(&rd, &wr) < 0) { cook_err("Out of pipes."); return; }
+    pending_npids = 0;
+    start(ctx, wr);
+    vfs_node_t *was_in = me->in_pipe;
+    int was_pos = me->in_pos, was_len = me->in_len;
+    me->in_pipe = rd; me->in_pos = me->in_len = 0;
+    int op = sg[b].op;
+    sg[b].op = ';';                          /* the compound runs whatever the left's status */
+    exec_range(sg, b, e + 1, depth + 1);
+    sg[b].op = op;
+    me->in_pipe = was_in; me->in_pos = was_pos; me->in_len = was_len;
+    vfs_close(rd);                           /* a writer still going gets -1 and ends */
+    int st = me->last_status;
+    for (int k = 0; k < pending_npids; k++) { int code; proc_wait(pending_pids[k], &code); }
+    pending_npids = 0;
+    me->last_status = st;                    /* the loop's, as sh's */
+}
+
+/* `A ... done | PROG | B ...` (v0.60.46): A piped into PROG is the left side
+ * of B. It runs first with its output captured (as a builtin on the left
+ * of a loop does), and B reads the capture. */
+typedef struct { void *rc; const char *out; } piped_left_t;
+static void range_feed(void *arg);
+static void run_piped_compound(void *ctx) {
+    piped_left_t *pl = ctx;
+    feed_fn = range_feed; feed_ctx = pl->rc;
+    pipe_into(0, pl->out);
+    feed_fn = 0;
+}
+static void start_piped(void *ctx, vfs_node_t *wr) { start_into_run(run_piped_compound, ctx, wr); }
 
 /* break [N] and continue [N] (v0.60.44), as sh: N loops out (1 if not
  * given, all of them if more than are open). exec_range stops at once
@@ -6001,6 +6056,17 @@ static void exec_range(lseg_t *sg, int from, int to, int depth) {
                 }
                 if (e >= 0 && sg[e].out) {
                     range_ctx_t rc = { sg, i, e + 1, depth };
+                    if (sg[e].into && e + 1 < to) {      /* ... done | PROG | B ... (v0.60.46) */
+                        const char *b = sg[e + 1].text;
+                        int eb = (is_kw(b, "while") || is_kw(b, "until") || is_kw(b, "for")) ? match_done(sg, e + 1, to)
+                               : is_kw(b, "if") ? match_end(sg, e + 1, to, "if", "fi")
+                               : match_end(sg, e + 1, to, "case", "esac");
+                        if (eb < 0) { t_puts("  |: the loop after it never ends (no done, fi or esac).\n"); cur_shell()->last_status = 2; return; }
+                        piped_left_t pl = { &rc, sg[e].out };
+                        into_compound(sg, e + 1, eb, depth, start_piped, &pl);
+                        i = eb + 1;
+                        continue;
+                    }
                     feed_fn = range_feed; feed_ctx = &rc;
                     pipe_into(0, sg[e].out);
                     feed_fn = 0;
@@ -6017,24 +6083,7 @@ static void exec_range(lseg_t *sg, int from, int to, int depth) {
                   : is_kw(c, "if") ? match_end(sg, i + 1, to, "if", "fi")
                   : match_end(sg, i + 1, to, "case", "esac");
             if (e < 0) { t_puts("  |: the loop after it never ends (no done, fi or esac).\n"); cur_shell()->last_status = 2; return; }
-            if (run) {
-                shell_t *me = cur_shell();
-                vfs_node_t *rd = 0, *wr = 0;
-                if (vfs_pipe(&rd, &wr) < 0) { cook_err("Out of pipes."); i = e + 1; continue; }
-                pending_out = wr;
-                start_into(sg[i].text);
-                vfs_node_t *was_in = me->in_pipe;
-                int was_pos = me->in_pos, was_len = me->in_len;
-                me->in_pipe = rd; me->in_pos = me->in_len = 0;
-                sg[i + 1].op = ';';                 /* the compound runs whatever X's status */
-                exec_range(sg, i + 1, e + 1, depth + 1);
-                me->in_pipe = was_in; me->in_pos = was_pos; me->in_len = was_len;
-                vfs_close(rd);                       /* a writer still going gets -1 and ends */
-                int st = me->last_status;
-                for (int k = 0; k < pending_npids; k++) { int code; proc_wait(pending_pids[k], &code); }
-                pending_npids = 0;
-                me->last_status = st;                /* the loop's, as sh's */
-            }
+            if (run) into_compound(sg, i + 1, e, depth, start_text, (void *)sg[i].text);
             i = e + 1;
             continue;
         }

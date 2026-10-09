@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.45
+Current version: v0.60.46
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,19 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.46 (2026-10-08)  — A LOOP, A PROGRAM, THEN A LOOP
+  - `until ... ; done | stack.elf | while take x ; do ... ; done` hung the
+    shell (while alike): split_segs looked for the | before a compound
+    first, so `done | stack.elf` became one segment piping into the second
+    loop, and the first loop's done never got its out. The closing word is
+    split off that segment too now (split_closer), and a piped compound
+    whose closing word also pipes on is the left side of the next one: it
+    runs first with its output captured (as a builtin on the left does, up
+    to 256 KB) and the next compound reads it through take
+    (into_compound, which the X | while case uses too now).
+  - loopin-test grows to eleven lines: until into a program into while,
+    for into rack into while, if into raise into case.
 
 v0.60.45 (2026-10-08)  — <<< HERE-STRINGS
   - `cook prog <<< WORD`: WORD (quotes removed, $v expanded, spaces kept
