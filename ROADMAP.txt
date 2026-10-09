@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.103
+Current version: v0.60.104
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,14 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.104 (2026-10-09)  — :, FRESH AND SPOILED
+  - `:` (POSIX's special builtin, so it keeps its name) does nothing,
+    status 0, its words expanded first: `: ${x:=5}` sets x, `: > F`
+    empties F, `while :` loops. fresh and spoiled are sh's true and false
+    under kitchen names (status 0 and 1).
+  - scripts/colon-test.sh compares seven lines and an emptied file with
+    bash.
 
 v0.60.103 (2026-10-09)  — SELECT
   - `select NAME in WORDS ; do ... ; done` is sh's: the words numbered,

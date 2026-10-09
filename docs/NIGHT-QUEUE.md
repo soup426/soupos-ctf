@@ -35,7 +35,7 @@ SHA-256, and one that says the same thing forever.
 
 ---
 
-## 1. :, fresh and spoiled (true and false)
+## 1. :, fresh and spoiled (true and false) — DONE v0.60.104
 
 `:` is POSIX's special builtin, so it keeps its name: it does nothing,
 status 0, its words expanded (so `: ${x:=5}` sets x). true and false

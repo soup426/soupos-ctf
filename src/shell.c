@@ -894,6 +894,9 @@ static void cmd_menu(void) {
         {0, "    follow [-e] <file> [..] - follow a recipe (a script); $1..$9 its args; -e stops at a failure"},
         {0, "    . <file> [..]      - follow it in this shell, as sh's dot (sets stay, return leaves)"},
         {0, "    NAME=value, $NAME  - shell variables ($RANDOM: 0 to 32767)"},
+        {0, "    : [words]          - nothing, status 0 (its words are expanded)"},
+        {0, "    fresh              - status 0 (sh's true)"},
+        {0, "    spoiled            - status 1 (sh's false)"},
         {0, "    discard NAME       - remove a variable"},
         {0, "    take [-r] [-p P] [-n N] [-t S] NAME... - a line into variables (sh's read)"},
         {0, "    hand NAME[=value]  - hand a variable to programs (their getenv)"},
@@ -4942,7 +4945,7 @@ static const char *const cmd_names[] = {
     "takeout", "bgclock", "yieldbg", "spinbg", "sleeptest", "vfstest",
     "dmesg", "pwd", "cd", "mkbowl", "rmbowl", "bowltest",
     "whoami", "roster", "clockout", "hire", "fire", "perms", "secret",
-    "break", "continue", "return", "exit", "inspect", "seal", "pluck", "taste", "[", "smoke", "eggtimer", "nickname", "forget", ".", "shelve", "unshelve", "shelf", "plain",
+    "break", "continue", "return", "exit", "inspect", "seal", "pluck", "taste", "[", "smoke", "eggtimer", "nickname", "forget", ".", "shelve", "unshelve", "shelf", "plain", ":", "fresh", "spoiled",
     "preempttest", "vmtest", "vgastress", "fatstress",
 };
 #define CMD_COUNT  (int)(sizeof(cmd_names) / sizeof(cmd_names[0]))
@@ -5213,6 +5216,12 @@ static void dispatch(const char *buf) {
     else if (str_eq(p, "unshelve") || str_startswith(p, "unshelve ")) cmd_unshelve(p + 8);
     else if (str_eq(p, "shelf") || str_startswith(p, "shelf ")) cmd_shelf(p + 5);
     else if (str_eq(p, "plain") || str_startswith(p, "plain ")) cmd_plain(p + 5);
+    /* : (POSIX's special builtin, its name kept), fresh and spoiled (true and
+     * false) (v0.60.104): nothing, then 0, 0 and 1. Their words are already
+     * expanded by now, so `: ${x:=5}` has set x; `: > F` empties F. */
+    else if (str_eq(p, ":") || str_startswith(p, ": ")) cur_shell()->last_status = 0;
+    else if (str_eq(p, "fresh") || str_startswith(p, "fresh ")) cur_shell()->last_status = 0;
+    else if (str_eq(p, "spoiled") || str_startswith(p, "spoiled ")) cur_shell()->last_status = 1;
     else if (str_eq(p, "forget") || str_startswith(p, "forget ")) cmd_forget(p + 6);
     else if (str_eq(p, "taste") || str_startswith(p, "taste ")) cmd_taste(p + 5, 0);
     else if (str_eq(p, "[") || str_startswith(p, "[ ")) cmd_taste(p + 1, 1);
