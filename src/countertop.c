@@ -206,6 +206,7 @@ static int  topmost(void) {                      /* the focus: the top window no
 #define TROWS 25
 #define WMAXC 127                       /* the most that fit between the bars (v0.60.162) */
 #define WMAXR 43
+#define SB_LINES 300                    /* scrollback, lines a terminal keeps (v0.60.166) */
 struct wterm {
     term_t t;                           /* first: a wterm_t is a term_t */
     uint16_t cell[WMAXR * WMAXC];       /* char | attribute << 8, as the console's; cols to a row */
@@ -213,6 +214,9 @@ struct wterm {
     int row, col, attr;
     volatile int closed, changed;
     int sel_a, sel_b;                   /* (v0.60.160) a selection, cell indices; sel_a -1: none */
+    uint16_t *sb;                       /* (v0.60.166) the lines scrolled off the top: SB_LINES of WMAXC */
+    uint8_t sb_w[SB_LINES];             /* each one's width when it went */
+    int sb_head, sb_n, back;            /* the next slot, how many, and how far the view is scrolled back */
     int ring[128];
     volatile uint32_t head, tail;
 };
@@ -222,6 +226,13 @@ static const uint32_t vga_rgb[16] = {
 };
 static wterm_t *WT(term_t *t) { return (wterm_t *)t; }
 static void wt_scroll(wterm_t *w) {
+    if (w->sb) {                                        /* the top row into the scrollback */
+        uint16_t *dst = w->sb + w->sb_head * WMAXC;
+        memcpy(dst, w->cell, sizeof(uint16_t) * (uint32_t)w->cols);
+        w->sb_w[w->sb_head] = (uint8_t)w->cols;
+        w->sb_head = (w->sb_head + 1) % SB_LINES;
+        if (w->sb_n < SB_LINES) w->sb_n++;
+    }
     memmove(w->cell, w->cell + w->cols, sizeof(w->cell[0]) * w->cols * (w->rows - 1));
     for (int c = 0; c < w->cols; c++) w->cell[(w->rows - 1) * w->cols + c] = (uint16_t)(' ' | w->attr << 8);
     w->row = w->rows - 1;
@@ -282,6 +293,7 @@ static void wt_resize(wterm_t *w, int nc, int nr) {
     w->row -= shift;
     if (w->col >= nc) w->col = nc - 1;
     w->sel_a = w->sel_b = -1;
+    w->back = 0;
     w->changed = 1;
 }
 static void wt_cell(term_t *t, int r, int c, char ch, int attr) {   /* (v0.60.154) for jot */
@@ -314,11 +326,21 @@ static wterm_t *wt_new(void) {
     w->t.ctx = w;
     w->attr = 0x07;
     w->cols = TCOLS; w->rows = TROWS;
+    w->sb = kmalloc(sizeof(uint16_t) * SB_LINES * WMAXC);   /* none if the heap says no: no scrollback */
+    w->sb_head = w->sb_n = w->back = 0;
     w->sel_a = w->sel_b = -1;
     wt_clear(&w->t);
     return w;
 }
 /* The cells into the body at (x,y), within the clip; the cursor when focused. */
+/* What row r, column c shows with the view scrolled back w->back lines:
+ * the scrollback (oldest first) then the live rows, as one long buffer. */
+static uint16_t view_cell(const wterm_t *w, int r, int c) {
+    int i = w->sb_n - w->back + r;                     /* index into scrollback + live */
+    if (i >= w->sb_n) return w->cell[(i - w->sb_n) * w->cols + c];
+    int slot = (w->sb_head - w->sb_n + i + SB_LINES) % SB_LINES;
+    return c < w->sb_w[slot] ? w->sb[slot * WMAXC + c] : (uint16_t)(' ' | 0x07 << 8);
+}
 static void draw_cells(wterm_t *w, int x, int y, int focused) {
     for (int r = 0; r < w->rows; r++) {
         int py = y + r * 16;
@@ -326,14 +348,14 @@ static void draw_cells(wterm_t *w, int x, int y, int focused) {
         for (int c = 0; c < w->cols; c++) {
             int px = x + c * 8;
             if (px + 8 <= cx0 || px >= cx1) continue;
-            uint16_t cell = w->cell[r * w->cols + c];
+            uint16_t cell = view_cell(w, r, c);
             uint32_t fg = vga_rgb[(cell >> 8) & 15], bg = vga_rgb[(cell >> 12) & 7];
             if (w->sel_a >= 0) {                                /* selected: inverted */
                 int i = r * w->cols + c, lo = w->sel_a < w->sel_b ? w->sel_a : w->sel_b, hi = w->sel_a ^ w->sel_b ^ lo;
                 if (i >= lo && i <= hi) { uint32_t t = fg; fg = bg; bg = t; }
             }
             const uint8_t *g = font8x16[cell & 0xFF];
-            int cur = focused && !w->closed && r == w->row && c == w->col;
+            int cur = focused && !w->closed && !w->back && r == w->row && c == w->col;
             for (int j = 0; j < 16; j++) {
                 if (py + j < cy0 || py + j >= cy1) continue;
                 uint32_t *dst = row[py + j];
@@ -768,6 +790,7 @@ static void reap_dying(void) {
     for (int i = 0; i < MAX_WIN; i++)
         if (dying[i].sess && shell_session_done(dying[i].sess, 0)) {
             shell_session_free(dying[i].sess);
+            if (dying[i].term->sb) kfree(dying[i].term->sb);
             kfree(dying[i].term);
             dying[i].sess = 0; dying[i].term = 0;
         }
@@ -1114,6 +1137,7 @@ static void pointer_buttons(int px, int py, int btn, int np) {
             rs_win = k; rs_dx = w->x + w->w - px; rs_dy = w->y + w->h - py;
             return;
         }
+        if (w->term && w->term->back && py >= w->y + BORDER + TITLE_H) return;   /* scrolled back: no selection (it is of live cells) */
         if (w->term && py >= w->y + BORDER + TITLE_H) {     /* a terminal's cells: a selection starts */
             int had = w->term->sel_a >= 0;
             w->term->sel_a = w->term->sel_b = cell_at(w, px, py);
@@ -1293,6 +1317,16 @@ int countertop_run(int (*avail)(void), int (*getch)(void), int uid) {
                 int bx, by;
                 body_origin(&win[k], &bx, &by);
                 app_push(win[k].app, WEV_WHEEL, (unsigned)dw, px - bx, py - by, 0);
+            } else if (k >= 0 && win[k].term) {           /* a terminal: through its scrollback (v0.60.166) */
+                wterm_t *t = win[k].term;
+                int back = t->back - 3 * dw;
+                if (back < 0) back = 0;
+                if (back > t->sb_n) back = t->sb_n;
+                if (back != t->back) {
+                    t->back = back; t->sel_a = -1;
+                    repaint_win(k);
+                    klog("[countertop] %s scrolled back %d\n", win[k].title, back);
+                }
             } else if (k >= 0 && win[k].files) {
                 struct files *f = win[k].files;
                 int rows = files_rows(&win[k]), most = f->n > rows ? f->n - rows : 0;
@@ -1310,6 +1344,7 @@ int countertop_run(int (*avail)(void), int (*getch)(void), int uid) {
             if (win[k].term->changed) {
                 win[k].term->changed = 0;
                 if (k != sel_win) win[k].term->sel_a = -1;      /* new output: the selection goes */
+                win[k].term->back = 0;                          /* and the view is the bottom again */
                 repaint_win(k);
             }
         }
@@ -1321,7 +1356,10 @@ int countertop_run(int (*avail)(void), int (*getch)(void), int uid) {
                 lower_window(k);
                 continue;
             }
-            if (k >= 0 && win[k].term) wt_key(win[k].term, c);
+            if (k >= 0 && win[k].term) {
+                if (win[k].term->back) { win[k].term->back = 0; repaint_win(k); }   /* typing: back to the bottom */
+                wt_key(win[k].term, c);
+            }
             else if (k >= 0 && win[k].app >= 0) app_push(win[k].app, WEV_KEY, (unsigned)c, 0, 0, 0);
             else if (k >= 0 && win[k].files && (c == KEY_UP || c == KEY_DOWN || c == '\n')) {
                 struct files *f = win[k].files;

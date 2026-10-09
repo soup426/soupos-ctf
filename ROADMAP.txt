@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.165
+Current version: v0.60.166
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,19 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.166 (2026-10-09)  — SCROLLBACK IN TERMINAL WINDOWS
+  - A terminal window keeps the last 300 lines that scroll off its top
+    (each with the width it had; ~76 KB a terminal, from the heap, and
+    none if the heap says no). The wheel over the window moves the view
+    back through them three lines a notch; typing, or new output, puts
+    it back at the bottom. While scrolled back the cursor is not drawn
+    and a press in the body starts no selection (selections are of the
+    live cells); a resize puts it back at the bottom too.
+  - scripts/ctscroll-test.sh: tally.elf 60 past the window's 25 rows;
+    three notches up show the live rows nine lower with the number
+    before them above, twenty more reach the welcome, a key typed brings
+    the bottom back with it on the prompt. Six-wide soak 6 of 6.
 
 v0.60.165 (2026-10-09)  — LEAVE ASKS FIRST
   - With programs' windows open, the first Leave (its button or Esc)

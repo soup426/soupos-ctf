@@ -47,7 +47,7 @@ runs in asks; the user has not seen it.
 
 ---
 
-## 1. Scrollback in terminal windows
+## 1. Scrollback in terminal windows — DONE v0.60.166
 
 A terminal window keeps the lines that scroll off its top (a few hundred,
 per window) and the wheel over it scrolls back through them; typing, or
