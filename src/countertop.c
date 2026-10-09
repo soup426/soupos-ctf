@@ -155,11 +155,22 @@ static uint32_t blend(uint32_t a, uint32_t b, int num, int den) {
     return (uint32_t)(r << 16 | g << 8 | bl);
 }
 
+/* The backgrounds (v0.60.169): a cook chooses one from the Kitchen menu
+ * and it is kept in their home (`countertop`, beside `profile`: /countertop
+ * for the headchef), read back when the desktop starts. */
+static const struct { const char *name; uint32_t top, bot; } bgs[] = {
+    { "dusk",   TOP_RGB,     BOT_RGB },
+    { "sea",    0x000B2E4Au, 0x003FA7B8u },
+    { "forest", 0x00123524u, 0x008DB86Bu },
+    { "plum",   0x002A1238u, 0x00C0607Eu },
+};
+#define NBG (int)(sizeof(bgs) / sizeof(bgs[0]))
+static int bg_choice;
 static void background(void) {                  /* within the clip */
     int span = H - BAR_H - 1 > 0 ? H - BAR_H - 1 : 1;
     int ya = cy0 > BAR_H ? cy0 : BAR_H;
     for (int y = ya; y < cy1; y++) {
-        uint32_t c = blend(TOP_RGB, BOT_RGB, y - BAR_H, span);
+        uint32_t c = blend(bgs[bg_choice].top, bgs[bg_choice].bot, y - BAR_H, span);
         for (int x = cx0; x < cx1; x++) row[y][x] = c;
     }
     dirty(cx0, ya, cx1 - cx0, cy1 - ya);
@@ -615,6 +626,7 @@ static const char *const menu_item[][3] = {      /* name, what it is, what to co
     { "swirl", "the Mandelbrot set", "swirl.elf" },
     { "oven", "a minute's timer", "oven.elf 60" },          /* (v0.60.164) */
     { "expo", "the processes", "expo.elf" },                /* (v0.60.168) */
+    { "backdrop", "the next one", "" },                     /* (v0.60.169) not a program: the background */
 };
 #define MENU_N (int)(sizeof(menu_item) / sizeof(menu_item[0]))
 #define MENU_H (MENU_N * MENU_IH + 4)
@@ -637,6 +649,33 @@ static void repaint(int x, int y, int w, int h) {
         if (menu_open) draw_menu();
     }
     clip_all();
+}
+static int ct_uid;                                 /* whose desktop (v0.60.143) */
+static void settings_path(char *p) {               /* the cook's `countertop` file */
+    if (ct_uid == 0) { strcpy(p, "/countertop"); return; }
+    strcpy(p, "/home/");
+    strncpy(p + 6, users_name_of((uint8_t)ct_uid), FAT_PATH_MAX - 20);
+    p[FAT_PATH_MAX - 14] = '\0';
+    strcat(p, "/countertop");
+}
+static void load_settings(void) {
+    char p[FAT_PATH_MAX], buf[64];
+    uint32_t n = 0;
+    settings_path(p);
+    bg_choice = 0;
+    if (fat_read(p, (uint8_t *)buf, sizeof(buf) - 1, &n) < 0) return;
+    buf[n < sizeof(buf) - 1 ? n : sizeof(buf) - 1] = '\0';
+    if (!strncmp(buf, "background ", 11) && buf[11] >= '0' && buf[11] < '0' + NBG) bg_choice = buf[11] - '0';
+    klog("[countertop] settings from %s: background %s\n", p, bgs[bg_choice].name);
+}
+static void next_background(void) {
+    bg_choice = (bg_choice + 1) % NBG;
+    repaint(0, BAR_H, W, H - BAR_H - TASK_H);
+    char p[FAT_PATH_MAX], line[16] = "background 0\n";
+    line[11] = (char)('0' + bg_choice);
+    settings_path(p);
+    int ok = users_may(p, 'w') && fat_write(p, (const uint8_t *)line, 13) >= 0;
+    klog("[countertop] background %s, %s %s\n", bgs[bg_choice].name, ok ? "kept in" : "not kept in", p);
 }
 static void menu_set(int open) {
     if (menu_open == open) return;
@@ -661,7 +700,7 @@ static int open_window(int x, int y, int w, int h, const char *title, uint32_t b
     return -1;
 }
 static void close_window(int k);
-static int ct_uid, nterm;
+static int nterm;
 static int open_terminal(void) {
     wterm_t *t = wt_new();
     if (!t) return -1;
@@ -1127,7 +1166,9 @@ static void pointer_buttons(int px, int py, int btn, int np) {
         int i = (py - MENU_Y - 2) / MENU_IH;
         int on_button = py < BAR_H && px >= BTN_KITCHEN_X && px < BTN_KITCHEN_X + BTN_KITCHEN_W;
         menu_set(0);
-        if (px >= MENU_X && px < MENU_X + MENU_W && py >= MENU_Y + 2 && i >= 0 && i < MENU_N) {
+        if (px >= MENU_X && px < MENU_X + MENU_W && py >= MENU_Y + 2 && i >= 0 && i < MENU_N && !menu_item[i][2][0]) {
+            next_background();
+        } else if (px >= MENU_X && px < MENU_X + MENU_W && py >= MENU_Y + 2 && i >= 0 && i < MENU_N) {
             int t = open_terminal();
             if (t >= 0) {
                 char line[40] = "cook ";
@@ -1316,6 +1357,8 @@ int countertop_run(int (*avail)(void), int (*getch)(void), int uid) {
     fbcon_pause();
     any_dirty = 0;
     clip_all();
+    ct_uid = uid;
+    load_settings();                                 /* before the first background (v0.60.169) */
     background();
     bar();
     nwin = 0; drag = -1; last_btn = 0; leave_asked = 0; leave_armed = 0; menu_open = 0; rs_win = -1; sel_win = -1; fd_win = -1; ct_uid = uid; nterm = 0; task_sig = 0xFFFFFFFFu;

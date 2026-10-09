@@ -71,10 +71,11 @@ the headchef, as `kill` already decides (the kernel checks, not expo).
 Named for the expediter, who runs the pass. Test: glutton.elf running,
 expo lists it, k ends it; as saucier, the headchef's process is refused.
 
-## 4. Settings that stay
+## 4. Settings that stay — DONE v0.60.169
 
 The desktop's background (a choice of a few gradients, from a Kitchen
-menu entry or a small window) saved in the cook's home (.countertop)
+menu entry or a small window) saved in the cook's home (.countertop;
+built as `countertop`, no dot, beside the shell's `profile`)
 and read back the next time countertop starts. Test: choose one, Leave,
 countertop again, the background is the chosen one (screendump), and
 another cook's desktop is not.
