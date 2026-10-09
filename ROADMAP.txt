@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.94
+Current version: v0.60.95
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,19 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.95 (2026-10-09)  — $$, $PPID, $SECONDS, $LINENO
+  - $$ is the shell's task (the console's is the kernel's first, 0; a
+    session's its own), the same inside $( ) as bash's; $PPID the task
+    that started it (0 for the console); $SECONDS the seconds since it
+    started, and SECONDS=N counts on from N; $LINENO the line of the
+    follow script now running (a block over lines gives its first line,
+    where bash gives each command's: written down).
+  - $(( )) reads $$ $? $# and $1..$9 too, as bash; they were errors.
+  - Found on the way: builtin_redirect's depth for $(( )) never came back
+    to 0, so a > after one on the same line was not taken; it counts each
+    ( and ) once now (biredir-test gains that line).
+  - scripts/shellvars-test.sh checks them, $LINENO against bash's.
 
 v0.60.94 (2026-10-09)  — REDIRECTIONS ON BUILTINS AND FUNCTIONS
   - `slurp hi > F` printed "hi > F": only cook, a loop's done and a { }

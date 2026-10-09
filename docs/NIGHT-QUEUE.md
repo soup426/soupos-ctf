@@ -41,7 +41,7 @@ done (or a { } group) take > F. A builtin's or a function's line takes
 > F, >> F and < F as `{ cmd ; } > F` would, wherever the redirection
 sits in the line. Compare the files with bash's.
 
-## 2. $$, $PPID, $SECONDS, $LINENO
+## 2. $$, $PPID, $SECONDS, $LINENO — DONE v0.60.95
 
 The shell's own number, its parent's, the seconds since it started (and
 SECONDS=N resets the count from N), and the line of the follow script

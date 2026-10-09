@@ -22,6 +22,7 @@ LINES=(
   'for i in 1 2 ; do slurp R10:$i > /r10.txt ; done'
   'v=/r11.txt ; slurp R11 > $v'
   '(( 3 > 2 )) && slurp R12:arith > /r12.txt'
+  'slurp R13:$(( 1 + 2 )) > /r13.txt'
 )
 keys=("headchef" "rosemary" "WAIT:1")
 for l in "${LINES[@]}"; do keys+=("$l" "UNTIL:@soupOS:"); done
@@ -37,10 +38,10 @@ script=""; for l in "${LINES[@]}"; do b=${l//slurp/echo}; b=${b//take/read}; b=$
 tr -d '\r' < "$WORK/serial.log" | grep -E '^P[0-9]+:' > "$WORK/got"
 bad=0
 cmp -s "$WORK/got" "$WORK/want" || { echo "        printed:"; diff "$WORK/want" "$WORK/got" | sed 's/^/          /'; bad=1; }
-for k in 1 2 3 4 6 7 8 9 10 11 12; do
+for k in 1 2 3 4 6 7 8 9 10 11 12 13; do
     mcopy -n -i "$WORK/disk.img" "::/r$k.txt" "$WORK/got$k" 2>/dev/null || { echo "        r$k.txt was not written"; bad=1; continue; }
     cmp -s "$WORK/got$k" "$WORK/b/r$k.txt" || { echo "        r$k.txt: got '$(tr '\n' '|' < "$WORK/got$k")', bash '$(tr '\n' '|' < "$WORK/b/r$k.txt")'"; bad=1; }
 done
-[ "$bad" = 0 ] && echo "  ok    builtins and functions take > >> < as bash's do (11 files and 3 printed lines: >, >>, at the front, a function, < into take, < and > together, 2> F empty, 2>&1, a quoted >, in a loop, \$v, after (( > )))" \
+[ "$bad" = 0 ] && echo "  ok    builtins and functions take > >> < as bash's do (12 files and 3 printed lines: >, >>, at the front, a function, < into take, < and > together, 2> F empty, 2>&1, a quoted >, in a loop, \$v, after (( > )), after \$(( )) on the same line)" \
     || { echo "  FAIL  redirections on builtins differ from bash"; fail=1; }
 exit $fail

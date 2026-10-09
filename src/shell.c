@@ -87,6 +87,10 @@ typedef struct {
     int     nnicks;
     int     dots;                /* . FILE running (v0.60.91): return leaves it */
     int     dot_fns;             /* ... at this function depth: deeper, return is a function's */
+    uint32_t self_id, parent_id; /* $$ and $PPID (v0.60.95): the shell's task, its starter's */
+    uint32_t sec_base;           /* $SECONDS counts from here, plus sec_off */
+    int      sec_off;
+    int      lineno;             /* $LINENO: the follow script's line now running */
     uint32_t job_pid[16];        /* job numbers (v0.60.92): %N is job_num's N */
     uint16_t job_num[16];
     int     njob;
@@ -5346,6 +5350,13 @@ static int seal_bypass;
 static int arr_whole;    /* set_var stores value as an array's whole (v0.60.88) */
 static void set_var(const char *name, const char *value) {
     shell_t *me = cur_shell();
+    if (str_eq(name, "SECONDS")) {                 /* the count starts again from it (v0.60.95) */
+        long n = 0; int neg = *value == '-'; const char *c = value + neg;
+        while (*c >= '0' && *c <= '9') n = n * 10 + (*c++ - '0');
+        me->sec_off = (int)(neg ? -n : n); me->sec_base = timer_get_ticks();
+        me->last_status = 0;
+        return;
+    }
     int slot = -1;
     for (int i = 0; i < me->nvars; i++) if (str_eq(me->vname[i], name)) slot = i;
     if (slot >= 0 && me->vseal[slot] && !seal_bypass) {
@@ -5552,6 +5563,24 @@ static void a_sp(void) { while (*ap == ' ') ap++; }
 /* $RANDOM (v0.60.58): 0..32767, new at each expansion, from the kernel's
  * entropy pool. Always a new one: unlike bash, assigning RANDOM does not
  * seed it, there being nothing to seed. Returns a static buffer. */
+/* $SECONDS, $LINENO, $PPID (v0.60.95): worked out when read, as bash's;
+ * 0 if NAME is none of them. SECONDS=N (set_var) starts the count from N. */
+static const char *special_var(const char *name) {
+    static char out[24];
+    shell_t *me = cur_shell();
+    long long v;
+    if (str_eq(name, "SECONDS")) v = (long long)((timer_get_ticks() - me->sec_base) / TIMER_HZ) + me->sec_off;
+    else if (str_eq(name, "LINENO")) v = me->lineno;
+    else if (str_eq(name, "PPID")) v = me->parent_id;
+    else return 0;
+    char d[24]; int nd = 0, n = 0;
+    unsigned long long u = v < 0 ? 0ULL - (unsigned long long)v : (unsigned long long)v;
+    do { d[nd++] = (char)('0' + u % 10); u /= 10; } while (u);
+    if (v < 0) out[n++] = '-';
+    while (nd) out[n++] = d[--nd];
+    out[n] = '\0';
+    return out;
+}
 static const char *random_text(void) {
     static char out[8];
     uint16_t r;
@@ -5566,6 +5595,7 @@ static const char *random_text(void) {
 static long long a_var(const char *name) {
     shell_t *me = cur_shell();
     if (str_eq(name, "RANDOM")) { const char *x = random_text(); long long n = 0; while (*x) n = n * 10 + (*x++ - '0'); return n; }
+    { const char *x = special_var(name); if (x) { long long n = 0; int ng = *x == '-'; if (ng) x++; while (*x) n = n * 10 + (*x++ - '0'); return ng ? -n : n; } }
     for (int v = 0; v < me->nvars; v++)
         if (str_eq(me->vname[v], name)) {
             const char *x = me->vval[v]; long long n = 0; int neg = 0;
@@ -5655,6 +5685,19 @@ static long long a_prim(void) {
     if (*ap == '-') { ap++; return -a_prim(); }
     if (*ap == '+') { ap++; return a_prim(); }
     if (*ap >= '0' && *ap <= '9') return a_number();
+    if (ap[0] == '$' && (ap[1] == '$' || ap[1] == '?' || ap[1] == '#' || (ap[1] >= '1' && ap[1] <= '9'))) {
+        /* $$ $? $# $1..$9 in arithmetic (v0.60.95), as bash */
+        shell_t *me = cur_shell();
+        char c = ap[1];
+        ap += 2;
+        if (c == '$') return me->self_id;
+        if (c == '?') return me->last_status;
+        if (c == '#') return me->npargs;
+        const char *x = c - '1' < me->npargs ? me->parg[c - '1'] : "";
+        long long n = 0; int ng = *x == '-'; if (ng) x++;
+        while (*x >= '0' && *x <= '9') n = n * 10 + (*x++ - '0');
+        return ng ? -n : n;
+    }
     if (*ap == '$') ap++;
     char name[16];
     if (a_name(name)) {
@@ -6246,6 +6289,7 @@ static int expand_into(const char *seg, char *ex, int max) {
                 }
                 if (name[0] >= '1' && name[0] <= '9' && !name[1]) { if (name[0] - '1' < me->npargs) val = me->parg[name[0] - '1']; }
                 else if (str_eq(name, "RANDOM")) val = random_text();
+                else if (special_var(name)) val = special_var(name);
                 else for (int v = 0; v < me->nvars; v++) if (str_eq(me->vname[v], name)) {
                     val = me->vval[v];
                     if (me->varr[v]) {                      /* an array: ${a} is its first */
@@ -6396,6 +6440,12 @@ static int expand_into(const char *seg, char *ex, int max) {
             name[nn] = '\0';
             if (braced) { if (seg[j] != '}') { ex[k++] = seg[i]; continue; } j++; }
             shell_t *me = cur_shell();
+            if (special_var(name)) {                       /* $SECONDS $LINENO $PPID (v0.60.95) */
+                for (const char *val = special_var(name); *val; val++)
+                    if (!put_lit(ex, &k, max, *val, 0)) { cut = 1; break; }
+                i = j - 1;
+                continue;
+            }
             if (str_eq(name, "RANDOM")) {
                 for (const char *val = random_text(); *val; val++)
                     if (!put_lit(ex, &k, max, *val, 0)) { cut = 1; break; }
@@ -6410,6 +6460,14 @@ static int expand_into(const char *seg, char *ex, int max) {
                     break;
                 }
             i = j - 1;
+            continue;
+        }
+        if (seg[i] == '$' && seg[i + 1] == '$' && sq != '\'') {   /* $$ (v0.60.95): the shell's task */
+            unsigned v = cur_shell()->self_id;
+            char d[12]; int nd = 0;
+            do { d[nd++] = (char)('0' + v % 10); v /= 10; } while (v);
+            while (nd && k < max - 1) ex[k++] = d[--nd];
+            i++;
             continue;
         }
         if (seg[i] == '$' && seg[i + 1] == '!' && sq != '\'') {   /* $! (v0.60.48): empty before any & */
@@ -6736,9 +6794,10 @@ __attribute__((noinline)) static int builtin_redirect(const char *q) {   /* not 
         if (qq) { if (*c == qq) qq = 0; if (cl < INPUT_MAX - 1) cmd[cl++] = *c; c++; continue; }
         if (*c == '\\' && c[1]) { if (cl < INPUT_MAX - 2) { cmd[cl++] = c[0]; cmd[cl++] = c[1]; } c += 2; continue; }
         if (*c == '\'' || *c == '"') { qq = *c; if (cl < INPUT_MAX - 1) cmd[cl++] = *c; c++; continue; }
-        if ((c[0] == '$' && c[1] == '(') || (c[0] == '(' && c[1] == '(')) { dep++; if (cl < INPUT_MAX - 1) cmd[cl++] = *c; c++; continue; }
-        if (dep && *c == '(') dep++;
-        if (dep && *c == ')') dep--;
+        /* inside $( ), $(( )) and (( )) nothing is ours: each ( counts once
+         * and each ) takes one off, so the depth comes back to 0 after */
+        if (*c == '(' && (dep || (c > q && c[-1] == '$') || c[1] == '(')) { dep++; if (cl < INPUT_MAX - 1) cmd[cl++] = *c; c++; continue; }
+        if (dep && *c == ')') { dep--; if (cl < INPUT_MAX - 1) cmd[cl++] = *c; c++; continue; }
         if (c[0] == '<' && c[1] == '<') {            /* << and <<< are a document's, not ours */
             while (*c == '<') { if (cl < INPUT_MAX - 1) cmd[cl++] = *c; c++; }
             continue;
@@ -8675,8 +8734,11 @@ static void run_file(const char *args, int dot) {
     if (trap_cmd_was) memcpy(trap_cmd_was, me->trap_cmd, sizeof(me->trap_cmd));
     if (!dot) for (int k = 0; k < 2; k++) if (me->trap_set[k] == 1) me->trap_set[k] = 0;
     cur_shell()->last_status = 0;
-    uint32_t i = 0;
+    uint32_t i = 0, counted = 0;
+    int lineno_was = me->lineno, ln = 1;         /* $LINENO (v0.60.95) */
     while (i < size && !cur_shell()->exiting && !me->quit) {
+        while (counted < i) { if (text[counted] == '\n') ln++; counted++; }
+        me->lineno = ln;
         uint32_t e = i;
         while (e < size && text[e] != '\n' && text[e] != '\r') e++;
         char line[INPUT_MAX];
@@ -8764,6 +8826,7 @@ static void run_file(const char *args, int dot) {
     }
     if (trap_cmd_was) kfree(trap_cmd_was);
     if (dot) { me->dots--; me->dot_fns = dot_fns_was; }
+    me->lineno = lineno_was;
     me->quit = 0;                               /* exit ends this script, not its caller */
     if (own_args) { memcpy(me->parg, saved, sizeof(me->parg)); me->npargs = saved_n; }
     kfree(saved);
@@ -8811,6 +8874,8 @@ static void run_rc(void) {
 }
 
 void shell_run(void) {
+    the_shell.self_id = task_current() ? task_current()->id : 0;   /* $$ (v0.60.95); $PPID 0, the kernel's */
+    the_shell.sec_base = timer_get_ticks();
     char input[INPUT_MAX];
     char saved[INPUT_MAX];
     int  pos = 0, len = 0;
@@ -9151,8 +9216,11 @@ void *shell_session_start(term_t *t, int uid, const char *exec_line, const char 
         strncpy(sh->exec_line, exec_line, INPUT_MAX - 1);
         sh->exec_line[INPUT_MAX - 1] = '\0';
     }
+    sh->parent_id = task_current() ? task_current()->id : 0;
+    sh->sec_base = sh->started;
     task_t *tk = task_spawn(exec_line ? "sh:exec" : "sh:session", session_task, sh);
     if (!tk) { kfree(sh); return 0; }
+    sh->self_id = tk->id;
     klog("[shell] session for uid %d started as task %u\n", uid, tk->id);
     return sh;
 }
