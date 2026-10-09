@@ -819,7 +819,7 @@ static void cmd_menu(void) {
         {0, "    simmer             - time since boot"},
         {0, "    broth              - physical memory stats"},
         {0, "    ladle              - heap allocator stats"},
-        {0, "    expiry             - current date/time"},
+        {0, "    expiry [-d @S] [+FMT] - the date and time, or in date's format (+%Y-%m-%d ...)"},
         {0, "    chef               - CPU info (bare 'chef'; see Kitchen Staff)"},
         {0, "    pantry             - PCI devices"},
         {0, "    serve              - list the current bowl's contents"},
@@ -1092,11 +1092,127 @@ static void cmd_ladle(void) {
     t_printf("    Free:   %u bytes (%u KB)\n", fr, fr / 1024);
 }
 
-static void cmd_expiry(void) {
-    rtc_time_t t;
-    rtc_read(&t);
-    t_printf("  %u-%02u-%02u  %02u:%02u:%02u\n",
-               t.year, t.month, t.day, t.hour, t.minute, t.second);
+/* expiry [-d @SECONDS] [+FORMAT] (v0.60.131): date's format under its
+ * kitchen name. The RTC's time (UTC, as QEMU keeps it), or the moment
+ * -d @SECONDS names, through GNU date's conversions in the C locale: %Y %m
+ * %d %H %M %S %y %C %e %k %l %j %I %p %a %A %b %h %B %u %w %s %Z (UTC) %F
+ * %T %D %R %n %t %%; anything else after a % comes out as written. Bare,
+ * it is the line it always was. */
+static void unquote(char *w);
+int ksnprintf(char *buf, uint32_t size, const char *fmt, ...);   /* doom_libc.c, built always */
+static long long days_from_civil(long long y, unsigned m, unsigned d) {
+    y -= m <= 2;
+    long long era = (y >= 0 ? y : y - 399) / 400;
+    unsigned yoe = (unsigned)(y - era * 400);
+    unsigned doy = (153 * (m + (m > 2 ? -3 : 9)) + 2) / 5 + d - 1;
+    unsigned doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
+    return era * 146097 + (long long)doe - 719468;
+}
+static void civil_from_days(long long z, long long *y, unsigned *m, unsigned *d) {
+    z += 719468;
+    long long era = (z >= 0 ? z : z - 146096) / 146097;
+    unsigned doe = (unsigned)(z - era * 146097);
+    unsigned yoe = (doe - doe / 1460 + doe / 36524 - doe / 146096) / 365;
+    long long yy = (long long)yoe + era * 400;
+    unsigned doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    unsigned mp = (5 * doy + 2) / 153;
+    *d = doy - (153 * mp + 2) / 5 + 1;
+    *m = mp < 10 ? mp + 3 : mp - 9;
+    *y = yy + (*m <= 2);
+}
+static void cmd_expiry(const char *args) {
+    shell_t *me = cur_shell();
+    char w[INPUT_MAX], fmt[INPUT_MAX] = "";
+    long long secs; int have_secs = 0;
+    const char *a = args;
+    for (;;) {
+        while (*a == ' ') a++;
+        if (!*a) break;
+        a = first_word(a, w, sizeof(w));
+        unquote(w);
+        if (str_eq(w, "-d") || str_eq(w, "-u")) {
+            if (str_eq(w, "-u")) continue;               /* it is UTC already */
+            while (*a == ' ') a++;
+            a = first_word(a, w, sizeof(w)); unquote(w);
+            const char *c = w; int neg = 0; long long v = 0; int any = 0;
+            if (*c == '@') c++; else { t_printf("  expiry: -d takes @SECONDS\n"); me->last_status = 1; return; }
+            if (*c == '-') { neg = 1; c++; }
+            for (; *c >= '0' && *c <= '9'; c++) { v = v * 10 + (*c - '0'); any = 1; }
+            if (!any || *c) { t_printf("  expiry: invalid date '%s'\n", w); me->last_status = 1; return; }
+            secs = neg ? -v : v; have_secs = 1;
+        } else if (w[0] == '+') strcpy(fmt, w + 1);
+        else { t_printf("  expiry: extra operand '%s'\n", w); me->last_status = 1; return; }
+    }
+    if (!have_secs) {
+        rtc_time_t t;
+        rtc_read(&t);
+        if (!fmt[0] && !args[0]) {
+            t_printf("  %u-%02u-%02u  %02u:%02u:%02u\n", t.year, t.month, t.day, t.hour, t.minute, t.second);
+            me->last_status = 0;
+            return;
+        }
+        secs = days_from_civil(t.year, t.month, t.day) * 86400 + t.hour * 3600 + t.minute * 60 + t.second;
+    }
+    if (!fmt[0]) strcpy(fmt, "%a %b %e %H:%M:%S %Z %Y");     /* date's own, in the C locale */
+    long long days = secs >= 0 ? secs / 86400 : -((-secs + 86399) / 86400);
+    long long rem = secs - days * 86400;
+    long long Y; unsigned M, D;
+    civil_from_days(days, &Y, &M, &D);
+    int H = (int)(rem / 3600), Mi = (int)(rem % 3600 / 60), S = (int)(rem % 60);
+    int wd = (int)((days % 7 + 11) % 7);                 /* 1970-01-01 was a Thursday: 4 */
+    int yday = (int)(days - days_from_civil(Y, 1, 1)) + 1;
+    static const char *const dn[] = { "Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday" };
+    static const char *const mn[] = { "January", "February", "March", "April", "May", "June", "July",
+                                      "August", "September", "October", "November", "December" };
+    char out[INPUT_MAX * 2]; int o = 0;
+    #define EXP_PUT(...) do { o += ksnprintf(out + o, sizeof(out) - (unsigned)o, __VA_ARGS__); if (o > (int)sizeof(out) - 64) o = (int)sizeof(out) - 64; } while (0)
+    for (const char *f = fmt; *f; f++) {
+        if (*f != '%' || !f[1]) { out[o++] = *f; if (o > (int)sizeof(out) - 64) break; continue; }
+        char c = *++f;
+        int h12 = H % 12 ? H % 12 : 12;
+        switch (c) {
+        case 'Y': EXP_PUT("%d", (int)Y); break;
+        case 'C': EXP_PUT("%02d", (int)(Y / 100)); break;
+        case 'y': EXP_PUT("%02d", (int)(Y % 100)); break;
+        case 'm': EXP_PUT("%02u", M); break;
+        case 'd': EXP_PUT("%02u", D); break;
+        case 'e': EXP_PUT("%2u", D); break;
+        case 'H': EXP_PUT("%02d", H); break;
+        case 'k': EXP_PUT("%2d", H); break;
+        case 'I': EXP_PUT("%02d", h12); break;
+        case 'l': EXP_PUT("%2d", h12); break;
+        case 'M': EXP_PUT("%02d", Mi); break;
+        case 'S': EXP_PUT("%02d", S); break;
+        case 'p': EXP_PUT("%s", H < 12 ? "AM" : "PM"); break;
+        case 'j': EXP_PUT("%03d", yday); break;
+        case 'a': EXP_PUT("%.3s", dn[wd]); break;
+        case 'A': EXP_PUT("%s", dn[wd]); break;
+        case 'b': case 'h': EXP_PUT("%.3s", mn[M - 1]); break;
+        case 'B': EXP_PUT("%s", mn[M - 1]); break;
+        case 'u': EXP_PUT("%d", wd ? wd : 7); break;
+        case 'w': EXP_PUT("%d", wd); break;
+        case 's': {                                      /* by hand: ksnprintf's ll is 32 bits */
+            char d[24]; int n = 0; unsigned long long v = secs < 0 ? (unsigned long long)-secs : (unsigned long long)secs;
+            do { d[n++] = (char)('0' + (int)(v % 10)); v /= 10; } while (v);
+            if (secs < 0) out[o++] = '-';
+            while (n) out[o++] = d[--n];
+            break;
+        }
+        case 'Z': EXP_PUT("UTC"); break;
+        case 'F': EXP_PUT("%d-%02u-%02u", (int)Y, M, D); break;
+        case 'T': EXP_PUT("%02d:%02d:%02d", H, Mi, S); break;
+        case 'D': EXP_PUT("%02u/%02u/%02d", M, D, (int)(Y % 100)); break;
+        case 'R': EXP_PUT("%02d:%02d", H, Mi); break;
+        case 'n': out[o++] = '\n'; break;
+        case 't': out[o++] = '\t'; break;
+        case '%': out[o++] = '%'; break;
+        default:  out[o++] = '%'; out[o++] = c; break;   /* as GNU's: as written */
+        }
+    }
+    #undef EXP_PUT
+    out[o] = '\0';
+    t_printf("%s\n", out);
+    me->last_status = 0;
 }
 
 static void cmd_chef(void) {
@@ -5294,7 +5410,7 @@ static void dispatch(const char *buf) {
     else if (str_eq(p, "simmer"))     cmd_simmer();
     else if (str_eq(p, "broth"))      cmd_broth();
     else if (str_eq(p, "ladle"))      cmd_ladle();
-    else if (str_eq(p, "expiry"))     cmd_expiry();
+    else if (str_eq(p, "expiry") || str_startswith(p, "expiry ")) cmd_expiry(p + 6);
     else if (str_startswith(p, "chef")) {
         const char *a = p + 4; while (*a == ' ') a++;
         cmd_chef_elevate(a);

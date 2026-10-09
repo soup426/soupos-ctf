@@ -50,7 +50,7 @@ either fit them (a builtin's arguments in a larger buffer) or say the
 line is too long with status 1, as a cut expansion already does; never
 the pattern as if nothing matched. Test with 302 names.
 
-## 2. expiry +FORMAT (date +FORMAT)
+## 2. expiry +FORMAT (date +FORMAT) — DONE v0.60.131 (with -d @SECONDS)
 
 `expiry +FORMAT`: %Y %m %d %H %M %S %y %e %j %a %A %b %B %p %I %s %F %T
 %D %R %n %t %%, as GNU date's in the C locale, for the RTC's time. Test:
