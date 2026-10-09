@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.128
+Current version: v0.60.129
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,12 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.129 (2026-10-09)  — CULL -U AND -I
+  - cull.elf -u prints only the lines that are not repeated, -i compares
+    without case (the first of each run printed), with -c and -d as
+    before; -d with -u prints nothing, as GNU uniq's.
+  - scripts/cullui-test.sh compares eleven cases with GNU uniq.
 
 v0.60.128 (2026-10-09)  — SKIM AND DREGS: BYTES, -N AND +N
   - skim.elf -c N (the first N bytes), -n -N and -c -N (all but the last

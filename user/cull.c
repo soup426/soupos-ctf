@@ -3,6 +3,8 @@
  *   cook rack.elf X | cull.elf        each distinct line once
  *   cook cull.elf -c X                with how many times, as "%7d line"
  *   cook cull.elf -d X                only the lines that repeat
+ *   cook cull.elf -u X                only the lines that do not (v0.60.129)
+ *   cook cull.elf -i X                ignoring case: the first of each run
  *
  * Only ADJACENT lines are compared, as uniq does (sort first for all
  * duplicates). A last line with no newline is still a line, printed with
@@ -10,7 +12,7 @@
  */
 #include "ulib.h"
 
-static int counts, dups_only;
+static int counts, dups_only, uniq_only, nocase;
 
 typedef struct { char *s; int n, cap; } buf_t;
 static void put(buf_t *b, char c) {
@@ -24,11 +26,16 @@ static void put(buf_t *b, char c) {
 }
 static int same(const buf_t *a, const buf_t *b) {
     if (a->n != b->n) return 0;
-    for (int i = 0; i < a->n; i++) if (a->s[i] != b->s[i]) return 0;
+    for (int i = 0; i < a->n; i++) {
+        char x = a->s[i], y = b->s[i];
+        if (nocase) { if (x >= 'A' && x <= 'Z') x = (char)(x + 32); if (y >= 'A' && y <= 'Z') y = (char)(y + 32); }
+        if (x != y) return 0;
+    }
     return 1;
 }
 static void emit(const buf_t *b, int count) {
     if (dups_only && count < 2) return;
+    if (uniq_only && count > 1) return;              /* -d and -u: nothing, as GNU's */
     if (counts) {                                   /* "%7d " */
         char d[12]; int k = 0, v = count;
         do { d[k++] = (char)('0' + v % 10); v /= 10; } while (v);
@@ -48,7 +55,9 @@ int main(void) {
         for (char *f = tok[t] + 1; *f; f++) {
             if      (*f == 'c') counts = 1;
             else if (*f == 'd') dups_only = 1;
-            else { print("usage: cull.elf [-c] [-d] [file]\n"); return 2; }
+            else if (*f == 'u') uniq_only = 1;
+            else if (*f == 'i') nocase = 1;
+            else { print("usage: cull.elf [-cdui] [file]\n"); return 2; }
         }
     int fd = FD_STDIN;
     if (t < nt) {

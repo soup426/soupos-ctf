@@ -78,7 +78,7 @@ Compare with GNU cut.
 head and tail's byte counts, tail's "from line N on", and head's "all but
 the last N". Compare with GNU head and tail, binary input included.
 
-## 6. cull -u and -i (uniq -u, uniq -i)
+## 6. cull -u and -i (uniq -u, uniq -i) — DONE v0.60.129
 
 -u only the lines that are not repeated, -i comparing without case
 (printing the first of each run as GNU's does). With -c and -d as they
