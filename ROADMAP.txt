@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.147
+Current version: v0.60.148
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,21 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.148 (2026-10-09)  — TALLY WITH DECIMALS (seq)
+  - FIRST, STEP and LAST may have fractions (0.5, .5, 1., -.25). No
+    floating point in ring 3, so each is a 64-bit integer in units of the
+    finest fraction typed; every value is FIRST plus whole STEPs, exact,
+    and stops past LAST. Printed with as many decimals as FIRST or STEP
+    has, LAST's not counted (seq 1 1.50 prints 1), as GNU seq does. -w
+    is seq's arithmetic on the typed strings ("1." one narrower, ".5" one
+    wider, each widened or narrowed to the printed decimals). 17 digits
+    at most once scaled; -.5 is a number, not an option.
+  - seq-test.sh: 36 more forms against GNU seq, 57 in all (negatives,
+    steps that miss LAST, counting down, -w and -s with decimals, 3001
+    lines of 0.001). They now run from one script on the disk (. /SEQ.SH):
+    typing 57 lines and waiting for each prompt took 188 s, the script
+    takes 7.
 
 v0.60.147 (2026-10-09)  — LAYER -s, AND - MORE THAN ONCE (paste)
   - Every - is now the same stdin, so `layer.elf - -` takes its lines in

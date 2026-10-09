@@ -108,7 +108,7 @@ cook it, draw with injected drags, screendump, close.
 
 Built as frost.elf (doodle is not a kitchen name: icing a cake).
 
-## 8. Later: layer -s and - (paste), tally with decimals (seq) — layer DONE v0.60.147
+## 8. Later: layer -s and - (paste), tally with decimals (seq) — DONE v0.60.147, v0.60.148
 
 Moved from queue 47 so the desktop comes first; as written there.
 
@@ -137,3 +137,8 @@ Skipped at the user's request: OS work only.
   kill the caller instead.
 - v0.60.146: no test has a second program try another's window id
   (countertop_win_* check the pid; nothing exercises it).
+- v0.60.148: seq-test typed each case and waited for its prompt: 57
+  cases took 188 s alone, 7 s once they ran from a script on the disk
+  (. /SEQ.SH). The other compare-with-the-host tests are built the same
+  way; check.sh's wall time is set by its slowest tests, so the same
+  change there is worth measuring.
