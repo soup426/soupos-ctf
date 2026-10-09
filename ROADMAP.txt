@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.53
+Current version: v0.60.54
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,18 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.54 (2026-10-08)  — THE MENU MATCHES THE SHELL
+  - `menu` still named jobs, clip, netinfo, ifconfig, arp, ping, nslookup
+    and fg, none of them commands since the kitchen renames (orders,
+    scraps, faucet, plumbing, table, sip, sniff, plate), and left out some
+    thirty that were: steep, the network ones (reserve, holler, takeout,
+    hatch, pass, vault), the sound ones (whistle, sizzle, hum, hush), larder,
+    skewer, discard, break, continue, return, exit and the self-tests. It
+    lists all of them now, with Sound and Network sections.
+  - scripts/menu-test.sh reads the menu and dispatch() from the source and
+    checks both ways; cat and special stay off it on purpose (the CTF
+    build's).
 
 v0.60.53 (2026-10-08)  — BACKSLASH
   - \ is sh's escape now: outside quotes \X is X as text (\  \$ \; \| \'

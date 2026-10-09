@@ -35,7 +35,7 @@ first failure, and $RANDOM.
 
 ---
 
-## 1. The menu matches the shell
+## 1. The menu matches the shell — DONE v0.60.54
 
 `menu` still lists names from before the kitchen renames (jobs, clip, and
 perhaps more) and may miss builtins added since. Every command it names
