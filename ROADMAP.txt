@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.131
+Current version: v0.60.132
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,16 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.132 (2026-10-09)  — SWAP [:CLASS:], OCTAL AND -C
+  - swap.elf sets take [:alpha:] [:digit:] [:alnum:] [:upper:] [:lower:]
+    [:space:] [:punct:] [:blank:] [:xdigit:] [:cntrl:] [:print:]
+    [:graph:], each in byte order, so [:lower:] [:upper:] translates
+    letter for letter; \NNN octal and \\ \a \b \f \r \v beside \n \t;
+    -c (or -C) takes every byte not in the first set, for -d, -s and
+    translating, as GNU tr's.
+  - scripts/swapclass-test.sh compares 16 cases with GNU tr, byte for byte,
+    high and control bytes in the input.
 
 v0.60.131 (2026-10-09)  — EXPIRY +FORMAT AND -d @SECONDS
   - expiry +FORMAT is date's format: %Y %m %d %H %M %S %y %C %e %k %l %j

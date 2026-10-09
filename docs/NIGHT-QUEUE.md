@@ -56,7 +56,7 @@ the pattern as if nothing matched. Test with 302 names.
 %D %R %n %t %%, as GNU date's in the C locale, for the RTC's time. Test:
 print %s beside each format and compare with the host's `date -u -d @S`.
 
-## 3. swap [:class:] and -c (tr)
+## 3. swap [:class:] and -c (tr) — DONE v0.60.132
 
 Classes in a set ([:alpha:] [:digit:] [:alnum:] [:upper:] [:lower:]
 [:space:] [:punct:] [:blank:] [:xdigit:] [:cntrl:] [:print:] [:graph:]),
