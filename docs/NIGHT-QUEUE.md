@@ -57,7 +57,7 @@ hundredth, as bash's time says real (no user and sys here). A kitchen
 name. Test that CMD's output and status are untouched and the time is
 there and sane.
 
-## 5. Arrays
+## 5. Arrays — DONE v0.60.88 (dense; see ROADMAP)
 
 `a=(x y z)`, ${a[i]} (i arithmetic), ${a[@]} and "${a[@]}" (a word each),
 ${#a[@]}, a[i]=v, and for over them. Compare with bash.

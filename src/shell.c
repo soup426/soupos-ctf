@@ -55,6 +55,7 @@
 #define INPUT_MAX   256
 #define HIST_MAX     16
 #define VARS_MAX     24          /* was 16; PWD and OLDPWD take two now (v0.60.32) */
+#define VAL_MAX      256         /* a value's bytes, the NUL too (was 96; arrays, v0.60.88) */
 
 /* Everything that belongs to ONE shell rather than to the kernel: where it
  * is, what it typed before, where its prompt sits. Fourth queue, item 2a:
@@ -77,9 +78,10 @@ typedef struct {
     char    exec_line[INPUT_MAX];/* a session that runs one line (ssh host cmd)  */
     char    where[20];           /* "console", or the client's address (v0.52.0) */
     char    vname[VARS_MAX][16]; /* shell variables (v0.58.0): NAME=value, $NAME */
-    char    vval[VARS_MAX][96];
+    char    vval[VARS_MAX][VAL_MAX];
     uint8_t vhand[VARS_MAX];     /* handed to programs (`hand`, v0.60.26) */
     uint8_t vseal[VARS_MAX];     /* sealed: sh's readonly (`seal`, v0.60.76) */
+    uint8_t varr[VARS_MAX];      /* an array: elements parted by \x1f, 2 for one of none (v0.60.88) */
     int     optpos, optind_seen; /* pluck's place inside a -abc, and the OPTIND it last wrote (v0.60.77) */
     char    trap_cmd[2][INPUT_MAX]; /* smoke (trap): EXIT, INT (v0.60.82) */
     uint8_t trap_set[2];         /* 0 none, 1 a command, 2 ignored */
@@ -93,7 +95,7 @@ typedef struct {
     int     loops;               /* loops open now, for break and continue (v0.60.44) */
     int     brk, cont;           /* loops still to break out of / continue past */
     int     fns, scripts;        /* functions and follow scripts running (v0.60.47) */
-    struct { char name[16]; char val[96]; uint8_t had, handed; } stashed[32];
+    struct { char name[16]; char val[VAL_MAX]; uint8_t had, handed, arr; } stashed[32];
     int     nstash;              /* stash (local): what to give back as functions return (v0.60.56) */
     int     stash_floor;         /* where the running call's own stashes begin */
     int     errexit, in_cond;    /* follow -e, and how deep in a condition (v0.60.57) */
@@ -5244,6 +5246,7 @@ static int try_assign(const char *text) {
  * sealed one is not set: it says so, status 1 (v0.60.76), unless
  * seal_bypass is up (a stash given back as its function returns). */
 static int seal_bypass;
+static int arr_whole;    /* set_var stores value as an array's whole (v0.60.88) */
 static void set_var(const char *name, const char *value) {
     shell_t *me = cur_shell();
     int slot = -1;
@@ -5260,6 +5263,7 @@ static void set_var(const char *name, const char *value) {
         me->vname[slot][sizeof(me->vname[slot]) - 1] = '\0';
         me->vhand[slot] = 0;
         me->vseal[slot] = 0;
+        me->varr[slot] = 0;
         for (int i = 0; i < me->npend; i++)            /* `hand X` before X was set */
             if (str_eq(me->vpend[i], name)) {
                 me->vhand[slot] = 1;
@@ -5267,8 +5271,20 @@ static void set_var(const char *name, const char *value) {
                 break;
             }
     }
-    strncpy(me->vval[slot], value, sizeof(me->vval[slot]) - 1);
-    me->vval[slot][sizeof(me->vval[slot]) - 1] = '\0';
+    if (me->varr[slot] && !arr_whole) {
+        /* NAME=v on an array sets its first element, as sh (v0.60.88) */
+        char nv[VAL_MAX]; int n = 0;
+        for (const char *c = value; *c && n < VAL_MAX - 1; c++) nv[n++] = *c;
+        const char *rest = me->vval[slot];
+        while (*rest && *rest != '\x1f') rest++;
+        for (; *rest && n < VAL_MAX - 1; rest++) nv[n++] = *rest;
+        nv[n] = '\0';
+        strcpy(me->vval[slot], nv);
+    } else {
+        strncpy(me->vval[slot], value, sizeof(me->vval[slot]) - 1);
+        me->vval[slot][sizeof(me->vval[slot]) - 1] = '\0';
+    }
+    if (arr_whole) me->varr[slot] = 1;
     me->last_status = 0;
 }
 
@@ -5366,7 +5382,8 @@ static void cmd_unset(const char *args) {
             }
             me->nvars--;
             if (i != me->nvars) { strcpy(me->vname[i], me->vname[me->nvars]); strcpy(me->vval[i], me->vval[me->nvars]);
-                                  me->vhand[i] = me->vhand[me->nvars]; me->vseal[i] = me->vseal[me->nvars]; }
+                                  me->vhand[i] = me->vhand[me->nvars]; me->vseal[i] = me->vseal[me->nvars];
+                                  me->varr[i] = me->varr[me->nvars]; }
             return;
         }
     for (int i = 0; i < me->npend; i++)               /* unset drops the mark, as sh's */
@@ -6020,6 +6037,69 @@ static int expand_into(const char *seg, char *ex, int max) {
             else while ((seg[j] == '_' || (seg[j] >= 'A' && seg[j] <= 'Z') || (seg[j] >= 'a' && seg[j] <= 'z') ||
                          (nn && seg[j] >= '0' && seg[j] <= '9')) && nn < 15) name[nn++] = seg[j++];
             name[nn] = '\0';
+            /* ${a[i]}, ${a[@]}, ${a[*]}, ${#a[@]}, ${#a[i]} (v0.60.88) */
+            char sub[INPUT_MAX]; int has_sub = 0;
+            if (nn && !indirect && seg[j] == '[') {
+                int e2 = j + 1, dep2 = 0;
+                while (seg[e2] && !(seg[e2] == ']' && !dep2)) { if (seg[e2] == '[') dep2++; else if (seg[e2] == ']') dep2--; e2++; }
+                if (seg[e2] == ']' && seg[e2 + 1] == '}') {
+                    int sl = e2 - j - 1 < INPUT_MAX - 1 ? e2 - j - 1 : INPUT_MAX - 1;
+                    memcpy(sub, seg + j + 1, (uint32_t)sl); sub[sl] = '\0';
+                    has_sub = 1; j = e2 + 1;
+                }
+            }
+            if (has_sub) {
+                shell_t *me = cur_shell();
+                const char *whole = 0; int is_arr = 0;
+                for (int v = 0; v < me->nvars; v++) if (str_eq(me->vname[v], name)) { whole = me->vval[v]; is_arr = me->varr[v]; break; }
+                const char *elems[64]; int el[64], ne = 0;
+                if (whole && is_arr != 2) {
+                    const char *c = whole;
+                    for (;;) {
+                        const char *st = c; while (*c && *c != '\x1f') c++;
+                        if (ne < 64) { elems[ne] = st; el[ne] = (int)(c - st); ne++; }
+                        if (!*c) break;
+                        c++;
+                    }
+                }
+                int all = str_eq(sub, "@") || str_eq(sub, "*"), star = str_eq(sub, "*");
+                int assign = in_assign_value(ex, k);
+                int mode = sq == '"' ? 1 : assign ? 2 : 0;
+                if (len_of) {
+                    long long v = 0;
+                    if (all) v = ne;
+                    else {
+                        char sx[INPUT_MAX]; expand_into(sub, sx, INPUT_MAX);
+                        long long ix = arith(sx); if (ix < 0) ix += ne;
+                        if (ix >= 0 && ix < ne) v = el[ix];
+                    }
+                    char d[24]; int nd = 0; unsigned long long u = (unsigned long long)v;
+                    do { d[nd++] = (char)('0' + u % 10); u /= 10; } while (u);
+                    while (nd && k < max - 1) ex[k++] = d[--nd];
+                } else if (all) {
+                    int each = !star && sq == '"' && !assign;
+                    if (each && ne == 0 && k > 0 && ex[k - 1] == '"' && seg[j + 1] == '"' &&
+                        (k == 1 || ex[k - 2] == ' ') && (seg[j + 2] == '\0' || seg[j + 2] == ' ')) {
+                        k--; sq = 0; i = j + 1;                  /* "${a[@]}" of none: no word */
+                        continue;
+                    }
+                    for (int a = 0; a < ne; a++) {
+                        if (a) {
+                            if (each) { if (k < max - 3) { ex[k++] = '"'; ex[k++] = ' '; ex[k++] = '"'; } }
+                            else if (sq == '"' || !assign) { if (k < max - 1) ex[k++] = ' '; }
+                            else if (!put_lit(ex, &k, max, ' ', 2)) { cut = 1; break; }
+                        }
+                        for (int c = 0; c < el[a]; c++) if (!put_lit(ex, &k, max, elems[a][c], mode)) { cut = 1; break; }
+                    }
+                } else {
+                    char sx[INPUT_MAX]; expand_into(sub, sx, INPUT_MAX);
+                    long long ix = arith(sx); if (ix < 0) ix += ne;
+                    if (ix >= 0 && ix < ne)
+                        for (int c = 0; c < el[ix]; c++) if (!put_lit(ex, &k, max, elems[ix][c], mode)) { cut = 1; break; }
+                }
+                i = j;
+                continue;
+            }
             char op = 0;
             if (nn && !len_of && seg[j] == ':' && (seg[j + 1] == '-' || seg[j + 1] == '=')) { op = seg[j + 1]; j += 2; }
             /* ${NAME#pat} ##, %, %% (v0.60.64): trim a match off the front
@@ -6069,7 +6149,15 @@ static int expand_into(const char *seg, char *ex, int max) {
                 }
                 if (name[0] >= '1' && name[0] <= '9' && !name[1]) { if (name[0] - '1' < me->npargs) val = me->parg[name[0] - '1']; }
                 else if (str_eq(name, "RANDOM")) val = random_text();
-                else for (int v = 0; v < me->nvars; v++) if (str_eq(me->vname[v], name)) { val = me->vval[v]; break; }
+                else for (int v = 0; v < me->nvars; v++) if (str_eq(me->vname[v], name)) {
+                    val = me->vval[v];
+                    if (me->varr[v]) {                      /* an array: ${a} is its first */
+                        static char first[VAL_MAX]; int f = 0;
+                        while (val[f] && val[f] != '\x1f' && f < VAL_MAX - 1) { first[f] = val[f]; f++; }
+                        first[f] = '\0'; val = first;
+                    }
+                    break;
+                }
             }
             int mode = sq == '"' ? 1 : in_assign_value(ex, k) ? 2 : 0;
             if (len_of) {
@@ -6220,7 +6308,7 @@ static int expand_into(const char *seg, char *ex, int max) {
             for (int v = 0; v < me->nvars; v++)
                 if (str_eq(me->vname[v], name)) {
                     int mode = sq == '"' ? 1 : in_assign_value(ex, k) ? 2 : 0;
-                    for (const char *val = me->vval[v]; *val; val++)
+                    for (const char *val = me->vval[v]; *val && *val != '\x1f'; val++)   /* an array: its first */
                         if (!put_lit(ex, &k, max, *val, mode)) { cut = 1; break; }
                     break;
                 }
@@ -6288,9 +6376,13 @@ static int call_function(const char *ex) {
         me->nstash--;
         if (!me->stashed[me->nstash].had) cmd_unset(me->stashed[me->nstash].name);
         else {
+            cmd_unset(me->stashed[me->nstash].name);       /* back as it was, array or not */
+            arr_whole = me->stashed[me->nstash].arr;
             set_var(me->stashed[me->nstash].name, me->stashed[me->nstash].val);
+            arr_whole = 0;
             for (int v = 0; v < me->nvars; v++)
-                if (str_eq(me->vname[v], me->stashed[me->nstash].name)) { me->vhand[v] = me->stashed[me->nstash].handed; me->vseal[v] = 0; }
+                if (str_eq(me->vname[v], me->stashed[me->nstash].name)) { me->vhand[v] = me->stashed[me->nstash].handed; me->vseal[v] = 0;
+                                                                           me->varr[v] = me->stashed[me->nstash].arr; }
         }
     }
     seal_bypass = 0;
@@ -6468,7 +6560,7 @@ static void cmd_unset(const char *args);
 static void unquote(char *w);
 static int call_function(const char *ex);
 static void dispatch(const char *buf);
-typedef struct { char name[16]; char val[96]; char old[96]; int had, handed; } pre_t;
+typedef struct { char name[16]; char val[VAL_MAX]; char old[VAL_MAX]; int had, handed; } pre_t;
 static int prefix_assigns(const char *ex) {
     const char *t = ex;
     while (*t == ' ') t++;
@@ -6529,9 +6621,93 @@ static int prefix_assigns(const char *ex) {
 }
 
 /* Run one command: expand it, then it is an assignment or a dispatch. */
+/* a=(W...) and a[I]=V (v0.60.88): arrays, seen on the line as typed (so
+ * the words are split once, as sh splits them). Elements are parted by
+ * \x1f in one value of 256 bytes at most; dense, not sparse: a[5]=x on
+ * three fills 3 and 4 with nothing. 1 if the line was one. */
+static int array_assign(const char *q) {
+    int n = 0;
+    while (q[n] == '_' || (q[n] >= 'A' && q[n] <= 'Z') || (q[n] >= 'a' && q[n] <= 'z') || (n && q[n] >= '0' && q[n] <= '9')) n++;
+    if (!n || n > 15) return 0;
+    char name[16]; memcpy(name, q, (uint32_t)n); name[n] = '\0';
+    shell_t *me = cur_shell();
+    if (q[n] == '=' && q[n + 1] == '(') {
+        const char *b = q + n + 2, *e = b; char qq = 0; int dep = 0;
+        while (*e && (qq || dep || *e != ')')) {
+            if (qq) { if (*e == qq) qq = 0; }
+            else if (*e == '\'' || *e == '"') qq = *e;
+            else if (*e == '(') dep++;
+            else if (*e == ')') dep--;
+            e++;
+        }
+        if (*e != ')') return 0;
+        for (const char *r = e + 1; *r; r++) if (*r != ' ') return 0;
+        char inner[INPUT_MAX], ex[INPUT_MAX], joined[VAL_MAX];
+        int il = (int)(e - b) < INPUT_MAX - 1 ? (int)(e - b) : INPUT_MAX - 1;
+        memcpy(inner, b, (uint32_t)il); inner[il] = '\0';
+        expand_into(inner, ex, INPUT_MAX);
+        int jl = 0, nw = 0;
+        const char *a = ex;
+        while (*a == ' ') a++;
+        while (*a) {
+            char w[INPUT_MAX];
+            a = first_word(a, w, sizeof(w));
+            if (nw++ && jl < VAL_MAX - 1) joined[jl++] = '\x1f';
+            for (const char *c = w; *c && jl < VAL_MAX - 1; c++) joined[jl++] = *c;
+            while (*a == ' ') a++;
+        }
+        joined[jl] = '\0';
+        cmd_unset(name);
+        if (me->last_status == 1) { for (int v = 0; v < me->nvars; v++) if (str_eq(me->vname[v], name) && me->vseal[v]) return 1; }
+        arr_whole = 1; set_var(name, joined); arr_whole = 0;
+        if (!nw) for (int v = 0; v < me->nvars; v++) if (str_eq(me->vname[v], name)) me->varr[v] = 2;   /* () */
+        return 1;
+    }
+    if (q[n] != '[') return 0;
+    const char *rb = q + n + 1; int dep = 0;
+    while (*rb && !(*rb == ']' && !dep)) { if (*rb == '[') dep++; else if (*rb == ']') dep--; rb++; }
+    if (*rb != ']' || rb[1] != '=') return 0;
+    char sub[INPUT_MAX], sx[INPUT_MAX], vx[INPUT_MAX];
+    int sl = (int)(rb - q - n - 1) < INPUT_MAX - 1 ? (int)(rb - q - n - 1) : INPUT_MAX - 1;
+    memcpy(sub, q + n + 1, (uint32_t)sl); sub[sl] = '\0';
+    expand_into(sub, sx, INPUT_MAX);
+    arith_err = 0;
+    long long ix = arith(sx);
+    if (arith_err || ix < 0 || ix > 63) { t_printf("  %s[%s]: not an index (0 to 63)\n", name, sub); me->last_status = 1; arith_err = 0; return 1; }
+    char vr[INPUT_MAX]; int vrl = 0;
+    const char *vs = rb + 2;
+    while (*vs && *vs != ' ' && vrl < INPUT_MAX - 1) vr[vrl++] = *vs++;   /* the value is one word */
+    vr[vrl] = '\0';
+    expand_into(vr, vx, INPUT_MAX);
+    unquote(vx);
+    /* the elements now, the one at ix replaced, padding with empty ones */
+    const char *old = "";
+    int slot = -1;
+    for (int v = 0; v < me->nvars; v++) if (str_eq(me->vname[v], name)) { slot = v; old = me->vval[v]; }
+    if (slot >= 0 && me->vseal[slot]) { t_printf("  %s: sealed (readonly)\n", name); me->last_status = 1; return 1; }
+    char joined[VAL_MAX]; int jl = 0, cur = 0;
+    const char *c = old;
+    int have = slot >= 0 && me->varr[slot] != 2 ? 1 : 0;
+    for (; have && *c; c++) if (*c == '\x1f') have++;
+    c = old;
+    int total = have > ix + 1 ? have : (int)ix + 1;
+    for (cur = 0; cur < total; cur++) {
+        if (cur && jl < VAL_MAX - 1) joined[jl++] = '\x1f';
+        const char *st = c;
+        if (cur < have) { while (*c && *c != '\x1f') c++; }
+        if (cur == ix) { for (const char *v = vx; *v && jl < VAL_MAX - 1; v++) joined[jl++] = *v; }
+        else if (cur < have) { for (const char *v = st; v < c && jl < VAL_MAX - 1; v++) joined[jl++] = *v; }
+        if (cur < have && *c) c++;
+    }
+    joined[jl] = '\0';
+    if (slot >= 0) cmd_unset(name);
+    arr_whole = 1; set_var(name, joined); arr_whole = 0;
+    return 1;
+}
+
 /* cook dish.elf -v NAME FORMAT [ARGS] (v0.60.73): bash's printf -v. A
  * program cannot set the shell's variables, so the shell runs dish with
- * the rest and puts what it wrote, every byte, into NAME (96 bytes at
+ * the rest and puts what it wrote, every byte, into NAME (255 bytes at
  * most, as every value). The status is dish's. Seen on the line as typed,
  * so nothing in it is expanded twice. 1 if it was one. */
 static int dish_into(const char *q) {
@@ -6571,6 +6747,7 @@ static void run_one(const char *seg) {
     const char *q = seg; while (*q == ' ') q++;
     if (!*q) return;
     if (dish_into(q)) return;
+    if (array_assign(q)) return;
     if (is_kw(q, "eggtimer")) { cmd_eggtimer(q + 8); return; }   /* the line as typed: expanded once, by what it runs */
     /* ! COMMAND (v0.60.60): the status turned round, 0 to 1 and anything
      * else to 0; of the whole pipeline, so before the | is looked for. A
@@ -7311,6 +7488,7 @@ static void cmd_stash(const char *args) {
             strcpy(me->stashed[me->nstash].name, w);
             me->stashed[me->nstash].had = slot >= 0;
             me->stashed[me->nstash].handed = slot >= 0 && me->vhand[slot];
+            me->stashed[me->nstash].arr = slot >= 0 && me->varr[slot];
             if (slot >= 0) strcpy(me->stashed[me->nstash].val, me->vval[slot]);
             me->nstash++;
         }
@@ -7918,7 +8096,7 @@ static void heredoc_expand(const char *in, char *out, int max) {
             for (int v = 0; v < me->nvars; v++) if (str_eq(me->vname[v], name)) { val = me->vval[v]; break; }
             i = j - 1;
         }
-        if (val) { while (*val && k < max - 1) out[k++] = *val++; }
+        if (val) { while (*val && *val != '\x1f' && k < max - 1) out[k++] = *val++; }
         else out[k++] = in[i];
     }
     out[k] = '\0';

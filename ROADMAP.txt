@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.87
+Current version: v0.60.88
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,19 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.88 (2026-10-09)  — ARRAYS
+  - a=(W...) makes an array, its words split once as sh splits them
+    ("$v" one, $v several), a=() an empty one; a[I]=V sets one (I is
+    arithmetic). ${a[I]} (-1 the last), ${a[@]} and ${a[*]}, "${a[@]}" a
+    word each as "$@" (none: no word), "${a[*]}" one, ${#a[@]} the count,
+    ${#a[I]} a length. $a and ${a} are the first element and a=V sets it,
+    as sh. stash keeps an array whole and gives it back; discard drops it.
+  - An array is one variable, its elements parted by \x1f, so 255 bytes
+    in all and dense, not sparse: a[5]=x on three fills 3 and 4 with
+    nothing where bash would leave holes (written down). A value is 255
+    bytes now everywhere (VAL_MAX; it was 95).
+  - scripts/array-test.sh compares eleven lines with bash.
 
 v0.60.87 (2026-10-09)  — EGGTIMER (TIME)
   - `eggtimer CMD` is sh's time under a kitchen name, and a keyword as
