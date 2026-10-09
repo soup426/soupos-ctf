@@ -45,7 +45,7 @@ sh. Compare with bash, nested ifs and follow scripts included.
 takes > F, >> F, < F, | PROG, && and || as a whole, as a loop's done
 does. Compare with bash.
 
-## 3. seal NAME[=value] (readonly)
+## 3. seal NAME[=value] (readonly) — DONE v0.60.76
 
 A variable that cannot be set, discarded or stashed again; trying says
 so and is status 1. A kitchen name. `seal` alone lists them. Compare
@@ -71,4 +71,5 @@ Carried; the user asked to keep to OS work.
 
 ## Notes left by unattended runs
 
-(none yet)
+- v0.60.76: `take a <<< x` reads the terminal; builtins do not get
+  here-strings (or <<WORD). Worth an item in the next queue.

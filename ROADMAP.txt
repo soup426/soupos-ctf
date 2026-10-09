@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.75
+Current version: v0.60.76
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,19 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.76 (2026-10-08)  — SEAL (READONLY)
+  - `seal NAME[=value]...` is sh's readonly under a kitchen name: a sealed
+    variable cannot be set (=, take, a for loop, a second seal), discarded
+    or stashed; each says so and is status 1, and a for loop over one does
+    not run its body. A NAME not yet set is sealed empty; bare `seal`
+    lists them. A stash given back as its function returns takes a seal
+    put on it inside along, as bash's local does.
+  - Seen on the way: `take a <<< x` reads the terminal, not the string; a
+    here-string reaches programs only. For the next queue.
+  - scripts/seal-test.sh compares ten lines with bash's readonly; the bash
+    side wraps each failing command in eval, since bash -c gives up at the
+    first readonly error and the prompt does not.
 
 v0.60.75 (2026-10-08)  — { ... ; } GROUPS
   - `{ A ; B ; }` runs A and B here, in this shell, so what they set

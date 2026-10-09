@@ -79,6 +79,7 @@ typedef struct {
     char    vname[VARS_MAX][16]; /* shell variables (v0.58.0): NAME=value, $NAME */
     char    vval[VARS_MAX][96];
     uint8_t vhand[VARS_MAX];     /* handed to programs (`hand`, v0.60.26) */
+    uint8_t vseal[VARS_MAX];     /* sealed: sh's readonly (`seal`, v0.60.76) */
     char    vpend[8][16];        /* handed while unset: handed once set    */
     int     nvars, npend;
     char    parg[9][64];         /* a script's $1..$9 (v0.60.2)            */
@@ -879,6 +880,7 @@ static void cmd_menu(void) {
         {0, "    stash NAME[=value] - a function's own variable (sh's local)"},
         {0, "    shift [N]          - drop the first N arguments ($2 becomes $1)"},
         {0, "    inspect [-t] NAME  - what NAME is: keyword, function, builtin or program"},
+        {0, "    seal NAME[=value]  - a variable nothing may change (sh's readonly)"},
         {0, "    ! command          - run it and turn its status round"},
         {0, "    exit [N]           - leave a script (at the prompt, clockout)"},
         {0, "    kill <id>          - stop a background task"},
@@ -3139,6 +3141,7 @@ static void cmd_return(const char *args, int is_exit);     /* beside it (v0.60.4
 static void cmd_stash(const char *args);                  /* beside it (v0.60.56) */
 static void cmd_shift(const char *args);                  /* beside it (v0.60.59) */
 static void cmd_inspect(const char *args);                /* beside it (v0.60.72) */
+static void cmd_seal(const char *args);                   /* beside it (v0.60.76) */
 static int status_before;
 static void cmd_read(const char *args);  /* beside run_line (v0.60.4) */
 
@@ -4645,7 +4648,7 @@ static const char *const cmd_names[] = {
     "takeout", "bgclock", "yieldbg", "spinbg", "sleeptest", "vfstest",
     "dmesg", "pwd", "cd", "mkbowl", "rmbowl", "bowltest",
     "whoami", "roster", "clockout", "hire", "fire", "perms", "secret",
-    "break", "continue", "return", "exit", "inspect",
+    "break", "continue", "return", "exit", "inspect", "seal",
     "preempttest", "vmtest", "vgastress", "fatstress",
 };
 #define CMD_COUNT  (int)(sizeof(cmd_names) / sizeof(cmd_names[0]))
@@ -4888,6 +4891,7 @@ static void dispatch(const char *buf) {
     else if (str_eq(p, "stash") || str_startswith(p, "stash ")) cmd_stash(p + 5);
     else if (str_eq(p, "shift") || str_startswith(p, "shift ")) cmd_shift(p + 5);
     else if (str_eq(p, "inspect") || str_startswith(p, "inspect ")) cmd_inspect(p + 7);
+    else if (str_eq(p, "seal") || str_startswith(p, "seal ")) cmd_seal(p + 4);
     else if (str_eq(p, "break") || str_startswith(p, "break ")) cmd_break(p + 5, 0);
     else if (str_eq(p, "return") || str_startswith(p, "return ")) cmd_return(p + 6, 0);
     else if (str_eq(p, "exit") || str_startswith(p, "exit ")) cmd_return(p + 4, 1);
@@ -5070,17 +5074,26 @@ static int try_assign(const char *text) {
     return 1;
 }
 
-/* Set a shell variable (assignment, and each turn of a for loop). */
+/* Set a shell variable (assignment, and each turn of a for loop). A
+ * sealed one is not set: it says so, status 1 (v0.60.76), unless
+ * seal_bypass is up (a stash given back as its function returns). */
+static int seal_bypass;
 static void set_var(const char *name, const char *value) {
     shell_t *me = cur_shell();
     int slot = -1;
     for (int i = 0; i < me->nvars; i++) if (str_eq(me->vname[i], name)) slot = i;
+    if (slot >= 0 && me->vseal[slot] && !seal_bypass) {
+        t_printf("  %s: sealed (readonly)\n", name);
+        me->last_status = 1;
+        return;
+    }
     if (slot < 0) {
         if (me->nvars >= VARS_MAX) { t_printf("  Too many variables (%d).\n", VARS_MAX); me->last_status = 1; return; }
         slot = me->nvars++;
         strncpy(me->vname[slot], name, sizeof(me->vname[slot]) - 1);
         me->vname[slot][sizeof(me->vname[slot]) - 1] = '\0';
         me->vhand[slot] = 0;
+        me->vseal[slot] = 0;
         for (int i = 0; i < me->npend; i++)            /* `hand X` before X was set */
             if (str_eq(me->vpend[i], name)) {
                 me->vhand[slot] = 1;
@@ -5155,7 +5168,7 @@ static void cmd_read(const char *args) {
         }
         ch[n] = line[i]; lit[n++] = 0;
     }
-    int r = 0;
+    int r = 0, set_bad = 0;
     #define TAKE_SEP(x) (!lit[x] && (ch[x] == ' ' || ch[x] == '\t'))
     for (int i = 0; i < nn; i++) {
         char word[INPUT_MAX]; int w = 0;
@@ -5169,9 +5182,10 @@ static void cmd_read(const char *args) {
         }
         word[w] = '\0';
         set_var(names[i], word);
+        if (me->last_status) set_bad = 1;            /* a sealed name (v0.60.76) */
     }
     #undef TAKE_SEP
-    cur_shell()->last_status = me->in_pipe ? (eof ? 1 : 0) : ((eof && len == 0) ? 1 : 0);
+    cur_shell()->last_status = set_bad ? 1 : me->in_pipe ? (eof ? 1 : 0) : ((eof && len == 0) ? 1 : 0);
 }
 
 /* unset NAME (v0.58.0). */
@@ -5179,8 +5193,14 @@ static void cmd_unset(const char *args) {
     shell_t *me = cur_shell();
     for (int i = 0; i < me->nvars; i++)
         if (str_eq(me->vname[i], args)) {
+            if (me->vseal[i] && !seal_bypass) {          /* (v0.60.76) */
+                t_printf("  discard: %s: sealed (readonly)\n", args);
+                me->last_status = 1;
+                return;
+            }
             me->nvars--;
-            if (i != me->nvars) { strcpy(me->vname[i], me->vname[me->nvars]); strcpy(me->vval[i], me->vval[me->nvars]); me->vhand[i] = me->vhand[me->nvars]; }
+            if (i != me->nvars) { strcpy(me->vname[i], me->vname[me->nvars]); strcpy(me->vval[i], me->vval[me->nvars]);
+                                  me->vhand[i] = me->vhand[me->nvars]; me->vseal[i] = me->vseal[me->nvars]; }
             return;
         }
     for (int i = 0; i < me->npend; i++)               /* unset drops the mark, as sh's */
@@ -5632,7 +5652,7 @@ static int in_assign_value(const char *ex, int k) {
     /* stash/hand NAME=value...: each NAME= word is an assignment too, as
      * sh's local and export take theirs whole (v0.60.56). Start from the
      * word being expanded into. */
-    if ((strncmp(ex + a, "stash ", 6) == 0 || strncmp(ex + a, "hand ", 5) == 0)) {
+    if ((strncmp(ex + a, "stash ", 6) == 0 || strncmp(ex + a, "hand ", 5) == 0 || strncmp(ex + a, "seal ", 5) == 0)) {
         int w = a; char q2 = 0;
         for (int b = a; b < k; b++) {
             if (q2) { if (ex[b] == q2) q2 = 0; }
@@ -6013,15 +6033,17 @@ static int call_function(const char *ex) {
     run_line(body);
     me->loops = loops;
     int st_after = me->last_status;
+    seal_bypass = 1;                            /* a stashed name sealed in here goes too, as sh's local */
     while (me->nstash > stash_mark) {
         me->nstash--;
         if (!me->stashed[me->nstash].had) cmd_unset(me->stashed[me->nstash].name);
         else {
             set_var(me->stashed[me->nstash].name, me->stashed[me->nstash].val);
             for (int v = 0; v < me->nvars; v++)
-                if (str_eq(me->vname[v], me->stashed[me->nstash].name)) me->vhand[v] = me->stashed[me->nstash].handed;
+                if (str_eq(me->vname[v], me->stashed[me->nstash].name)) { me->vhand[v] = me->stashed[me->nstash].handed; me->vseal[v] = 0; }
         }
     }
+    seal_bypass = 0;
     me->last_status = st_after;
     me->stash_floor = floor_was;
     me->fns--;
@@ -6692,6 +6714,41 @@ static int loop_after_body(shell_t *me) {
     }
     return 0;
 }
+/* seal [NAME[=value]]... (v0.60.76): sh's readonly. A sealed variable
+ * cannot be set (=, take, for, a stash), discarded or stashed: each says
+ * so and is status 1. A NAME not yet set is sealed empty. Bare `seal`
+ * lists them. */
+static void cmd_seal(const char *args) {
+    shell_t *me = cur_shell();
+    me->last_status = 0;
+    if (!*args) {
+        for (int i = 0; i < me->nvars; i++) if (me->vseal[i]) t_printf("  seal %s=%s\n", me->vname[i], me->vval[i]);
+        return;
+    }
+    int bad = 0;
+    const char *a = args;
+    while (*a) {
+        char w[INPUT_MAX];
+        a = first_word(a, w, sizeof(w));
+        if (!w[0]) break;
+        char *eq = strchr(w, '=');
+        if (eq) *eq = '\0';
+        int ok = w[0] && strlen(w) <= 15 && (w[0] == '_' || (w[0] >= 'A' && w[0] <= 'Z') || (w[0] >= 'a' && w[0] <= 'z'));
+        for (const char *c = w; ok && *c; c++)
+            if (!(*c == '_' || (*c >= 'A' && *c <= 'Z') || (*c >= 'a' && *c <= 'z') || (*c >= '0' && *c <= '9'))) ok = 0;
+        if (!ok) { t_printf("  seal: `%s': not a name\n", w); bad = 1; continue; }
+        int slot = -1;
+        for (int v = 0; v < me->nvars; v++) if (str_eq(me->vname[v], w)) slot = v;
+        if (eq || slot < 0) {
+            set_var(w, eq ? eq + 1 : "");
+            if (me->last_status) { bad = 1; continue; }
+            for (int v = 0; v < me->nvars; v++) if (str_eq(me->vname[v], w)) slot = v;
+        }
+        if (slot >= 0) me->vseal[slot] = 1;
+    }
+    me->last_status = bad;
+}
+
 /* inspect [-t] NAME... (v0.60.72): sh's type, under the health inspector's
  * name. What each NAME is, in sh's order: a keyword, a function (and its
  * body), a builtin, or a program (and where it is, found as cook finds
@@ -6782,6 +6839,9 @@ static void cmd_stash(const char *args) {
         char *eq = strchr(w, '=');
         if (eq) *eq = '\0';
         if (!w[0] || strlen(w) > 15) { t_printf("  stash: not a name: %s\n", w); me->last_status = 1; continue; }
+        int sealed = 0;
+        for (int v = 0; v < me->nvars; v++) if (str_eq(me->vname[v], w) && me->vseal[v]) sealed = 1;
+        if (sealed) { t_printf("  stash: %s: sealed (readonly)\n", w); me->last_status = 1; continue; }
         int done = 0;                          /* once per call: again just sets it */
         for (int i = me->stash_floor; i < me->nstash; i++) if (str_eq(me->stashed[i].name, w)) done = 1;
         if (!done) {
@@ -6983,6 +7043,7 @@ static void exec_range(lseg_t *sg, int from, int to, int depth) {
                 me->loops++;
                 for (int w = 0; w < wl->n && !me->exiting && !interrupted(); w++) {
                     set_var(name, wl->list[w]);
+                    if (me->last_status) break;             /* sealed: the loop stops, status 1 (v0.60.76) */
                     exec_range(sg, i + 2, d, depth + 1);
                     if (loop_after_body(me)) break;
                 }
