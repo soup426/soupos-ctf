@@ -57,7 +57,7 @@ Compare with the host's base64, both ways, on text and on binary.
 The SHA-256 of a file or stdin, as `HASH  NAME` lines; several files.
 Compare with the host's sha256sum, the empty file and a large one too.
 
-## 5. encore.elf (yes)
+## 5. encore.elf (yes) — DONE v0.60.108
 
 Says y (or its words) forever, until what reads it stops: `cook encore.elf
 | skim.elf -n 3` ends. Compare with yes | head -n 3.

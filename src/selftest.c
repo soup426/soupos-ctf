@@ -185,21 +185,36 @@ static void test_vga(void) {
  * time. Measured on an idle machine the renderer is 0%; the threshold is
  * generous because `sample` itself is printing while this runs, which gives
  * the renderer actual work to do. */
-static void test_services(void) {
+static int busiest_service(const char **name) {
     task_t *head = task_list_head();
     int worst = 0;
-    const char *worst_name = "none";
+    *name = "none";
     if (head) {
         task_t *t = head;
         do {
             if (t->service && (int)t->cpu_last > worst) {
                 worst = (int)t->cpu_last;
-                worst_name = t->name;
+                *name = t->name;
             }
             t = t->next;
         } while (t != head);
     }
+    return worst;
+}
+
+/* One busy second is measured again a second later (v0.60.108): on a loaded
+ * host the guest loses time in lumps and a renderer catching up can read
+ * over half for one second (2026-10-09, a full check). A service that spins
+ * is busy in the next second too. */
+static void test_services(void) {
+    const char *worst_name;
+    int worst = busiest_service(&worst_name);
     klog("[sample] busiest service: %s at %d%%\n", worst_name, worst);
+    if (worst > 50) {
+        task_sleep(1100);
+        worst = busiest_service(&worst_name);
+        klog("[sample] busiest service a second later: %s at %d%%\n", worst_name, worst);
+    }
     check("services are not busy", worst <= 50);
 }
 

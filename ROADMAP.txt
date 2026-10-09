@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.107
+Current version: v0.60.108
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,18 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.108 (2026-10-09)  — ENCORE.ELF (YES)
+  - encore.elf [WORDS] is yes under a kitchen name (the call for more):
+    its words joined by spaces, or y, a line at a time until a write
+    fails, which is what a pipe gives once its reader has gone. A kilobyte
+    of lines to each write.
+  - scripts/encore-test.sh: 3 and 2 lines through skim -n, 500 counted
+    by weigh -l, and no encore left running afterwards.
+  - sample's "services are not busy" measures a second over half again a
+    second later before failing: under a loaded full check one second of
+    a service catching up read over 50% and failed the gate. A service that
+    spins is busy the next second too.
 
 v0.60.107 (2026-10-09)  — BRAND.ELF (SHA256SUM)
   - brand.elf FILE... is sha256sum under a kitchen name (the batch's
