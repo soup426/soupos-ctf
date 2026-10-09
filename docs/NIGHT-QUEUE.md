@@ -54,7 +54,7 @@ Read up to DELIM instead of a newline (its first character; -d '' to the
 end of input, as bash reads to a NUL), with -r -a -n -p and from a pipe,
 <<< and < FILE. Test against bash.
 
-## 3. label: nl's options
+## 3. label: nl's options — DONE v0.60.138
 
 -b a (number every line) or t (non-empty, the default) or n, -w WIDTH,
 -s SEP, -v START, -i STEP, -n ln, rn or rz. Compare with GNU nl (single
