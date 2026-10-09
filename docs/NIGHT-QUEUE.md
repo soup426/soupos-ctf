@@ -1,12 +1,12 @@
 # Night queue
 
-Fifty-second queue. The first fifty-one are in `docs/queue-archive-2026-10-0*.md`;
-queue 51 (`-09q`) made windows maximise, terminals resize, files drop onto
-terminals, added oven.elf (and SYS_TONE) and made Leave ask first. This
-one: terminal scrollback, snapping windows to halves, a window that lists
-and ends processes, settings that persist, and notes from programs on the
-bar. Written by an unattended run when queue 51 ran out, as the loop it
-runs in asks; the user has not seen it.
+Fifty-third queue. The first fifty-two are in `docs/queue-archive-2026-10-0*.md`;
+queue 52 (`-09r`) added scrollback, snapping to halves, expo.elf (with
+SYS_PROCS and SYS_KILL), settings kept in the cook's home and notes on the
+bar (SYS_NOTE). This one: keyboard shortcuts, changing files from the
+files window, a calculator, icons on the background and a calendar under
+the clock. Written by an unattended run when queue 52 ran out, as the
+loop it runs in asks; the user has not seen it.
 
 ## Standing rules
 
@@ -47,45 +47,42 @@ runs in asks; the user has not seen it.
 
 ---
 
-## 1. Scrollback in terminal windows — DONE v0.60.166
+## 1. Keyboard shortcuts
 
-A terminal window keeps the lines that scroll off its top (a few hundred,
-per window) and the wheel over it scrolls back through them; typing, or
-new output, puts it back at the bottom. Test: fill a terminal past its
-height, wheel up, read the earlier lines back against the font, type a
-key, the bottom again.
+Ctrl+Alt+T opens a terminal and Alt+F4 closes the focused window (a
+program's gets WEV_CLOSE, as its close box sends). Measure first what the
+keyboard delivers for F4 (there is no KEY_F4 yet) and whether Ctrl+Alt+T
+arrives as Ctrl+T with Alt held. Test: both shortcuts, screendumps and
+the log.
 
-## 2. Snap to halves — DONE v0.60.167
+## 2. New bowls and removing files from the files window
 
-A window dragged by its title bar until the pointer reaches the left or
-right edge of the screen fills that half (between the bars), as maximise
-does; dragged off again it goes back to its own size. Test by
-screendump: snapped left, snapped right, unsnapped.
+A right click in a files window: a small menu with "new bowl" (named
+bowl, bowl2, ... in the shown one) and, on a row, "remove" (asked twice,
+as Leave is). The same permission rule as the shell's (users_may); a
+bowl that is not empty is not removed. Test: as saucier in their home,
+a bowl made and a file removed; in / refused.
 
-## 3. expo.elf: the processes, in a window — DONE v0.60.168
+## 3. scale.elf: a calculator
 
-SYS_PROCS (a list of the processes: pid, name, cook, state, pages) and
-expo.elf showing it as rows, refreshed every second, with a click on a
-row and k to end that process; only the cook's own processes, or any for
-the headchef, as `kill` already decides (the kernel checks, not expo).
-Named for the expediter, who runs the pass. Test: glutton.elf running,
-expo lists it, k ends it; as saucier, the headchef's process is refused.
+A window of buttons (digits, + - x /, =, C) clicked or typed, decimals in
+fixed point (ring 3 has no FPU), the display drawn with the kernel's font.
+Named for the kitchen scale. Test: 12.5 x 4 = 50, 7 / 2 = 3.5, 1 / 0 an
+error, typed and clicked, the display read against the font.
 
-## 4. Settings that stay — DONE v0.60.169
+## 4. Icons on the background
 
-The desktop's background (a choice of a few gradients, from a Kitchen
-menu entry or a small window) saved in the cook's home (.countertop;
-built as `countertop`, no dot, beside the shell's `profile`)
-and read back the next time countertop starts. Test: choose one, Leave,
-countertop again, the background is the chosen one (screendump), and
-another cook's desktop is not.
+The Kitchen menu's programs as icons down the left of the background
+(a drawn glyph and the name under it); a double click opens one as the
+menu does. Windows cover them; a click on the background between them
+does nothing. Test: double click swirl's icon, its window opens.
 
-## 5. Notes from programs on the bar — DONE v0.60.170
+## 5. A calendar under the clock
 
-SYS_NOTE: a program puts a short line on the bar for a few seconds
-(queued if another is showing); oven.elf says "oven: done" there too,
-which matters when its window is minimised. Test: oven minimised, the
-note on the bar at zero (read against the font).
+A click on the clock drops down this month (from the RTC), today
+marked; another click or a click away puts it up. Test: the month's
+first row and today's mark read back against the font, with the date
+the RTC gives QEMU.
 
 ## 6. Doom at the framebuffer's own resolution — DEFERRED
 
