@@ -14,5 +14,10 @@ void mouse_get(int *x, int *y, int *buttons);
  * (v0.60.140): what the desktop draws its pointer at. */
 void mouse_get_px(int *x, int *y, int *buttons);
 
+/* How many times the left button has gone down (counted in the IRQ), and
+ * the ticks of the last two presses (v0.60.145): a click is the count
+ * moving, a double click two presses close together. */
+uint32_t mouse_presses(uint32_t *last, uint32_t *prev);
+
 /* Packets accepted, and packets dropped because the stream had slipped. */
 void mouse_stats(uint32_t *moves, uint32_t *resyncs);

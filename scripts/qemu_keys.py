@@ -133,6 +133,12 @@ for item in SCRIPT:
         cmd(item[4:])
         time.sleep(0.5)
         continue
+    # MONQ:<command> is MON: with a tenth of a second after it, not half,
+    # for a double click (v0.60.145).
+    if item.startswith('MONQ:'):
+        cmd(item[5:])
+        time.sleep(0.1)
+        continue
     if log_path: typed_at = log_size()
     typed_line = item.encode('latin-1', 'replace')
     for ch in item:

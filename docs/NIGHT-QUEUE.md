@@ -90,11 +90,14 @@ Along the bottom: a button that opens a terminal, one per open window
 (click to raise, or to bring back a minimised one), and the clock. A
 minimise box on each window. Test by screendump after clicks.
 
-## 6. A files window
+## 6. A files window — DONE v0.60.145
 
 A bowl's entries (fat_ls), bowls first; a double click enters a bowl (and ..
 goes up), on a file opens a terminal window with it in pour (or jot for a
 text file). Test by screendump and by what the opened terminal shows.
+
+Built with pour for every file: jot in a terminal window is untested, and
+a pour of a .elf prints its bytes (a "cook it" for .elf is a later choice).
 
 ## 7. Windows for ring-3 programs
 
@@ -117,3 +120,9 @@ Skipped at the user's request: OS work only.
   peek.elf's "LS f SIZE NAME" serial markers (written for ls-test) appear
   under its listing there. Cosmetic; worth deciding whether peek should
   write them only when stderr is the serial log.
+- v0.60.145: the first check.sh run failed in the gate's boot segment
+  only ("[boot] could not drive the QEMU monitor", and every check after
+  it), with load near 22 and the whole run at 297 s, not ~180. The gate
+  alone passed (107 ok), and so did check.sh again (176 s). One failure
+  in three runs; if it comes back, look at qemu_keys' connect and login
+  waits under load before anything else.

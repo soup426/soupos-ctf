@@ -41,6 +41,12 @@
  * focused one, raises any other. A window's minimise box hides it; hidden
  * windows are not drawn, not hit, and not the focus. Windows live between
  * the two bars.
+ *
+ * Files (v0.60.145, step 6). A window listing a bowl: its path, then ..,
+ * its bowls and its files (with their sizes). A click selects, a double
+ * click (or Enter, with the arrows to move) opens: a bowl in the same
+ * window, a file in a new terminal with `pour PATH` typed into it, so what
+ * may be read is the shell's to decide, as it always is.
  */
 #include "countertop.h"
 #include "fb.h"
@@ -56,6 +62,9 @@
 #include "heap.h"
 #include "proc.h"
 #include "str.h"
+#include "fat.h"
+#include "users.h"
+#include "keyboard.h"
 
 #define MAX_H     1200
 #define BAR_H     24
@@ -72,6 +81,8 @@
 #define BTN_RGB    0x003A3F48u
 #define TASK_H     28                    /* the taskbar, along the bottom (v0.60.144) */
 #define TBTN_W     150
+#define BTN_FILES_X (BTN_LEAVE_X + BTN_LEAVE_W + 10)
+#define BTN_FILES_W (8 * 7)
 #define LAUNCH_W   (8 * 10 + 16)
 
 static uint32_t *row[MAX_H];
@@ -156,10 +167,12 @@ typedef struct {
     wterm_t *term;                      /* a terminal window's cells, or 0 */
     void *sess;                         /* and the shell session on them */
     int min;                            /* minimised: on the taskbar only */
+    struct files *files;                /* a files window's listing, or 0 */
 } win_t;
 static win_t win[MAX_WIN];
 static int order[MAX_WIN], nwin;                 /* z-order, bottom first */
 static int drag = -1, drag_dx, drag_dy, drag_ox, drag_oy, last_btn;
+static uint32_t presses_seen;                    /* mouse_presses() when last looked */
 
 static void scopy(char *d, const char *s, int n) { int i = 0; for (; s[i] && i < n - 1; i++) d[i] = s[i]; d[i] = '\0'; }
 static int  topmost(void) {                      /* the focus: the top window not minimised */
@@ -283,6 +296,63 @@ static void draw_cells(wterm_t *w, int x, int y, int focused) {
     dirty(x, y, TCOLS * 8, TROWS * 16);
 }
 
+/* ---- files windows (v0.60.145) ----------------------------------------- */
+
+#define FMAX   256
+#define FROW_H 18
+#define DCLICK 60                        /* ticks between a double click's presses */
+struct files {
+    char path[FAT_PATH_MAX];
+    int n, sel, top;
+    char name[FMAX][FAT_LFN_MAX];
+    uint8_t dir[FMAX];
+    uint32_t size[FMAX];
+};
+static void files_load(struct files *f) {
+    f->n = 0; f->sel = 0; f->top = 0;
+    if (f->path[1]) { strcpy(f->name[0], ".."); f->dir[0] = 1; f->size[0] = 0; f->n = 1; }
+    if (!users_may(f->path, 'r')) return;
+    static fat_entry_t e[FAT_LS_MAX];
+    for (int pass = 0; pass < 2; pass++)            /* bowls, then files */
+        for (int skip = 0, got; (got = fat_ls_from(f->path, e, FAT_LS_MAX, skip)) > 0; skip += got) {
+            for (int i = 0; i < got && f->n < FMAX; i++) {
+                int d = (e[i].attr & FAT_ATTR_DIR) != 0;
+                const char *nm = fat_display_name(&e[i]);
+                if (d != !pass || nm[0] == '.') continue;
+                strncpy(f->name[f->n], nm, FAT_LFN_MAX - 1); f->name[f->n][FAT_LFN_MAX - 1] = '\0';
+                f->dir[f->n] = (uint8_t)d; f->size[f->n] = e[i].size; f->n++;
+            }
+            if (got < FAT_LS_MAX) break;
+        }
+}
+static void put_size(char *o, uint32_t v) {
+    char d[12]; int k = 0;
+    do { d[k++] = (char)('0' + v % 10); v /= 10; } while (v);
+    int n = 0; while (k) o[n++] = d[--k];
+    o[n] = '\0';
+}
+static int files_rows(const win_t *w) { return (w->h - 2 * BORDER - TITLE_H - 28) / FROW_H; }
+static void draw_files(const win_t *w, int focused) {
+    struct files *f = w->files;
+    int x = w->x + BORDER, y = w->y + BORDER + TITLE_H, wd = w->w - 2 * BORDER;
+    fill(x, y, wd, w->h - 2 * BORDER - TITLE_H, 0x00F7F7F2u);
+    fill(x, y, wd, 24, 0x00E2E4E8u);                 /* the path */
+    text(x + 8, y + 4, f->path, 0x00202020u);
+    int rows = files_rows(w);
+    for (int i = 0; i < rows && f->top + i < f->n; i++) {
+        int k = f->top + i, ry = y + 28 + i * FROW_H;
+        int sel = k == f->sel;
+        if (sel) fill(x + 2, ry, wd - 4, FROW_H, focused ? FOCUS_RGB : 0x00C8CCD2u);
+        uint32_t fg = sel && focused ? TEXT_RGB : f->dir[k] ? 0x001E4E8Cu : 0x00202020u;
+        char line[FAT_LFN_MAX + 2]; int n = 0;
+        for (const char *c = f->name[k]; *c && n < FAT_LFN_MAX - 1; c++) line[n++] = *c;
+        if (f->dir[k] && strcmp(f->name[k], "..")) line[n++] = '/';
+        line[n] = '\0';
+        text(x + 10, ry + 1, line, fg);
+        if (!f->dir[k]) { char sz[12]; put_size(sz, f->size[k]); text(x + wd - 10 - 8 * (int)strlen(sz), ry + 1, sz, fg); }
+    }
+}
+
 static void draw_window(int k) {
     win_t *w = &win[k];
     int focused = k == topmost();
@@ -299,6 +369,7 @@ static void draw_window(int k) {
     fill(bx - 4 - CLOSE_SZ + 4, by + CLOSE_SZ - 5, CLOSE_SZ - 8, 2, TEXT_RGB);
     int top = w->y + BORDER + TITLE_H;
     if (w->term) { draw_cells(w->term, w->x + BORDER, top, focused); return; }
+    if (w->files) { draw_files(w, focused); return; }
     fill(w->x + BORDER, top, w->w - 2 * BORDER, w->h - 2 * BORDER - TITLE_H, w->body);
     for (int i = 0; i < 8 && w->lines[i]; i++) text(w->x + BORDER + 10, top + 8 + i * 18, w->lines[i], 0x00202020u);
 }
@@ -319,7 +390,7 @@ static void repaint_win(int k) { repaint(win[k].x, win[k].y, win[k].w, win[k].h)
 static int open_window(int x, int y, int w, int h, const char *title, uint32_t body, const char *const *lines) {
     for (int k = 0; k < MAX_WIN; k++) if (!win[k].used) {
         win_t *v = &win[k];
-        v->used = 1; v->x = x; v->y = y; v->w = w; v->h = h; v->body = body; v->term = 0; v->sess = 0; v->min = 0;
+        v->used = 1; v->x = x; v->y = y; v->w = w; v->h = h; v->body = body; v->term = 0; v->sess = 0; v->min = 0; v->files = 0;
         scopy(v->title, title, sizeof(v->title));
         for (int i = 0; i < 8; i++) v->lines[i] = lines && lines[i] ? lines[i] : 0;
         int was = topmost();
@@ -352,6 +423,58 @@ static int open_terminal(void) {
     return k;
 }
 
+static int open_files(const char *path) {
+    struct files *f = kmalloc(sizeof(struct files));
+    if (!f) return -1;
+    memset(f, 0, sizeof(*f));
+    strncpy(f->path, path, FAT_PATH_MAX - 1);
+    files_load(f);
+    static const char *const none[] = { 0 };
+    int k = open_window(W - 420, 60, 380, 460, "Files", 0, none);
+    if (k < 0) { kfree(f); return -1; }
+    win[k].files = f;
+    klog("[countertop] open Files at %s\n", f->path);
+    repaint_win(k);
+    return k;
+}
+/* Open what row r of files window k names: a bowl here, a file in a new
+ * terminal with `pour PATH` typed into it. */
+static void files_open(int k, int r) {
+    struct files *f = win[k].files;
+    if (r < 0 || r >= f->n) return;
+    char p[FAT_PATH_MAX];
+    if (!strcmp(f->name[r], "..")) {
+        strcpy(p, f->path);
+        int l = (int)strlen(p);
+        while (l > 1 && p[l - 1] != '/') l--;
+        p[l > 1 ? l - 1 : 1] = '\0';
+    } else {
+        int l = (int)strlen(f->path);
+        if (l + 1 + (int)strlen(f->name[r]) >= FAT_PATH_MAX) return;
+        strcpy(p, f->path);
+        if (l > 1) p[l++] = '/';
+        strcpy(p + l, f->name[r]);
+    }
+    if (f->dir[r]) {
+        strcpy(f->path, p);
+        files_load(f);
+        klog("[countertop] files in %s, %d entries\n", f->path, f->n);
+        repaint_win(k);
+        return;
+    }
+    int t = open_terminal();
+    if (t < 0) return;
+    const char *c = "pour '";                          /* quoted: names have spaces */
+    while (*c) wt_key(win[t].term, *c++);
+    for (c = p; *c; c++) {
+        if (*c == '\'') { wt_key(win[t].term, '\''); wt_key(win[t].term, '\\'); wt_key(win[t].term, '\''); }
+        wt_key(win[t].term, *c);
+    }
+    wt_key(win[t].term, '\'');
+    wt_key(win[t].term, '\n');
+    klog("[countertop] pour %s\n", p);
+}
+
 static void raise_window(int k) {
     int at = -1;
     for (int i = 0; i < nwin; i++) if (order[i] == k) at = i;
@@ -374,6 +497,7 @@ static void reap_dying(void) {
         }
 }
 static void close_window(int k) {
+    if (win[k].files) { kfree(win[k].files); win[k].files = 0; }
     if (win[k].term) {
         win[k].term->closed = 1;                       /* its shell's getc gives -1 */
         shell_session_hangup(win[k].sess);             /* its programs die with it */
@@ -454,15 +578,18 @@ static void restore_window(int k) {
 
 static int leave_asked;
 static uint32_t task_sig;                         /* the windows as the taskbar last showed them */
-static void pointer_buttons(int px, int py, int btn) {
-    int left = btn & 1, was = last_btn & 1;
+/* np: the left presses since the last look (the IRQ counts them, so a click
+ * shorter than the loop's nap still counts, v0.60.145). */
+static void pointer_buttons(int px, int py, int btn, int np) {
+    int left = btn & 1;
     last_btn = btn;
-    if (left && !was && py < BAR_H) {
+    if (np && py < BAR_H) {
         if (px >= BTN_TERM_X && px < BTN_TERM_X + BTN_TERM_W) open_terminal();
         else if (px >= BTN_LEAVE_X && px < BTN_LEAVE_X + BTN_LEAVE_W) leave_asked = 1;
+        else if (px >= BTN_FILES_X && px < BTN_FILES_X + BTN_FILES_W) open_files("/");
         return;
     }
-    if (left && !was && py >= H - TASK_H) {
+    if (np && py >= H - TASK_H) {
         int k = taskbar_hit(px, py);
         if (k == -2) open_terminal();
         else if (k >= 0 && win[k].min) restore_window(k);
@@ -470,7 +597,7 @@ static void pointer_buttons(int px, int py, int btn) {
         else if (k >= 0) raise_window(k);
         return;
     }
-    if (left && !was) {
+    if (np) {
         int k = window_at(px, py);
         if (k < 0) return;
         win_t *w = &win[k];
@@ -478,6 +605,19 @@ static void pointer_buttons(int px, int py, int btn) {
         if (px >= bx && px < bx + CLOSE_SZ && py >= by && py < by + CLOSE_SZ) { close_window(k); return; }
         if (px >= bx - 4 - CLOSE_SZ && px < bx - 4 && py >= by && py < by + CLOSE_SZ) { minimise_window(k); return; }
         raise_window(k);
+        if (w->files && py >= w->y + BORDER + TITLE_H + 28) {   /* a row: select, twice quickly: open */
+            static int last_k = -1, last_r = -1;
+            int r = w->files->top + (py - (w->y + BORDER + TITLE_H + 28)) / FROW_H;
+            if (r < w->files->n) {
+                uint32_t now, before;
+                mouse_presses(&now, &before);               /* timed in the IRQ */
+                int twice = np >= 2 || (last_k == k && last_r == r && now - before < DCLICK);
+                w->files->sel = r; repaint_win(k);
+                last_k = k; last_r = r;
+                if (twice) { last_k = -1; files_open(k, r); }
+            }
+            return;
+        }
         if (py < w->y + BORDER + TITLE_H) { drag = k; drag_dx = px - w->x; drag_dy = py - w->y; drag_ox = w->x; drag_oy = w->y; }
         return;
     }
@@ -525,6 +665,7 @@ static void bar(void) {
     text(10 + 8 * 7, (BAR_H - 16) / 2, "countertop", DIM_RGB);
     button(BTN_TERM_X, BTN_TERM_W, "Terminal");
     button(BTN_LEAVE_X, BTN_LEAVE_W, "Leave");
+    button(BTN_FILES_X, BTN_FILES_W, "Files");
     clock_sec = -1;
     bar_clock();
 }
@@ -588,6 +729,7 @@ int countertop_run(int (*avail)(void), int (*getch)(void), int uid) {
     int b;
     mouse_get_px(&ptr_x, &ptr_y, &b);
     last_btn = b;
+    presses_seen = mouse_presses(0, 0);
     flush();
     klog("[countertop] up %dx%d, %d pages for the back buffer\n", W, H, H);
     for (;;) {
@@ -598,7 +740,10 @@ int countertop_run(int (*avail)(void), int (*getch)(void), int uid) {
             ptr_x = px; ptr_y = py;
             dirty(ptr_x, ptr_y, ARROW_W, ARROW_H);
         }
-        if (b != last_btn || drag >= 0) pointer_buttons(px, py, b);
+        uint32_t pc = mouse_presses(0, 0);
+        int np = (int)(pc - presses_seen);
+        presses_seen = pc;
+        if (np || b != last_btn || drag >= 0) pointer_buttons(px, py, b, np);
         bar_clock();
         for (int i = 0; i < nwin; i++) {             /* terminals: drawn again, or gone */
             int k = order[i];
@@ -610,6 +755,18 @@ int countertop_run(int (*avail)(void), int (*getch)(void), int uid) {
         while (avail()) {                            /* keys: the focused terminal's */
             int c = getch(), k = topmost();
             if (k >= 0 && win[k].term) wt_key(win[k].term, c);
+            else if (k >= 0 && win[k].files && (c == KEY_UP || c == KEY_DOWN || c == '\n')) {
+                struct files *f = win[k].files;
+                if (c == '\n') files_open(k, f->sel);
+                else {
+                    if (c == KEY_UP && f->sel > 0) f->sel--;
+                    if (c == KEY_DOWN && f->sel < f->n - 1) f->sel++;
+                    int rows = files_rows(&win[k]);
+                    if (f->sel < f->top) f->top = f->sel;
+                    if (f->sel >= f->top + rows) f->top = f->sel - rows + 1;
+                    repaint_win(k);
+                }
+            }
             else if (c == 27) leave_asked = 1;
         }
         if (leave_asked) break;

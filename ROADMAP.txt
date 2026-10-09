@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.144
+Current version: v0.60.145
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,26 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.145 (2026-10-09)  — COUNTERTOP: A FILES WINDOW (STEP 6)
+  - The bar's Files button opens a window on /: its path, then .., its
+    bowls (with a /) and its files (with their sizes). A click selects a
+    row, the arrows move and scroll, and a double click or Enter opens it:
+    a bowl in the same window, a file in a new terminal with
+    `pour 'PATH'` typed into it (quoted, so names with spaces work). What
+    may be listed is users_may's to say; what may be read, the shell's.
+  - Clicks are counted in the mouse IRQ (mouse_presses: a count and the
+    ticks of the last two presses). The desktop loop naps 15 ms (two
+    ticks) and saw only the button's state when it woke, so a click
+    shorter than that was lost: a press and release a millisecond apart on the Terminal button
+    opened nothing 3 times out of 3, and opens it 3 of 3 now. A double
+    click is two presses under 0.6 s apart, timed by the IRQ.
+  - qemu_keys.py has MONQ: (a monitor command with 0.1 s after it).
+    scripts/ctfiles-test.sh: the listing, entering etc/ and coming back,
+    pouring HELLO.TXT and "A Long Recipe Name.txt" (scrolled to with the
+    arrows), from the window's rows and the terminals' cells read back
+    against the font; the Files click and one double click are sent in a
+    single monitor write. Six-wide soak: 6 of 6.
 
 v0.60.144 (2026-10-09)  — COUNTERTOP: THE TASKBAR (STEP 5)
   - A taskbar along the bottom: a Terminal launcher, then a button for

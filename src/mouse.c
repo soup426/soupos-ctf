@@ -18,6 +18,7 @@
  */
 #include "mouse.h"
 #include "isr.h"
+#include "timer.h"
 #include "vga.h"
 #include "klog.h"
 #include "fb.h"
@@ -58,6 +59,8 @@ static int      cur_x, cur_y;        /* cell coordinates          */
 static int      px_x, px_y;          /* pixels, a count each (v0.60.140) */
 static int      acc_x, acc_y;        /* leftover raw counts       */
 static int      buttons;
+static volatile uint32_t press_last, press_prev; /* ticks of the last two left presses */
+static volatile uint32_t press_count;             /* and how many there have been */
 static uint32_t moves;               /* packets accepted, for `skewer` */
 static uint32_t resyncs;             /* packets dropped out of frame   */
 
@@ -77,6 +80,16 @@ void mouse_get_px(int *x, int *y, int *btn) {
     if (x)   *x   = px_x;
     if (y)   *y   = px_y;
     if (btn) *btn = buttons;
+}
+/* How many times the left button has gone down, and when the last two were
+ * (v0.60.145). Counted in the interrupt, so a click shorter than a poller's
+ * nap is not lost, and a double click is timed by the presses themselves. */
+uint32_t mouse_presses(uint32_t *last, uint32_t *prev) {
+    uint32_t n, a, b;
+    do { n = press_count; a = press_last; b = press_prev; } while (n != press_count);
+    if (last) *last = a;
+    if (prev) *prev = b;
+    return n;
 }
 void mouse_stats(uint32_t *m, uint32_t *r) {
     if (m) *m = moves;
@@ -123,6 +136,7 @@ static void mouse_irq(registers_t *regs) {
     if (flags & 0x10) dx |= ~0xFF;      /* sign-extend from the flags byte */
     if (flags & 0x20) dy |= ~0xFF;
 
+    if ((flags & 1) && !(buttons & 1)) { press_prev = press_last; press_last = timer_get_ticks(); press_count++; }
     buttons = flags & 0x07;
 
     px_x += dx;
