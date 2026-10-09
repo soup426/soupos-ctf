@@ -67,7 +67,7 @@ bash's $'...': \n \t \r \\ \' \" \a \b \e \f \v \0NNN \xHH, the
 result one word as '...' is, and nothing else expanded inside. In
 commands, assignments, case patterns and [[ ]]. Test against bash.
 
-## 4. slice -c LIST and -s (cut -c, cut -s)
+## 4. slice -c LIST and -s (cut -c, cut -s) — DONE v0.60.127
 
 -c LIST picks characters (bytes) by position, with N, N-M, N- and -M
 ranges as -f's; -s drops lines with no delimiter when -f is given.

@@ -9,10 +9,14 @@
  * commas, and fields come out in the line's order, each once, whatever
  * order the list names them; a line with no delimiter is printed whole;
  * a last line with no newline gets one.
+ *
+ * -c LIST (and -b LIST, the same here: a character is a byte) picks
+ * characters by position with the same lists; -s, with -f, leaves out a
+ * line with no delimiter instead of printing it whole (v0.60.127).
  */
 #include "ulib.h"
 
-#define MAXF 64
+#define MAXF 4096                    /* fields, or characters with -c */
 static char want[MAXF + 1];          /* want[i]: field i (1-based) selected */
 static int  from_open;               /* every field from here on (N-), 0 = none */
 
@@ -52,10 +56,20 @@ static void put(char c) {
     line[len++] = c;
 }
 
+static int chars, only_delimited;    /* -c / -b, -s (v0.60.127) */
+static char outb[1024]; static int on;
 static void emit(char delim) {
+    if (chars) {                      /* the characters at those places, in order */
+        on = 0;
+        for (int i = 0; i < len; i++)
+            if (selected(i + 1)) { outb[on++] = line[i]; if (on == (int)sizeof(outb)) { sys_write(FD_STDOUT, outb, on); on = 0; } }
+        if (on) sys_write(FD_STDOUT, outb, on);
+        sys_write(FD_STDOUT, "\n", 1);
+        return;
+    }
     int has = 0;
     for (int i = 0; i < len; i++) if (line[i] == delim) { has = 1; break; }
-    if (!has) { sys_write(FD_STDOUT, line, len); sys_write(FD_STDOUT, "\n", 1); return; }
+    if (!has) { if (only_delimited) return; sys_write(FD_STDOUT, line, len); sys_write(FD_STDOUT, "\n", 1); return; }
     int field = 1, start = 0, first = 1;
     for (int i = 0; i <= len; i++) {
         if (i < len && line[i] != delim) continue;
@@ -76,18 +90,21 @@ int main(void) {
     int have_list = 0, t = 0;
     while (t < nt && tok[t][0] == '-' && tok[t][1]) {
         char o = tok[t][1];
+        if (o == 's' && !tok[t][2]) { only_delimited = 1; t++; continue; }
         const char *val = tok[t][2] ? tok[t] + 2 : (t + 1 < nt ? tok[t + 1] : 0);
-        if ((o != 'd' && o != 'f') || !val) { print("usage: slice.elf [-d C] -f LIST [file]\n"); return 2; }
+        if ((o != 'd' && o != 'f' && o != 'c' && o != 'b') || !val) { print("usage: slice.elf [-d C] [-s] -f LIST | -c LIST [file]\n"); return 2; }
         if (o == 'd') {
             if (val[0] == 0 || val[1] != 0) { print("slice: the delimiter must be one character\n"); return 2; }
             delim = val[0];
         } else {
-            if (parse_list(val) < 0) { print("slice: bad field list\n"); return 2; }
+            if (have_list) { print("slice: only one of -f, -c, -b\n"); return 2; }
+            if (parse_list(val) < 0) { print("slice: bad list\n"); return 2; }
             have_list = 1;
+            chars = o != 'f';
         }
         t += tok[t][2] ? 1 : 2;
     }
-    if (!have_list) { print("usage: slice.elf [-d C] -f LIST [file]\n"); return 2; }
+    if (!have_list) { print("usage: slice.elf [-d C] [-s] -f LIST | -c LIST [file]\n"); return 2; }
     int fd = FD_STDIN;
     if (t < nt) {
         fd = sys_open(tok[t], O_READ);

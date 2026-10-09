@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.126
+Current version: v0.60.127
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,13 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.127 (2026-10-09)  — SLICE -C, -B AND -S
+  - slice.elf -c LIST (and -b, the same where a character is a byte)
+    picks characters by position with -f's lists (N, N-M, N-, -M, in the
+    line's order, each once); -s with -f leaves out lines with no
+    delimiter, as GNU cut's. Positions and fields up to 4096.
+  - scripts/slicec-test.sh compares 13 cases with GNU cut.
 
 v0.60.126 (2026-10-09)  — $'...' (ANSI-C QUOTING)
   - bash's $'...': \n \t \r \\ \' \" \? \a \b \e \f \v, \NNN octal,
