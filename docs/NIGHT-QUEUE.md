@@ -47,7 +47,7 @@ runs in asks; the user has not seen it.
 
 ---
 
-## 1. Maximise and restore
+## 1. Maximise and restore — DONE v0.60.161
 
 A double click on a title bar fills the space between the bars with that
 window, and another puts it back where and how big it was. Terminal

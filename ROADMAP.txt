@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.160
+Current version: v0.60.161
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,18 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.161 (2026-10-09)  — MAXIMISE AND RESTORE
+  - A double click on a title bar fills the space between the bars with
+    the window; another puts it back where it was, as big as it was. A
+    maximised window cannot be dragged. Files windows show more rows;
+    terminals and programs' windows keep their bodies (80x25 cells, the
+    program's pixels), centred in the bigger frame: body_origin() is now
+    where every drawing, click, drag, wheel and selection finds them.
+  - scripts/ctmax-test.sh: Welcome maximised and restored; a terminal
+    maximised, a command typed there and read back at the centred
+    origin, restored with it intact; screendumps and the log. Six-wide
+    soak 6 of 6.
 
 v0.60.160 (2026-10-09)  — COPY AND PASTE IN TERMINAL WINDOWS
   - A left drag over a terminal window's cells selects them in reading

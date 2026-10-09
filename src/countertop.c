@@ -185,6 +185,7 @@ typedef struct {
     int min;                            /* minimised: on the taskbar only */
     struct files *files;                /* a files window's listing, or 0 */
     int app;                            /* a program's window: its app[] slot, or -1 */
+    int maxed, rx, ry, rw, rh;          /* (v0.60.161) maximised, and where to put it back */
 } win_t;
 static win_t win[MAX_WIN];
 static int order[MAX_WIN], nwin;                 /* z-order, bottom first */
@@ -501,8 +502,10 @@ int countertop_win_close(uint32_t pid, int id) {
     return r;
 }
 
+static void body_origin(const win_t *w, int *bx, int *by);
 static void draw_app(const win_t *w) {                /* within the clip */
-    int x0 = w->x + BORDER, y0 = w->y + BORDER + TITLE_H;
+    int x0, y0;
+    body_origin(w, &x0, &y0);
     mutex_lock(&app_mtx);
     app_t *a = &app[w->app];
     int xa = x0 < cx0 ? cx0 : x0, xb = x0 + a->w > cx1 ? cx1 : x0 + a->w;
@@ -513,6 +516,20 @@ static void draw_app(const win_t *w) {                /* within the clip */
     }
     mutex_unlock(&app_mtx);
     dirty(x0, y0, a->w, a->h);
+}
+
+/* Where a window's body starts (v0.60.161): its corner, unless it is a
+ * terminal or a program's window maximised, whose fixed body then sits
+ * in the middle of the bigger frame. */
+static void body_origin(const win_t *w, int *bx, int *by) {
+    *bx = w->x + BORDER; *by = w->y + BORDER + TITLE_H;
+    int iw = 0, ih = 0;
+    if (w->term) { iw = TCOLS * 8; ih = TROWS * 16; }
+    else if (w->app >= 0) { iw = app[w->app].w; ih = app[w->app].h; }
+    else return;
+    int ew = w->w - 2 * BORDER - iw, eh = w->h - 2 * BORDER - TITLE_H - ih;
+    if (ew > 0) *bx += ew / 2;
+    if (eh > 0) *by += eh / 2;
 }
 
 static void draw_window(int k) {
@@ -529,8 +546,11 @@ static void draw_window(int k) {
     }
     fill(bx - 4 - CLOSE_SZ, by, CLOSE_SZ, CLOSE_SZ, BTN_RGB);   /* the minimise box: a bar along its foot */
     fill(bx - 4 - CLOSE_SZ + 4, by + CLOSE_SZ - 5, CLOSE_SZ - 8, 2, TEXT_RGB);
-    int top = w->y + BORDER + TITLE_H;
-    if (w->term) { draw_cells(w->term, w->x + BORDER, top, focused); return; }
+    int top = w->y + BORDER + TITLE_H, bx0, by0;
+    body_origin(w, &bx0, &by0);
+    if ((w->term || w->app >= 0) && w->maxed)          /* the frame around a fixed body */
+        fill(w->x + BORDER, top, w->w - 2 * BORDER, w->h - 2 * BORDER - TITLE_H, w->term ? 0x00000000u : 0x00303438u);
+    if (w->term) { draw_cells(w->term, bx0, by0, focused); return; }
     if (w->files) { draw_files(w, focused); return; }
     if (w->app >= 0) { draw_app(w); return; }
     fill(w->x + BORDER, top, w->w - 2 * BORDER, w->h - 2 * BORDER - TITLE_H, w->body);
@@ -582,7 +602,7 @@ static void repaint_win(int k) { repaint(win[k].x, win[k].y, win[k].w, win[k].h)
 static int open_window(int x, int y, int w, int h, const char *title, uint32_t body, const char *const *lines) {
     for (int k = 0; k < MAX_WIN; k++) if (!win[k].used) {
         win_t *v = &win[k];
-        v->used = 1; v->x = x; v->y = y; v->w = w; v->h = h; v->body = body; v->term = 0; v->sess = 0; v->min = 0; v->files = 0; v->app = -1;
+        v->used = 1; v->x = x; v->y = y; v->w = w; v->h = h; v->body = body; v->term = 0; v->sess = 0; v->min = 0; v->files = 0; v->app = -1; v->maxed = 0;
         scopy(v->title, title, sizeof(v->title));
         for (int i = 0; i < 8; i++) v->lines[i] = lines && lines[i] ? lines[i] : 0;
         int was = topmost();
@@ -851,6 +871,27 @@ static void restore_window(int k) {
 
 static int leave_asked;
 static uint32_t task_sig;                         /* the windows as the taskbar last showed them */
+/* Maximise and restore (v0.60.161): a double click on a title bar fills
+ * the space between the bars with the window, and another puts it back. */
+static void maximise_window(int k) {
+    win_t *w = &win[k];
+    int ox = w->x, oy = w->y, ow = w->w, oh = w->h;
+    if (!w->maxed) {
+        w->rx = w->x; w->ry = w->y; w->rw = w->w; w->rh = w->h;
+        w->x = 0; w->y = BAR_H; w->w = W; w->h = H - BAR_H - TASK_H; w->maxed = 1;
+    } else {
+        w->x = w->rx; w->y = w->ry; w->w = w->rw; w->h = w->rh; w->maxed = 0;
+    }
+    if (w->files) {                                    /* its rows fit the new height */
+        int rows = files_rows(w);
+        if (w->files->sel >= w->files->top + rows) w->files->top = w->files->sel - rows + 1;
+        if (w->files->top > 0 && w->files->top + rows > w->files->n) w->files->top = w->files->n > rows ? w->files->n - rows : 0;
+    }
+    repaint(ox, oy, ow, oh);
+    repaint_win(k);
+    klog("[countertop] %s %s\n", w->maxed ? "maximise" : "restore", w->title);
+}
+
 /* Copy and paste in terminal windows (v0.60.160). A left drag over a
  * terminal's cells selects them in reading order; letting go copies them
  * (each line's trailing blanks dropped, lines joined by newlines) to the
@@ -859,7 +900,11 @@ static uint32_t task_sig;                         /* the windows as the taskbar 
  * with no drag, or new output, clears the selection. */
 static int sel_win = -1;
 static int cell_at(const win_t *w, int px, int py) {
-    int c = (px - w->x - BORDER) / 8, r = (py - w->y - BORDER - TITLE_H) / 16;
+    int bx, by;
+    body_origin(w, &bx, &by);
+    int c = (px - bx) / 8, r = (py - by) / 16;
+    if (px < bx) c = -1;
+    if (py < by) r = -1;
     if (c < 0) c = 0;
     if (c >= TCOLS) c = TCOLS - 1;
     if (r < 0) r = 0;
@@ -913,7 +958,9 @@ static void pointer_buttons(int px, int py, int btn, int np) {
     }
     if (app_drag >= 0) {                               /* a program's body, the button held */
         win_t *w = &win[app_drag];
-        int x = px - (w->x + BORDER), y = py - (w->y + BORDER + TITLE_H);
+        int bx, by;
+        body_origin(w, &bx, &by);
+        int x = px - bx, y = py - by;
         if (x != app_lx || y != app_ly) { app_push(w->app, WEV_MOVE, 0, x, y, (unsigned)btn); app_lx = x; app_ly = y; }
         if (!left || np) { app_push(w->app, WEV_UP, 0, x, y, (unsigned)btn); app_drag = -1; }
         if (!np) return;
@@ -969,7 +1016,9 @@ static void pointer_buttons(int px, int py, int btn, int np) {
             return;
         }
         if (w->app >= 0 && py >= w->y + BORDER + TITLE_H) {      /* the body: the program's */
-            app_drag = k; app_lx = px - (w->x + BORDER); app_ly = py - (w->y + BORDER + TITLE_H);
+            int ax, ay;
+            body_origin(w, &ax, &ay);
+            app_drag = k; app_lx = px - ax; app_ly = py - ay;
             app_push(w->app, WEV_DOWN, 0, app_lx, app_ly, (unsigned)(btn | 1));
             return;
         }
@@ -986,7 +1035,14 @@ static void pointer_buttons(int px, int py, int btn, int np) {
             }
             return;
         }
-        if (py < w->y + BORDER + TITLE_H) { drag = k; drag_dx = px - w->x; drag_dy = py - w->y; drag_ox = w->x; drag_oy = w->y; }
+        if (py < w->y + BORDER + TITLE_H) {               /* the title bar: drag, or twice: maximise */
+            static int last_tk = -1;
+            uint32_t now, before;
+            mouse_presses(&now, &before);
+            if (np >= 2 || (last_tk == k && now - before < DCLICK)) { last_tk = -1; maximise_window(k); return; }
+            last_tk = k;
+            if (!w->maxed) { drag = k; drag_dx = px - w->x; drag_dy = py - w->y; drag_ox = w->x; drag_oy = w->y; }
+        }
         return;
     }
     if (left && drag >= 0) {
@@ -1127,7 +1183,9 @@ int countertop_run(int (*avail)(void), int (*getch)(void), int uid) {
         if (dw) {                                    /* the wheel: a files window under the pointer scrolls */
             int k = window_at(px, py);
             if (k >= 0 && win[k].app >= 0 && py >= win[k].y + BORDER + TITLE_H) {   /* a program's: its event (v0.60.157) */
-                app_push(win[k].app, WEV_WHEEL, (unsigned)dw, px - (win[k].x + BORDER), py - (win[k].y + BORDER + TITLE_H), 0);
+                int bx, by;
+                body_origin(&win[k], &bx, &by);
+                app_push(win[k].app, WEV_WHEEL, (unsigned)dw, px - bx, py - by, 0);
             } else if (k >= 0 && win[k].files) {
                 struct files *f = win[k].files;
                 int rows = files_rows(&win[k]), most = f->n > rows ? f->n - rows : 0;
