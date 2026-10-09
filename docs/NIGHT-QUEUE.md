@@ -53,7 +53,7 @@ with bash.
 for, while, until, case or { asks for more lines with a > prompt until it
 closes, as sh, then runs the whole; Ctrl-C drops it. Test by typing.
 
-## 4. smoke 'CMD' SIGNAL... (trap)
+## 4. smoke 'CMD' SIGNAL... (trap) — DONE v0.60.82
 
 sh's trap under a kitchen name (the smoke alarm): EXIT runs CMD when a
 script (or a clockout) ends, INT when Ctrl-C stops a script; `smoke ''

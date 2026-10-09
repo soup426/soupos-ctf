@@ -81,6 +81,8 @@ typedef struct {
     uint8_t vhand[VARS_MAX];     /* handed to programs (`hand`, v0.60.26) */
     uint8_t vseal[VARS_MAX];     /* sealed: sh's readonly (`seal`, v0.60.76) */
     int     optpos, optind_seen; /* pluck's place inside a -abc, and the OPTIND it last wrote (v0.60.77) */
+    char    trap_cmd[2][INPUT_MAX]; /* smoke (trap): EXIT, INT (v0.60.82) */
+    uint8_t trap_set[2];         /* 0 none, 1 a command, 2 ignored */
     char    vpend[8][16];        /* handed while unset: handed once set    */
     int     nvars, npend;
     char    parg[9][64];         /* a script's $1..$9 (v0.60.2)            */
@@ -884,6 +886,7 @@ static void cmd_menu(void) {
         {0, "    seal NAME[=value]  - a variable nothing may change (sh's readonly)"},
         {0, "    pluck OPTS NAME    - the next -x option of $1.. (sh's getopts)"},
         {0, "    taste EXPR, [ EXPR ] - a condition: -f -d -e -z -n = != -eq -lt ... (sh's test)"},
+        {0, "    smoke 'CMD' EXIT|INT - run CMD when a script ends or is Ctrl-C'd (sh's trap)"},
         {0, "    ! command          - run it and turn its status round"},
         {0, "    exit [N]           - leave a script (at the prompt, clockout)"},
         {0, "    kill <id>          - stop a background task"},
@@ -3202,8 +3205,70 @@ static void cmd_roster(void) {
     }
 }
 
+/* smoke 'CMD' SIG... (v0.60.82): sh's trap, under the smoke alarm's
+ * name, for EXIT (or 0) and INT (SIGINT, 2). EXIT runs CMD when a follow
+ * script ends, however it ends, or at clockout for one set at the prompt;
+ * INT runs CMD when Ctrl-C stops a command in a script, which then goes
+ * on with its next line instead of ending. '' ignores INT (the script goes
+ * on, saying nothing); - or no command resets. Bare smoke lists them as
+ * trap does. A script starts without its caller's (ignored ones stay
+ * ignored, as sh's) and gives them back when it ends. */
+static int smoke_sig(const char *w) {
+    if (str_eq(w, "EXIT") || str_eq(w, "0")) return 0;
+    if (str_eq(w, "INT") || str_eq(w, "SIGINT") || str_eq(w, "2")) return 1;
+    return -1;
+}
+static void run_line(const char *line);
+static void smoke_exit(void) {                 /* the EXIT one, once, $? kept */
+    shell_t *me = cur_shell();
+    if (me->trap_set[0] != 1) return;
+    char cmd[INPUT_MAX];
+    strcpy(cmd, me->trap_cmd[0]);
+    me->trap_set[0] = 0;
+    int st = me->last_status, q = me->quit;
+    me->quit = 0;
+    run_line(cmd);
+    if (!me->quit) me->last_status = st;       /* an exit in it sets the status */
+    me->quit = q;
+}
+static void cmd_smoke(const char *args) {
+    shell_t *me = cur_shell();
+    me->last_status = 0;
+    char w[INPUT_MAX];
+    const char *a = first_word(args, w, sizeof(w));
+    while (*args == ' ') args++;
+    if (!*args) {
+        static const char *const names[2] = { "EXIT", "SIGINT" };
+        for (int k = 0; k < 2; k++)
+            if (me->trap_set[k]) t_printf("smoke -- '%s' %s\n", me->trap_set[k] == 1 ? me->trap_cmd[k] : "", names[k]);
+        return;
+    }
+    char action[INPUT_MAX]; int reset = 0;
+    strcpy(action, w);
+    if (str_eq(w, "-")) reset = 1;
+    else {
+        while (*a == ' ') a++;
+        if (!*a && smoke_sig(w) >= 0) { reset = 1; a = args; }   /* smoke SIG: reset it */
+    }
+    if (str_eq(w, "--")) a = first_word(a, action, sizeof(action));
+    int bad = 0;
+    while (*a) {
+        char sig[32];
+        a = first_word(a, sig, sizeof(sig));
+        if (!sig[0]) break;
+        int k = smoke_sig(sig);
+        if (k < 0) { t_printf("  smoke: %s: not a signal smoke knows (EXIT, INT)\n", sig); bad = 1; continue; }
+        if (reset) me->trap_set[k] = 0;
+        else if (!action[0]) me->trap_set[k] = 2;
+        else { strncpy(me->trap_cmd[k], action, INPUT_MAX - 1); me->trap_cmd[k][INPUT_MAX - 1] = '\0'; me->trap_set[k] = 1; }
+    }
+    me->last_status = bad;
+}
+
 static void hist_save(void);    /* with the history */
 static void cmd_clockout(void) {
+    smoke_exit();                              /* the prompt's EXIT smoke (v0.60.82) */
+    cur_shell()->trap_set[0] = cur_shell()->trap_set[1] = 0;
     hist_save();                               /* the shift's leftovers, kept */
     if (cur_shell() != &the_shell) {           /* a session: clocking out leaves */
         t_printf("  %s clocks out. Goodbye.\n", users_current_name());
@@ -4674,7 +4739,7 @@ static const char *const cmd_names[] = {
     "takeout", "bgclock", "yieldbg", "spinbg", "sleeptest", "vfstest",
     "dmesg", "pwd", "cd", "mkbowl", "rmbowl", "bowltest",
     "whoami", "roster", "clockout", "hire", "fire", "perms", "secret",
-    "break", "continue", "return", "exit", "inspect", "seal", "pluck", "taste", "[",
+    "break", "continue", "return", "exit", "inspect", "seal", "pluck", "taste", "[", "smoke",
     "preempttest", "vmtest", "vgastress", "fatstress",
 };
 #define CMD_COUNT  (int)(sizeof(cmd_names) / sizeof(cmd_names[0]))
@@ -4919,6 +4984,7 @@ static void dispatch(const char *buf) {
     else if (str_eq(p, "inspect") || str_startswith(p, "inspect ")) cmd_inspect(p + 7);
     else if (str_eq(p, "seal") || str_startswith(p, "seal ")) cmd_seal(p + 4);
     else if (str_eq(p, "pluck") || str_startswith(p, "pluck ")) cmd_pluck(p + 5);
+    else if (str_eq(p, "smoke") || str_startswith(p, "smoke ")) cmd_smoke(p + 5);
     else if (str_eq(p, "taste") || str_startswith(p, "taste ")) cmd_taste(p + 5, 0);
     else if (str_eq(p, "[") || str_startswith(p, "[ ")) cmd_taste(p + 1, 1);
     else if (str_eq(p, "break") || str_startswith(p, "break ")) cmd_break(p + 5, 0);
@@ -7762,6 +7828,11 @@ static void cmd_run(const char *args) {
     int had_optind = ow != 0, optpos_was = me->optpos, seen_was = me->optind_seen;
     if (ow) { strncpy(optind_was, ow, sizeof(optind_was) - 1); optind_was[sizeof(optind_was) - 1] = '\0'; }
     set_var_quiet("OPTIND", "1"); me->optpos = 1; me->optind_seen = 1;
+    /* smoke: the script's own, ignored ones kept (v0.60.82) */
+    uint8_t trap_was[2] = { me->trap_set[0], me->trap_set[1] };
+    char *trap_cmd_was = kmalloc(sizeof(me->trap_cmd));
+    if (trap_cmd_was) memcpy(trap_cmd_was, me->trap_cmd, sizeof(me->trap_cmd));
+    for (int k = 0; k < 2; k++) if (me->trap_set[k] == 1) me->trap_set[k] = 0;
     cur_shell()->last_status = 0;
     uint32_t i = 0;
     while (i < size && !cur_shell()->exiting && !me->quit) {
@@ -7828,12 +7899,21 @@ static void cmd_run(const char *args) {
             run_line(l);
             if (pending_here) { kfree(pending_here); pending_here = 0; }   /* not a cook line: unused */
         }
-        if (interrupted()) { cur_shell()->last_status = 130; break; }   /* Ctrl-C ends a script (v0.60.1) */
+        if (interrupted()) {                   /* Ctrl-C ends a script (v0.60.1) */
+            if (me->trap_set[1] && me->term) {  /* ... unless smoke catches it (v0.60.82) */
+                intr_mark = me->term->intr;
+                if (me->trap_set[1] == 1) { char tc[INPUT_MAX]; strcpy(tc, me->trap_cmd[1]); run_line(tc); }
+                me->last_status = 130;
+            } else { cur_shell()->last_status = 130; break; }
+        }
         i = next;
     }
     depth--;
     me->scripts--;
     me->errexit = errexit_was; me->in_cond = cond_was;
+    smoke_exit();                               /* the script's EXIT smoke, however it ended */
+    me->trap_set[0] = trap_was[0]; me->trap_set[1] = trap_was[1];
+    if (trap_cmd_was) { memcpy(me->trap_cmd, trap_cmd_was, sizeof(me->trap_cmd)); kfree(trap_cmd_was); }
     if (had_optind) set_var_quiet("OPTIND", optind_was); else cmd_unset("OPTIND");
     me->optpos = optpos_was; me->optind_seen = seen_was;
     me->quit = 0;                               /* exit ends this script, not its caller */

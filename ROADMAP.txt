@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.81
+Current version: v0.60.82
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,27 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.82 (2026-10-09)  — SMOKE (TRAP)
+  - `smoke 'CMD' SIG...` is sh's trap under the smoke alarm's name, for
+    EXIT (0) and INT (SIGINT, 2). EXIT runs CMD when a follow script ends,
+    however it ends (exit N keeps N), or at clockout for one set at the
+    prompt; INT runs CMD when Ctrl-C stops a command in a script, which
+    goes on with its next line instead of ending. '' ignores INT, - or no
+    command resets, bare smoke lists them as trap does. A script starts
+    without its caller's (ignored ones stay ignored) and gives them back.
+  - Not here: other signals, and INT at the prompt itself.
+  - scripts/trap-test.sh runs four scripts against bash's trap, and
+    soupOS's own: a caller's EXIT, INT on a typed Ctrl-C, clockout.
+  - Found when its first draft was named smoke-test.sh and wrote over the
+    gate: two earlier new tests had done the same to old ones. v0.60.65's
+    subst-test.sh replaced the $(COMMAND) test of v0.60.3, and v0.60.58's
+    random-test.sh the entropy-pool test across boots; check.sh then ran
+    the new one twice and the old one not at all. Both old tests are back
+    (subst-test waits for the prompt now, not a fixed 8 s, which a loaded
+    full check outran), the new ones are paramsub-test.sh and varrandom-test.sh,
+    and lint-test.sh now fails when check.sh names a script twice or names
+    one that is not there.
 
 v0.60.81 (2026-10-09)  — THE PROMPT WAITS FOR THE REST
   - A typed line that leaves an if, for, while, until, case, { or a
@@ -200,7 +221,8 @@ v0.60.65 (2026-10-08)  — ${NAME/PAT/REP} AND ${NAME:OFF:LEN}
   - ${NAME:off} and ${NAME:off:len} slice it; both are arithmetic, so n,
     $n and 2+1 work; a negative offset (written `: -2` or `:(-2)`) counts
     from the end, and so does a negative length; past the end is empty.
-  - scripts/subst-test.sh compares twelve lines with bash.
+  - scripts/paramsub-test.sh (named subst-test.sh until v0.60.82)
+    compares twelve lines with bash.
 
 v0.60.64 (2026-10-08)  — ${NAME#PAT} AND ${NAME%PAT}
   - ${NAME#pat} and ${NAME##pat} take the shortest or longest match of a
@@ -268,7 +290,7 @@ v0.60.58 (2026-10-08)  — $RANDOM
   - $RANDOM, ${RANDOM} and RANDOM in arithmetic give a number from 0 to
     32767, new at each expansion, from the kernel's entropy pool. Assigning
     RANDOM does not seed it, unlike bash: there is nothing to seed.
-  - scripts/random-test.sh draws a hundred: all in range, at least 95
+  - scripts/varrandom-test.sh (random-test.sh until v0.60.82) draws a hundred: all in range, at least 95
     distinct (a hundred from 32768 repeat by chance about one run in
     seven, so the queue's "no repeats" would have been a flake), and all
     six faces of $((RANDOM % 6)).
