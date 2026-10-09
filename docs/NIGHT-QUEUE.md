@@ -73,7 +73,7 @@ commands, assignments, case patterns and [[ ]]. Test against bash.
 ranges as -f's; -s drops lines with no delimiter when -f is given.
 Compare with GNU cut.
 
-## 5. skim -c N, dregs -c N, dregs -n +N, skim -n -N
+## 5. skim -c N, dregs -c N, dregs -n +N, skim -n -N — DONE v0.60.128
 
 head and tail's byte counts, tail's "from line N on", and head's "all but
 the last N". Compare with GNU head and tail, binary input included.

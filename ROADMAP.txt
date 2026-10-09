@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.127
+Current version: v0.60.128
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,15 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.128 (2026-10-09)  — SKIM AND DREGS: BYTES, -N AND +N
+  - skim.elf -c N (the first N bytes), -n -N and -c -N (all but the last
+    N lines or bytes, read whole first); dregs.elf -c N (the last N bytes,
+    keeping no more than that), -n +N and -c +N (from line or byte N on,
+    streamed), as GNU head and tail.
+  - scripts/skimdregs-test.sh compares 24 cases and 3 through pipes with
+    GNU head and tail, byte for byte. (Written first over the existing
+    headtail-test.sh by mistake; restored from git before the commit.)
 
 v0.60.127 (2026-10-09)  — SLICE -C, -B AND -S
   - slice.elf -c LIST (and -b, the same where a character is a byte)
