@@ -6718,11 +6718,84 @@ static int prefix_assigns(const char *ex) {
 }
 
 /* Run one command: expand it, then it is an assignment or a dispatch. */
+/* > F, >> F, < F on a builtin's or a function's line (v0.60.94): it runs
+ * as { cmd ; } > F, which the shell already knows. Taken from the line as
+ * typed, wherever they sit, outside quotes, $( ), $(( )) and (( )); 1>
+ * and &> as >; 2> F makes F (empty: a builtin has no stderr of its own)
+ * and 2>&1 needs nothing. Not for a cook line (cook does its own) nor a
+ * pipeline (its stages do). 1 if it ran the line. */
+__attribute__((noinline)) static int builtin_redirect(const char *q) {   /* not in run_one's frame: it recurses */
+    const char *h = q; while (*h == ' ') h++;
+    const char *h2 = h + 4; while (*h2 == ' ') h2++;
+    if (is_kw(h, "cook") || (is_kw(h, "chef") && is_kw(h2, "cook"))) return 0;
+    if (pipe_bar(q)) return 0;
+    char cmd[INPUT_MAX]; int cl = 0;
+    char out[FAT_PATH_MAX] = "", in[FAT_PATH_MAX] = "", err[FAT_PATH_MAX] = "";
+    int app = 0, any = 0, dep = 0; char qq = 0;
+    for (const char *c = q; *c; ) {
+        if (qq) { if (*c == qq) qq = 0; if (cl < INPUT_MAX - 1) cmd[cl++] = *c; c++; continue; }
+        if (*c == '\\' && c[1]) { if (cl < INPUT_MAX - 2) { cmd[cl++] = c[0]; cmd[cl++] = c[1]; } c += 2; continue; }
+        if (*c == '\'' || *c == '"') { qq = *c; if (cl < INPUT_MAX - 1) cmd[cl++] = *c; c++; continue; }
+        if ((c[0] == '$' && c[1] == '(') || (c[0] == '(' && c[1] == '(')) { dep++; if (cl < INPUT_MAX - 1) cmd[cl++] = *c; c++; continue; }
+        if (dep && *c == '(') dep++;
+        if (dep && *c == ')') dep--;
+        if (c[0] == '<' && c[1] == '<') {            /* << and <<< are a document's, not ours */
+            while (*c == '<') { if (cl < INPUT_MAX - 1) cmd[cl++] = *c; c++; }
+            continue;
+        }
+        int start = c == q || c[-1] == ' ' || c[-1] == '\t';
+        int fd = -1, len = 0, kind = 0;               /* kind: 1 >, 2 >>, 3 <, 4 2>, 5 2>> , 6 2>&1 */
+        if (!dep) {
+            if (start && c[0] == '2' && c[1] == '>' && c[2] == '&' && c[3] == '1') { kind = 6; len = 4; }
+            else if (start && c[0] == '2' && c[1] == '>' && c[2] == '>') { kind = 5; len = 3; }
+            else if (start && c[0] == '2' && c[1] == '>') { kind = 4; len = 2; }
+            else if (start && c[0] == '1' && c[1] == '>' && c[2] == '>') { kind = 2; len = 3; }
+            else if (start && c[0] == '1' && c[1] == '>') { kind = 1; len = 2; }
+            else if (c[0] == '&' && c[1] == '>') { kind = 1; len = 2; }
+            else if (c[0] == '>' && c[1] == '>') { kind = 2; len = 2; }
+            else if (c[0] == '>') { kind = 1; len = 1; }
+            else if (c[0] == '<' && c[1] != '<') { kind = 3; len = 1; }
+        }
+        (void)fd;
+        if (!kind) { if (cl < INPUT_MAX - 1) cmd[cl++] = *c; c++; continue; }
+        c += len;
+        any = 1;
+        if (kind == 6) continue;
+        while (*c == ' ') c++;
+        char tgt[FAT_PATH_MAX]; int tl = 0; char tq = 0;
+        while (*c && (tq || (*c != ' ' && *c != '\t' && *c != '<' && *c != '>'))) {
+            if (tq) { if (*c == tq) tq = 0; }
+            else if (*c == '\'' || *c == '"') tq = *c;
+            if (tl < FAT_PATH_MAX - 1) tgt[tl++] = *c;
+            c++;
+        }
+        tgt[tl] = '\0';
+        if (!tl) { t_puts("  syntax error: a redirection with no file\n"); cur_shell()->last_status = 2; return 1; }
+        if (kind == 1 || kind == 2) { strcpy(out, tgt); app = kind == 2; }
+        else if (kind == 3) strcpy(in, tgt);
+        else if (kind == 4) strcpy(err, tgt);
+    }
+    cmd[cl] = '\0';
+    if (!any) return 0;
+    char line[INPUT_MAX * 2]; int n = 0;
+    #define LINE_ADD(str) do { for (const char *_s = (str); *_s && n < (int)sizeof(line) - 1; _s++) line[n++] = *_s; } while (0)
+    if (err[0]) { LINE_ADD("{ slurp -n ; } > "); LINE_ADD(err); LINE_ADD(" ; "); }   /* 2> F: an empty F */
+    if (out[0] && in[0]) LINE_ADD("{ ");
+    LINE_ADD("{ "); LINE_ADD(cmd); LINE_ADD(" ; }");
+    if (in[0]) { LINE_ADD(" < "); LINE_ADD(in); }
+    if (out[0] && in[0]) LINE_ADD(" ; }");
+    if (out[0]) { LINE_ADD(app ? " >> " : " > "); LINE_ADD(out); }
+    #undef LINE_ADD
+    line[n] = '\0';
+    run_line(line);
+    return 1;
+}
+
 /* a=(W...) and a[I]=V (v0.60.88): arrays, seen on the line as typed (so
  * the words are split once, as sh splits them). Elements are parted by
  * \x1f in one value of 256 bytes at most; dense, not sparse: a[5]=x on
  * three fills 3 and 4 with nothing. 1 if the line was one. */
-static int array_assign(const char *q) {
+__attribute__((noinline)) static int array_assign(const char *q) {
     int n = 0;
     while (q[n] == '_' || (q[n] >= 'A' && q[n] <= 'Z') || (q[n] >= 'a' && q[n] <= 'z') || (n && q[n] >= '0' && q[n] <= '9')) n++;
     if (!n || n > 15) return 0;
@@ -6807,7 +6880,7 @@ static int array_assign(const char *q) {
  * the rest and puts what it wrote, every byte, into NAME (255 bytes at
  * most, as every value). The status is dish's. Seen on the line as typed,
  * so nothing in it is expanded twice. 1 if it was one. */
-static int dish_into(const char *q) {
+__attribute__((noinline)) static int dish_into(const char *q) {
     char w1[16], w2[FAT_PATH_MAX], w3[8], name[32];
     const char *r = first_word(q, w1, sizeof(w1));
     if (!str_eq(w1, "cook")) return 0;
@@ -7009,6 +7082,7 @@ static void run_one(const char *seg) {
     }
     if (dish_into(q)) return;
     if (array_assign(q)) return;
+    if (builtin_redirect(q)) return;
     if (is_kw(q, "eggtimer")) { cmd_eggtimer(q + 8); return; }   /* the line as typed: expanded once, by what it runs */
     /* ! COMMAND (v0.60.60): the status turned round, 0 to 1 and anything
      * else to 0; of the whole pipeline, so before the | is looked for. A

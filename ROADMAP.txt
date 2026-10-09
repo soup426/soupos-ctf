@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.93
+Current version: v0.60.94
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,22 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.94 (2026-10-09)  — REDIRECTIONS ON BUILTINS AND FUNCTIONS
+  - `slurp hi > F` printed "hi > F": only cook, a loop's done and a { }
+    group took a redirection. Now a builtin's or a function's line takes
+    > F, >> F and < F (1> and &> as >) wherever they sit, and runs as
+    { cmd ; } > F (both nested). 2> F makes F empty, as a builtin has no
+    stderr of its own; 2>&1 needs nothing. Not inside quotes, $( ),
+    $(( )) or (( )), so (( 3 > 2 )) is still arithmetic; a cook line and
+    a pipeline's stages do their own as before.
+  - Found on the way: gcc had inlined builtin_redirect, array_assign and
+    dish_into into run_one, whose frame grew to 1.6 KB on every level of
+    a function's recursion, and `r() { r ; } ; r` ran the kernel stack out
+    before the eight-deep stop (func-test hung). They are noinline now and
+    run_one's frame is 828 bytes. << and <<< are left to the documents.
+  - scripts/biredir-test.sh compares eleven files and three printed
+    lines with bash.
 
 v0.60.93 (2026-10-09)  — HISTORY EXPANSION AT THE PROMPT
   - A typed line's !! is the last line, !N leftovers' line N, !-N the Nth

@@ -34,7 +34,7 @@ variables, take's options, case's fall-through, and array keys.
 
 ---
 
-## 1. Redirections on builtins and functions
+## 1. Redirections on builtins and functions — DONE v0.60.94
 
 `slurp hi > /f.txt` prints "hi > /f.txt" today: only cook and a loop's
 done (or a { } group) take > F. A builtin's or a function's line takes
