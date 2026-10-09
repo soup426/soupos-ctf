@@ -60,7 +60,7 @@ end of input, as bash reads to a NUL), with -r -a -n -p and from a pipe,
 -s SEP, -v START, -i STEP, -n ln, rn or rz. Compare with GNU nl (single
 logical page; no section delimiters).
 
-## 4. pair -l, -s and the EOF message (cmp)
+## 4. pair -l, -s and the EOF message (cmp) — DONE v0.60.139 (the EOF message was already GNU's)
 
 -l every differing byte (number, then both values in octal), -s nothing
 said, only the status; a shorter file: "cmp: EOF on NAME after byte N,

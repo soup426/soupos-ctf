@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.138
+Current version: v0.60.139
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,18 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.139 (2026-10-09)  — PAIR -L AND -S
+  - pair.elf -l every differing byte (its number right-aligned to the
+    digits of the smaller file's size, both values " %3o"), an EOF after
+    them said without its line; -s nothing said, only the status; -ls a
+    usage error, 2. (The EOF message itself was GNU's since v0.59.4.)
+  - Found on the way: GNU cmp 3.12 -l exits 0 when the last buffer it
+    compares of a file over ~16 KB matches, though bytes before differed.
+    pair says 1 whenever one differed; the test puts a difference near the
+    end so the two agree.
+  - scripts/cmpls-test.sh compares ten cases with GNU cmp, statuses
+    included.
 
 v0.60.138 (2026-10-09)  — LABEL: NL'S OPTIONS
   - label.elf -b a|t|n, -w WIDTH, -s SEP, -v START, -i STEP, -n ln|rn|rz,
