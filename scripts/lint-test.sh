@@ -19,10 +19,15 @@ else echo "  FAIL  a test pipes into grep -q (use grep ... >/dev/null):"; echo "
 # written over old ones of the same name: subst-test.sh ($(COMMAND), v0.60.3)
 # by v0.60.65's, random-test.sh (the entropy pool across boots) by
 # v0.60.58's, and smoke-test.sh, the gate itself, by v0.60.82's draft. Each
-# left its name in check.sh twice, so a name run twice is the sign.
+# left its name in check.sh twice, so a name run twice is the sign. Since
+# 2026-10-09 the list is check.sh's TESTS=( ... ), run longest first.
 names=$(awk '/^run "/ && /\.\/scripts\// { match($0, /scripts\/[a-z0-9-]+\.sh/); print substr($0, RSTART + 8, RLENGTH - 11) }
-             /for t in/,/; do/ { for (i = 1; i <= NF; i++) { f = $i; sub(/;$/, "", f); if (f ~ /^[a-z0-9-]+-test$/) print f } }' scripts/check.sh)
+             /TESTS=\(/,/^ *\)/ { for (i = 1; i <= NF; i++) { f = $i; sub(/[;(]$/, "", f); if (f ~ /^[a-z0-9-]+-test$/) print f } }' scripts/check.sh)
 dups=$(echo "$names" | sort | uniq -d | tr '\n' ' ')
 missing=""; for n in $names; do [ -f "scripts/$n.sh" ] || missing+="$n "; done
-if [ -z "$dups$missing" ]; then echo "  ok    check.sh runs $(echo "$names" | wc -l) scripts, each name once and each there"
-else echo "  FAIL  check.sh names twice: ${dups:-none}; names with no script: ${missing:-none}"; exit 1; fi
+# And every test script is in it (2026-10-09): rewrapping the list, a
+# hyphen-breaking wrap split append-test and twelve others across lines,
+# and the two checks above passed with them gone.
+unrun=""; for f in scripts/*-test.sh; do n=$(basename "$f" .sh); grep -qw -- "$n" scripts/check.sh || unrun+="$n "; done
+if [ -z "$dups$missing$unrun" ]; then echo "  ok    check.sh runs $(echo "$names" | wc -l) scripts, each name once and each there, and every test script"
+else echo "  FAIL  check.sh names twice: ${dups:-none}; names with no script: ${missing:-none}; scripts it never runs: ${unrun:-none}"; exit 1; fi

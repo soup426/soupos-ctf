@@ -47,13 +47,19 @@ seen it.
 
 ---
 
-## 1. The longest jobs first
+## 1. The longest jobs first — DONE (check.sh, 2026-10-09)
 
 check.sh starts its ~205 jobs in list order, so users-test, testcmd-test,
 bowls-test and cooks-test (115-124 s under load) can start late and set
 the wall time: 353 s against ~258 s of work at 32 wide. Keep each job's
 time from the last run (on the machine that ran it) and start the
 longest first. Measure check.sh's wall time before and after, twice each.
+
+Measured on CT 123 at 32 jobs: 353 s and 352 s before; 356 s on the
+first run after (no times yet, so it only records them); 297 s and 298 s
+after that. lint-test now also fails when a test script is in no list:
+rewrapping the list split 13 names at their hyphens and the old checks
+passed without them.
 
 ## 2. How many jobs at once
 

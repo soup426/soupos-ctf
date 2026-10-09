@@ -48,6 +48,7 @@ DISK_SUM=$(sha256sum disk.img | cut -d' ' -f1)
 # (scripts/remote-check.sh). A job's time in its .status is its own, from
 # when it started, not from when it was queued.
 JOBS=${CHECK_JOBS:-$(( $(nproc) * 2 ))}
+TIMES=${CHECK_TIMES:-$HOME/.cache/soupos-check-times}   # "name seconds", the last full run
 PIDS=()
 run() {                                   # run <name> <command...>
     local name=$1; shift
@@ -80,15 +81,51 @@ run "build PROFILE=1"           build_cfg "$WORK/t-pr"   PROFILE=1
 run "gate"                      ./scripts/smoke-test.sh
 
 if [ "$MODE" = "full" ]; then
-    for t in ssh-test pass-test hatch-test console-test fat-longname-test \
-             random-test x25519-test sound-test mixer-test music-test \
-             framebuffer-test fullness-test lines-test fsck-test ls-test users-test rc-test fsops-test guess-test owner-test cooks-test bowls-test last-test idle-test du-test secrets-test privs-test reserve-test motd-test append-test grep-test headtail-test sort-test redirect-test uniq-test wc-test tee-test cut-test tr-test chain-test status-test quote-test tilde-test bquote-test run-test lname-test seq-test vars-test testcmd-test glob-test stat-test lsl-test find-test control-test cmp-test arith-test while-test args-test subst-test read-test profile-test flip-test label-test tab-test clockout-test clip-test mince-test knead-test layer-test leftovers-test search-test case-test lint-test stderr-test func-test stack-test spread-test env-test bpipe-test longword-test cd-test loopin-test pipeloop-test wordsplit-test litexp-test assign-test prefix-test param-test until-test break-test herestr-test return-test rest-test dish-test arithcmd-test heredoc-test backslash-test menu-test bracket-test stash-test errexit-test varrandom-test shift-test bang-test loopredir-test amp-test ternary-test trim-test paramsub-test bits-test taker-test promptdoc-test quoteglob-test docsubst-test wide-test inspect-test dishv-test elif-test multiline-test group-test seal-test pluck-test atstar-test tastebi-test bihere-test cont-test trap-test blockdoc-test slurpopt-test casevar-test catsubst-test eggtimer-test array-test brace-test nickname-test dot-test jobspec-test histexp-test biredir-test shellvars-test takeopt-test casefall-test keys-test shelf-test plain-test restn-test tabvar-test select-test colon-test peelstalk-test brine-test brand-test encore-test substnl-test brew-test potluck-test portion-test dbracket-test fnkw-test temper-test rail-test runner-test tumble-test ere-test rematch-test stock-test spot-test carve-test reckon-test bigdir-test ansic-test slicec-test skimdregs-test cullui-test bglob-test expiry-test swapclass-test rackfb-test siftfiles-test weighfiles-test cfor-test taked-test nlopts-test cmpls-test pxmouse-test countertop-test ctwin-test ctterm-test ctbar-test ctfiles-test frost-test prod-test prodwin-test ctwheel-test sear-test swirl-test ctjot-test ctalttab-test; do
-        run "$t" "./scripts/$t.sh"
-    done
     # challenge-test rebuilds as CHALLENGE=1, so it gets a tree of its own too.
     run "challenge-test" bash -c "$(declare -f tree_copy); tree_copy '$WORK/t-chal' && cd '$WORK/t-chal' && ./scripts/challenge-test.sh"
     # doom-fb-test rebuilds two ISOs, so it gets a tree of its own.
     run "doom-fb-test" bash -c "$(declare -f tree_copy); tree_copy '$WORK/t-doom' && cd '$WORK/t-doom' && ./scripts/doom-fb-test.sh"
+    # The longest first (2026-10-09): started in list order, the slow ones
+    # could start last and set the wall time. Each test's time from the
+    # last full run here is in $TIMES; one with none starts first, as if
+    # it were the longest.
+    TESTS=(
+           ssh-test pass-test hatch-test console-test fat-longname-test random-test x25519-test
+           sound-test mixer-test music-test framebuffer-test fullness-test lines-test fsck-test
+           ls-test users-test rc-test fsops-test guess-test owner-test cooks-test bowls-test
+           last-test idle-test du-test secrets-test privs-test reserve-test motd-test
+           append-test grep-test headtail-test sort-test redirect-test uniq-test wc-test
+           tee-test cut-test tr-test chain-test status-test quote-test tilde-test bquote-test
+           run-test lname-test seq-test vars-test testcmd-test glob-test stat-test lsl-test
+           find-test control-test cmp-test arith-test while-test args-test subst-test read-test
+           profile-test flip-test label-test tab-test clockout-test clip-test mince-test
+           knead-test layer-test leftovers-test search-test case-test lint-test stderr-test
+           func-test stack-test spread-test env-test bpipe-test longword-test cd-test
+           loopin-test pipeloop-test wordsplit-test litexp-test assign-test prefix-test
+           param-test until-test break-test herestr-test return-test rest-test dish-test
+           arithcmd-test heredoc-test backslash-test menu-test bracket-test stash-test
+           errexit-test varrandom-test shift-test bang-test loopredir-test amp-test ternary-test
+           trim-test paramsub-test bits-test taker-test promptdoc-test quoteglob-test
+           docsubst-test wide-test inspect-test dishv-test elif-test multiline-test group-test
+           seal-test pluck-test atstar-test tastebi-test bihere-test cont-test trap-test
+           blockdoc-test slurpopt-test casevar-test catsubst-test eggtimer-test array-test
+           brace-test nickname-test dot-test jobspec-test histexp-test biredir-test
+           shellvars-test takeopt-test casefall-test keys-test shelf-test plain-test restn-test
+           tabvar-test select-test colon-test peelstalk-test brine-test brand-test encore-test
+           substnl-test brew-test potluck-test portion-test dbracket-test fnkw-test temper-test
+           rail-test runner-test tumble-test ere-test rematch-test stock-test spot-test
+           carve-test reckon-test bigdir-test ansic-test slicec-test skimdregs-test cullui-test
+           bglob-test expiry-test swapclass-test rackfb-test siftfiles-test weighfiles-test
+           cfor-test taked-test nlopts-test cmpls-test pxmouse-test countertop-test ctwin-test
+           ctterm-test ctbar-test ctfiles-test frost-test prod-test prodwin-test ctwheel-test
+           sear-test swirl-test ctjot-test ctalttab-test
+    )
+    for t in $(for t in "${TESTS[@]}"; do
+                   s=$(awk -v n="$t" '$1 == n { print $2 }' "$TIMES" 2>/dev/null)
+                   echo "${s:-99999} $t"
+               done | sort -rn | cut -d' ' -f2); do
+        run "$t" "./scripts/$t.sh"
+    done
 fi
 
 wait
@@ -116,6 +153,11 @@ else
     fail=1
 fi
 sort -k3 -n "$WORK/summary"
+if [ "$MODE" = "full" ]; then                    # this run's times, for the next one's order
+    mkdir -p "$(dirname "$TIMES")"
+    for st in "$WORK"/*.status; do read -r _ secs <"$st"; echo "$(basename "$st" .status | tr ' ' '_') $secs"; done >"$TIMES.new" \
+        && mv "$TIMES.new" "$TIMES"
+fi
 echo "  total ${MODE} check: $(now)s"
 
 if [ $fail = 1 ]; then
