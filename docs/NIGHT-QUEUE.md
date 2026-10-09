@@ -41,7 +41,7 @@ ${NAME#"*"}, ${NAME/"?"/x} and case patterns ("*") take a quoted * ? [
 as glob syntax today (v0.60.64 wrote it down); sh takes it as the
 character. Compare with bash.
 
-## 2. $( ) in here-documents
+## 2. $( ) in here-documents — DONE v0.60.70
 
 heredoc_expand knows $NAME, ${NAME}, $1, $? and $(( )), not $( ).
 Compare with bash, in a script and at the prompt.

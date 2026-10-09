@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.69
+Current version: v0.60.70
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,16 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.70 (2026-10-08)  — $( ) IN HERE-DOCUMENTS
+  - A here-document's $(CMD) is CMD's output, its newlines kept (but the
+    last), as sh; nested ones too; left as typed under <<'WORD'. In a
+    script and at the prompt. The gap v0.60.68 wrote down is closed.
+  - It runs while a cook is being set up, so what that cook is about to
+    use (a pipe in or out, a feed, its document) is put aside around it:
+    a cook inside CMD would otherwise take it.
+  - scripts/docsubst-test.sh compares two documents' files with bash's
+    and types one.
 
 v0.60.69 (2026-10-08)  — A QUOTED * IS A *
   - In ${NAME#pat} (and ##, %, %%), ${NAME/pat/rep} and case patterns, a

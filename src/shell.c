@@ -5518,7 +5518,10 @@ static void cap_flush(term_t *t) { (void)t; }
 
 static void run_line(const char *line);
 static int subst_cut;     /* the last $(...) did not fit (v0.60.30) */
+static int subst_keep_nl; /* a here-document's $(...) keeps its newlines (v0.60.70) */
 static int command_subst(const char *cmd, char *out, int max) {
+    int keep_nl = subst_keep_nl;
+    subst_keep_nl = 0;                         /* not for the ones inside it */
     if (subst_depth >= 2) return 0;
     capterm_t cap;
     cap.t.name = "subst"; cap.t.puts = cap_puts; cap.t.putc = cap_putc; cap.t.set_color = cap_color;
@@ -5544,7 +5547,7 @@ static int command_subst(const char *cmd, char *out, int max) {
     for (int i = 0; i < cap.len && n < max; i++) {
         char c = cap.buf[i];
         if (c == '\r') continue;
-        out[n++] = (c == '\n') ? ' ' : c;
+        out[n++] = (c == '\n' && !keep_nl) ? ' ' : c;
     }
     kfree(cap.buf);
     return n;
@@ -7073,13 +7076,60 @@ static char *heredoc_mark(char *line, char *word, int max, int *quoted) {
     return 0;
 }
 
+/* $(CMD) in a here-document (v0.60.70): its output, newlines kept but the
+ * last, as sh. It runs while a cook is being set up, so what that cook is
+ * waiting to use (a pipe in, a feed, a document) is put aside and back,
+ * or a cook inside CMD would take it. */
+static int heredoc_subst(const char *cmd, char *out, int max) {
+    vfs_node_t *in = pending_in, *outp = pending_out, *fwr = feed_wr;
+    char *here = pending_here; int hlen = pending_here_len, hexp = pending_here_expand;
+    int nowait = pending_nowait, npids = pending_npids;
+    uint32_t pids[4]; memcpy(pids, pending_pids, sizeof(pids));
+    void (*pf)(void) = pending_feed; void (*ff)(void *) = feed_fn;
+    void *fctx = feed_ctx; const char *fl = feed_left;
+    pending_in = pending_out = feed_wr = 0; pending_here = 0; pending_nowait = pending_npids = 0;
+    pending_feed = 0; feed_fn = 0; feed_ctx = 0; feed_left = 0;
+    subst_keep_nl = 1;
+    int n = command_subst(cmd, out, max);
+    subst_keep_nl = 0;
+    pending_in = in; pending_out = outp; feed_wr = fwr;
+    pending_here = here; pending_here_len = hlen; pending_here_expand = hexp;
+    pending_nowait = nowait; pending_npids = npids; memcpy(pending_pids, pids, sizeof(pids));
+    pending_feed = pf; feed_fn = ff; feed_ctx = fctx; feed_left = fl;
+    return n;
+}
+
 /* A here-document line: $NAME, ${NAME}, $1..$9, $? and $(( )) (v0.60.68)
- * as their values, everything else (quotes too) as written. */
+ * and $( ) (v0.60.70) as their values, everything else (quotes too) as
+ * written. */
 static void heredoc_expand(const char *in, char *out, int max) {
     shell_t *me = cur_shell();
     int k = 0;
     for (int i = 0; in[i] && k < max - 1; i++) {
         const char *val = 0; char num[24];
+        if (in[i] == '$' && in[i + 1] == '(' && in[i + 2] != '(') {
+            int j = i + 2, dep = 0; char q = 0;
+            while (in[j] && !(dep == 0 && !q && in[j] == ')')) {
+                if (q) { if (in[j] == q) q = 0; }
+                else if (in[j] == '\'' || in[j] == '"') q = in[j];
+                else if (in[j] == '(') dep++;
+                else if (in[j] == ')') dep--;
+                j++;
+            }
+            if (in[j]) {
+                char inner[INPUT_MAX];
+                int il = j - (i + 2) < INPUT_MAX - 1 ? j - (i + 2) : INPUT_MAX - 1;
+                memcpy(inner, in + i + 2, (uint32_t)il); inner[il] = '\0';
+                char *res = kmalloc(INPUT_MAX);
+                if (res) {
+                    int n = heredoc_subst(inner, res, max - 1 - k);
+                    for (int c = 0; c < n && k < max - 1; c++) out[k++] = res[c];
+                    kfree(res);
+                }
+                i = j;
+                continue;
+            }
+        }
         if (in[i] == '$' && in[i + 1] == '(' && in[i + 2] == '(') {
             int j = i + 3, dep = 0;
             while (in[j] && !(dep == 0 && in[j] == ')' && in[j + 1] == ')')) { if (in[j] == '(') dep++; else if (in[j] == ')') dep--; j++; }
