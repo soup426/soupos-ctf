@@ -3,7 +3,7 @@
 ## What this is
 
 soupOS is a 32-bit x86 hobby OS written in C and NASM assembly (currently
-**v0.60.148**; ROADMAP.txt is the authority on the version). It boots via GRUB and runs in protected mode with paging, a
+**v0.60.149**; ROADMAP.txt is the authority on the version). It boots via GRUB and runs in protected mode with paging, a
 physical/heap allocator, and a cooperative scheduler. On top of that:
 
 - **Filesystem**: FAT16 read/write with subdirectories ("bowls") and a VFS shim
@@ -444,7 +444,11 @@ soupOS runs real ring-3 user programs with hardware memory protection.
   - `ticks` (v0.7.2) returns `timer_get_ticks()` (100 Hz uptime) — lets a
     user program pace itself in wall-clock time (see `user/spin.c`).
   - Every user pointer is bounds-checked via `user_ok()` so a buggy or
-    hostile program can't make the kernel touch non-user memory.
+    hostile program can't make the kernel touch non-user memory. Since
+    v0.60.149 it also checks every page: mapped, or the heap below the
+    break, or the stack above its guard. A range check alone let the
+    kernel's own copy fault on a page the program never had, and isr.c
+    panics on that; prod.elf and prod-test.sh keep it closed.
 - **Transitions** (`usermode_asm.asm`): `user_mode_enter(entry, ustack)` records
   the resume esp on the current task (`usermode_arm_resume`, which also loads
   `tss.esp0`) and builds an `iret` frame into ring 3. `user_mode_exit` reads

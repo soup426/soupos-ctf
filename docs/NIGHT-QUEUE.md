@@ -44,7 +44,7 @@ as the loop it runs in asks; the user has not seen it.
 
 ---
 
-## 1. A bad user pointer kills the caller, not the kernel
+## 1. A bad user pointer kills the caller, not the kernel — DONE v0.60.149
 
 Read from the code in v0.60.146, not yet run: user_ok checks that a
 pointer is inside the user range, nothing more, so a syscall copying from
@@ -54,6 +54,11 @@ panic. Prove it first with a program that hands SYS_WRITE such a pointer
 (the smallest reproduction), then make that fault kill the program the
 way a ring-3 fault does, with the same "[user] fault" log line. Test:
 the program is killed, the kernel lives, the next command runs.
+
+Proven (all four of write, the image gap, read, stat panicked), then
+built as -1 from the call rather than a kill: user_ok checks the pages
+before the copy, because a kill from inside the fault could unwind a
+call holding FAT's or the desktop's mutex.
 
 ## 2. prod.elf: the window calls, attacked
 
@@ -126,3 +131,8 @@ Skipped at the user's request (queue 48): OS work only.
 - From queue 48 (v0.60.145): the gate's boot segment failed once in
   three check.sh runs under load ("could not drive the QEMU monitor");
   if it comes back, look at qemu_keys' connect and login waits first.
+- v0.60.149: cmp-test failed once under check.sh's load: it typed each
+  line then waited a fixed 2 s, the guest fell behind after four, and
+  QEMU was killed with four lines unread. Now it waits for each prompt.
+  find, cut, glob, flip, quote, uniq, wc and tr tests have the same
+  fixed wait (grep '"WAIT:2"); done'); item 8 should take them too.

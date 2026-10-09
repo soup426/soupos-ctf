@@ -72,11 +72,30 @@ typedef struct {
 static uint32_t g_fault_exc, g_fault_err, g_fault_eip, g_fault_cr2;
 
 /* A user pointer is acceptable only if it lies entirely within user space, so
- * a buggy/hostile program cannot make the kernel read or write elsewhere. */
+ * a buggy/hostile program cannot make the kernel read or write elsewhere.
+ *
+ * And only if the program has every page of it (v0.60.149): mapped already,
+ * or one the demand pager would give it on first touch (its heap below the
+ * break, its stack above the guard page). The range alone let a program
+ * hand SYS_WRITE 0xC6000000, above its break: the kernel's own copy faulted,
+ * the pager declined, and isr.c panicked the machine. Checked before the
+ * copy rather than caught in the fault, because by then the call may hold
+ * a lock (FAT's, the desktop's) that unwinding would strand. */
+static int user_page_ok(const proc_t *pr, uint32_t pg) {
+    if (paging_is_mapped(pg)) return 1;
+    if (pr && pg >= USER_HEAP && pg < pr->brk) return 1;
+    return pg >= USTACK_GUARD + 4096 && pg < USTACK_TOP;
+}
 static int user_ok(uint32_t ptr, uint32_t len) {
     if (ptr < USER_LO || ptr >= USER_HI) return 0;
     if (len > USER_HI - ptr) return 0;
-    return 1;
+    if (!len) return 1;
+    proc_t *pr = proc_current();
+    uint32_t end = (ptr + len - 1) & ~0xFFFu;
+    for (uint32_t pg = ptr & ~0xFFFu; ; pg += 4096) {
+        if (!user_page_ok(pr, pg)) return 0;
+        if (pg == end) return 1;
+    }
 }
 
 /* A NUL-terminated path out of user memory, each byte checked. 0, or -1 for

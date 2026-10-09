@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.148
+Current version: v0.60.149
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,20 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.149 (2026-10-09)  — A POINTER A PROGRAM NEVER HAD (FIX)
+  - Any program could panic the machine: user_ok checked only that a
+    pointer was inside the user range, so SYS_WRITE from 0xC6000000
+    (above the break) or 0xC2000000 (between the image and the heap),
+    and SYS_READ or SYS_STAT into 0xC6000000, faulted in the kernel's
+    own copy; the demand pager declined and isr.c panicked. All four
+    did, proven with prod.elf before the fix.
+  - user_ok now also wants every page: mapped, or one the pager would
+    give on first touch (the heap below the break, the stack above its
+    guard). Such a call gives -1. Checked before the copy, not caught in
+    the fault: by then the call may hold FAT's or the desktop's lock.
+  - prod.elf (a poke with a fork) and scripts/prod-test.sh: all four
+    give -1, the program ends normally, no panic, the shell goes on.
 
 v0.60.148 (2026-10-09)  — TALLY WITH DECIMALS (seq)
   - FIRST, STEP and LAST may have fractions (0.5, .5, 1., -.25). No
