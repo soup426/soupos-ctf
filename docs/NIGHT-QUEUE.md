@@ -47,7 +47,7 @@ than N. A special builtin in sh, so it keeps its name. Compare with bash.
 Works on a pipeline, in if and while conditions, and with && and ||; and
 follow -e does not stop on it, as bash -e does not. Compare with bash.
 
-## 3. done > FILE, fi > FILE
+## 3. done > FILE, fi > FILE — DONE v0.60.61 (with < FILE; 2> refused, see ROADMAP)
 
 A loop's or an if's whole output to a file (>, >>, and 2> with them),
 which the shell refuses today. Compare the file with bash's.

@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.60
+Current version: v0.60.61
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,19 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.61 (2026-10-08)  — DONE > FILE, DONE < FILE
+  - `done > F` and `done >> F` (and fi, esac) send a whole loop's, if's
+    or case's output to a file: the compound feeds spoon (cat), which
+    cook sends to F, so builtins and programs in the body both land there.
+    `done < F` reads F into the compound, as `spoon.elf F | while` would,
+    which makes `while take line ; do ... ; done < F` work. The status is
+    the compound's, as sh's; a < file that is not there is status 1 and
+    the loop does not run.
+  - `done 2> F` stays refused, now with a message naming what is allowed:
+    builtins have no stderr of their own, so it could only half work.
+  - scripts/loopredir-test.sh compares six files byte for byte and the
+    statuses with bash.
 
 v0.60.60 (2026-10-08)  — ! COMMAND
   - `! cmd` runs cmd and turns its status round, 0 to 1 and anything else

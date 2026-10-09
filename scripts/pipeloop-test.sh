@@ -4,7 +4,8 @@
 # for, while, if and case with `| PROG` after their done, fi or esac; each
 # line writes a file in soupOS and in bash (slurp as echo, the programs as
 # their host tools), and the files must match. Anything else after done is
-# refused rather than ignored.
+# refused rather than ignored (> F, >> F and < F are allowed since v0.60.61,
+# loopredir-test.sh has them; 2> F is still refused).
 set -uo pipefail
 cd "$(dirname "$0")/.."
 fail=0
@@ -29,7 +30,7 @@ LINES=(
 FILES="R1 R2 R3 R4 R5 R6 R7 R8 S8"
 keys=("headchef" "rosemary" "WAIT:1")
 for l in "${LINES[@]}"; do keys+=("$l" "UNTIL:@soupOS:"); done
-keys+=("for x in a ; do slurp \$x ; done > /J.TXT" "UNTIL:@soupOS:" "cook mise.elf after-loops" "UNTIL:@soupOS:")
+keys+=("for x in a ; do slurp \$x ; done 2> /J.TXT" "UNTIL:@soupOS:" "cook mise.elf after-loops" "UNTIL:@soupOS:")
 qemu-system-i386 -accel kvm -cpu host -drive "file=$WORK/disk.img,format=raw,if=ide,index=0" \
     -cdrom soupOS.iso -boot d -m 128M -no-reboot -no-shutdown -display none \
     -serial "file:$WORK/serial.log" -monitor "unix:$WORK/mon.sock,server,nowait" >/dev/null 2>&1 &
@@ -51,8 +52,8 @@ for f in $FILES; do
 done
 [ "$bad" = 0 ] && echo "  ok    all ${#LINES[@]} lines write what bash writes ($(echo $FILES | wc -w) files: for, an endless while, while with arithmetic, if, case, a program into a loop into a program, a loop in a loop, the status)" \
     || { echo "  FAIL  a piped loop differs from bash"; fail=1; }
-tr -d '\r' < "$WORK/serial.log" | grep -F 'Only `| program` may follow done, fi or esac' >/dev/null && ! mdir -b -i "$WORK/disk.img" ::/J.TXT >/dev/null 2>&1 \
-    && echo "  ok    done > F is refused, not quietly ignored" || { echo "  FAIL  done > F was not refused"; fail=1; }
+tr -d '\r' < "$WORK/serial.log" | grep -F 'Only `| program`, `> file`, `>> file` or `< file` may follow done, fi or esac' >/dev/null && ! mdir -b -i "$WORK/disk.img" ::/J.TXT >/dev/null 2>&1 \
+    && echo "  ok    done 2> F is refused, not quietly ignored" || { echo "  FAIL  done 2> F was not refused"; fail=1; }
 grep -q 'TESTOUT args=after-loops' "$WORK/serial.log" && echo "  ok    programs still run after all that" \
     || { echo "  FAIL  a program did not run after the loops"; fail=1; }
 exit $fail

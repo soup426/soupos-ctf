@@ -6025,7 +6025,7 @@ static void run_one(const char *seg) {
  * loop in turn. `case W in P) ... ;; esac` (v0.60.19) splits further: the
  * header, each arm's pattern and a ;; are segments of their own. */
 #define LSEG_MAX 64
-typedef struct { const char *text; int op; int into; const char *out; int junk; } lseg_t;
+typedef struct { const char *text; int op; int into; const char *out; int junk; const char *redir; char rkind; } lseg_t;
 /* op: ';' 'A' 'O'; into: | the next (v0.60.34); out: `done | PROG`, PROG (v0.60.37) */
 
 static int is_kw(const char *t, const char *kw) {
@@ -6112,7 +6112,15 @@ static void split_closer(lseg_t *g, char *t) {
                 t[kl] = '\0';
                 r++; while (*r == ' ') r++;
                 g->out = r;
-            } else if (*r) g->junk = 1;          /* done > F, done foo: said, not ignored */
+            } else if (r[0] == '<' || r[0] == '>') {   /* done > F, >> F, < F (v0.60.61) */
+                char kind = r[0] == '<' ? '<' : r[1] == '>' ? 'a' : '>';
+                r += kind == 'a' ? 2 : 1;
+                while (*r == ' ') r++;
+                int bad = !*r;
+                for (const char *c = r; *c; c++) if (*c == '|' || *c == '<' || *c == '>') bad = 1;
+                if (bad) g->junk = 1;
+                else { t[kl] = '\0'; g->redir = r; g->rkind = kind; }
+            } else if (*r) g->junk = 1;          /* done 2> F, done foo: said, not ignored */
             return;
         }
     }
@@ -6437,6 +6445,15 @@ static void range_feed(void *arg) {
     feeding_seg = was;
 }
 
+/* done > F: range_feed, noting the compound's status before spoon's
+ * replaces it (v0.60.61). */
+static int redir_status, redir_ran;
+static void range_feed_keep(void *arg) {
+    range_feed(arg);
+    redir_status = cur_shell()->last_status;
+    redir_ran = 1;
+}
+
 static void exec_range(lseg_t *sg, int from, int to, int depth) {
     if (depth > 8) { t_puts("  Nested eight deep; not going further.\n"); cur_shell()->last_status = 1; return; }
     int i = from;
@@ -6457,9 +6474,43 @@ static void exec_range(lseg_t *sg, int from, int to, int depth) {
                       : is_kw(c, "if") ? match_end(sg, i, to, "if", "fi")
                       : match_end(sg, i, to, "case", "esac");
                 if (e >= 0 && sg[e].junk) {
-                    t_printf("  Only `| program` may follow done, fi or esac (here: %s).\n", sg[e].text);
+                    t_printf("  Only `| program`, `> file`, `>> file` or `< file` may follow done, fi or esac (here: %s).\n", sg[e].text);
                     cur_shell()->last_status = 2;
                     return;
+                }
+                if (e >= 0 && sg[e].redir) {
+                    /* done > F, >> F (v0.60.61): the compound's output into
+                     * spoon (cat), and spoon's into the file; done < F: spoon
+                     * reads the file into the compound, as `X | while` does.
+                     * The status is the compound's, as sh's. */
+                    const char *rw = sg[e].redir; char kind = sg[e].rkind;
+                    char line[INPUT_MAX]; int n = 0;
+                    const char *pre = kind == '<' ? "cook spoon.elf " : kind == 'a' ? "spoon.elf >> " : "spoon.elf > ";
+                    while (*pre && n < INPUT_MAX - 1) line[n++] = *pre++;
+                    for (const char *w = rw; *w && n < INPUT_MAX - 1; w++) line[n++] = *w;
+                    line[n] = '\0';
+                    sg[e].redir = 0;                     /* the compound itself runs plain */
+                    if (kind == '<') {
+                        char fx[INPUT_MAX], fname[FAT_PATH_MAX], path[FAT_PATH_MAX];
+                        expand_into(rw, fx, INPUT_MAX);
+                        first_word(fx, fname, sizeof(fname));
+                        resolve_path(fname, path);
+                        if (!fat_exists(path) || fat_is_dir(path)) {
+                            t_printf("  No such file: %s\n", fname);
+                            cur_shell()->last_status = 1;
+                        } else if (!may(path, 'r')) deny(path);
+                        else into_compound(sg, i, e, depth, start_text, line);
+                    } else {
+                        range_ctx_t rc = { sg, i, e + 1, depth };
+                        redir_ran = 0;
+                        feed_fn = range_feed_keep; feed_ctx = &rc;
+                        pipe_into(0, line);
+                        feed_fn = 0;
+                        if (redir_ran) cur_shell()->last_status = redir_status;
+                    }
+                    sg[e].redir = rw;
+                    i = e + 1;
+                    continue;
                 }
                 if (e >= 0 && sg[e].out) {
                     range_ctx_t rc = { sg, i, e + 1, depth };
