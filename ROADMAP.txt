@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.50
+Current version: v0.60.51
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,18 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.51 (2026-10-08)  — MUSIC-TEST COUNTS FROM THE MUSIC
+  - Two full checks failed music-test with "the effects never showed",
+    the music alone measuring 2466 and 2987, about twice its usual 1291.
+    The four seconds before the effects were counted from typing `hum`;
+    loading the lump is slow under load, so the effects could start inside
+    the 1.0-3.5 s music-alone window, raising the baseline above what the
+    effects add. They are counted from the kernel's [music] line now, when
+    the score starts. The failure did not come back on demand (twelve runs
+    beside a full check passed on the old timing), so this removes the
+    likely cause rather than a reproduced one; a FAIL still prints its
+    numbers.
 
 v0.60.50 (2026-10-08)  — (( EXPR ))
   - The arithmetic command: status 0 when the expression is not zero, 1

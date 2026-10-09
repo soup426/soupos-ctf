@@ -36,8 +36,14 @@ qemu-system-i386 -accel kvm -cpu host \
 PID=$!
 sleep 5
 
+# The four seconds before the effects are counted from the [music] line,
+# when the score has loaded and starts (v0.60.51). Counted from typing
+# `hum`, they shrank under load, since loading the lump is slow then, and
+# the effects could land inside the music-alone window: two full checks
+# failed with "never showed" and the music measured 2466 and 2987, about
+# twice its usual 1291.
 python3 scripts/qemu_keys.py "$MON" "headchef" "rosemary" "WAIT:1" \
-    "hum D_E1M1" "WAIT:4" "sizzle DSSAWUP DSPISTOL" "WAIT:6" >/dev/null 2>&1 \
+    "hum D_E1M1" "UNTIL:[music] D_E1M1:" "WAIT:4" "sizzle DSSAWUP DSPISTOL" "WAIT:6" >/dev/null 2>&1 \
     || { echo "  FAIL  could not drive QEMU"; exit 1; }
 sleep 1; kill "$PID" 2>/dev/null; PID=""
 

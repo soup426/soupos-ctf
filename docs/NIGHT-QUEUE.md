@@ -68,7 +68,7 @@ In a `follow` script, `cook prog <<WORD` takes the lines up to WORD as
 the first stage's stdin, $NAME expanded in them (not with <<'WORD').
 Compare with bash running the same script.
 
-## 7. music-test: "the effects never showed"
+## 7. music-test: "the effects never showed" — DONE v0.60.51 (likely cause; reopen if it recurs)
 
 2026-10-08, the first full check for v0.60.48: "the effects never showed
 in the capture (music 2466, 10.2 s captured)"; the rerun passed. The
@@ -76,7 +76,8 @@ music alone measured 2466, about twice the usual 1291, and the capture
 was 10.2 s. v0.60.28 finds the effects as the first quarter second half
 again as loud as the loudest music quarter second; a louder baseline
 (the capture starting late, so 1.0-3.5 s holds the louder part of the
-score) puts the bar above the effects. Measure where the capture starts
+score) puts the bar above the effects. Again on v0.60.50's first check:
+music 2987, 8.2 s captured. Measure where the capture starts
 relative to `hum` (the serial log has both) and anchor the windows there.
 
 ## 8. Backslash in the shell
