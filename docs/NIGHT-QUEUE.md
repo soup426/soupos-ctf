@@ -1,9 +1,9 @@
 # Night queue
 
-Thirty-seventh queue. The first thirty-six are in `docs/queue-archive-2026-10-0*.md`.
+Thirty-eighth queue. The first thirty-seven are in `docs/queue-archive-2026-10-0*.md`.
 Items wait on a person in three archives (the seventh, the thirteenth and
-the twenty-fourth). slurp learns echo's -n and -e, variables learn case
-and indirection, $(< FILE), a timer for commands, and arrays.
+the twenty-fourth). Brace expansion, nicknames (aliases), the dot command,
+job numbers, and history expansion at the prompt.
 
 ## Standing rules
 
@@ -34,33 +34,38 @@ and indirection, $(< FILE), a timer for commands, and arrays.
 
 ---
 
-## 1. slurp -n and -e — DONE v0.60.84
+## 1. Brace expansion
 
-echo's -n (no newline at the end) and -e (\n \t \\ and the rest), and -E,
-in bash's way (options only first, -ne together, a word like -x printed).
-Compare with bash's echo.
+{a,b,c} and {1..5}, {a..e}, {5..1}, {01..10} and a step {1..10..2},
+nested and with a prefix and suffix (x{a,b}y), not in quotes, before the
+other expansions, as bash. Compare with bash.
 
-## 2. ${NAME^} ${NAME^^} ${NAME,} ${NAME,,} and ${!NAME} — DONE v0.60.85
+## 2. nickname NAME=TEXT (alias)
 
-Upper and lower case, the first letter or all of them, and indirection
-(the variable whose name NAME holds). Compare with bash.
+The first word of a command that is a nickname is replaced by its text
+(again, for the text's own first word, but not a nickname inside
+itself); bare `nickname` lists them, `nickname NAME` shows one, and
+`forget NAME` removes one (unalias). A kitchen name. Compare with bash's
+alias where bash can be driven the same way (bash -i or shopt -s
+expand_aliases).
 
-## 3. $(< FILE) — DONE v0.60.86
+## 3. . FILE
 
-The file's contents, as $(spoon.elf FILE) gives them but without starting
-a program, as bash. Compare with bash.
+POSIX's dot command, a special builtin, so it keeps its name: follow FILE
+in this shell, as follow already does. Compare with bash's . on a script
+that sets variables.
 
-## 4. eggtimer CMD (time) — DONE v0.60.87
+## 4. Job numbers
 
-Runs CMD and says how long it took, real time in seconds to the
-hundredth, as bash's time says real (no user and sys here). A kitchen
-name. Test that CMD's output and status are untouched and the time is
-there and sane.
+kill, plate, steep and rest take %N (the Nth background job, as orders
+lists them), %% and %+ (the newest), %- (the one before); orders shows
+the numbers. Test with two jobs.
 
-## 5. Arrays — DONE v0.60.88 (dense; see ROADMAP)
+## 5. History expansion at the prompt
 
-`a=(x y z)`, ${a[i]} (i arithmetic), ${a[@]} and "${a[@]}" (a word each),
-${#a[@]}, a[i]=v, and for over them. Compare with bash.
+!! (the last line), !N, !-N, !word (the last line starting so), and !$ (the
+last word of the last line), shown before they run, as bash does at its
+prompt. Test by typing.
 
 ## 6. Doom at the framebuffer's own resolution — DEFERRED
 
