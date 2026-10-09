@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.151
+Current version: v0.60.152
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,23 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.152 (2026-10-09)  — HOW FAST A PROGRAM CAN DRAW (MEASURED)
+  - sear.elf W H N puts N frames and times its fill and its puts with
+    rdtsc against the ticks; the desktop now logs, when a program's
+    window closes, what it was given and drew ("[countertop] sear: 100
+    puts, 9 drawn, 814 us a draw").
+  - Measured, one QEMU on the laptop, idle / with glutton.elf spinning:
+      640x480: put 1748 / 3149 us (555 / 312 puts a second), a draw
+               (repaint and copy out) 814 / 825 us
+      320x240: put 419 / 855 us, a draw 478 / 405 us
+    The desktop shows 45-50 frames a second either way, held there by
+    its 15 ms nap, keeping the newest put and dropping the rest. The
+    queue item's premise (a whole-body put too slow for 30 a second)
+    measures false, so no put of a rectangle was built. The put is a
+    plain memcpy of up to 1.2 MB at ~0.7 GB/s; there is room there if
+    it is ever wanted.
+  - scripts/sear-test.sh: sear's line and the desktop's count.
 
 v0.60.151 (2026-10-09)  — THE WHEEL
   - mouse_init knocks as an IntelliMouse does (sample rates 200, 100, 80,

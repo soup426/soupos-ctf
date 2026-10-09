@@ -80,13 +80,18 @@ stays 0. QEMU's `mouse_move dx dy dz` turns it. The files window scrolls
 by it. Measure first that QEMU's PS/2 mouse answers ID 3. Test: the
 handshake's ID in the log, and a files window scrolled by dz (screendump).
 
-## 4. How fast can a program draw?
+## 4. How fast can a program draw? — MEASURED, CLOSED v0.60.152
 
 Measure before building anything: a program that puts N frames of
 640x480 and of 320x240 and reports ticks per frame, idle and with a
 terminal busy. If a full-body put is too slow for something like 30
 frames a second, add a put of a rectangle and measure again; if it is
 fast enough, close the item with the numbers.
+
+Measured with sear.elf: a 640x480 put costs 1.7 ms idle, 3.1 ms with a
+CPU hog (300-550 a second); the desktop draws one in ~0.8 ms and shows
+45-50 frames a second, held by its 15 ms nap. Fast enough: no rectangle
+put. Numbers in ROADMAP v0.60.152.
 
 ## 5. swirl.elf: a Mandelbrot set in fixed point
 

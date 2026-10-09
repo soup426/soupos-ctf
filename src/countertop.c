@@ -74,6 +74,7 @@
 #include "users.h"
 #include "keyboard.h"
 #include "syscall_nr.h"
+#include "timer.h"
 
 #define MAX_H     1200
 #define BAR_H     24
@@ -385,13 +386,24 @@ typedef struct {
     int dirty;
     uwinev_t q[APP_EVQ];
     int qh, qt;
+    uint32_t puts, drawn;               /* (v0.60.152) what was put, what the desktop showed */
+    uint64_t draw_tsc, tsc0;            /* and what showing it cost, since tsc0 (the open) */
+    uint32_t tick0;
 } app_t;
 static app_t app[APP_MAX];
 static mutex_t app_mtx;
 static int ct_running;                  /* countertop_run is in its loop (under app_mtx) */
 static int app_drag = -1, app_lx, app_ly;  /* a press in a program's body, held: that window */
 
+static uint64_t rdtsc_(void) { uint32_t lo, hi; __asm__ volatile ("rdtsc" : "=a"(lo), "=d"(hi)); return ((uint64_t)hi << 32) | lo; }
+static void app_report(const app_t *a) { /* app_mtx held: what it put and what was drawn (v0.60.152) */
+    uint32_t dt = timer_get_ticks() - a->tick0;
+    uint64_t per_us = dt ? (rdtsc_() - a->tsc0) / ((uint64_t)dt * 10000) : 0;
+    uint32_t us = per_us && a->drawn ? (uint32_t)(a->draw_tsc / a->drawn / per_us) : 0;
+    klog("[countertop] %s: %u puts, %u drawn, %u us a draw\n", a->title, a->puts, a->drawn, us);
+}
 static void app_free(app_t *a) {        /* app_mtx held */
+    if (a->used && a->win >= 0) app_report(a);
     if (a->px) kfree(a->px);
     memset(a, 0, sizeof(*a));
     a->win = -1;
@@ -426,6 +438,7 @@ int countertop_win_open(uint32_t pid, int w, int h, const char *title) {
             for (int i = 0; i < w * h; i++) a->px[i] = 0x00FFFFFFu;
             a->used = 1; a->gone = 0; a->pid = pid; a->w = w; a->h = h; a->win = -1; a->dirty = 1;
             a->qh = a->qt = 0;
+            a->puts = a->drawn = 0; a->draw_tsc = 0; a->tsc0 = rdtsc_(); a->tick0 = timer_get_ticks();
             scopy(a->title, title, sizeof(a->title));
         }
     }
@@ -443,7 +456,7 @@ int countertop_win_size(uint32_t pid, int id, int *w, int *h) {
 int countertop_win_put(uint32_t pid, int id, const uint32_t *px) {
     mutex_lock(&app_mtx);
     app_t *a = app_mine(pid, id);
-    if (a) { memcpy(a->px, px, (uint32_t)(a->w * a->h * 4)); a->dirty = 1; }
+    if (a) { memcpy(a->px, px, (uint32_t)(a->w * a->h * 4)); a->dirty = 1; a->puts++; }
     mutex_unlock(&app_mtx);
     return a ? 0 : -1;
 }
@@ -655,6 +668,7 @@ static void close_window(int k) {
 }
 /* Once a loop: show new program windows, repaint changed ones, close
  * those whose program closed them or has ended. */
+static void flush(void);
 static void apps_tick(void) {
     mutex_lock(&app_mtx);
     for (int i = 0; i < APP_MAX; i++) {
@@ -685,7 +699,11 @@ static void apps_tick(void) {
             repaint_win(k);
             continue;
         }
-        if (a->win >= 0 && a->dirty) { a->dirty = 0; repaint_win(a->win); }
+        if (a->win >= 0 && a->dirty) {                 /* drawn, and its share of the copy out */
+            uint64_t t = rdtsc_();
+            a->dirty = 0; repaint_win(a->win); flush();
+            a->draw_tsc += rdtsc_() - t; a->drawn++;
+        }
     }
     mutex_unlock(&app_mtx);
 }
