@@ -1,10 +1,20 @@
 # Night queue
 
-Forty-seventh queue. The first forty-six are in `docs/queue-archive-2026-10-0*.md`.
-Items wait on a person in three archives (the seventh, the thirteenth and
-the twenty-fourth). bash's C-style for loop and read -d, then what nl,
-cmp, paste and seq can do that label, pair, layer and tally cannot (each
-checked against the menu and the programs first).
+Forty-eighth queue: a desktop for soupOS, at the user's request (2026-10-09:
+"start working on getting a desktop for soupOS ... whatever you want to get
+to that goal"). The first forty-seven are in `docs/queue-archive-2026-10-0*.md`.
+
+What is there to build on: the default image boots GRUB's 1024x768x32 linear
+framebuffer (fb.c); fbcon draws the text console onto it as 128x48 cells of
+font8x16; a PS/2 mouse reports cells (4 counts each); mode 13h programs
+pause fbcon and take the screen. The tests boot that image, inject keys and
+mouse moves through QEMU's monitor, and can screendump the pixels
+(framebuffer-test.sh compares glyphs against the font). The kernel heap is
+8 MB; a 1024x768x4 back buffer is 3 MB, so where the desktop's memory comes
+from is the first thing to measure.
+
+The desktop is `countertop` (the surface everything is set out on). Each
+item below leaves something that works and is tested by screendump.
 
 ## Standing rules
 
@@ -41,45 +51,63 @@ checked against the menu and the programs first).
 
 ---
 
-## 1. for (( INIT ; COND ; STEP )) ; do ... ; done — DONE v0.60.136
+## 1. The pointer in pixels
 
-bash's arithmetic for loop (a keyword form, its own name): INIT once,
-COND before each pass (empty is true), STEP after; break, continue and N
-of each; nested; over several lines and in a recipe; its status the
-last command's (0 if none ran). Test against bash.
+mouse.c keeps text cells. Keep a pixel position too (the framebuffer's
+1024x768, clamped), with mouse_get_px(), and the cells derived from it as
+now so skewer, drag-select and the gate are unchanged. Test: injected moves
+land on the pixel expected (screendump not needed; a shell command or the
+serial log can say where).
 
-## 2. take -d DELIM (read -d) — DONE v0.60.137
+## 2. countertop: the surface
 
-Read up to DELIM instead of a newline (its first character; -d '' to the
-end of input, as bash reads to a NUL), with -r -a -n -p and from a pipe,
-<<< and < FILE. Test against bash.
+`countertop` takes the framebuffer (as mode 13h programs do: fbcon paused,
+then resumed): a desktop background, a bar along the top with "soupOS" and
+the time (expiry's), and a pointer drawn where the mouse is, moving with it;
+Esc gives the console back as it was. Drawn into a back buffer and copied
+out only where something changed. Measure first where 3 MB comes from (the
+heap, or pages of its own). Test by screendump: the bar, the background,
+the pointer where it was moved to, and the console intact after Esc.
 
-## 3. label: nl's options — DONE v0.60.138
+## 3. Windows
 
--b a (number every line) or t (non-empty, the default) or n, -w WIDTH,
--s SEP, -v START, -i STEP, -n ln, rn or rz. Compare with GNU nl (single
-logical page; no section delimiters).
+A window list in z-order: each with a title bar (its name, a close box), a
+border and a body. Click to focus and raise, drag the title bar to move,
+the close box to close. Two demo windows to start. Test by screendump after
+injected clicks and drags: raised, moved, closed.
 
-## 4. pair -l, -s and the EOF message (cmp) — DONE v0.60.139 (the EOF message was already GNU's)
+## 4. Terminal windows
 
--l every differing byte (number, then both values in octal), -s nothing
-said, only the status; a shorter file: "cmp: EOF on NAME after byte N,
-line M" as GNU's (on stderr), status 1. Compare with GNU cmp.
+A term_t whose cells are drawn into a window (font8x16), keyboard input to
+the focused window, and a shell task of its own in each (as pass and vault
+give a remote session one). Several at once, each its own cwd and history.
+Test: open two, type a different command in each, screendump, compare the
+glyphs against the font as framebuffer-test does.
 
-## 5. layer -s and - (paste)
+## 5. A bar of its own: launcher and taskbar
 
--s each file's lines joined into one line (with -d's list cycling); - for
-stdin, more than once taking turns. Compare with GNU paste.
+Along the bottom: a button that opens a terminal, one per open window
+(click to raise, or to bring back a minimised one), and the clock. A
+minimise box on each window. Test by screendump after clicks.
 
-## 6. tally with decimals (seq)
+## 6. A files window
 
-FIRST, STEP and LAST may have fractions: computed in scaled integers
-(user programs have no floating point) to the most decimals any of them
-has, printed with that many, as GNU seq does (seq 0 0.5 2 gives 0.0 to
-2.0); negatives, a step that does not land on LAST, -w and -s with
-them. Compare with GNU seq.
+A bowl's entries (fat_ls), bowls first; a double click enters a bowl (and ..
+goes up), on a file opens a terminal window with it in pour (or jot for a
+text file). Test by screendump and by what the opened terminal shows.
 
-## 7. Doom at the framebuffer's own resolution — DEFERRED
+## 7. Windows for ring-3 programs
+
+Syscalls to make a window, put a buffer of pixels into it, and wait for its
+events (keys, the mouse in its coordinates, close); a first program that
+uses them (a paint program, `doodle.elf`, or a Mandelbrot viewer). Test:
+cook it, draw with injected drags, screendump, close.
+
+## 8. Later: layer -s and - (paste), tally with decimals (seq)
+
+Moved from queue 47 so the desktop comes first; as written there.
+
+## 9. Doom at the framebuffer's own resolution — DEFERRED
 
 Skipped at the user's request: OS work only.
 
