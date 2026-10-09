@@ -35,7 +35,7 @@ and here-documents.
 
 ---
 
-## 1. return and exit
+## 1. return and exit — DONE v0.60.47
 
 `return [N]` leaves a function with status N (the last command's if no
 N); `exit [N]` ends a `follow` script with status N (at the prompt it is

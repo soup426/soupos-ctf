@@ -87,6 +87,8 @@ typedef struct {
     vfs_node_t *in_pipe;         /* `prog | while take ...`: take reads this (v0.60.34) */
     int     loops;               /* loops open now, for break and continue (v0.60.44) */
     int     brk, cont;           /* loops still to break out of / continue past */
+    int     fns, scripts;        /* functions and follow scripts running (v0.60.47) */
+    int     ret, quit;           /* a return / an exit on its way out */
     char    in_buf[512];
     int     in_pos, in_len;
     char    fname[16][16];       /* functions (v0.60.22): NAME() { BODY } */
@@ -2980,6 +2982,8 @@ static void cmd_run(const char *args);  /* defined beside run_rc (v0.57.5) */
 static void cmd_unset(const char *args); /* beside run_line (v0.58.0) */
 static void cmd_hand(const char *args);  /* beside it (v0.60.26) */
 static void cmd_break(const char *args, int is_continue);   /* with the loops (v0.60.44) */
+static void cmd_return(const char *args, int is_exit);     /* beside it (v0.60.47) */
+static int status_before;
 static void cmd_read(const char *args);  /* beside run_line (v0.60.4) */
 
 /* The headchef's commands (v0.55.0). Until then any cook could close the
@@ -4681,10 +4685,12 @@ static void prompt(void) {
     cur_shell()->prompt_len = (int)strlen(u) + 1 + 6 + 1 + (int)strlen(cur_shell()->cwd) + 2;
 }
 
+/* status_before: what $? was as this command began, for return/exit with no N (v0.60.47) */
 static void dispatch(const char *buf) {
     const char *p = buf;
     while (*p == ' ') p++;
     if (!*p) return;
+    status_before = cur_shell()->last_status;
     cur_shell()->last_status = 0;
 
     if      (str_eq(p, "menu"))       cmd_menu();
@@ -4716,6 +4722,8 @@ static void dispatch(const char *buf) {
     else if (str_startswith(p, "discard ")) cmd_unset(uq_args(p + 8));
     else if (str_eq(p, "hand") || str_startswith(p, "hand ")) cmd_hand(p + 4 + (p[4] == ' '));
     else if (str_eq(p, "break") || str_startswith(p, "break ")) cmd_break(p + 5, 0);
+    else if (str_eq(p, "return") || str_startswith(p, "return ")) cmd_return(p + 6, 0);
+    else if (str_eq(p, "exit") || str_startswith(p, "exit ")) cmd_return(p + 4, 1);
     else if (str_eq(p, "continue") || str_startswith(p, "continue ")) cmd_break(p + 8, 1);
     else if (str_eq(p, "take") || str_startswith(p, "take ")) cmd_read(p + 4);
     else if (str_startswith(p, "pour")) {
@@ -5437,7 +5445,13 @@ static int call_function(const char *ex) {
     while (*rest && me->npargs < 9) { rest = first_word(rest, me->parg[me->npargs], 64); me->npargs++; }
     me->last_status = 0;
     depth++;
+    me->fns++;
+    int loops = me->loops;
+    me->loops = 0;                              /* a loop out here is not the body's to break */
     run_line(body);
+    me->loops = loops;
+    me->fns--;
+    me->ret = 0;                                /* a return ends here; an exit goes on */
     depth--;
     memcpy(me->parg, saved, sizeof(me->parg));
     me->npargs = saved_n;
@@ -5992,6 +6006,7 @@ static void start_piped(void *ctx, vfs_node_t *wr) { start_into_run(run_piped_co
  * given, all of them if more than are open). exec_range stops at once
  * while one is pending; each loop, after its body, takes its share. */
 static int loop_after_body(shell_t *me) {
+    if (me->ret || me->quit) return 1;                 /* a return or exit leaves every loop */
     if (me->brk) { me->brk--; return 1; }              /* this loop ends; the rest go on up */
     if (me->cont) {
         me->cont--;
@@ -6000,6 +6015,24 @@ static int loop_after_body(shell_t *me) {
     }
     return 0;
 }
+/* return [N] and exit [N] (v0.60.47): leave a function, or a follow
+ * script, with status N (the last command's without one). */
+static void cmd_return(const char *args, int is_exit) {
+    shell_t *me = cur_shell();
+    while (*args == ' ') args++;
+    int have = *args >= '0' && *args <= '9', n = 0;
+    while (*args >= '0' && *args <= '9') n = n * 10 + (*args++ - '0');
+    if (is_exit) {
+        if (!me->scripts) { t_puts("  exit: at the prompt, clockout ends the shift\n"); me->last_status = 0; return; }
+        me->last_status = have ? (n & 0xFF) : status_before;
+        me->quit = 1;
+        return;
+    }
+    if (!me->fns) { t_puts("  return: can only return from a function\n"); me->last_status = 2; return; }
+    me->last_status = have ? (n & 0xFF) : status_before;
+    me->ret = 1;
+}
+
 static void cmd_break(const char *args, int is_continue) {
     shell_t *me = cur_shell();
     int n = 0;
@@ -6036,6 +6069,7 @@ static void exec_range(lseg_t *sg, int from, int to, int depth) {
     int i = from;
     while (i < to && !cur_shell()->exiting) {
         if (cur_shell()->brk || cur_shell()->cont) return;   /* break/continue on its way out (v0.60.44) */
+        if (cur_shell()->ret || cur_shell()->quit) return;   /* return/exit on its way out (v0.60.47) */
         if (interrupted()) { cur_shell()->last_status = 130; return; }
         int status = cur_shell()->last_status, op = sg[i].op;
         int run = (op == ';') || (op == 'A' && status == 0) || (op == 'O' && status != 0);
@@ -6271,7 +6305,7 @@ static void run_line(const char *line) {
     if (!buf || !sg) { if (buf) kfree(buf); if (sg) kfree(sg); return; }
     strncpy(buf, line, INPUT_MAX * 2 - 1); buf[INPUT_MAX * 2 - 1] = '\0';
     int n = split_segs(buf, sg, LSEG_MAX);
-    if (run_depth == 0) { cur_shell()->brk = cur_shell()->cont = 0; cur_shell()->loops = 0; }
+    if (run_depth == 0) { cur_shell()->brk = cur_shell()->cont = 0; cur_shell()->loops = 0; cur_shell()->ret = cur_shell()->quit = 0; }
     if (run_depth++ == 0 && cur_shell()->term) intr_mark = cur_shell()->term->intr;
     exec_range(sg, 0, n, 0);
     run_depth--;
@@ -6322,9 +6356,10 @@ static void cmd_run(const char *args) {
     me->npargs = 0;
     while (*rest && me->npargs < 9) { rest = first_word(rest, me->parg[me->npargs], 64); me->npargs++; }
     depth++;
+    me->scripts++;
     cur_shell()->last_status = 0;
     uint32_t i = 0;
-    while (i < size && !cur_shell()->exiting) {
+    while (i < size && !cur_shell()->exiting && !me->quit) {
         uint32_t e = i;
         while (e < size && text[e] != '\n' && text[e] != '\r') e++;
         char line[INPUT_MAX];
@@ -6337,6 +6372,8 @@ static void cmd_run(const char *args) {
         i = e + 1;
     }
     depth--;
+    me->scripts--;
+    me->quit = 0;                               /* exit ends this script, not its caller */
     memcpy(me->parg, saved, sizeof(me->parg));
     me->npargs = saved_n;
     kfree(saved);

@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.46
+Current version: v0.60.47
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,21 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.47 (2026-10-08)  — RETURN AND EXIT
+  - `return [N]` leaves a function with status N, or the last command's
+    without one (dispatch now remembers $? as the command began, since it
+    clears it first); outside a function it says so, status 2 as bash's.
+    `exit [N]` ends a follow script the same way, from inside its loops
+    and its functions, and only that script (a script that followed it
+    carries on). At the prompt exit points at clockout and does nothing.
+    Loops a return or exit passes through end without counting it as a
+    break; a function's body starts with no loops of the caller's to
+    break, as bash has it.
+  - scripts/return-test.sh compares eight lines and four scripts with bash.
+    (The first build put follow's cleanup in call_function, whose last
+    lines look the same: the shell then thought it was always in a script
+    and every exit silently ended the line. The test caught it.)
 
 v0.60.46 (2026-10-08)  — A LOOP, A PROGRAM, THEN A LOOP
   - `until ... ; done | stack.elf | while take x ; do ... ; done` hung the
