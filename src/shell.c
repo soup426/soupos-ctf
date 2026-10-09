@@ -6742,6 +6742,149 @@ static int dish_into(const char *q) {
     return 1;
 }
 
+/* Brace expansion (v0.60.89), as bash, before every other expansion and
+ * on the words as typed: x{a,b}y is xay xby, {1..5} and {5..1}, {a..e},
+ * {01..10} padded, {1..10..3} by threes, nested and one after another.
+ * Not in quotes, not in $( ), ${ } or $(( )), not {a} or {}, and not in a
+ * leading NAME=value (bash leaves an assignment's braces). */
+static int brace_skip(const char *w, int i, int n) {      /* past a $( ) ${ } or $(( )) at w[i] */
+    char open = w[i + 1], close = open == '{' ? '}' : ')';
+    int dep = 0; char q = 0;
+    for (int k = i + 1; k < n; k++) {
+        if (q) { if (w[k] == q) q = 0; continue; }
+        if (w[k] == '\'' || w[k] == '"') { q = w[k]; continue; }
+        if (w[k] == open) dep++;
+        else if (w[k] == close && --dep == 0) return k;
+    }
+    return n - 1;
+}
+static int brace_int(const char *s, int n, long *v, int *digits) {
+    int k = 0, neg = 0; long x = 0;
+    if (k < n && s[k] == '-') { neg = 1; k++; }
+    int d0 = k;
+    while (k < n && s[k] >= '0' && s[k] <= '9') x = x * 10 + (s[k++] - '0');
+    if (k == d0 || k != n) return 0;
+    *v = neg ? -x : x; *digits = n;
+    return 1;
+}
+static void brace_word(const char *w, int n, char *out, int *o, int max, int depth);
+static void brace_emit(const char *pre, int pl, const char *mid, int ml, const char *post, int ql,
+                       char *out, int *o, int max, int depth) {
+    char nw[INPUT_MAX]; int k = 0;
+    for (int i = 0; i < pl && k < INPUT_MAX - 1; i++) nw[k++] = pre[i];
+    for (int i = 0; i < ml && k < INPUT_MAX - 1; i++) nw[k++] = mid[i];
+    for (int i = 0; i < ql && k < INPUT_MAX - 1; i++) nw[k++] = post[i];
+    brace_word(nw, k, out, o, max, depth + 1);
+}
+static void brace_word(const char *w, int n, char *out, int *o, int max, int depth) {
+    char q = 0;
+    for (int i = 0; depth < 8 && i < n; i++) {
+        if (q) { if (w[i] == q) q = 0; continue; }
+        if (w[i] == '\\' && i + 1 < n) { i++; continue; }
+        if (w[i] == '\'' || w[i] == '"') { q = w[i]; continue; }
+        if (w[i] == '$' && i + 1 < n && (w[i + 1] == '{' || w[i + 1] == '(')) { i = brace_skip(w, i, n); continue; }
+        if (w[i] != '{') continue;
+        int j = i + 1, dep = 0, commas = 0; char q2 = 0;
+        for (; j < n; j++) {
+            if (q2) { if (w[j] == q2) q2 = 0; continue; }
+            if (w[j] == '\\' && j + 1 < n) { j++; continue; }
+            if (w[j] == '\'' || w[j] == '"') { q2 = w[j]; continue; }
+            if (w[j] == '$' && j + 1 < n && (w[j + 1] == '{' || w[j + 1] == '(')) { j = brace_skip(w, j, n); continue; }
+            if (w[j] == '{') dep++;
+            else if (w[j] == '}') { if (!dep) break; dep--; }
+            else if (w[j] == ',' && !dep) commas++;
+        }
+        if (j >= n) continue;                          /* no } for it: just a { */
+        const char *b = w + i + 1; int bl = j - i - 1;
+        const char *post = w + j + 1; int ql = n - j - 1;
+        if (commas) {                                  /* {a,b,c} */
+            int st = 0, d2 = 0; char q3 = 0;
+            for (int k = 0; k <= bl; k++) {
+                if (k < bl) {
+                    if (q3) { if (b[k] == q3) q3 = 0; continue; }
+                    if (b[k] == '\\' && k + 1 < bl) { k++; continue; }
+                    if (b[k] == '\'' || b[k] == '"') { q3 = b[k]; continue; }
+                    if (b[k] == '{') { d2++; continue; }
+                    if (b[k] == '}') { d2--; continue; }
+                    if (b[k] != ',' || d2) continue;
+                }
+                brace_emit(w, i, b + st, k - st, post, ql, out, o, max, depth);
+                st = k + 1;
+            }
+            return;
+        }
+        /* {x..y} or {x..y..step}: numbers or single letters */
+        int dots[2], nd = 0;
+        for (int k = 0; k + 1 < bl && nd < 3; k++) if (b[k] == '.' && b[k + 1] == '.') { if (nd < 2) dots[nd] = k; nd++; k++; }
+        if (nd != 1 && nd != 2) continue;
+        int e1 = dots[0], s2 = dots[0] + 2, e2 = nd == 2 ? dots[1] : bl;
+        long x, y, step = 1; int dx, dy, ds;
+        int letters = e1 == 1 && e2 - s2 == 1 &&
+                      ((b[0] >= 'a' && b[0] <= 'z') || (b[0] >= 'A' && b[0] <= 'Z')) &&
+                      ((b[s2] >= 'a' && b[s2] <= 'z') || (b[s2] >= 'A' && b[s2] <= 'Z'));
+        if (letters) { x = b[0]; y = b[s2]; dx = dy = 1; }
+        else if (!brace_int(b, e1, &x, &dx) || !brace_int(b + s2, e2 - s2, &y, &dy)) continue;
+        if (nd == 2 && !brace_int(b + e2 + 2, bl - e2 - 2, &step, &ds)) continue;
+        if (step < 0) step = -step;
+        if (step == 0) step = 1;
+        int width = 0;
+        if (!letters) {
+            const char *xs = b[0] == '-' ? b + 1 : b, *ys = b[s2] == '-' ? b + s2 + 1 : b + s2;
+            if ((xs[0] == '0' && dx - (b[0] == '-') > 1) || (ys[0] == '0' && dy - (b[s2] == '-') > 1)) width = dx > dy ? dx : dy;
+        }
+        int count = 0;
+        for (long v = x; (x <= y ? v <= y : v >= y) && count < 256; v += x <= y ? step : -step, count++) {
+            char num[24]; int m = 0;
+            if (letters) num[m++] = (char)v;
+            else {
+                char d[24]; int k2 = 0; unsigned long u = v < 0 ? (unsigned long)(-v) : (unsigned long)v;
+                do { d[k2++] = (char)('0' + u % 10); u /= 10; } while (u);
+                if (v < 0) num[m++] = '-';
+                for (int pad = k2 + (v < 0); pad < width; pad++) num[m++] = '0';
+                while (k2) num[m++] = d[--k2];
+            }
+            brace_emit(w, i, num, m, post, ql, out, o, max, depth);
+        }
+        return;
+    }
+    if (*o && *o < max - 1) out[(*o)++] = ' ';     /* none: the word as it is */
+    for (int i = 0; i < n && *o < max - 1; i++) out[(*o)++] = w[i];
+    out[*o] = '\0';
+}
+static void brace_line(const char *in, char *out, int max) {
+    int o = 0, lead = 1;
+    out[0] = '\0';
+    const char *c = in;
+    while (*c) {
+        while (*c == ' ' || *c == '\t') c++;
+        if (!*c) break;
+        const char *st = c; char q = 0;
+        while (*c && (q || (*c != ' ' && *c != '\t'))) {
+            if (q) { if (*c == q) q = 0; c++; continue; }
+            if (*c == '\\' && c[1]) { c += 2; continue; }
+            if (*c == '\'' || *c == '"') { q = *c; c++; continue; }
+            if (*c == '$' && (c[1] == '{' || c[1] == '(')) { int n = (int)strlen(c); c += brace_skip(c, 0, n) + 1; continue; }
+            c++;
+        }
+        int n = (int)(c - st);
+        int assign = 0;
+        if (lead) {                                    /* NAME=value, first in the command */
+            int k = 0;
+            while (k < n && (st[k] == '_' || (st[k] >= 'A' && st[k] <= 'Z') || (st[k] >= 'a' && st[k] <= 'z') || (k && st[k] >= '0' && st[k] <= '9'))) k++;
+            assign = k && k < n && st[k] == '=';
+            if (!assign) lead = 0;
+        }
+        int brace = 0;
+        for (int k = 0; k < n; k++) if (st[k] == '{') brace = 1;
+        if (assign || !brace) {
+            if (o && o < max - 1) out[o++] = ' ';
+            for (int k = 0; k < n && o < max - 1; k++) out[o++] = st[k];
+            out[o] = '\0';
+        } else brace_word(st, n, out, &o, max, 0);
+    }
+    out[o] = '\0';
+}
+
 static void run_ex(char *ex);
 static void run_one(const char *seg) {
     const char *q = seg; while (*q == ' ') q++;
@@ -6769,6 +6912,8 @@ static void run_one(const char *seg) {
         return;
     }
     char ex[INPUT_MAX];
+    char braced[INPUT_MAX];
+    if (strchr(seg, '{')) { brace_line(seg, braced, INPUT_MAX); seg = braced; }   /* {a,b} {1..3} (v0.60.89) */
     arith_err = 0;
     if (expand_into(seg, ex, INPUT_MAX) && !arith_err) {
         /* v0.60.30: it used to run cut short, which can name another file */
@@ -7718,7 +7863,13 @@ static void exec_range(lseg_t *sg, int from, int to, int depth) {
                 wordlist_t *wl = kmalloc(sizeof(wordlist_t));
                 if (!ex || !wl) { if (ex) kfree(ex); if (wl) kfree(wl); t_puts("  for: out of memory.\n"); cur_shell()->last_status = 1; return; }
                 wl->used = wl->n = wl->cut = 0;
-                if (expand_into(sg[i].text + 3, ex, FOR_TEXT)) wl->cut = 1;
+                {
+                    const char *ft = sg[i].text + 3;
+                    char *fb = 0;
+                    if (strchr(ft, '{') && (fb = kmalloc(FOR_TEXT)) != 0) { brace_line(ft, fb, FOR_TEXT); ft = fb; }   /* (v0.60.89) */
+                    if (expand_into(ft, ex, FOR_TEXT)) wl->cut = 1;
+                    if (fb) kfree(fb);
+                }
                 /* NAME in WORDS */
                 char name[16]; const char *r = first_word(ex, name, sizeof(name));
                 char inw[8]; r = first_word(r, inw, sizeof(inw));

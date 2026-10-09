@@ -34,7 +34,7 @@ job numbers, and history expansion at the prompt.
 
 ---
 
-## 1. Brace expansion
+## 1. Brace expansion — DONE v0.60.89
 
 {a,b,c} and {1..5}, {a..e}, {5..1}, {01..10} and a step {1..10..2},
 nested and with a prefix and suffix (x{a,b}y), not in quotes, before the

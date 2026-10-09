@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.88
+Current version: v0.60.89
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,15 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.89 (2026-10-09)  — BRACE EXPANSION
+  - x{a,b}y is xay xby; {1..5} and {5..1}, {a..e}, {01..10} padded,
+    {1..10..3} by threes, {-2..2}; nested (a{b,c{d,e}}f) and one after
+    another ({x,y}{1,2}), as bash, before every other expansion (so {$v,y}
+    is $v's value and y). Left alone: in quotes, \{ \}, {a}, {}, {a..},
+    inside $( ), ${ } and $(( )), and in a leading NAME=value. For lists
+    too.
+  - scripts/brace-test.sh compares nine lines with bash.
 
 v0.60.88 (2026-10-09)  — ARRAYS
   - a=(W...) makes an array, its words split once as sh splits them
