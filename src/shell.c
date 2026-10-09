@@ -5125,18 +5125,56 @@ static long a_var(const char *name) {
         }
     return 0;
 }
+/* (( )) and $(( )) assign (v0.60.50): NAME = op= ++ --, and a, b, as sh's. */
+static void set_var(const char *name, const char *value);
+static void a_set(const char *name, long v) {
+    char d[24]; int k = 0, n = 0; char out[24];
+    unsigned long u = v < 0 ? (unsigned long)(-v) : (unsigned long)v;
+    do { d[k++] = (char)('0' + u % 10); u /= 10; } while (u);
+    if (v < 0) out[n++] = '-';
+    while (k) out[n++] = d[--k];
+    out[n] = '\0';
+    int st = cur_shell()->last_status;
+    set_var(name, out);
+    cur_shell()->last_status = st;
+}
+static int a_name(char *name) {         /* an identifier at ap, read; 0 if none */
+    int n = 0;
+    if (!(*ap == '_' || (*ap >= 'A' && *ap <= 'Z') || (*ap >= 'a' && *ap <= 'z'))) return 0;
+    while ((*ap == '_' || (*ap >= 'A' && *ap <= 'Z') || (*ap >= 'a' && *ap <= 'z') || (*ap >= '0' && *ap <= '9')) && n < 15) name[n++] = *ap++;
+    name[n] = '\0';
+    return 1;
+}
 static long a_prim(void) {
     a_sp();
+    if ((ap[0] == '+' && ap[1] == '+') || (ap[0] == '-' && ap[1] == '-')) {   /* ++n, --n */
+        int up = ap[0] == '+';
+        ap += 2; a_sp();
+        if (*ap == '$') ap++;
+        char name[16];
+        if (!a_name(name)) { arith_err = 1; return 0; }
+        long v = a_var(name) + (up ? 1 : -1);
+        a_set(name, v);
+        return v;
+    }
+    if (*ap == '!') { ap++; return !a_prim(); }
     if (*ap == '(') { ap++; long v = a_eq(); a_sp(); if (*ap == ')') ap++; else arith_err = 1; return v; }
     if (*ap == '-') { ap++; return -a_prim(); }
     if (*ap == '+') { ap++; return a_prim(); }
     if (*ap >= '0' && *ap <= '9') { long v = 0; while (*ap >= '0' && *ap <= '9') v = v * 10 + (*ap++ - '0'); return v; }
     if (*ap == '$') ap++;
-    if (*ap == '_' || (*ap >= 'A' && *ap <= 'Z') || (*ap >= 'a' && *ap <= 'z')) {
-        char name[16]; int n = 0;
-        while ((*ap == '_' || (*ap >= 'A' && *ap <= 'Z') || (*ap >= 'a' && *ap <= 'z') || (*ap >= '0' && *ap <= '9')) && n < 15) name[n++] = *ap++;
-        name[n] = '\0';
-        return a_var(name);
+    char name[16];
+    if (a_name(name)) {
+        long v = a_var(name);
+        const char *save = ap;
+        a_sp();
+        if ((ap[0] == '+' && ap[1] == '+') || (ap[0] == '-' && ap[1] == '-')) {   /* n++, n-- */
+            a_set(name, v + (ap[0] == '+' ? 1 : -1));
+            ap += 2;
+            return v;
+        }
+        ap = save;
+        return v;
     }
     arith_err = 1;
     return 0;
@@ -5179,9 +5217,43 @@ static long a_eq(void) {
         else return v;
     }
 }
+static long a_and(void) {
+    long v = a_eq();
+    for (;;) { a_sp(); if (ap[0] == '&' && ap[1] == '&') { ap += 2; long r = a_eq(); v = v && r; } else return v; }
+}
+static long a_or(void) {
+    long v = a_and();
+    for (;;) { a_sp(); if (ap[0] == '|' && ap[1] == '|') { ap += 2; long r = a_and(); v = v || r; } else return v; }
+}
+/* NAME = expr, NAME op= expr (right to left), else a plain expression. */
+static long a_assign(void) {
+    a_sp();
+    const char *save = ap;
+    char name[16];
+    if (*ap == '$') ap++;
+    if (a_name(name)) {
+        a_sp();
+        char op = 0;
+        if (ap[0] == '=' && ap[1] != '=') { op = '='; ap++; }
+        else if ((ap[0] == '+' || ap[0] == '-' || ap[0] == '*' || ap[0] == '/' || ap[0] == '%') && ap[1] == '=') { op = ap[0]; ap += 2; }
+        if (op) {
+            long r = a_assign(), v = a_var(name);
+            if ((op == '/' || op == '%') && r == 0) { arith_err = 2; return 0; }
+            v = op == '=' ? r : op == '+' ? v + r : op == '-' ? v - r : op == '*' ? v * r : op == '/' ? v / r : v % r;
+            a_set(name, v);
+            return v;
+        }
+    }
+    ap = save;
+    return a_or();
+}
+static long a_comma(void) {               /* a, b: both, the value b's */
+    long v = a_assign();
+    for (;;) { a_sp(); if (*ap == ',') { ap++; v = a_assign(); } else return v; }
+}
 static long arith(const char *expr) {
     ap = expr;
-    long v = a_eq();
+    long v = a_comma();
     a_sp();
     if (*ap && !arith_err) arith_err = 1;            /* something left over */
     return v;
@@ -5772,6 +5844,24 @@ static void run_one(const char *seg) {
         cur_shell()->last_status = 1;
         return;
     }
+    {
+        /* (( expr )) (v0.60.50): status 0 when it is not zero, 1 when it is. */
+        const char *e = ex; while (*e == ' ') e++;
+        int el = (int)strlen(e);
+        while (el > 0 && e[el - 1] == ' ') el--;
+        if (el >= 4 && e[0] == '(' && e[1] == '(' && e[el - 1] == ')' && e[el - 2] == ')') {
+            char expr[INPUT_MAX];
+            int xl = el - 4 < INPUT_MAX - 1 ? el - 4 : INPUT_MAX - 1;
+            memcpy(expr, e + 2, (uint32_t)xl); expr[xl] = '\0';
+            arith_err = 0;
+            long v = arith(expr);
+            if (arith_err) {
+                t_puts(arith_err == 2 ? "  arithmetic: division by zero\n" : "  arithmetic: not an expression\n");
+                cur_shell()->last_status = 1;
+            } else cur_shell()->last_status = v ? 0 : 1;
+            return;
+        }
+    }
     if (prefix_assigns(ex)) return;
     if (try_assign(ex)) return;
     if (call_function(ex)) return;
@@ -5894,6 +5984,7 @@ static int split_segs(char *buf, lseg_t *sg, int max) {
             if (inq) { if (*s == inq) inq = 0; s++; continue; }
             if (*s == '\'' || *s == '"') { inq = *s; s++; continue; }
             if (s[0] == '$' && s[1] == '(') { pdepth++; s += 2; continue; }
+            if (s[0] == '(' && s[1] == '(') { pdepth += 2; s += 2; continue; }   /* (( ... )) (v0.60.50) */
             if (pdepth && *s == '(') { pdepth++; s++; continue; }
             if (pdepth && *s == ')') { pdepth--; s++; continue; }
             if (pdepth) { s++; continue; }

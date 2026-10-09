@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.49
+Current version: v0.60.50
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,15 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.50 (2026-10-08)  — (( EXPR ))
+  - The arithmetic command: status 0 when the expression is not zero, 1
+    when it is (an error says so, status 1). The evaluator, here and in
+    $(( )), gains assignment (= += -= *= /= %=, right to left), ++ and --
+    before and after a name, !, && and || (both sides evaluated), and the
+    comma. split_segs no longer splits a line inside (( )), so
+    `(( a > 1 && b < 2 ))` stays one command.
+  - scripts/arithcmd-test.sh compares twelve lines with bash.
 
 v0.60.49 (2026-10-08)  — DISH (PRINTF)
   - dish.elf is printf under a kitchen name, as the host's (coreutils):

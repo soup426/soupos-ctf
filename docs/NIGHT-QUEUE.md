@@ -56,7 +56,7 @@ statuses with bash.
 reused while arguments remain. Compare with the host's printf byte for
 byte.
 
-## 4. (( expr ))
+## 4. (( expr )) — DONE v0.60.50
 
 The arithmetic command: status 0 when the expression is not zero, 1 when
 it is, with the $(( )) evaluator; `n=$((n+1))` gets `(( n = n + 1 ))`
