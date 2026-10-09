@@ -1,0 +1,5 @@
+2026-10-09, during the v0.60.124 full check: ls-test "entry counts differ: peek.elf
+49 (said ?), mtools 79" and "a missing directory did not report an error". Alone:
+79 of 79. The test waited a flat two seconds for `cook peek.elf /`, and the listing
+grows with every program on the disk (SYS_READDIR lists the whole directory per
+entry); under load it ran past the wait. Fixed in v0.60.124: it waits for the prompt.

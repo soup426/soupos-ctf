@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.123
+Current version: v0.60.124
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,22 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.124 (2026-10-09)  — RECKON.ELF (EXPR)
+  - reckon.elf is expr under a kitchen name, with GNU's precedence and
+    rules: | and & (and their null-or-0 tests, both null giving 0),
+    comparisons as numbers when both are and as text otherwise, + - * / %
+    on 64-bit integers, STRING : REGEX, length, substr, index, match,
+    + TOKEN, ( ). Status 0, 1 for a null or 0 result, 2 for errors.
+  - : takes a basic regex, as expr's, turned into rx.c's extended one
+    (\( \| \+ are operators, ( | + plain, * first plain, ^ only first and
+    $ only last), anchored at the start; with a group the result is what
+    it matched, without, how much matched.
+  - scripts/reckon-test.sh compares 52 expressions' output and status
+    with GNU expr.
+  - ls-test.sh waits for the prompt after each listing, not two seconds:
+    the 79-entry root (SYS_READDIR reads the whole directory per entry)
+    ran past the wait under a loaded check. The flake is logged.
 
 v0.60.123 (2026-10-09)  — CARVE.ELF (SPLIT)
   - carve.elf [-l N | -b N] [FILE [PREFIX]] is split under a kitchen name:

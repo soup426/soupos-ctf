@@ -6,6 +6,10 @@
 # must agree on every name (the long one where there is one), size and type.
 # soupOS's own `serve` would only prove soupOS agrees with itself.
 set -uo pipefail
+# v0.60.124: each listing waits for the prompt, not two seconds: SYS_READDIR
+# reads the whole directory for every entry, so a listing grows with the
+# disk, and with 79 entries under a loaded full check (2026-10-09) peek.elf
+# was cut off at 49 when the wait ran out.
 cd "$(dirname "$0")/.."
 
 TESTDISK=$(mktemp /tmp/soupos-lsdisk.XXXXXX.img)
@@ -24,7 +28,7 @@ qemu-system-i386 -accel kvm -cpu host \
 PID=$!
 sleep 4
 python3 scripts/qemu_keys.py "$MON" "headchef" "rosemary" "WAIT:1" \
-    "cook peek.elf /" "WAIT:2" "cook peek.elf /nowhere" "WAIT:1" >/dev/null 2>&1
+    "cook peek.elf /" "UNTIL:@soupOS:" "cook peek.elf /nowhere" "UNTIL:@soupOS:" >/dev/null 2>&1
 kill "$PID" 2>/dev/null; wait "$PID" 2>/dev/null; PID=""
 
 python3 - "$LOG" "$TESTDISK" <<'PY'

@@ -75,7 +75,7 @@ A file (or stdin) into pieces: -l N lines (1000 by default) or -b N
 bytes, named PREFIX then aa, ab, ... (x by default). Compare the pieces
 with GNU split's byte for byte.
 
-## 6. reckon.elf (expr)
+## 6. reckon.elf (expr) — DONE v0.60.124
 
 expr under a kitchen name: + - * / % on integers, = != < <= > >= (as
 numbers when both are, else as text), | and &, length, substr, index,
@@ -88,4 +88,7 @@ Skipped at the user's request: OS work only.
 
 ## Notes left by unattended runs
 
-(none yet)
+- v0.60.124: SYS_READDIR runs fat_ls over the whole directory for every
+  entry it hands back, so peek.elf on the 79-entry root lists 79 x 79; it
+  ran past ls-test's flat two-second wait under a loaded check. The test
+  now waits for the prompt; the quadratic listing is worth an item.
