@@ -9,7 +9,9 @@
  * (arithmetic shifts, as the tests' Python does). Drawn eight rows at a
  * time, each batch handed to the desktop as it is done, so the window
  * fills as it computes. A click centres the view on that pixel and halves
- * the step (zoom in); - doubles it (zoom out); q or the close box ends it.
+ * the step (zoom in); - doubles it (zoom out); the wheel zooms in (up) or
+ * out (down) a notch at a time about the point under the pointer, which
+ * stays where it is (v0.60.157); q or the close box ends it.
  * What it shows is fixed by those integers: scripts/swirl-test.sh redoes
  * the arithmetic on the host and compares every pixel.
  */
@@ -59,6 +61,13 @@ int main(void) {
         if (e.type == WEV_DOWN && e.x >= 0 && e.y >= 0 && e.x < SW && e.y < SH && step > 1) {
             cx += (e.x - SW / 2) * step; cy += (e.y - SH / 2) * step; step >>= 1;
         } else if (e.type == WEV_KEY && e.key == '-' && step < (1 << 14)) step <<= 1;
+        else if (e.type == WEV_WHEEL && e.key) {        /* about the point under the pointer */
+            int n = (int)e.key, ox = e.x - SW / 2, oy = e.y - SH / 2;
+            int px0 = cx + ox * step, py0 = cy + oy * step;
+            for (; n < 0 && step > 1; n++) step >>= 1;          /* up: in */
+            for (; n > 0 && step < (1 << 14); n--) step <<= 1;  /* down: out */
+            cx = px0 - ox * step; cy = py0 - oy * step;
+        }
         else continue;
         render(id, cx, cy, step);
         views++;

@@ -60,6 +60,9 @@ typedef struct {
 #define WEV_MOVE   3   /* the pointer moved with it held                  */
 #define WEV_UP     4   /* and let go                                      */
 #define WEV_CLOSE  5   /* its close box: the program decides              */
+#define WEV_WHEEL  6   /* the wheel over the body (v0.60.157): key is the
+                        * notches as a signed int, down positive; x, y
+                        * where the pointer was                            */
 
 /* Reserved file descriptors. fd >= 3 are returned by open(). */
 #define FD_STDIN   0   /* keyboard                                          */

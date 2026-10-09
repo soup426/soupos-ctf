@@ -49,7 +49,8 @@
  * PATH` for a text file, v0.60.154), so what may be read is the shell's to
  * decide, as it always is.
  *
- * The wheel (v0.60.151) scrolls the files window under the pointer; Alt+Tab
+ * The wheel (v0.60.151) scrolls the files window under the pointer, and
+ * is a program's event over its window (v0.60.157); Alt+Tab
  * (v0.60.155) sends the focused window to the back.
  *
  * Programs' windows (v0.60.146, step 7). SYS_WIN_OPEN/PUT/EVENT/CLOSE: a
@@ -1007,7 +1008,9 @@ int countertop_run(int (*avail)(void), int (*getch)(void), int uid) {
         wheel_seen = wh;
         if (dw) {                                    /* the wheel: a files window under the pointer scrolls */
             int k = window_at(px, py);
-            if (k >= 0 && win[k].files) {
+            if (k >= 0 && win[k].app >= 0 && py >= win[k].y + BORDER + TITLE_H) {   /* a program's: its event (v0.60.157) */
+                app_push(win[k].app, WEV_WHEEL, (unsigned)dw, px - (win[k].x + BORDER), py - (win[k].y + BORDER + TITLE_H), 0);
+            } else if (k >= 0 && win[k].files) {
                 struct files *f = win[k].files;
                 int rows = files_rows(&win[k]), most = f->n > rows ? f->n - rows : 0;
                 int top = f->top + 3 * dw;

@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.156
+Current version: v0.60.157
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,17 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.157 (2026-10-09)  — THE WHEEL FOR PROGRAMS
+  - WEV_WHEEL: the wheel over a program's window body is its event, the
+    notches as a signed int in key (down positive) and the pointer's
+    place in x, y. Over a files window it still scrolls it.
+  - swirl.elf zooms with it, a notch at a time about the point under the
+    pointer, which stays put (up in, down out).
+  - swirl-test.sh: after the click's zoom, a notch up and a notch down
+    at the same pixel, every pixel compared with the host's arithmetic.
+    Not quite back where it was, and the test says why: the click's
+    step is 307, so in is 153 and out again 306. Six-wide soak 6 of 6.
 
 v0.60.156 (2026-10-09)  — THE SUITE'S TYPING TIME
   - Fifteen compare-with-the-host tests now run their cases from a

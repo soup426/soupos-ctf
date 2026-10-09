@@ -75,7 +75,7 @@ peak 7722 MB of 8192. remote-check.sh now asks for 48. The one failure
 at 48 (prodwin-test) was a background job's line split by the prompt,
 fixed in prod.elf.
 
-## 3. The wheel for programs
+## 3. The wheel for programs — DONE v0.60.157
 
 A WEV_WHEEL event (notches, signed, and where the pointer was) for the
 window under the pointer when it is a program's; swirl zooms with it.
