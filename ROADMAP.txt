@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.139
+Current version: v0.60.140
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,21 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.140 (2026-10-09)  — THE POINTER IN PIXELS (DESKTOP, STEP 1)
+  - The desktop begins (queue 48, at the user's request). mouse.c keeps a
+    pixel position beside its cells: a raw count a pixel, clamped to the
+    framebuffer (or the text screen's 8x16 cells), starting mid-screen;
+    mouse_get_px() for the desktop. The cells are kept as they were, not
+    derived, so skewer, drag-select and the gate move exactly as before.
+    skewer says the pixel too (and its serial line ends px=X,Y).
+  - Measured on the way: QEMU queues what a packet cannot carry, so one
+    mouse_move of -2000 goes on being paid back by the moves after it.
+  - scripts/pxmouse-test.sh: mid-screen, 100,50 then 107,53 exactly, both
+    clamps, the cells unchanged.
+  - rail-test.sh's jobs get more time: greet 2 s to exit before the first
+    listing (half a second was not enough under a loaded check, twice), the
+    long ones 30 and 31 s. Four at once pass; the flake log says why.
 
 v0.60.139 (2026-10-09)  — PAIR -L AND -S
   - pair.elf -l every differing byte (its number right-aligned to the

@@ -51,7 +51,7 @@ item below leaves something that works and is tested by screendump.
 
 ---
 
-## 1. The pointer in pixels
+## 1. The pointer in pixels — DONE v0.60.140
 
 mouse.c keeps text cells. Keep a pixel position too (the framebuffer's
 1024x768, clamped), with mouse_get_px(), and the cells derived from it as

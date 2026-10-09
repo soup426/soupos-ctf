@@ -3,7 +3,10 @@
 # (v0.60.116): two running jobs, one a pipeline, a finished one shown once
 # as Exit 42 and then gone, -p, a killed one, rail %N and %9 (status 1),
 # and a Ctrl-Z'd one as Stopped. The two jobs sleep long enough to outlast
-# the typing of the next lines (a line of 90 keys takes seconds). marinate.elf is sleep, spoon.elf cat and
+# the typing of the next lines (a line of 90 keys takes seconds), and greet
+# gets two seconds to have exited before the first listing: under a loaded
+# full check (2026-10-09, twice) half a second was not enough for it, and 13
+# seconds ran out before the last lines were typed. marinate.elf is sleep, spoon.elf cat and
 # greet.elf exits 42.
 set -uo pipefail
 cd "$(dirname "$0")/.."
@@ -14,7 +17,7 @@ cleanup() { [ -n "$PID" ] && kill "$PID" 2>/dev/null; if [ "$fail" != 0 ] || [ "
 trap cleanup EXIT
 cp disk.img "$WORK/disk.img"
 LINES=(
-  'cook marinate.elf 12 & cook marinate.elf 13 | cook spoon.elf & cook greet.elf & cook marinate.elf 0.5 ; rail ; rail'
+  'cook marinate.elf 30 & cook marinate.elf 31 | cook spoon.elf & cook greet.elf & cook marinate.elf 2 ; rail ; rail'
   'n=$(rail -p | cook weigh.elf -l) ; slurp R1:$((n)) ; kill %1 ; cook marinate.elf 0.3 ; rail'
   'rail %2 ; rail %9 ; slurp R2:$?'
 )

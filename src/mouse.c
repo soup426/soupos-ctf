@@ -20,6 +20,7 @@
 #include "isr.h"
 #include "vga.h"
 #include "klog.h"
+#include "fb.h"
 
 #define PS2_DATA   0x60
 #define PS2_CMD    0x64
@@ -54,6 +55,7 @@ static int      present;
 static uint8_t  pkt[3];
 static int      pkt_idx;
 static int      cur_x, cur_y;        /* cell coordinates          */
+static int      px_x, px_y;          /* pixels, a count each (v0.60.140) */
 static int      acc_x, acc_y;        /* leftover raw counts       */
 static int      buttons;
 static uint32_t moves;               /* packets accepted, for `skewer` */
@@ -63,6 +65,17 @@ int  mouse_present(void) { return present; }
 void mouse_get(int *x, int *y, int *btn) {
     if (x)   *x   = cur_x;
     if (y)   *y   = cur_y;
+    if (btn) *btn = buttons;
+}
+/* The pointer in pixels (v0.60.140), for the desktop: one raw count a
+ * pixel, clamped to the framebuffer (or to the text screen's 8x16 cells
+ * when there is none). Kept beside the cells, not derived from them, so
+ * everything that reads cells moves exactly as it always has. */
+static int px_w(void) { return fb_present() ? (int)fb_width()  : SCREEN_W * 8; }
+static int px_h(void) { return fb_present() ? (int)fb_height() : SCREEN_H * 16; }
+void mouse_get_px(int *x, int *y, int *btn) {
+    if (x)   *x   = px_x;
+    if (y)   *y   = px_y;
     if (btn) *btn = buttons;
 }
 void mouse_stats(uint32_t *m, uint32_t *r) {
@@ -112,6 +125,13 @@ static void mouse_irq(registers_t *regs) {
 
     buttons = flags & 0x07;
 
+    px_x += dx;
+    px_y -= dy;
+    if (px_x < 0) px_x = 0;
+    if (px_y < 0) px_y = 0;
+    if (px_x >= px_w()) px_x = px_w() - 1;
+    if (px_y >= px_h()) px_y = px_h() - 1;
+
     acc_x += dx;
     acc_y += dy;                        /* positive is up, screen y grows down */
 
@@ -152,6 +172,8 @@ int mouse_init(void) {
 
     cur_x = SCREEN_W / 2;
     cur_y = SCREEN_H / 2;
+    px_x = px_w() / 2;
+    px_y = px_h() / 2;
     pkt_idx = 0;
 
     irq_register(12, mouse_irq);

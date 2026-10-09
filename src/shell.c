@@ -3087,17 +3087,18 @@ static void cmd_skewer(void) {
         t_puts("  No mouse. QEMU has one by default; check IRQ 12.\n");
         return;
     }
-    int x, y, b;
+    int x, y, b, px, py;
     uint32_t moves, resyncs;
     mouse_get(&x, &y, &b);
+    mouse_get_px(&px, &py, 0);
     mouse_stats(&moves, &resyncs);
-    t_printf("  pointing at %d,%d  buttons:%s%s%s\n", x, y,
+    t_printf("  pointing at %d,%d (pixel %d,%d)  buttons:%s%s%s\n", x, y, px, py,
                (b & 1) ? " left"   : "",
                (b & 2) ? " right"  : "",
                (b & 4) ? " middle" : "");
     t_printf("  %u packets, %u resyncs\n", moves, resyncs);
-    klog("[mouse] at %d,%d buttons=%d packets=%u resyncs=%u\n",
-         x, y, b, moves, resyncs);
+    klog("[mouse] at %d,%d buttons=%d packets=%u resyncs=%u px=%d,%d\n",
+         x, y, b, moves, resyncs, px, py);
 }
 
 /* vault - the SSH server: `vault <port>`, `vault off`, or bare for status.
