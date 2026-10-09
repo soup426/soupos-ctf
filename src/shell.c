@@ -95,6 +95,7 @@ typedef struct {
     int      lineno;             /* $LINENO: the follow script's line now running */
     uint32_t job_pid[16];        /* job numbers (v0.60.92): %N is job_num's N */
     uint16_t job_num[16];
+    char    job_cmd[16][48];     /* what each was, for rail (v0.60.116) */
     int     njob;
     int     optpos, optind_seen; /* pluck's place inside a -abc, and the OPTIND it last wrote (v0.60.77) */
     char    trap_cmd[2][INPUT_MAX]; /* smoke (trap): EXIT, INT (v0.60.82) */
@@ -846,6 +847,7 @@ static void cmd_menu(void) {
         {0, "    orders             - list processes and their exit codes"},
         {0, "    rest [pid|%N|-n]   - wait for background jobs (-n: the next to end)"},
         {0, "    scraps             - show the clipboard (^U/^W fill it, ^V pastes)"},
+        {0, "    rail [-p] [%N]     - this shell's jobs: running, stopped, done (sh's jobs)"},
         {0, "    plate [pid]        - bring a job back to the foreground"},
         {0, "    steep [pid]        - resume a stopped job in the background"},
         {0, "                         (Ctrl+Z stops the foreground program)"},
@@ -1785,7 +1787,7 @@ static vfs_node_t *feed_text(char *buf, int len) {
     return rd;
 }
 
-static void job_add(uint32_t pid);          /* job numbers (v0.60.92) */
+static void job_add(uint32_t pid, const char *cmd);   /* job numbers (v0.60.92); cmd for rail (v0.60.116) */
 static int job_number(uint32_t pid);
 static void build_env(char *out, int max);   /* with hand (v0.60.26) */
 static vfs_node_t *pending_in;   /* stdin for the next cook's first stage (v0.60.27, pipe_into) */
@@ -1868,6 +1870,7 @@ static vfs_node_t *open_for_writing(const char *name, int append, const char *fa
 
 static void cmd_cook(const char *args) {
     while (*args == ' ') args++;
+    const char *line_was = args;                   /* for rail (v0.60.116) */
     if (!*args) {
         t_puts("Usage: cook <prog.elf> [args] [2> err] [| prog.elf ...] [< in | <<< word] [> out] [&]\n");
         return;
@@ -2083,7 +2086,7 @@ static void cmd_cook(const char *args) {
 
     if (background) {
         cur_shell()->last_bg = pids[nst - 1];       /* $! (v0.60.48) */
-        job_add(pids[nst - 1]);                      /* %N (v0.60.92) */
+        job_add(pids[nst - 1], line_was);            /* %N (v0.60.92) */
         t_color(VGA_DARK_GREY, VGA_BLACK);
         t_printf("  [%u] %s%s\n", pids[nst - 1], st[0].prog,
                    nst > 1 ? " | ..." : "");
@@ -2114,7 +2117,7 @@ static void cmd_cook(const char *args) {
             if (q) q->background = 1;
         }
         t_color(VGA_YELLOW, VGA_BLACK);
-        job_add(last);
+        job_add(last, line_was);
         t_printf("  [%u] set aside  %s   (plate / steep / kill %%%d)\n", last, st[nst - 1].path, job_number(last));
         t_color(VGA_LIGHT_GREY, VGA_BLACK);
         return;
@@ -2170,19 +2173,29 @@ static void job_prune(shell_t *me) {
     for (int k = 0; k < me->njob; ) {
         proc_t *p = proc_by_pid(me->job_pid[k]);
         if (!p || p->state == PROC_ZOMBIE) {
-            for (int m = k + 1; m < me->njob; m++) { me->job_pid[m - 1] = me->job_pid[m]; me->job_num[m - 1] = me->job_num[m]; }
+            for (int m = k + 1; m < me->njob; m++) { me->job_pid[m - 1] = me->job_pid[m]; me->job_num[m - 1] = me->job_num[m]; memcpy(me->job_cmd[m - 1], me->job_cmd[m], sizeof(me->job_cmd[0])); }
             me->njob--;
         } else k++;
     }
 }
-static void job_add(uint32_t pid) {
+static void job_add(uint32_t pid, const char *cmd) {
     shell_t *me = cur_shell();
     job_prune(me);
     for (int k = 0; k < me->njob; k++) if (me->job_pid[k] == pid) return;   /* already one */
     if (me->njob >= 16) return;
     int top = 0;
     for (int k = 0; k < me->njob; k++) if (me->job_num[k] > top) top = me->job_num[k];
-    me->job_pid[me->njob] = pid; me->job_num[me->njob] = (uint16_t)(top + 1); me->njob++;
+    me->job_pid[me->njob] = pid; me->job_num[me->njob] = (uint16_t)(top + 1);
+    /* "cook " and the line it was given, without its & and the blanks round it */
+    char *c = me->job_cmd[me->njob]; int n = 0, cap = (int)sizeof(me->job_cmd[0]) - 1;
+    for (const char *w = "cook "; *w && n < cap; w++) c[n++] = *w;
+    while (*cmd == ' ') cmd++;
+    for (; *cmd && n < cap; cmd++) c[n++] = *cmd;
+    while (n > 5 && c[n - 1] == ' ') n--;
+    if (n > 5 && c[n - 1] == '&' && c[n - 2] != '&' && c[n - 2] != '>') n--;
+    while (n > 5 && c[n - 1] == ' ') n--;
+    c[n] = '\0';
+    me->njob++;
 }
 static int job_number(uint32_t pid) {
     shell_t *me = cur_shell();
@@ -2195,7 +2208,7 @@ static int job_spec(const char *w, uint32_t *pid) {
     shell_t *me = cur_shell();
     for (int k = 0; k < me->njob; ) {          /* gone ones only: one that has ended is still waited for */
         if (!proc_by_pid(me->job_pid[k])) {
-            for (int m = k + 1; m < me->njob; m++) { me->job_pid[m - 1] = me->job_pid[m]; me->job_num[m - 1] = me->job_num[m]; }
+            for (int m = k + 1; m < me->njob; m++) { me->job_pid[m - 1] = me->job_pid[m]; me->job_num[m - 1] = me->job_num[m]; memcpy(me->job_cmd[m - 1], me->job_cmd[m], sizeof(me->job_cmd[0])); }
             me->njob--;
         } else k++;
     }
@@ -2220,6 +2233,76 @@ static proc_t *job_arg(const char *args) {
     proc_t *p = js ? proc_by_pid(jp) : *args ? proc_by_pid((uint32_t)parse_num(args)) : proc_most_recent_on(TERM_KEY);
     if (p && !may_signal(p)) { not_yours(p->pid); return 0; }
     return p;
+}
+
+/* rail [-p] [%N...] (v0.60.116): bash's jobs under a kitchen name, the
+ * order rail the tickets hang on. Each job this shell put in the background
+ * or set aside: [N], + the newest and - the one before, Running, Stopped,
+ * Done (Exit N for an exit that was not 0, Killed), and what it was, with
+ * & while it runs. A finished one is shown once and then collected, its
+ * status kept for rest as the prompt keeps it. -p: the PIDs alone. */
+static int job_status(int code);
+static void cmd_rail(const char *args) {
+    shell_t *me = cur_shell();
+    int pids_only = 0, st = 0, any_spec = 0;
+    char w[24];
+    const char *r = args;
+    uint8_t want[16]; memset(want, 0, sizeof(want));
+    for (int k = 0; k < me->njob; ) {                 /* gone altogether: dropped */
+        if (!proc_by_pid(me->job_pid[k])) {
+            for (int m = k + 1; m < me->njob; m++) { me->job_pid[m - 1] = me->job_pid[m]; me->job_num[m - 1] = me->job_num[m]; memcpy(me->job_cmd[m - 1], me->job_cmd[m], sizeof(me->job_cmd[0])); }
+            me->njob--;
+        } else k++;
+    }
+    for (;;) {
+        while (*r == ' ') r++;
+        if (!*r) break;
+        r = first_word(r, w, sizeof(w));
+        if (str_eq(w, "-p")) { pids_only = 1; continue; }
+        any_spec = 1;
+        uint32_t pid;
+        if (job_spec(w, &pid) <= 0) {
+            if (w[0] != '%') t_printf("  rail: %s: no such job\n", w);
+            st = 1; continue;
+        }
+        for (int k = 0; k < me->njob; k++) if (me->job_pid[k] == pid) want[k] = 1;
+    }
+    int ndone = 0; uint32_t done[16];
+    for (int k = 0; k < me->njob; k++) {
+        if (any_spec && !want[k]) continue;
+        proc_t *p = proc_by_pid(me->job_pid[k]);
+        if (!p) continue;
+        if (pids_only) { t_printf("%u\n", p->pid); continue; }
+        char mark = k == me->njob - 1 ? '+' : k == me->njob - 2 ? '-' : ' ';
+        char what[28];
+        int fin = p->state == PROC_ZOMBIE;
+        if (p->state == PROC_STOPPED) strcpy(what, "Stopped");
+        else if (!fin) strcpy(what, "Running");
+        else if (p->exit_code == PROC_EXIT_KILLED) strcpy(what, "Killed");
+        else if (job_status(p->exit_code) == 0) strcpy(what, "Done");
+        else {
+            int v = job_status(p->exit_code), nd = 0; char d[4];
+            do { d[nd++] = (char)('0' + v % 10); v /= 10; } while (v);
+            strcpy(what, "Exit "); int o = 5;
+            while (nd) what[o++] = d[--nd];
+            what[o] = '\0';
+        }
+        int wl = (int)strlen(what);
+        while (wl < 27) what[wl++] = ' ';
+        what[wl] = '\0';
+        t_printf("[%d]%c  %s%s%s\n", me->job_num[k], mark, what, me->job_cmd[k], fin || p->state == PROC_STOPPED ? "" : " &");
+        if (fin && ndone < 16) done[ndone++] = p->pid;
+    }
+    for (int d = 0; d < ndone; d++) {                /* shown: collected, as the prompt would */
+        proc_t *p = proc_by_pid(done[d]);
+        if (!p || p->state != PROC_ZOMBIE) continue;
+        me->done_pid[me->done_head % 16] = p->pid;
+        me->done_st[me->done_head % 16] = (uint8_t)job_status(p->exit_code);
+        me->done_head++;
+        p->reported = 1;
+        p->state = PROC_FREE;
+    }
+    me->last_status = st;
 }
 
 /* fg [pid] - put a job back in the foreground: give it the terminal, resume it
@@ -3363,6 +3446,7 @@ static void cmd_shelf(const char *args);
 static void cmd_plain(const char *args);                  /* v0.60.100 */
 static void cmd_brew(const char *args);                   /* v0.60.110 */
 static void cmd_temper(const char *args);                 /* v0.60.115 */
+static void cmd_rail(const char *args);                   /* v0.60.116 */
 static int fn_name_len(const char *t);
 static void run_file(const char *args, int dot);          /* . FILE (v0.60.91) */
 static void cmd_forget(const char *args);
@@ -4951,7 +5035,7 @@ static const char *const cmd_names[] = {
     "takeout", "bgclock", "yieldbg", "spinbg", "sleeptest", "vfstest",
     "dmesg", "pwd", "cd", "mkbowl", "rmbowl", "bowltest",
     "whoami", "roster", "clockout", "hire", "fire", "perms", "secret",
-    "break", "continue", "return", "exit", "inspect", "seal", "pluck", "taste", "[", "smoke", "eggtimer", "nickname", "forget", ".", "shelve", "unshelve", "shelf", "plain", "brew", "temper", ":", "fresh", "spoiled",
+    "break", "continue", "return", "exit", "inspect", "seal", "pluck", "taste", "[", "smoke", "eggtimer", "nickname", "forget", ".", "shelve", "unshelve", "shelf", "plain", "brew", "temper", "rail", ":", "fresh", "spoiled",
     "preempttest", "vmtest", "vgastress", "fatstress",
 };
 #define CMD_COUNT  (int)(sizeof(cmd_names) / sizeof(cmd_names[0]))
@@ -5224,6 +5308,7 @@ static void dispatch(const char *buf) {
     else if (str_eq(p, "plain") || str_startswith(p, "plain ")) cmd_plain(p + 5);
     else if (str_eq(p, "brew") || str_startswith(p, "brew ")) cmd_brew(p + 4);
     else if (str_eq(p, "temper") || str_startswith(p, "temper ")) cmd_temper(p + 6);
+    else if (str_eq(p, "rail") || str_startswith(p, "rail ")) cmd_rail(p + 4);
     /* : (POSIX's special builtin, its name kept), fresh and spoiled (true and
      * false) (v0.60.104): nothing, then 0, 0 and 1. Their words are already
      * expanded by now, so `: ${x:=5}` has set x; `: > F` empties F. */

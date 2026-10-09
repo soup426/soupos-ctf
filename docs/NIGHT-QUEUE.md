@@ -63,7 +63,7 @@ and the command does not run), `-x` (each command written to stderr with
 a +, after expansion), `temper -- A B C` and `temper A B C` setting $1..
 and $#, `temper` alone listing variables. Test each against bash's set.
 
-## 4. rail (jobs)
+## 4. rail (jobs) — DONE v0.60.116
 
 The jobs this shell put in the background or set aside, as bash's jobs:
 `[N]+  Running   cmd &`, `-` for the one before, Stopped and Done (a done

@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.115
+Current version: v0.60.116
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,17 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.116 (2026-10-09)  — RAIL (JOBS)
+  - rail [-p] [%N] is bash's jobs under a kitchen name (the rail the order
+    tickets hang on): [N], + the newest and - the one before, Running,
+    Stopped, Done, Exit N, Killed, and the command, & while it runs. A
+    finished one is shown once and then collected, its status kept for
+    rest as the prompt keeps it. -p the PIDs; %9 no such job, status 1.
+  - Each job now keeps what it was ("cook ..." as given) beside its PID
+    and number.
+  - scripts/rail-test.sh compares eleven lines with bash's jobs under
+    set -m, a Ctrl-Z'd job included.
 
 v0.60.115 (2026-10-09)  — TEMPER (SET)
   - temper is sh's set under a kitchen name. -e stops a recipe at a
