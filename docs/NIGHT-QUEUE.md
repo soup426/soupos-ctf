@@ -42,7 +42,7 @@ N); `exit [N]` ends a `follow` script with status N (at the prompt it is
 clockout's business, so say so and do nothing there). sh's keywords keep
 their names. Compare with bash.
 
-## 2. $! and rest (wait)
+## 2. $! and rest (wait) — DONE v0.60.48
 
 `$!` is the id of the last program started in the background; `rest`
 (wait, under a kitchen name) waits for all of this cook's background
@@ -67,6 +67,17 @@ and `(( n++ ))`, `(( n += 2 ))` too. Compare with bash.
 In a `follow` script, `cook prog <<WORD` takes the lines up to WORD as
 the first stage's stdin, $NAME expanded in them (not with <<'WORD').
 Compare with bash running the same script.
+
+## 7. music-test: "the effects never showed"
+
+2026-10-08, the first full check for v0.60.48: "the effects never showed
+in the capture (music 2466, 10.2 s captured)"; the rerun passed. The
+music alone measured 2466, about twice the usual 1291, and the capture
+was 10.2 s. v0.60.28 finds the effects as the first quarter second half
+again as loud as the loudest music quarter second; a louder baseline
+(the capture starting late, so 1.0-3.5 s holds the louder part of the
+score) puts the bar above the effects. Measure where the capture starts
+relative to `hum` (the serial log has both) and anchor the windows there.
 
 ## 6. Doom at the framebuffer's own resolution — DEFERRED
 

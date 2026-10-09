@@ -88,6 +88,10 @@ typedef struct {
     int     loops;               /* loops open now, for break and continue (v0.60.44) */
     int     brk, cont;           /* loops still to break out of / continue past */
     int     fns, scripts;        /* functions and follow scripts running (v0.60.47) */
+    uint32_t last_bg;            /* the last job started with &: $! (v0.60.48) */
+    uint32_t done_pid[16];       /* finished jobs the prompt reported, and their */
+    uint8_t  done_st[16];        /* statuses, for a rest that comes after (as sh) */
+    int      done_head;
     int     ret, quit;           /* a return / an exit on its way out */
     char    in_buf[512];
     int     in_pos, in_len;
@@ -811,6 +815,7 @@ static void cmd_menu(void) {
         {0, "    cook <prog.elf> &  - ... in the background (Ctrl+C kills the"},
         {0, "                         foreground one; kill <pid> any of them)"},
         {0, "    jobs               - list processes and their exit codes"},
+        {0, "    rest [pid]         - wait for background jobs ($! is the last one)"},
         {0, "    clip               - show the clipboard (^U/^W fill it, ^V pastes)"},
         {1, "  Network"},
         {0, "    netinfo            - card, addresses and frame counters"},
@@ -1847,6 +1852,7 @@ static void cmd_cook(const char *args) {
     }
 
     if (background) {
+        cur_shell()->last_bg = pids[nst - 1];       /* $! (v0.60.48) */
         t_color(VGA_DARK_GREY, VGA_BLACK);
         t_printf("  [%u] %s%s\n", pids[nst - 1], st[0].prog,
                    nst > 1 ? " | ..." : "");
@@ -2828,6 +2834,52 @@ static void cmd_orders(void) {
         t_printf("  %-8s  %s%s\n", users_name_of(p->owner), p->name, p->killed ? " (killing)" : "");
     }
     if (!n) t_puts("  (no processes)\n");
+}
+
+/* rest [PID] - wait, under a kitchen name (v0.60.48). With a PID: until that
+ * background job of this shell's ends, its status being the job's (127 if
+ * there is no such job, as sh's). Without: until every one of them has,
+ * status 0. The job waited for is in the foreground meanwhile, so Ctrl-C
+ * reaches it (sh's Ctrl-C would stop the wait and leave the job). */
+static int interrupted(void);
+/* A job started on this shell's terminal: a task with no terminal of its
+ * own is on the console, so an empty one on either side means term_vga. */
+static int my_job_term(void *t) { return (t ? (term_t *)t : &term_vga) == term_current(); }
+static int job_status(int code) { return (code == -1) ? 126 : (code < 0) ? ((-code) & 0xFF) : (code & 0xFF); }
+static void cmd_rest(const char *args) {
+    shell_t *me = cur_shell();
+    while (*args == ' ') args++;
+    me->last_status = 0;
+    if (*args) {
+        uint32_t pid = 0;
+        while (*args >= '0' && *args <= '9') pid = pid * 10 + (uint32_t)(*args++ - '0');
+        proc_t *p = proc_by_pid(pid);
+        if (!p || !my_job_term(p->term) || !p->background) {
+            for (int k = 0; k < 16; k++)             /* finished and reported already */
+                if (pid && me->done_pid[k] == pid) { me->last_status = me->done_st[k]; me->done_pid[k] = 0; return; }
+            t_printf("  rest: %u is not a job of this shell\n", pid);
+            me->last_status = 127;
+            return;
+        }
+        int code = 0;
+        shell_set_fg(p);
+        int r = proc_wait(pid, &code);
+        shell_set_fg(0);
+        me->last_status = r == 1 ? job_status(code) : 0;
+        return;
+    }
+    for (;;) {
+        proc_t *q, *found = 0;
+        int idx = 0;
+        while ((q = proc_next(&idx)) != 0)
+            if (q->background && my_job_term(q->term) && q->state != PROC_STOPPED) { found = q; break; }
+        if (!found) break;
+        int code = 0;
+        shell_set_fg(found);
+        proc_wait(found->pid, &code);
+        shell_set_fg(0);
+        if (interrupted()) break;
+    }
 }
 
 /* ---- bowls (directories) ---------------------------------------------- */
@@ -4481,7 +4533,7 @@ static const char *const cmd_names[] = {
     "jot", "ai", "cook", "soup", "hash",
     "beep", "mandelbrot", "vgademo", "uname", "cal",
     "clock", "wipe", "fortune", "bounce", "recipe", "leftovers", "spill",
-    "freeze", "reheat", "ps", "kitchen", "brigade", "logbook", "portions", "follow", "discard", "take", "orders", "plate", "steep", "hand", "kill", "scraps", "sample", "skewer", "larder", "whistle", "hatch", "hush", "pass", "vault",
+    "freeze", "reheat", "ps", "kitchen", "brigade", "logbook", "portions", "follow", "discard", "take", "orders", "plate", "steep", "hand", "rest", "kill", "scraps", "sample", "skewer", "larder", "whistle", "hatch", "hush", "pass", "vault",
 #ifndef NO_DOOM
     "sizzle", "hum",
 #endif
@@ -4658,7 +4710,12 @@ static void shell_tab_complete(char *input, int *pos, int *len) {
 /* ---- prompt & dispatch ---- */
 
 /* How a finished background job is announced, just before the next prompt. */
+static int job_status(int code);
 static void report_finished_job(const proc_t *p) {
+    shell_t *me = cur_shell();                       /* remembered for rest (v0.60.48) */
+    me->done_pid[me->done_head % 16] = p->pid;
+    me->done_st[me->done_head % 16] = (uint8_t)job_status(p->exit_code);
+    me->done_head++;
     t_color(VGA_DARK_GREY, VGA_BLACK);
     if (p->exit_code == PROC_EXIT_KILLED)
         t_printf("  [%u] killed  %s\n", p->pid, p->name);
@@ -4721,6 +4778,7 @@ static void dispatch(const char *buf) {
     else if (str_eq(p, "follow") || str_startswith(p, "follow ")) cmd_run(p + 6);
     else if (str_startswith(p, "discard ")) cmd_unset(uq_args(p + 8));
     else if (str_eq(p, "hand") || str_startswith(p, "hand ")) cmd_hand(p + 4 + (p[4] == ' '));
+    else if (str_eq(p, "rest") || str_startswith(p, "rest ")) cmd_rest(p + 4);
     else if (str_eq(p, "break") || str_startswith(p, "break ")) cmd_break(p + 5, 0);
     else if (str_eq(p, "return") || str_startswith(p, "return ")) cmd_return(p + 6, 0);
     else if (str_eq(p, "exit") || str_startswith(p, "exit ")) cmd_return(p + 4, 1);
@@ -5406,6 +5464,16 @@ static int expand_into(const char *seg, char *ex, int max) {
                     break;
                 }
             i = j - 1;
+            continue;
+        }
+        if (seg[i] == '$' && seg[i + 1] == '!' && sq != '\'') {   /* $! (v0.60.48): empty before any & */
+            unsigned v = cur_shell()->last_bg;
+            if (v) {
+                char d[12]; int nd = 0;
+                do { d[nd++] = (char)('0' + v % 10); v /= 10; } while (v);
+                while (nd && k < max - 1) ex[k++] = d[--nd];
+            }
+            i++;
             continue;
         }
         if (seg[i] == '$' && seg[i + 1] == '?' && sq != '\'') {

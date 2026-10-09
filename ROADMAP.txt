@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.47
+Current version: v0.60.48
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,20 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.48 (2026-10-08)  — $! AND REST (WAIT)
+  - $! is the last job started with & (empty before the first). `rest PID`
+    (sh's wait, under a kitchen name) waits for that background job of
+    this shell's and takes its status; a job that already finished, even
+    one the prompt has reported and collected, still gives its status (the
+    shell keeps the last sixteen, as sh remembers them); no such job is
+    127. `rest` alone waits for all of them, status 0. The job waited for
+    is in the foreground meanwhile, so Ctrl-C reaches it (sh's Ctrl-C
+    would stop the wait and leave the job running).
+  - A job is this shell's when it was started on the same terminal; a task
+    with no terminal of its own is on the console, which the first build
+    missed (every rest said 127).
+  - scripts/rest-test.sh compares twelve lines with bash.
 
 v0.60.47 (2026-10-08)  — RETURN AND EXIT
   - `return [N]` leaves a function with status N, or the last command's
