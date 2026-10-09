@@ -7262,6 +7262,7 @@ static void brace_line(const char *in, char *out, int max) {
 }
 
 static void run_ex(char *ex);
+static void cmd_dbracket(const char *args);              /* [[ ]] (v0.60.113) */
 static void run_one(const char *seg) {
     const char *q = seg; while (*q == ' ') q++;
     if (!*q) return;
@@ -7286,6 +7287,7 @@ static void run_one(const char *seg) {
             }
         }
     }
+    if (q[0] == '[' && q[1] == '[' && (q[2] == ' ' || q[2] == '\t' || !q[2])) { cmd_dbracket(q + 2); return; }
     if (dish_into(q)) return;
     if (array_assign(q)) return;
     if (builtin_redirect(q)) return;
@@ -7411,7 +7413,7 @@ static void cmd_plain(const char *args) {
     const char *rest = first_word(args, w, sizeof(w));
     if (str_eq(w, "-v")) {
         static const char *const kws[] = { "if", "then", "elif", "else", "fi", "for", "select", "while", "until",
-                                           "do", "done", "case", "esac", "in", "!", "{", "}", "eggtimer" };
+                                           "do", "done", "case", "esac", "in", "!", "{", "}", "eggtimer", "[[", "]]" };
         int missing = 0;
         while (*rest) {
             char n[FAT_PATH_MAX], path[FAT_PATH_MAX];
@@ -7617,6 +7619,7 @@ static int split_segs(char *buf, lseg_t *sg, int max) {
         char *start = s, inq = 0;
         int next_op = 0, pdepth = 0, dsemi = 0;   /* inside $( ... ): no splitting (v0.60.4) */
         int amp = 0, n_was = n;                   /* ended by a lone & (v0.60.62) */
+        int dbr = 0;                              /* inside [[ ... ]]: && || < > are its own (v0.60.113) */
         char *defend = fndef_end(start);          /* NAME() { ... }: one segment (v0.60.22) */
         if (defend) s = defend;
         while (*s) {
@@ -7627,11 +7630,15 @@ static int split_segs(char *buf, lseg_t *sg, int max) {
             }
             if (*s == '\\' && s[1]) { s += 2; continue; }      /* \; \| \' are not syntax (v0.60.53) */
             if (*s == '\'' || *s == '"') { inq = *s; s++; continue; }
+            if (!pdepth && !dbr && s[0] == '[' && s[1] == '[' && (s[2] == ' ' || s[2] == '\t') &&
+                (s == start || s[-1] == ' ' || s[-1] == '\t' || s[-1] == '!')) { dbr = 1; s += 2; continue; }
+            if (dbr && !pdepth && s[0] == ']' && s[1] == ']' && (s[-1] == ' ' || s[-1] == '\t') &&
+                (!s[2] || s[2] == ' ' || s[2] == '\t' || s[2] == ';' || s[2] == '&' || s[2] == '|' || s[2] == ')')) { dbr = 0; s += 2; continue; }
             if (s[0] == '$' && s[1] == '(') { pdepth++; s += 2; continue; }
             if (s[0] == '(' && s[1] == '(') { pdepth += 2; s += 2; continue; }   /* (( ... )) (v0.60.50) */
             if (pdepth && *s == '(') { pdepth++; s++; continue; }
             if (pdepth && *s == ')') { pdepth--; s++; continue; }
-            if (pdepth) { s++; continue; }
+            if (pdepth || dbr) { s++; continue; }
             if (s[0] == ';' && s[1] == ';' && s[2] == '&') { next_op = ';'; dsemi = 3; *s = '\0'; s += 3; break; }
             if (s[0] == ';' && s[1] == ';') { next_op = ';'; dsemi = 1; *s = '\0'; s += 2; break; }
             if (s[0] == ';' && s[1] == '&') { next_op = ';'; dsemi = 2; *s = '\0'; s += 2; break; }
@@ -8034,6 +8041,171 @@ static int taste_eval(char (*a)[INPUT_MAX], int n) {     /* 1 true, 0 false, -1 
     }
     return -1;
 }
+
+/* [[ EXPR ]] (v0.60.113): bash's conditional command. Its words are taken
+ * from the line as typed, before any expansion, so && || < > ( ) inside are
+ * its own and not the shell's; each operand is expanded on its own, when it
+ * is reached (not after a && that is already false), and is not split, so
+ * $x holding blanks is one word. == and != match against a pattern unless
+ * the right side was quoted; < and > compare text; the rest is taste's.
+ * Status 0 true, 1 false, 2 a malformed one. */
+#define DB_MAX 32
+typedef struct { char *w[DB_MAX]; uint8_t op[DB_MAX]; int n, i, err; } dbr_t;
+static void db_operand(const char *raw, char *out) {
+    char ex[INPUT_MAX];
+    if (expand_into(raw, ex, INPUT_MAX)) ex[INPUT_MAX - 1] = '\0';
+    unquote(ex);
+    strcpy(out, ex);
+}
+/* The right side of == and != as a pattern: what was quoted is text (its
+ * * ? [ \\ escaped for glob_match), what was not is pattern, an expansion
+ * included, as bash's: "a"* is a then anything. */
+static __attribute__((noinline)) void db_pattern(const char *raw, char *out) {
+    char piece[INPUT_MAX], ex[INPUT_MAX];
+    int o = 0;
+    const char *c = raw;
+    while (*c && o < INPUT_MAX - 1) {
+        int pl = 0, quoted = 0;
+        if (*c == '\'' || *c == '"') {               /* one quoted stretch, quotes and all */
+            char q = *c; quoted = 1;
+            piece[pl++] = *c++;
+            while (*c && *c != q && pl < INPUT_MAX - 2) piece[pl++] = *c++;
+            if (*c) piece[pl++] = *c++;
+        } else {                                        /* up to the next quote, $( ) whole */
+            int depth = 0;
+            while (*c && pl < INPUT_MAX - 2) {
+                if (!depth && (*c == '\'' || *c == '"')) break;
+                if (c[0] == '$' && c[1] == '(') { depth++; piece[pl++] = *c++; piece[pl++] = *c++; continue; }
+                if (depth && *c == '(') depth++;
+                if (depth && *c == ')') depth--;
+                piece[pl++] = *c++;
+            }
+        }
+        piece[pl] = '\0';
+        if (expand_into(piece, ex, INPUT_MAX)) ex[INPUT_MAX - 1] = '\0';
+        unquote(ex);
+        for (const char *e = ex; *e && o < INPUT_MAX - 2; e++) {
+            if (quoted && (*e == '*' || *e == '?' || *e == '[' || *e == '\\')) out[o++] = '\\';
+            out[o++] = *e;
+        }
+    }
+    out[o] = '\0';
+}
+static int db_or(dbr_t *d, int skip);
+static __attribute__((noinline)) int db_test(dbr_t *d, int skip) {
+    if (d->i >= d->n || d->op[d->i]) { d->err = 1; return 0; }
+    static const char *const bin[] = { "==", "=", "!=", "<", ">", "-eq", "-ne", "-lt", "-le", "-gt", "-ge", "-nt", "-ot", "=~" };
+    int isbin = 0;
+    if (d->i + 2 < d->n && !d->op[d->i + 1] && !d->op[d->i + 2])
+        for (unsigned k = 0; k < sizeof(bin) / sizeof(bin[0]); k++) if (str_eq(d->w[d->i + 1], bin[k])) isbin = 1;
+    char (*a)[INPUT_MAX] = kmalloc(3 * INPUT_MAX);
+    if (!a) { d->err = 1; return 0; }
+    int r = 0;
+    if (isbin) {
+        const char *L = d->w[d->i], *op = d->w[d->i + 1], *R = d->w[d->i + 2];
+        d->i += 3;
+        if (str_eq(op, "=~")) { if (!skip) t_puts("  [[: =~ is not supported (no regular expressions)\n"); d->err = 2; kfree(a); return 0; }
+        if (!skip) {
+            db_operand(L, a[0]);
+            if (str_eq(op, "==") || str_eq(op, "=") || str_eq(op, "!=")) {
+                db_pattern(R, a[2]);
+                int m = glob_match(a[2], a[0]);
+                r = str_eq(op, "!=") ? !m : m;
+            } else if (str_eq(op, "<") || str_eq(op, ">")) {
+                db_operand(R, a[2]);
+                int c = strcmp(a[0], a[2]);
+                r = op[0] == '<' ? c < 0 : c > 0;
+            } else {
+                db_operand(R, a[2]);
+                strcpy(a[1], op);
+                r = taste_eval(a, 3);
+                if (r < 0) { d->err = 1; r = 0; }
+            }
+        }
+    } else if (d->w[d->i][0] == '-' && d->w[d->i][1] && !d->w[d->i][2] && d->i + 1 < d->n && !d->op[d->i + 1]) {
+        const char *op = d->w[d->i], *X = d->w[d->i + 1];
+        d->i += 2;
+        if (!skip) {
+            strcpy(a[0], op); db_operand(X, a[1]);
+            r = taste_eval(a, 2);
+            if (r < 0) { d->err = 1; r = 0; }
+        }
+    } else {
+        const char *X = d->w[d->i++];
+        if (!skip) { db_operand(X, a[0]); r = a[0][0] != '\0'; }
+    }
+    kfree(a);
+    return r;
+}
+static int db_not(dbr_t *d, int skip) {
+    if (d->i < d->n && !d->op[d->i] && str_eq(d->w[d->i], "!")) { d->i++; return !db_not(d, skip); }
+    if (d->i < d->n && d->op[d->i] == '(') {
+        d->i++;
+        int r = db_or(d, skip);
+        if (d->i >= d->n || d->op[d->i] != ')') { d->err = 1; return 0; }
+        d->i++;
+        return r;
+    }
+    return db_test(d, skip);
+}
+static int db_and(dbr_t *d, int skip) {
+    int r = db_not(d, skip);
+    while (!d->err && d->i < d->n && d->op[d->i] == 'A') { d->i++; int b = db_not(d, skip || !r); r = r && b; }
+    return r;
+}
+static int db_or(dbr_t *d, int skip) {
+    int r = db_and(d, skip);
+    while (!d->err && d->i < d->n && d->op[d->i] == 'O') { d->i++; int b = db_and(d, skip || r); r = r || b; }
+    return r;
+}
+static __attribute__((noinline)) void cmd_dbracket(const char *args) {
+    shell_t *me = cur_shell();
+    char *buf = kmalloc(INPUT_MAX);
+    if (!buf) { me->last_status = 2; return; }
+    int bl = 0;
+    for (const char *c = args; *c && bl < INPUT_MAX - 1; c++) buf[bl++] = *c;
+    buf[bl] = '\0';
+    while (bl > 0 && (buf[bl - 1] == ' ' || buf[bl - 1] == '\t')) buf[--bl] = '\0';
+    if (bl < 2 || buf[bl - 1] != ']' || buf[bl - 2] != ']') {
+        t_puts("  [[: no ]] to close it\n"); kfree(buf); me->last_status = 2; return;
+    }
+    buf[bl - 2] = '\0';
+    dbr_t d; memset(&d, 0, sizeof(d));
+    char *c = buf;
+    while (*c && d.n < DB_MAX) {
+        while (*c == ' ' || *c == '\t') *c++ = '\0';
+        if (!*c) break;
+        if ((c[0] == '&' && c[1] == '&') || (c[0] == '|' && c[1] == '|')) { d.op[d.n] = c[0] == '&' ? 'A' : 'O'; d.w[d.n++] = c; c[0] = '\0'; c += 2; continue; }
+        if (*c == '(' || *c == ')') { d.op[d.n] = (uint8_t)*c; d.w[d.n++] = c; *c++ = '\0'; continue; }
+        d.w[d.n] = c; d.op[d.n] = 0; d.n++;
+        char q = 0; int depth = 0;
+        while (*c) {
+            if (q) { if (*c == q) q = 0; c++; continue; }
+            if (*c == '\'' || *c == '"') { q = *c++; continue; }
+            if (*c == '\\' && c[1]) { c += 2; continue; }
+            if (c[0] == '$' && c[1] == '(') { depth++; c += 2; continue; }
+            if (depth && *c == '(') { depth++; c++; continue; }
+            if (depth && *c == ')') { depth--; c++; continue; }
+            if (depth) { c++; continue; }
+            if (*c == ' ' || *c == '\t' || *c == '(' || *c == ')' || (c[0] == '&' && c[1] == '&') || (c[0] == '|' && c[1] == '|')) break;
+            c++;
+        }
+        if (*c == '(' || *c == ')' || *c == '&' || *c == '|') {
+            /* the word ends here; the operator starts a token of its own */
+            char save = *c; *c = '\0';
+            if (d.n < DB_MAX) {
+                if (save == '(' || save == ')') { d.op[d.n] = (uint8_t)save; d.w[d.n++] = (char *)""; c++; }
+                else { d.op[d.n] = save == '&' ? 'A' : 'O'; d.w[d.n++] = (char *)""; c += 2; }
+            }
+        }
+    }
+    int r = 0;
+    if (d.n == 0) d.err = 1;
+    else { r = db_or(&d, 0); if (d.i != d.n && !d.err) d.err = 1; }
+    if (d.err == 1) t_puts("  [[: not a condition\n");
+    me->last_status = d.err ? 2 : (r ? 0 : 1);
+    kfree(buf);
+}
 static void cmd_taste(const char *args, int bracket) {
     shell_t *me = cur_shell();
     char (*w)[INPUT_MAX] = kmalloc(sizeof(char[INPUT_MAX]) * 8);
@@ -8163,7 +8335,7 @@ static void cmd_seal(const char *args) {
  * not found, and the status is 1. */
 static void cmd_inspect(const char *args) {
     static const char *const kws[] = { "if", "then", "elif", "else", "fi", "for", "select", "while", "until",
-                                       "do", "done", "case", "esac", "in", "!", "{", "}" };
+                                       "do", "done", "case", "esac", "in", "!", "{", "}", "[[", "]]" };
     shell_t *me = cur_shell();
     int terse = 0, missing = 0, any = 0;
     const char *a = args;

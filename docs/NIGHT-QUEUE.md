@@ -38,7 +38,7 @@ the shell's own switches (set), the jobs list, xargs, and shuf.
 
 ---
 
-## 1. [[ EXPR ]]
+## 1. [[ EXPR ]] — DONE v0.60.113 (no =~)
 
 bash's conditional command, a keyword so it keeps its name: no word
 splitting or globbing of what is inside, `==` and `!=` against a glob
