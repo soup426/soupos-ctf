@@ -1,10 +1,10 @@
 # Night queue
 
-Thirty-first queue. The first thirty are in `docs/queue-archive-2026-10-0*.md`.
+Thirty-second queue. The first thirty-one are in `docs/queue-archive-2026-10-0*.md`.
 Items wait on a person in three archives (the seventh, the thirteenth and
-the twenty-fourth). The menu catches up with the shell, globs learn
-brackets, functions get their own variables, scripts can stop at the
-first failure, and $RANDOM.
+the twenty-fourth). Scripts get shift, a command can be turned around with
+!, a whole loop or if can go to a file, & separates commands, and
+arithmetic learns to stop early and to choose.
 
 ## Standing rules
 
@@ -35,36 +35,33 @@ first failure, and $RANDOM.
 
 ---
 
-## 1. The menu matches the shell — DONE v0.60.54
+## 1. shift [N]
 
-`menu` still lists names from before the kitchen renames (jobs, clip, and
-perhaps more) and may miss builtins added since. Every command it names
-must run (no "No soup for you"), and every builtin the dispatcher has
-must be listed. Test it: take the names from menu's own output and try
-each.
+Drops the first N (default 1) of a script's or function's arguments, so
+$1 is what $2 was, and $# and $@ follow. Status 1 when there are fewer
+than N. A special builtin in sh, so it keeps its name. Compare with bash.
 
-## 2. [abc] and [a-z] in globs and case patterns — DONE v0.60.55
+## 2. ! COMMAND
 
-glob_match knows * and ? only. Add bracket expressions, ranges and [!x],
-for file globs and case patterns alike. Compare with bash.
+`! cmd` runs cmd and turns its status round: 0 becomes 1, anything else 0.
+Works on a pipeline, in if and while conditions, and with && and ||; and
+follow -e does not stop on it, as bash -e does not. Compare with bash.
 
-## 3. stash (local) — DONE v0.60.56
+## 3. done > FILE, fi > FILE
 
-`stash NAME[=value]` inside a function: the variable is the function's
-own, the caller's (or its absence) back when it returns, as sh's local.
-A kitchen name, since local is a builtin, not a keyword. Compare with
-bash, nested calls and a recursive function included.
+A loop's or an if's whole output to a file (>, >>, and 2> with them),
+which the shell refuses today. Compare the file with bash's.
 
-## 4. follow -e — DONE v0.60.57
+## 4. & between commands
 
-`follow -e FILE` stops the script at the first command that fails (not
-counting a condition of if/while/until, or a command before && or ||),
-with that command's status, as `bash -e` does. Compare with bash -e.
+`a & b` runs a in the background and b at once, as `a & ; b` does today.
+$! is a's. Compare with bash.
 
-## 5. $RANDOM — DONE v0.60.58
+## 5. && || and ?: in arithmetic
 
-A number from 0 to 32767, new at each expansion, from the entropy pool.
-Test that it stays in range and does not repeat in a run of a hundred.
+$(( )) and (( )) evaluate both sides of && and || today; sh evaluates the
+right only when it counts, which matters for assignments and ++. Add
+c ? a : b, which evaluates one side only. Compare with bash.
 
 ## 6. Doom at the framebuffer's own resolution — DEFERRED
 
