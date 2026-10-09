@@ -6435,7 +6435,7 @@ static char *compound_bar(char *t) {
     for (const char *b = pipe_bar(t); b; b = pipe_bar(b + 1)) {
         const char *r = b + 1;
         while (*r == ' ') r++;
-        if (is_kw(r, "while") || is_kw(r, "until") || is_kw(r, "for") || is_kw(r, "if") || is_kw(r, "case")) return (char *)b;
+        if (is_kw(r, "while") || is_kw(r, "until") || is_kw(r, "for") || is_kw(r, "if") || is_kw(r, "case") || is_kw(r, "{")) return (char *)b;
     }
     return 0;
 }
@@ -6443,8 +6443,8 @@ static char *compound_bar(char *t) {
 /* done | PROG, fi | PROG, esac | PROG (v0.60.37): the compound's output
  * goes to PROG. The word stands alone; PROG is noted in out. */
 static void split_closer(lseg_t *g, char *t) {
-    static const char *const closers[] = { "done", "fi", "esac" };
-    for (int k = 0; k < 3; k++) {
+    static const char *const closers[] = { "done", "fi", "esac", "}" };   /* } (v0.60.75) */
+    for (int k = 0; k < 4; k++) {
         int kl = (int)strlen(closers[k]);
         if (strncmp(t, closers[k], (uint32_t)kl) == 0 && t[kl] == ' ') {
             char *r = t + kl; while (*r == ' ') r++;
@@ -6522,11 +6522,11 @@ static int split_segs(char *buf, lseg_t *sg, int max) {
          * repeatedly, since X may start with a keyword too (`do if ...`,
          * `then for ...`, `else if ...`). */
         {
-            static const char *const kws[] = { "do", "then", "else", "elif", "if", "while", "until" };
+            static const char *const kws[] = { "do", "then", "else", "elif", "if", "while", "until", "{" };
             int more = 1;
             while (more && n < max - 1) {
                 more = 0;
-                for (int k = 0; k < 7; k++) {
+                for (int k = 0; k < 8; k++) {
                     int kl = (int)strlen(kws[k]);
                     if (strncmp(t, kws[k], (uint32_t)kl) == 0 && t[kl] == ' ') {
                         t[kl] = '\0';
@@ -6588,6 +6588,17 @@ static int match_end(lseg_t *sg, int from, int to, const char *open, const char 
         else if (is_kw(sg[i].text, close) && --depth == 0) return i;
     }
     return -1;
+}
+
+/* Where the compound starting at sg[from] ends (v0.60.75): a loop's done,
+ * an if's fi, a case's esac or a group's }; -1 if it never does. */
+static int match_done(lseg_t *sg, int from, int to);
+static int compound_end(lseg_t *sg, int from, int to) {
+    const char *c = sg[from].text;
+    if (is_kw(c, "for") || is_kw(c, "while") || is_kw(c, "until")) return match_done(sg, from, to);
+    if (is_kw(c, "if")) return match_end(sg, from, to, "if", "fi");
+    if (is_kw(c, "case")) return match_end(sg, from, to, "case", "esac");
+    return match_end(sg, from, to, "{", "}");
 }
 
 static void set_var(const char *name, const char *value);
@@ -6688,7 +6699,7 @@ static int loop_after_body(shell_t *me) {
  * not found, and the status is 1. */
 static void cmd_inspect(const char *args) {
     static const char *const kws[] = { "if", "then", "elif", "else", "fi", "for", "while", "until",
-                                       "do", "done", "case", "esac", "in", "!" };
+                                       "do", "done", "case", "esac", "in", "!", "{", "}" };
     shell_t *me = cur_shell();
     int terse = 0, missing = 0, any = 0;
     const char *a = args;
@@ -6861,10 +6872,8 @@ static void exec_range(lseg_t *sg, int from, int to, int depth) {
              * Not again for the compound the feed itself is running. */
             const char *c = sg[i].text;
             int loopish = is_kw(c, "for") || is_kw(c, "while") || is_kw(c, "until");
-            if (run && &sg[i] != feeding_seg && (loopish || is_kw(c, "if") || is_kw(c, "case"))) {
-                int e = loopish ? match_done(sg, i, to)
-                      : is_kw(c, "if") ? match_end(sg, i, to, "if", "fi")
-                      : match_end(sg, i, to, "case", "esac");
+            if (run && &sg[i] != feeding_seg && (loopish || is_kw(c, "if") || is_kw(c, "case") || is_kw(c, "{"))) {
+                int e = compound_end(sg, i, to);
                 if (e >= 0 && sg[e].junk) {
                     t_printf("  Only `| program`, `> file`, `>> file` or `< file` may follow done, fi or esac (here: %s).\n", sg[e].text);
                     cur_shell()->last_status = 2;
@@ -6907,10 +6916,7 @@ static void exec_range(lseg_t *sg, int from, int to, int depth) {
                 if (e >= 0 && sg[e].out) {
                     range_ctx_t rc = { sg, i, e + 1, depth };
                     if (sg[e].into && e + 1 < to) {      /* ... done | PROG | B ... (v0.60.46) */
-                        const char *b = sg[e + 1].text;
-                        int eb = (is_kw(b, "while") || is_kw(b, "until") || is_kw(b, "for")) ? match_done(sg, e + 1, to)
-                               : is_kw(b, "if") ? match_end(sg, e + 1, to, "if", "fi")
-                               : match_end(sg, e + 1, to, "case", "esac");
+                        int eb = compound_end(sg, e + 1, to);
                         if (eb < 0) { t_puts("  |: the loop after it never ends (no done, fi or esac).\n"); cur_shell()->last_status = 2; return; }
                         piped_left_t pl = { &rc, sg[e].out };
                         into_compound(sg, e + 1, eb, depth, start_piped, &pl);
@@ -6928,12 +6934,18 @@ static void exec_range(lseg_t *sg, int from, int to, int depth) {
         if (sg[i].into && i + 1 < to) {
             /* X | while/for/if/case ... (v0.60.34): the compound after this
              * segment reads X's output through take. Find where it ends. */
-            const char *c = sg[i + 1].text;
-            int e = (is_kw(c, "while") || is_kw(c, "until") || is_kw(c, "for")) ? match_done(sg, i + 1, to)
-                  : is_kw(c, "if") ? match_end(sg, i + 1, to, "if", "fi")
-                  : match_end(sg, i + 1, to, "case", "esac");
-            if (e < 0) { t_puts("  |: the loop after it never ends (no done, fi or esac).\n"); cur_shell()->last_status = 2; return; }
+            int e = compound_end(sg, i + 1, to);
+            if (e < 0) { t_puts("  |: the loop after it never ends (no done, fi, esac or }).\n"); cur_shell()->last_status = 2; return; }
             if (run) into_compound(sg, i + 1, e, depth, start_text, (void *)sg[i].text);
+            i = e + 1;
+            continue;
+        }
+        if (is_kw(sg[i].text, "{")) {
+            /* { A ; B ; } (v0.60.75): run here, in this shell, so what it
+             * sets stays; its status is the last command's. */
+            int e = match_end(sg, i, to, "{", "}");
+            if (e < 0) { t_puts("  {: expected `{ ... ; }`.\n"); cur_shell()->last_status = 2; return; }
+            if (run) exec_range(sg, i + 1, e, depth + 1);
             i = e + 1;
             continue;
         }

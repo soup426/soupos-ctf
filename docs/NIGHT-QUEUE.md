@@ -39,7 +39,7 @@ seal (readonly), pluck (getopts), and a check of "$@" and "$*".
 `if A ; then X ; elif B ; then Y ; else Z ; fi`, any number of elifs, as
 sh. Compare with bash, nested ifs and follow scripts included.
 
-## 2. { ... ; } groups
+## 2. { ... ; } groups — DONE v0.60.75
 
 `{ a ; b ; }` runs a and b in this shell (variables stick), and the group
 takes > F, >> F, < F, | PROG, && and || as a whole, as a loop's done

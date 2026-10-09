@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.74
+Current version: v0.60.75
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,16 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.75 (2026-10-08)  — { ... ; } GROUPS
+  - `{ A ; B ; }` runs A and B here, in this shell, so what they set
+    stays; its status is the last one's. Like a loop's done, its } takes
+    > F, >> F, < F and | PROG for the whole group; && and || after it, X |
+    before it, and groups in functions, ifs and loops all work. inspect
+    calls { and } keywords; follow joins a group over lines.
+  - compound_end() finds where any compound ends (done, fi, esac or }),
+    in place of three copies of the same choice.
+  - scripts/group-test.sh compares eleven lines with bash.
 
 v0.60.74 (2026-10-08)  — ELIF, AND COMPOUNDS OVER LINES IN SCRIPTS
   - `if A ; then X ; elif B ; then Y ; else Z ; fi`, up to eight elifs:
