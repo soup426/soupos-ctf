@@ -27,7 +27,21 @@
 #define KERNEL    0x00100000u            /* the kernel's own memory             */
 
 static int same(const char *a, const char *b) { while (*a && *a == *b) { a++; b++; } return *a == *b; }
-static void said(const char *what, int r) { print("prod: "); print(what); print(" gave "); print_int(r); print("\n"); }
+/* One write a line (v0.60.157): written in pieces, a background prod's line
+ * could have the shell's prompt land in the middle of it under load. */
+static void said(const char *what, int r) {
+    char b[160]; int n = 0;
+    for (const char *p = "prod: "; *p; p++) b[n++] = *p;
+    for (const char *p = what; *p && n < 120; p++) b[n++] = *p;
+    for (const char *p = " gave "; *p; p++) b[n++] = *p;
+    unsigned u = r < 0 ? (unsigned)-r : (unsigned)r;
+    char d[12]; int k = 0;
+    do { d[k++] = (char)('0' + u % 10); u /= 10; } while (u);
+    if (r < 0) b[n++] = '-';
+    while (k) b[n++] = d[--k];
+    b[n++] = '\n';
+    sys_write(FD_STDOUT, b, n);
+}
 
 static int open_when_up(int w, int h, const char *title) {   /* the desktop, within a minute */
     for (int i = 0; i < 600; i++) {
@@ -44,7 +58,7 @@ static int victim(void) {
     unsigned *px = malloc(100 * 100 * 4);
     for (int i = 0; i < 100 * 100; i++) px[i] = 0x0027AE60;
     sys_win_put(id, px);
-    print("prod: victim window open\n");
+    print("prod: victim window open\n");                 /* one write already */
     for (;;) {
         uwinev_t e;
         int r = sys_win_event(id, &e, 1000);
