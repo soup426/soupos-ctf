@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.59
+Current version: v0.60.60
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,18 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.60 (2026-10-08)  — ! COMMAND
+  - `! cmd` runs cmd and turns its status round, 0 to 1 and anything else
+    to 0: of a whole pipeline, in if, while and until conditions, with &&
+    and ||, twice over, and on a function. A bare ! is 1. follow -e does
+    not stop on a ! command, as bash -e does not.
+  - Found on the way: `slurp x | cook prog` said "No such program: cook"
+    (pipe_into put a cook of its own in front), and so did `a.elf | cook
+    b.elf`; a cook starting a later stage is skipped now. A program that
+    is not there gives $? 127, as sh's "not found"; it used to leave $?
+    as it was.
+  - scripts/bang-test.sh compares eighteen lines with bash.
 
 v0.60.59 (2026-10-08)  — SHIFT
   - `shift [N]` drops the first N (1 if none) of a script's or function's

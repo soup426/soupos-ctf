@@ -878,6 +878,7 @@ static void cmd_menu(void) {
         {0, "    return [N]         - leave a function"},
         {0, "    stash NAME[=value] - a function's own variable (sh's local)"},
         {0, "    shift [N]          - drop the first N arguments ($2 becomes $1)"},
+        {0, "    ! command          - run it and turn its status round"},
         {0, "    exit [N]           - leave a script (at the prompt, clockout)"},
         {0, "    kill <id>          - stop a background task"},
         {0, "    larder             - room left on the disk"},
@@ -1776,6 +1777,9 @@ static void cmd_cook(const char *args) {
             }
             continue;
         }
+        /* `a.elf | cook b.elf`: a cook starting a later stage is the word
+         * it would be at the prompt, not a program (v0.60.60) */
+        if (!st[nst - 1].prog[0] && nst > 1 && str_eq(tok, "cook")) continue;
         if (!st[nst - 1].prog[0]) { strncpy(st[nst - 1].prog, tok, FAT_PATH_MAX - 1); unquote(st[nst - 1].prog); }
         else if (stage_add_word(&st[nst - 1], tok) < 0) { cook_err("The arguments are too long (128 bytes at most)."); return; }
     }
@@ -1796,6 +1800,7 @@ static void cmd_cook(const char *args) {
             t_color(VGA_LIGHT_RED, VGA_BLACK);
             t_printf("  No such program: %s\n", st[i].prog);
             t_color(VGA_LIGHT_GREY, VGA_BLACK);
+            cur_shell()->last_status = 127;     /* sh's "not found" (v0.60.60; it was left as it was) */
             return;
         }
         if (!may(st[i].path, 'r') || !may(st[i].path, 'x')) { deny(st[i].path); return; }
@@ -5815,6 +5820,7 @@ static void pipe_into(const char *left, const char *right) {
     const char *c = "cook ";
     while (*c && n < INPUT_MAX - 1) line[n++] = *c++;
     while (*right == ' ') right++;
+    if (strncmp(right, "cook ", 5) == 0) right += 5;   /* `slurp x | cook y.elf` (v0.60.60) */
     while (*right && n < INPUT_MAX - 1) line[n++] = *right++;
     line[n] = '\0';
     pending_in = rd;
@@ -5952,6 +5958,17 @@ static int prefix_assigns(const char *ex) {
 static void run_one(const char *seg) {
     const char *q = seg; while (*q == ' ') q++;
     if (!*q) return;
+    /* ! COMMAND (v0.60.60): the status turned round, 0 to 1 and anything
+     * else to 0; of the whole pipeline, so before the | is looked for. A
+     * bare ! is 1, as the empty command it turns round is 0. */
+    if (q[0] == '!' && (q[1] == ' ' || !q[1])) {
+        shell_t *me = cur_shell();
+        const char *r = q + 1; while (*r == ' ') r++;
+        me->last_status = 0;
+        if (*r) run_one(r);
+        me->last_status = me->last_status ? 0 : 1;
+        return;
+    }
     const char *bar = pipe_bar(q);
     if (bar && !is_kw(q, "cook")) {
         char left[INPUT_MAX];
@@ -6660,7 +6677,9 @@ static void exec_range(lseg_t *sg, int from, int to, int depth) {
              * not in a condition, nor one an && or || follows, as bash -e. */
             shell_t *me = cur_shell();
             int next_op = (i + 1 < to) ? sg[i + 1].op : ';';
-            if (me->errexit && !me->in_cond && me->last_status != 0 && next_op != 'A' && next_op != 'O')
+            const char *t = sg[i].text; while (*t == ' ') t++;
+            int negated = t[0] == '!' && (t[1] == ' ' || !t[1]);    /* nor a ! one */
+            if (me->errexit && !me->in_cond && !negated && me->last_status != 0 && next_op != 'A' && next_op != 'O')
                 me->quit = 1;
         }
         i++;

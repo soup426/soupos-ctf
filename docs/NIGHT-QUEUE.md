@@ -41,7 +41,7 @@ Drops the first N (default 1) of a script's or function's arguments, so
 $1 is what $2 was, and $# and $@ follow. Status 1 when there are fewer
 than N. A special builtin in sh, so it keeps its name. Compare with bash.
 
-## 2. ! COMMAND
+## 2. ! COMMAND — DONE v0.60.60
 
 `! cmd` runs cmd and turns its status round: 0 becomes 1, anything else 0.
 Works on a pipeline, in if and while conditions, and with && and ||; and
