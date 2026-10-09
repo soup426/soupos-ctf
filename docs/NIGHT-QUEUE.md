@@ -1,10 +1,9 @@
 # Night queue
 
-Thirty-fourth queue. The first thirty-three are in `docs/queue-archive-2026-10-0*.md`.
+Thirty-fifth queue. The first thirty-four are in `docs/queue-archive-2026-10-0*.md`.
 Items wait on a person in three archives (the seventh, the thirteenth and
-the twenty-fourth). The gaps the last queues wrote down: quoted pattern
-characters, $( ) in here-documents and 64-bit arithmetic; and two new
-builtins, inspect (type) and dish -v.
+the twenty-fourth). The shell still has no elif and no { } group; then
+seal (readonly), pluck (getopts), and a check of "$@" and "$*".
 
 ## Standing rules
 
@@ -35,33 +34,34 @@ builtins, inspect (type) and dish -v.
 
 ---
 
-## 1. A quoted glob character is itself, in patterns — DONE v0.60.69
+## 1. elif
 
-${NAME#"*"}, ${NAME/"?"/x} and case patterns ("*") take a quoted * ? [
-as glob syntax today (v0.60.64 wrote it down); sh takes it as the
-character. Compare with bash.
+`if A ; then X ; elif B ; then Y ; else Z ; fi`, any number of elifs, as
+sh. Compare with bash, nested ifs and follow scripts included.
 
-## 2. $( ) in here-documents — DONE v0.60.70
+## 2. { ... ; } groups
 
-heredoc_expand knows $NAME, ${NAME}, $1, $? and $(( )), not $( ).
-Compare with bash, in a script and at the prompt.
+`{ a ; b ; }` runs a and b in this shell (variables stick), and the group
+takes > F, >> F, < F, | PROG, && and || as a whole, as a loop's done
+does. Compare with bash.
 
-## 3. 64-bit arithmetic — DONE v0.60.71 (with 0x, 017 and BASE#N)
+## 3. seal NAME[=value] (readonly)
 
-$(( )) is 32 bits (a long on i386); bash's is 64. Make it 64, which needs
-64-bit division and remainder in the kernel (libgcc's __divdi3 and
-friends, or our own). Compare with bash past 2**31.
+A variable that cannot be set, discarded or stashed again; trying says
+so and is status 1. A kitchen name. `seal` alone lists them. Compare
+with bash's readonly.
 
-## 4. inspect NAME (sh's type) — DONE v0.60.72
+## 4. pluck OPTSTRING NAME (getopts)
 
-Says what each NAME is: a keyword, a builtin, a function (with its body),
-or a program (with its path), or not found (status 1). A kitchen name,
-the health inspector's. Compare the kinds with bash's type -t.
+sh's getopts under a kitchen name: OPTIND, OPTARG, a : after a letter for
+an argument, ? for one not known, a leading : for the quiet form; in a
+script or a function, over $1..$9. Compare with bash.
 
-## 5. dish -v NAME — DONE v0.60.73
+## 5. "$@" and "$*"
 
-dish (printf) into a variable instead of the terminal, as bash's
-printf -v. Compare with bash.
+Check them against bash in every place a word can be: arguments, for
+lists, assignments, here-documents, with IFS's default; fix what
+differs.
 
 ## 6. Doom at the framebuffer's own resolution — DEFERRED
 
