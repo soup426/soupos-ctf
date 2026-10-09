@@ -48,7 +48,7 @@ SECONDS=N resets the count from N), and the line of the follow script
 being run. Test against what is known (two reads of $$ agree, $SECONDS
 moves with sleeptest, $LINENO counts a script's lines as bash does).
 
-## 3. take -p PROMPT, -n N, -t SECS
+## 3. take -p PROMPT, -n N, -t SECS — DONE v0.60.96
 
 read's prompt, its N characters and no more, and its timeout (status
 above 128 when it runs out, as bash). Test by typing and by not typing.

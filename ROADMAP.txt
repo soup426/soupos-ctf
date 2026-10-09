@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.95
+Current version: v0.60.96
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,14 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.96 (2026-10-09)  — TAKE -P, -N, -T
+  - take learns read's options: -p PROMPT shown before it reads (not when
+    the input is a pipe), -n N for N characters and no more (no Enter
+    needed, no \ joining), -t SECS (to the tenth) to give up at, with
+    status 142 as bash's read and the names given what was typed so far.
+    -t is for the terminal; a pipe's take waits as before (written down).
+  - scripts/takeopt-test.sh types and pipes seven uses.
 
 v0.60.95 (2026-10-09)  — $$, $PPID, $SECONDS, $LINENO
   - $$ is the shell's task (the console's is the kernel's first, 0; a

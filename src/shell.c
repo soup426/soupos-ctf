@@ -890,7 +890,7 @@ static void cmd_menu(void) {
         {0, "    . <file> [..]      - follow it in this shell, as sh's dot (sets stay, return leaves)"},
         {0, "    NAME=value, $NAME  - shell variables ($RANDOM: 0 to 32767)"},
         {0, "    discard NAME       - remove a variable"},
-        {0, "    take [-r] NAME...  - take a line into variables (-r: backslashes kept)"},
+        {0, "    take [-r] [-p P] [-n N] [-t S] NAME... - a line into variables (sh's read)"},
         {0, "    hand NAME[=value]  - hand a variable to programs (their getenv)"},
         {0, "    break [N]          - leave a for, while or until loop"},
         {0, "    continue [N]       - go round it again"},
@@ -5403,8 +5403,10 @@ static void set_var(const char *name, const char *value) {
  * `\ ` is a space inside a word), a \ at the end of a line joins the next
  * line to it, and tabs part words as spaces do; `take -r` keeps every
  * backslash as it is. */
-static int take_line(shell_t *me, char *line, int *lenp, int max) {
-    int len = *lenp, eof = 0;
+/* limit: stop after so many characters (-n), 0 none; deadline: the tick
+ * to give up at (-t), 0 never. 1 at the end of input, 2 run out of time. */
+static int take_line(shell_t *me, char *line, int *lenp, int max, int limit, uint32_t deadline) {
+    int len = *lenp, eof = 0, start = len;
     if (me->in_pipe) {
         /* From a pipe (v0.60.34): the line as written, no echo, as sh's read
          * from a pipe. */
@@ -5417,9 +5419,15 @@ static int take_line(shell_t *me, char *line, int *lenp, int max) {
             char c = me->in_buf[me->in_pos++];
             if (c == '\n') break;
             if (c != '\r' && len < max - 1) line[len++] = c;
+            if (limit && len - start >= limit) break;
         }
     } else
     for (;;) {
+        if (limit && len - start >= limit) { t_putc('\n'); break; }
+        if (deadline) {                          /* take -t: wait for a key, not past the deadline */
+            while (!t_avail() && (int32_t)(timer_get_ticks() - deadline) < 0) task_sleep(10);
+            if (!t_avail()) { t_putc('\n'); *lenp = len; return 2; }
+        }
         int c = t_getc();
         if (c < 0) { eof = 1; break; }
         if (c == '\n') { t_putc('\n'); break; }
@@ -5429,25 +5437,54 @@ static int take_line(shell_t *me, char *line, int *lenp, int max) {
     *lenp = len;
     return eof;
 }
+/* take's options (v0.60.96), as read's: -r, -p PROMPT (shown when the
+ * input is the terminal), -n N (N characters and no more, no Enter
+ * needed), -t SECS (to the tenth: run out, status 142 as bash's, the
+ * names get what was typed so far). Before the names, any order. */
 static void cmd_read(const char *args) {
-    char names[8][16]; int nn = 0, raw = 0;
+    char names[8][16]; int nn = 0, raw = 0, limit = 0;
+    char prompt[INPUT_MAX] = "";
+    uint32_t wait_ticks = 0; int timed = 0;
     const char *a = args;
+    shell_t *me = cur_shell();
     while (*a && nn < 8) {
+        char w[INPUT_MAX];
+        const char *after = first_word(a, w, sizeof(w));
+        if (!nn && w[0] == '-' && w[1] && !w[2] && (w[1] == 'r' || w[1] == 'p' || w[1] == 'n' || w[1] == 't')) {
+            char opt = w[1];
+            a = after;
+            if (opt == 'r') { raw = 1; continue; }
+            char v[INPUT_MAX];
+            a = first_word(a, v, sizeof(v));
+            if (opt == 'p') strcpy(prompt, v);
+            else if (opt == 'n') { limit = 0; for (const char *c = v; *c >= '0' && *c <= '9'; c++) limit = limit * 10 + (*c - '0'); }
+            else {
+                uint32_t whole = 0, tenth = 0; const char *c = v;
+                while (*c >= '0' && *c <= '9') whole = whole * 10 + (uint32_t)(*c++ - '0');
+                if (*c == '.' && c[1] >= '0' && c[1] <= '9') tenth = (uint32_t)(c[1] - '0');
+                wait_ticks = whole * TIMER_HZ + tenth * (TIMER_HZ / 10);
+                timed = 1;
+            }
+            continue;
+        }
         a = first_word(a, names[nn], 16);
-        if (!nn && !raw && str_eq(names[nn], "-r")) { raw = 1; continue; }
         if (names[nn][0]) nn++;
     }
-    if (!nn) { t_puts("Usage: take [-r] NAME...\n"); cur_shell()->last_status = 2; return; }
+    if (!nn) { t_puts("Usage: take [-r] [-p PROMPT] [-n N] [-t SECS] NAME...\n"); me->last_status = 2; return; }
     char line[INPUT_MAX];
     int len = 0, eof = 0;
-    shell_t *me = cur_shell();
+    if (prompt[0] && !me->in_pipe) t_puts(prompt);
+    uint32_t deadline = timed ? timer_get_ticks() + wait_ticks + (wait_ticks ? 0 : 1) : 0;
     for (;;) {
-        eof = take_line(me, line, &len, INPUT_MAX);
+        eof = take_line(me, line, &len, INPUT_MAX, limit, me->in_pipe ? 0 : deadline);
+        if (eof == 2) break;
         int bs = 0;                                  /* backslashes ending it */
         while (bs < len && line[len - 1 - bs] == '\\') bs++;
-        if (raw || eof || !(bs & 1)) break;
+        if (raw || eof || limit || !(bs & 1)) break;
         len--;                                       /* \ newline: the next line joins on */
     }
+    int timed_out = eof == 2;
+    if (timed_out) eof = 0;
     /* what each byte is, after the backslashes: lit marks one that was
      * escaped, which is never a separator and never trimmed */
     char ch[INPUT_MAX]; char lit[INPUT_MAX]; int n = 0;
@@ -5475,7 +5512,7 @@ static void cmd_read(const char *args) {
         if (me->last_status) set_bad = 1;            /* a sealed name (v0.60.76) */
     }
     #undef TAKE_SEP
-    cur_shell()->last_status = set_bad ? 1 : me->in_pipe ? (eof ? 1 : 0) : ((eof && len == 0) ? 1 : 0);
+    cur_shell()->last_status = timed_out ? 142 : set_bad ? 1 : me->in_pipe ? (eof ? 1 : 0) : ((eof && len == 0) ? 1 : 0);
 }
 
 /* unset NAME (v0.58.0). */
