@@ -60,7 +60,7 @@ built as -1 from the call rather than a kill: user_ok checks the pages
 before the copy, because a kill from inside the fault could unwind a
 call holding FAT's or the desktop's mutex.
 
-## 2. prod.elf: the window calls, attacked
+## 2. prod.elf: the window calls, attacked — DONE v0.60.150
 
 A program that does what frost would never: SYS_WIN_* with another
 program's id (opened by a second copy of itself), sizes of 0 and 641,
@@ -136,3 +136,10 @@ Skipped at the user's request (queue 48): OS work only.
   QEMU was killed with four lines unread. Now it waits for each prompt.
   find, cut, glob, flip, quote, uniq, wc and tr tests have the same
   fixed wait (grep '"WAIT:2"); done'); item 8 should take them too.
+- v0.60.150: the gate failed again only inside check.sh, this time its
+  audio segment (no "[doomsnd] DSPISTOL" or "[music] D_E1M1" line, 98
+  checks run, not 107); the gate alone passed (107 ok) and so did the
+  rerun. With the boot segment's failure (v0.60.145) that is two of
+  about ten check.sh runs today. Worth an item: run check.sh several
+  times, count, and give the gate's segments what they wait for rather
+  than fixed time under load.

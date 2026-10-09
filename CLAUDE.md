@@ -3,7 +3,7 @@
 ## What this is
 
 soupOS is a 32-bit x86 hobby OS written in C and NASM assembly (currently
-**v0.60.149**; ROADMAP.txt is the authority on the version). It boots via GRUB and runs in protected mode with paging, a
+**v0.60.150**; ROADMAP.txt is the authority on the version). It boots via GRUB and runs in protected mode with paging, a
 physical/heap allocator, and a cooperative scheduler. On top of that:
 
 - **Filesystem**: FAT16 read/write with subdirectories ("bowls") and a VFS shim
@@ -489,7 +489,9 @@ drawer (it shows new slots, repaints dirty ones, closes the windows of
 programs that closed them or ended). PUT copies the program's whole body
 into a kernel buffer (640x480 at most), so nothing is drawn from user
 memory. The close box only sends `WEV_CLOSE`: the program decides. With
-the desktop down every call gives -1. A program in a terminal window
+the desktop down every call gives -1 (but CLOSE, which frees the slot);
+a second CLOSE of one window gives -1. prodwin-test.sh attacks all of
+it through `prod.elf limits`/`victim`. A program in a terminal window
 writes its stderr there, not to serial, so frost-test reads frost's
 `[frost]` lines from the terminal's cells.
 

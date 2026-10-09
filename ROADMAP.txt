@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.149
+Current version: v0.60.150
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,25 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.150 (2026-10-09)  — THE WINDOW CALLS, ATTACKED
+  - prod.elf victim, started at the console in the background, waits
+    for the desktop and opens a green window; limits then runs in a
+    terminal on the desktop, its answers to a file (run first from the
+    console too, it raced the victim to the desktop under load and won,
+    attacking ids before the victim had one). limits asks for windows of 0 and
+    641 wide, 481 high, -1; with a title in the kernel and one running
+    off the end of its memory; puts pixels from above its break, the
+    kernel, half past its break; asks for events into the kernel and
+    above its break; uses ids 8, -1 and all seven that are not its own
+    (the victim's among them). All give -1, and the victim's window
+    stays green.
+  - Fixed: a second SYS_WIN_CLOSE of the same window gave 0 (the slot
+    waits for the desktop's loop to free it). It gives -1 now.
+  - Once the desktop has left, the victim's put, event and open give -1,
+    and its close gives 0 and frees the slot.
+  - scripts/prodwin-test.sh (it checks the victim's window was up before
+    limits asked for one); six-wide soak 6 of 6.
 
 v0.60.149 (2026-10-09)  — A POINTER A PROGRAM NEVER HAD (FIX)
   - Any program could panic the machine: user_ok checked only that a

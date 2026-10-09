@@ -458,7 +458,7 @@ int countertop_win_event(uint32_t pid, int id, void *ev) {
 int countertop_win_close(uint32_t pid, int id) {
     mutex_lock(&app_mtx);
     int r = -1;
-    if (id >= 0 && id < APP_MAX && app[id].used && app[id].pid == pid) {
+    if (id >= 0 && id < APP_MAX && app[id].used && app[id].pid == pid && app[id].gone != 2) {   /* not twice */
         if (app[id].gone || !ct_running) app_free(&app[id]);   /* no window to take down */
         else app[id].gone = 2;                                 /* the loop takes it down */
         r = 0;
