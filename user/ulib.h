@@ -36,6 +36,8 @@ int  sys_win_put  (int id, const unsigned *px);                /* the whole body
 int  sys_win_event(int id, uwinev_t *ev, unsigned wait_ms);    /* 1, 0 none, -1 gone */
 int  sys_win_close(int id);
 int  sys_tone(unsigned hz, unsigned ms);      /* a beep, not waited for; -1 with no sound card (v0.60.164) */
+int  sys_procs(uproc_t *out, int max);         /* the live processes; how many (v0.60.168) */
+int  sys_kill(unsigned pid);                   /* 0, -1 no such process, -2 not yours (v0.60.168) */
 __attribute__((noreturn)) void sys_exit(int code);
 
 /* conveniences */

@@ -62,7 +62,7 @@ right edge of the screen fills that half (between the bars), as maximise
 does; dragged off again it goes back to its own size. Test by
 screendump: snapped left, snapped right, unsnapped.
 
-## 3. expo.elf: the processes, in a window
+## 3. expo.elf: the processes, in a window — DONE v0.60.168
 
 SYS_PROCS (a list of the processes: pid, name, cook, state, pages) and
 expo.elf showing it as rows, refreshed every second, with a click on a

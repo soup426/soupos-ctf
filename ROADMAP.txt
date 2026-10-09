@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.167
+Current version: v0.60.168
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,21 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.168 (2026-10-09)  — expo.elf: THE PROCESSES, IN A WINDOW
+  - SYS_PROCS (21): the live processes, by pid: pid, program, cook (uid
+    and name), state, pages. SYS_KILL (22): end a process if it is the
+    caller's own or the caller is the headchef, the rule the shell's
+    kill has (may_signal); 0, -1 no such process, -2 not yours. Both
+    outcomes go in the kernel log with who asked.
+  - expo.elf (the expediter runs the pass): a row a process, refreshed
+    every second, drawn with the kernel's own 8x16 font; a click or the
+    arrows choose, k ends, the foot says what the kernel answered, q
+    quits. The Kitchen menu lists it.
+  - scripts/ctexpo-test.sh: as the headchef, a background glutton listed
+    and ended; as saucier, a glutton cooked through chef (the
+    headchef's) listed and the end refused, the glutton still there;
+    rows against the font, the kernel's lines. Six-wide soak 6 of 6.
 
 v0.60.167 (2026-10-09)  — SNAP TO HALVES
   - A window dragged by its title bar until the pointer reaches the left

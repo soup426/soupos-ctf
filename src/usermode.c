@@ -723,6 +723,39 @@ void syscall_dispatch(registers_t *r) {
             if (r->ebx < 20 || r->ebx > 20000) { r->eax = (uint32_t)-1; break; }
             r->eax = (uint32_t)mixer_tone(r->ebx, r->ecx > 2000 ? 2000 : r->ecx);
             break;
+        case SYS_PROCS: {                 /* (v0.60.168) the processes, for expo.elf */
+            uint32_t max = r->ecx > 64 ? 64 : r->ecx, n = 0;
+            if (!user_ok(r->ebx, max * (uint32_t)sizeof(uproc_t))) { r->eax = (uint32_t)-1; break; }
+            uproc_t *out = (uproc_t *)r->ebx;
+            int idx = 0;
+            for (proc_t *p; (p = proc_next(&idx)) && n < max; ) {
+                if (p->state != PROC_RUNNING && p->state != PROC_STOPPED) continue;
+                uproc_t u;
+                memset(&u, 0, sizeof(u));
+                u.pid = p->pid;
+                const char *nm = p->name;                     /* the program, not its path */
+                for (const char *c = p->name; *c; c++) if (*c == '/') nm = c + 1;
+                strncpy(u.name, nm, sizeof(u.name) - 1);
+                u.owner = p->owner;
+                strncpy(u.owner_name, users_name_of(p->owner), sizeof(u.owner_name) - 1);
+                u.state = p->state == PROC_STOPPED ? 'T' : 'R';
+                u.pages = p->upages;
+                memcpy(&out[n++], &u, sizeof(u));
+            }
+            r->eax = n;
+            break;
+        }
+        case SYS_KILL: {                  /* (v0.60.168) the shell's rule: your own, or the headchef */
+            proc_t *t = proc_by_pid(r->ebx);
+            if (!t || (t->state != PROC_RUNNING && t->state != PROC_STOPPED)) { r->eax = (uint32_t)-1; break; }
+            if (!users_is_headchef() && t->owner != users_current_uid()) {
+                klog("[proc] %s may not end %u (asked by %s)\n", users_current_name(), t->pid, pr ? pr->name : "?");
+                r->eax = (uint32_t)-2; break;
+            }
+            klog("[proc] %s ends %u (asked by %s)\n", users_current_name(), t->pid, pr ? pr->name : "?");
+            r->eax = (uint32_t)(proc_kill(t->pid) == 0 ? 0 : -1);
+            break;
+        }
         case SYS_WIN_CLOSE:
             r->eax = (uint32_t)(pr ? countertop_win_close(pr->pid, (int)r->ebx) : -1);
             break;

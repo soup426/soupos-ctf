@@ -29,6 +29,11 @@
 #define SYS_WIN_CLOSE 19 /* ebx = id; -> 0, or -1. A program's windows close when it ends */
 #define SYS_TONE   20  /* ebx = Hz (20-20000), ecx = ms (2000 at most): a tone through the mixer,
                         * not waited for; -> 0, or -1 with no sound card (v0.60.164)   */
+#define SYS_PROCS  21  /* ebx = uproc_t*, ecx = how many fit: the live processes, by pid;
+                        * -> how many written (v0.60.168)                               */
+#define SYS_KILL   22  /* ebx = pid: end it, if it is the caller's own or the caller is
+                        * the headchef, as the shell's kill decides; -> 0, -1 no such
+                        * process, -2 not yours (v0.60.168)                             */
 
 /* One directory entry for SYS_READDIR (v0.44.0): the long name when the
  * entry has one, else the 8.3 name. Shared by the kernel and ulib. */
@@ -65,6 +70,16 @@ typedef struct {
 #define WEV_WHEEL  6   /* the wheel over the body (v0.60.157): key is the
                         * notches as a signed int, down positive; x, y
                         * where the pointer was                            */
+
+/* One process for SYS_PROCS (v0.60.168). */
+typedef struct {
+    unsigned pid;
+    char     name[24];          /* its program, as cooked */
+    unsigned owner;             /* the cook's uid */
+    char     owner_name[16];
+    unsigned state;             /* 'R' running, 'T' stopped */
+    unsigned pages;             /* user pages mapped */
+} uproc_t;
 
 /* Reserved file descriptors. fd >= 3 are returned by open(). */
 #define FD_STDIN   0   /* keyboard                                          */

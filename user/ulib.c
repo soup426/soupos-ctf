@@ -127,6 +127,16 @@ int sys_tone(unsigned hz, unsigned ms) {
     __asm__ volatile ("int $0x80" : "=a"(ret) : "a"(SYS_TONE), "b"(hz), "c"(ms) : "memory");
     return ret;
 }
+int sys_procs(uproc_t *out, int max) {
+    int ret;
+    __asm__ volatile ("int $0x80" : "=a"(ret) : "a"(SYS_PROCS), "b"(out), "c"(max) : "memory");
+    return ret;
+}
+int sys_kill(unsigned pid) {
+    int ret;
+    __asm__ volatile ("int $0x80" : "=a"(ret) : "a"(SYS_KILL), "b"(pid) : "memory");
+    return ret;
+}
 int sys_win_close(int id) {
     int ret;
     __asm__ volatile ("int $0x80" : "=a"(ret) : "a"(SYS_WIN_CLOSE), "b"(id) : "memory");
