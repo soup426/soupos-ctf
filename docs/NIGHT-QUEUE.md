@@ -63,7 +63,7 @@ Classes in a set ([:alpha:] [:digit:] [:alnum:] [:upper:] [:lower:]
 [:lower:] to [:upper:] and back in order, and -c (the complement of the
 first set) with -d and -s. Compare with GNU tr.
 
-## 4. rack -f and -b (sort)
+## 4. rack -f and -b (sort) — DONE v0.60.133
 
 -f folds lower case to upper for comparing, -b ignores leading blanks
 (in keys with -k too); with -r -n -u -k -t as they are. Compare with GNU

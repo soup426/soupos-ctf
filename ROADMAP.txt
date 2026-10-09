@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.132
+Current version: v0.60.133
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,13 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.133 (2026-10-09)  — RACK -F AND -B
+  - rack.elf -f folds lower case to upper when comparing keys (so _ and [
+    sort among the letters as GNU's do), -b skips blanks at the start of
+    each key (the whole line's without -k); with -r -n -u -k -t as they
+    were. The last-resort whole-line comparison stays plain bytes.
+  - scripts/rackfb-test.sh compares 12 cases with GNU sort, LC_ALL=C.
 
 v0.60.132 (2026-10-09)  — SWAP [:CLASS:], OCTAL AND -C
   - swap.elf sets take [:alpha:] [:digit:] [:alnum:] [:upper:] [:lower:]

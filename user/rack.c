@@ -21,11 +21,15 @@
  * short of fields has an empty key. -u keeps the first line of each run the
  * keys call equal, with the whole-line comparison switched off for it, as
  * GNU sort does; the merge sort is stable, so "first" is the input's first.
+ *
+ * -f (v0.60.133) folds lower case to upper for comparing keys; -b skips
+ * the blanks at the start of each key (the whole line's, without -k). The
+ * last-resort comparison of whole lines is bytes as they are, as GNU's.
  */
 #include "ulib.h"
 
 typedef struct { const char *s; int n; } line_t;
-static int numeric, reverse, unique;
+static int numeric, reverse, unique, fold, blanks;
 static int kbeg, kend;             /* -k fields, 1-based; 0: the whole line / to the end */
 static char tsep;                  /* -t character, or 0 for blanks */
 
@@ -95,10 +99,23 @@ static int numcmp(const line_t *a, const line_t *b) {
     return c * sign;
 }
 
+static int foldcmp(const line_t *a, const line_t *b) {
+    int m = a->n < b->n ? a->n : b->n;
+    for (int i = 0; i < m; i++) {
+        unsigned char x = (unsigned char)a->s[i], y = (unsigned char)b->s[i];
+        if (x >= 'a' && x <= 'z') x = (unsigned char)(x - 32);
+        if (y >= 'a' && y <= 'z') y = (unsigned char)(y - 32);
+        if (x != y) return x < y ? -1 : 1;
+    }
+    return a->n < b->n ? -1 : a->n > b->n ? 1 : 0;
+}
+static void skip_blanks(line_t *k) { while (k->n > 0 && blank(*k->s)) { k->s++; k->n--; } }
+
 /* The keys, then (unless -u) the whole line as the last resort. */
 static int keycmp(const line_t *a, const line_t *b) {
     line_t x = key_of(a), y = key_of(b);
-    int c = numeric ? numcmp(&x, &y) : bytecmp(&x, &y);
+    if (blanks) { skip_blanks(&x); skip_blanks(&y); }
+    int c = numeric ? numcmp(&x, &y) : fold ? foldcmp(&x, &y) : bytecmp(&x, &y);
     return reverse ? -c : c;
 }
 static int cmp(const line_t *a, const line_t *b) {
@@ -127,10 +144,12 @@ int main(void) {
             if      (*f == 'r') reverse = 1;
             else if (*f == 'n') numeric = 1;
             else if (*f == 'u') unique = 1;
+            else if (*f == 'f') fold = 1;
+            else if (*f == 'b') blanks = 1;
             else if (*f == 't' || *f == 'k') {
                 /* the value is the rest of this word, or the next word */
                 const char *v = f[1] ? f + 1 : (t + 1 < nt ? tok[++t] : 0);
-                if (!v || !*v) { print("usage: rack.elf [-rnu] [-t C] [-k N[,M]] [file]\n"); return 2; }
+                if (!v || !*v) { print("usage: rack.elf [-rnufb] [-t C] [-k N[,M]] [file]\n"); return 2; }
                 if (*f == 't') {
                     if (v[1]) { print("rack: -t takes one character\n"); return 2; }
                     tsep = v[0];
@@ -142,7 +161,7 @@ int main(void) {
                 }
                 break;                       /* the word is used up */
             }
-            else { print("usage: rack.elf [-rnu] [-t C] [-k N[,M]] [file]\n"); return 2; }
+            else { print("usage: rack.elf [-rnufb] [-t C] [-k N[,M]] [file]\n"); return 2; }
         }
     int fd = FD_STDIN;
     if (t < nt) {
