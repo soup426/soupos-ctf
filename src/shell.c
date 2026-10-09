@@ -87,6 +87,9 @@ typedef struct {
     int     nnicks;
     int     dots;                /* . FILE running (v0.60.91): return leaves it */
     int     dot_fns;             /* ... at this function depth: deeper, return is a function's */
+    uint32_t job_pid[16];        /* job numbers (v0.60.92): %N is job_num's N */
+    uint16_t job_num[16];
+    int     njob;
     int     optpos, optind_seen; /* pluck's place inside a -abc, and the OPTIND it last wrote (v0.60.77) */
     char    trap_cmd[2][INPUT_MAX]; /* smoke (trap): EXIT, INT (v0.60.82) */
     uint8_t trap_set[2];         /* 0 none, 1 a command, 2 ignored */
@@ -1766,6 +1769,8 @@ static vfs_node_t *feed_text(char *buf, int len) {
     return rd;
 }
 
+static void job_add(uint32_t pid);          /* job numbers (v0.60.92) */
+static int job_number(uint32_t pid);
 static void build_env(char *out, int max);   /* with hand (v0.60.26) */
 static vfs_node_t *pending_in;   /* stdin for the next cook's first stage (v0.60.27, pipe_into) */
 static char *pending_here;        /* a here-document's body for the next cook (v0.60.52) */
@@ -2062,6 +2067,7 @@ static void cmd_cook(const char *args) {
 
     if (background) {
         cur_shell()->last_bg = pids[nst - 1];       /* $! (v0.60.48) */
+        job_add(pids[nst - 1]);                      /* %N (v0.60.92) */
         t_color(VGA_DARK_GREY, VGA_BLACK);
         t_printf("  [%u] %s%s\n", pids[nst - 1], st[0].prog,
                    nst > 1 ? " | ..." : "");
@@ -2092,7 +2098,8 @@ static void cmd_cook(const char *args) {
             if (q) q->background = 1;
         }
         t_color(VGA_YELLOW, VGA_BLACK);
-        t_printf("  [%u] set aside  %s   (plate / steep / kill %%)\n", last, st[nst - 1].path);
+        job_add(last);
+        t_printf("  [%u] set aside  %s   (plate / steep / kill %%%d)\n", last, st[nst - 1].path, job_number(last));
         t_color(VGA_LIGHT_GREY, VGA_BLACK);
         return;
     }
@@ -2138,9 +2145,63 @@ static void not_yours(uint32_t pid) {
     klog("[proc] %s may not signal %u\n", users_current_name(), pid);
 }
 
+/* Job numbers (v0.60.92), as sh's: a job put in the background (cook &)
+ * or set aside (Ctrl-Z) on this shell gets the next number, one more than
+ * the highest still alive; one that has ended drops out. %N is job N,
+ * %% %+ and %% the newest, %- the one before it; a bare % is still the
+ * newest process on this terminal, as kill % always was. */
+static void job_prune(shell_t *me) {
+    for (int k = 0; k < me->njob; ) {
+        proc_t *p = proc_by_pid(me->job_pid[k]);
+        if (!p || p->state == PROC_ZOMBIE) {
+            for (int m = k + 1; m < me->njob; m++) { me->job_pid[m - 1] = me->job_pid[m]; me->job_num[m - 1] = me->job_num[m]; }
+            me->njob--;
+        } else k++;
+    }
+}
+static void job_add(uint32_t pid) {
+    shell_t *me = cur_shell();
+    job_prune(me);
+    for (int k = 0; k < me->njob; k++) if (me->job_pid[k] == pid) return;   /* already one */
+    if (me->njob >= 16) return;
+    int top = 0;
+    for (int k = 0; k < me->njob; k++) if (me->job_num[k] > top) top = me->job_num[k];
+    me->job_pid[me->njob] = pid; me->job_num[me->njob] = (uint16_t)(top + 1); me->njob++;
+}
+static int job_number(uint32_t pid) {
+    shell_t *me = cur_shell();
+    for (int k = 0; k < me->njob; k++) if (me->job_pid[k] == pid) return me->job_num[k];
+    return 0;
+}
+/* w a %spec: 1 and *pid, or -1 (said so) when no such job; 0 if w is not one */
+static int job_spec(const char *w, uint32_t *pid) {
+    if (w[0] != '%' || !w[1]) return 0;
+    shell_t *me = cur_shell();
+    for (int k = 0; k < me->njob; ) {          /* gone ones only: one that has ended is still waited for */
+        if (!proc_by_pid(me->job_pid[k])) {
+            for (int m = k + 1; m < me->njob; m++) { me->job_pid[m - 1] = me->job_pid[m]; me->job_num[m - 1] = me->job_num[m]; }
+            me->njob--;
+        } else k++;
+    }
+    const char *s = w + 1;
+    int k = -1;
+    if (str_eq(s, "%") || str_eq(s, "+")) k = me->njob - 1;
+    else if (str_eq(s, "-")) k = me->njob - 2;
+    else {
+        int n = 0, any = 0;
+        for (; *s >= '0' && *s <= '9'; s++) { n = n * 10 + (*s - '0'); any = 1; }
+        if (any && !*s) for (int m = 0; m < me->njob; m++) if (me->job_num[m] == n) k = m;
+    }
+    if (k < 0 || k >= me->njob) { t_printf("  %s: no such job\n", w); return -1; }
+    *pid = me->job_pid[k];
+    return 1;
+}
 static proc_t *job_arg(const char *args) {
     while (*args == ' ') args++;
-    proc_t *p = *args ? proc_by_pid((uint32_t)parse_num(args)) : proc_most_recent_on(TERM_KEY);
+    uint32_t jp;
+    int js = job_spec(args, &jp);
+    if (js < 0) return 0;
+    proc_t *p = js ? proc_by_pid(jp) : *args ? proc_by_pid((uint32_t)parse_num(args)) : proc_most_recent_on(TERM_KEY);
     if (p && !may_signal(p)) { not_yours(p->pid); return 0; }
     return p;
 }
@@ -3031,6 +3092,7 @@ static void cmd_scraps(void) {
 static void cmd_orders(void) {
     int idx = 0, n = 0;
     proc_t *p;
+    job_prune(cur_shell());
     t_color(VGA_YELLOW, VGA_BLACK);
     t_puts("  PID  ST  BG  CODE  OWNER     PROGRAM\n");
     t_color(VGA_LIGHT_GREY, VGA_BLACK);
@@ -3040,7 +3102,10 @@ static void cmd_orders(void) {
                    proc_state_letter(p->state), p->background ? 'y' : 'n');
         if (p->state == PROC_ZOMBIE) t_printf("  %4d", p->exit_code);
         else                         t_puts("     -");
-        t_printf("  %-8s  %s%s\n", users_name_of(p->owner), p->name, p->killed ? " (killing)" : "");
+        int jn = job_number(p->pid);
+        t_printf("  %-8s  %s%s", users_name_of(p->owner), p->name, p->killed ? " (killing)" : "");
+        if (jn) t_printf("  %%%d", jn);              /* its job number (v0.60.92) */
+        t_putc('\n');
     }
     if (!n) t_puts("  (no processes)\n");
 }
@@ -3061,7 +3126,9 @@ static void cmd_rest(const char *args) {
     me->last_status = 0;
     if (*args) {
         uint32_t pid = 0;
-        while (*args >= '0' && *args <= '9') pid = pid * 10 + (uint32_t)(*args++ - '0');
+        int js = job_spec(args, &pid);              /* rest %N (v0.60.92) */
+        if (js < 0) { me->last_status = 127; return; }
+        if (!js) while (*args >= '0' && *args <= '9') pid = pid * 10 + (uint32_t)(*args++ - '0');
         proc_t *p = proc_by_pid(pid);
         if (!p || !my_job_term(p->term) || !p->background) {
             for (int k = 0; k < 16; k++)             /* finished and reported already */
@@ -4009,6 +4076,20 @@ static void cmd_kill(const char *args) {
     /* `kill %` targets the newest live process, the way a shell's %1 does.
      * Saves reading `jobs` for a pid, and lets a script kill what it just
      * started without knowing the number. */
+    {
+        char w[16]; uint32_t jp;
+        first_word(args, w, sizeof(w));
+        int js = job_spec(w, &jp);                     /* kill %N, %%, %- (v0.60.92) */
+        if (js < 0) return;
+        if (js) {
+            proc_t *jpp = proc_by_pid(jp);
+            if (!jpp) { t_printf("  %s: no such job\n", w); return; }
+            if (!may_signal(jpp)) { not_yours(jpp->pid); return; }
+            proc_kill(jpp->pid);
+            t_printf("killing process %u (%s)\n", jpp->pid, jpp->name);
+            return;
+        }
+    }
     if (*args == '%') {
         proc_t *last = proc_most_recent_on(TERM_KEY);
         if (!last) { t_puts("kill: no live process\n"); return; }

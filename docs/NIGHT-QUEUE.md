@@ -55,7 +55,7 @@ POSIX's dot command, a special builtin, so it keeps its name: follow FILE
 in this shell, as follow already does. Compare with bash's . on a script
 that sets variables.
 
-## 4. Job numbers
+## 4. Job numbers — DONE v0.60.92
 
 kill, plate, steep and rest take %N (the Nth background job, as orders
 lists them), %% and %+ (the newest), %- (the one before); orders shows
