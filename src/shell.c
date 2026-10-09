@@ -85,6 +85,8 @@ typedef struct {
     char    nick_name[16][16];   /* nickname (alias, v0.60.90) */
     char    nick_text[16][128];
     int     nnicks;
+    int     dots;                /* . FILE running (v0.60.91): return leaves it */
+    int     dot_fns;             /* ... at this function depth: deeper, return is a function's */
     int     optpos, optind_seen; /* pluck's place inside a -abc, and the OPTIND it last wrote (v0.60.77) */
     char    trap_cmd[2][INPUT_MAX]; /* smoke (trap): EXIT, INT (v0.60.82) */
     uint8_t trap_set[2];         /* 0 none, 1 a command, 2 ignored */
@@ -878,6 +880,7 @@ static void cmd_menu(void) {
         {0, "    logbook            - who clocked in, and who was refused, newest first"},
         {0, "    portions [bowl]    - clusters and bytes under each entry, and the total"},
         {0, "    follow [-e] <file> [..] - follow a recipe (a script); $1..$9 its args; -e stops at a failure"},
+        {0, "    . <file> [..]      - follow it in this shell, as sh's dot (sets stay, return leaves)"},
         {0, "    NAME=value, $NAME  - shell variables ($RANDOM: 0 to 32767)"},
         {0, "    discard NAME       - remove a variable"},
         {0, "    take [-r] NAME...  - take a line into variables (-r: backslashes kept)"},
@@ -3249,6 +3252,7 @@ static void cmd_pluck(const char *args);                  /* beside it (v0.60.77
 static void cmd_taste(const char *args, int bracket);     /* beside it (v0.60.79) */
 static void cmd_eggtimer(const char *args);               /* beside it (v0.60.87) */
 static void cmd_nickname(const char *args);               /* beside it (v0.60.90) */
+static void run_file(const char *args, int dot);          /* . FILE (v0.60.91) */
 static void cmd_forget(const char *args);
 static int nick_find(const char *name);
 static int status_before;
@@ -4820,7 +4824,7 @@ static const char *const cmd_names[] = {
     "takeout", "bgclock", "yieldbg", "spinbg", "sleeptest", "vfstest",
     "dmesg", "pwd", "cd", "mkbowl", "rmbowl", "bowltest",
     "whoami", "roster", "clockout", "hire", "fire", "perms", "secret",
-    "break", "continue", "return", "exit", "inspect", "seal", "pluck", "taste", "[", "smoke", "eggtimer", "nickname", "forget",
+    "break", "continue", "return", "exit", "inspect", "seal", "pluck", "taste", "[", "smoke", "eggtimer", "nickname", "forget", ".",
     "preempttest", "vmtest", "vgastress", "fatstress",
 };
 #define CMD_COUNT  (int)(sizeof(cmd_names) / sizeof(cmd_names[0]))
@@ -5067,6 +5071,7 @@ static void dispatch(const char *buf) {
     else if (str_eq(p, "pluck") || str_startswith(p, "pluck ")) cmd_pluck(p + 5);
     else if (str_eq(p, "smoke") || str_startswith(p, "smoke ")) cmd_smoke(p + 5);
     else if (str_eq(p, "eggtimer") || str_startswith(p, "eggtimer ")) cmd_eggtimer(p + 8);
+    else if (str_eq(p, ".") || str_startswith(p, ". ")) run_file(p + 1, 1);   /* (v0.60.91) */
     else if (str_eq(p, "nickname") || str_startswith(p, "nickname ")) cmd_nickname(p + 8);
     else if (str_eq(p, "forget") || str_startswith(p, "forget ")) cmd_forget(p + 6);
     else if (str_eq(p, "taste") || str_startswith(p, "taste ")) cmd_taste(p + 5, 0);
@@ -7761,7 +7766,12 @@ static void cmd_return(const char *args, int is_exit) {
         me->quit = 1;
         return;
     }
-    if (!me->fns) { t_puts("  return: can only return from a function\n"); me->last_status = 2; return; }
+    if (me->dots && me->fns == me->dot_fns) {   /* leaves a . FILE (v0.60.91) */
+        me->last_status = have ? (n & 0xFF) : status_before;
+        me->quit = 1;
+        return;
+    }
+    if (!me->fns) { t_puts("  return: can only return from a function or a . file\n"); me->last_status = 2; return; }
     me->last_status = have ? (n & 0xFF) : status_before;
     me->ret = 1;
 }
@@ -8445,15 +8455,23 @@ static void block_docs(char *chunk, const char *text, uint32_t *next, uint32_t s
     }
 }
 
-static void cmd_run(const char *args) {
+/* . FILE [ARGS] (v0.60.91): POSIX's dot command, a special builtin, so it
+ * keeps its name. follow FILE in this shell, as a sourced file: no new
+ * shell's fresh start, so the caller's OPTIND and smoke stay (an EXIT
+ * smoke it sets is the shell's, not the file's end's), without ARGS the
+ * caller's $1..$9 are the file's (and a shift there is the caller's), and
+ * return leaves the file. Unlike bash, exit leaves only the file too. */
+static void run_file(const char *args, int dot);
+static void cmd_run(const char *args) { run_file(args, 0); }
+static void run_file(const char *args, int dot) {
     static int depth;
     /* run FILE [ARGS...] (v0.60.2): the words after the file are the
      * script's $1..$9; quotes group them, as everywhere. */
     char file[FAT_PATH_MAX];
     const char *rest = first_word(args, file, sizeof(file));
     int errexit = 0;
-    if (str_eq(file, "-e")) { errexit = 1; rest = first_word(rest, file, sizeof(file)); }   /* follow -e (v0.60.57) */
-    if (!file[0]) { t_puts("Usage: follow [-e] <file> [args...]\n"); cur_shell()->last_status = 2; return; }
+    if (!dot && str_eq(file, "-e")) { errexit = 1; rest = first_word(rest, file, sizeof(file)); }   /* follow -e (v0.60.57) */
+    if (!file[0]) { t_puts(dot ? "Usage: . <file> [args...]\n" : "Usage: follow [-e] <file> [args...]\n"); cur_shell()->last_status = 2; return; }
     char path[FAT_PATH_MAX];
     resolve_path(file, path);
     if (!fat_exists(path) || fat_is_dir(path)) { cook_err("No such script."); return; }
@@ -8477,10 +8495,16 @@ static void cmd_run(const char *args) {
     int  saved_n = me->npargs;
     if (!saved) { kfree(text); return; }
     memcpy(saved, me->parg, sizeof(me->parg));
-    me->npargs = 0;
-    while (*rest && me->npargs < 9) { rest = first_word(rest, me->parg[me->npargs], 64); me->npargs++; }
+    while (*rest == ' ') rest++;
+    int own_args = !dot || *rest;                /* . FILE alone: the caller's are the file's */
+    if (own_args) {
+        me->npargs = 0;
+        while (*rest && me->npargs < 9) { rest = first_word(rest, me->parg[me->npargs], 64); me->npargs++; }
+    }
     depth++;
     me->scripts++;
+    int dot_fns_was = me->dot_fns;
+    if (dot) { me->dots++; me->dot_fns = me->fns; }
     int errexit_was = me->errexit, cond_was = me->in_cond;
     me->errexit = errexit; me->in_cond = 0;     /* -e is this script's alone */
     /* A script starts pluck afresh, OPTIND 1, as a new sh does; the
@@ -8488,13 +8512,13 @@ static void cmd_run(const char *args) {
     char optind_was[24]; const char *ow = get_var("OPTIND");
     int had_optind = ow != 0, optpos_was = me->optpos, seen_was = me->optind_seen;
     if (ow) { strncpy(optind_was, ow, sizeof(optind_was) - 1); optind_was[sizeof(optind_was) - 1] = '\0'; }
-    set_var_quiet("OPTIND", "1"); me->optpos = 1; me->optind_seen = 1;
+    if (!dot) { set_var_quiet("OPTIND", "1"); me->optpos = 1; me->optind_seen = 1; }
     int doc_base = doc_tab_n;                  /* this script's block documents go after here (v0.60.83) */
     /* smoke: the script's own, ignored ones kept (v0.60.82) */
     uint8_t trap_was[2] = { me->trap_set[0], me->trap_set[1] };
     char *trap_cmd_was = kmalloc(sizeof(me->trap_cmd));
     if (trap_cmd_was) memcpy(trap_cmd_was, me->trap_cmd, sizeof(me->trap_cmd));
-    for (int k = 0; k < 2; k++) if (me->trap_set[k] == 1) me->trap_set[k] = 0;
+    if (!dot) for (int k = 0; k < 2; k++) if (me->trap_set[k] == 1) me->trap_set[k] = 0;
     cur_shell()->last_status = 0;
     uint32_t i = 0;
     while (i < size && !cur_shell()->exiting && !me->quit) {
@@ -8575,15 +8599,18 @@ static void cmd_run(const char *args) {
     depth--;
     me->scripts--;
     me->errexit = errexit_was; me->in_cond = cond_was;
-    smoke_exit();                               /* the script's EXIT smoke, however it ended */
+    if (!dot) smoke_exit();                     /* the script's EXIT smoke, however it ended */
     while (doc_tab_n > doc_base) { doc_tab_n--; kfree(doc_tab[doc_tab_n]); doc_tab[doc_tab_n] = 0; }
-    me->trap_set[0] = trap_was[0]; me->trap_set[1] = trap_was[1];
-    if (trap_cmd_was) { memcpy(me->trap_cmd, trap_cmd_was, sizeof(me->trap_cmd)); kfree(trap_cmd_was); }
-    if (had_optind) set_var_quiet("OPTIND", optind_was); else cmd_unset("OPTIND");
-    me->optpos = optpos_was; me->optind_seen = seen_was;
+    if (!dot) {
+        me->trap_set[0] = trap_was[0]; me->trap_set[1] = trap_was[1];
+        if (trap_cmd_was) memcpy(me->trap_cmd, trap_cmd_was, sizeof(me->trap_cmd));
+        if (had_optind) set_var_quiet("OPTIND", optind_was); else cmd_unset("OPTIND");
+        me->optpos = optpos_was; me->optind_seen = seen_was;
+    }
+    if (trap_cmd_was) kfree(trap_cmd_was);
+    if (dot) { me->dots--; me->dot_fns = dot_fns_was; }
     me->quit = 0;                               /* exit ends this script, not its caller */
-    memcpy(me->parg, saved, sizeof(me->parg));
-    me->npargs = saved_n;
+    if (own_args) { memcpy(me->parg, saved, sizeof(me->parg)); me->npargs = saved_n; }
     kfree(saved);
     kfree(text);
 }

@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.90
+Current version: v0.60.91
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,16 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.91 (2026-10-09)  — . FILE
+  - `. FILE [ARGS]` is POSIX's dot command (a special builtin, so it keeps
+    its name): FILE is followed in this shell as a sourced file, not as a
+    new shell's script. What it sets and defines stays; without ARGS the
+    caller's $1..$9 are its (a shift there is the caller's); OPTIND and
+    smoke are the caller's, so an EXIT smoke it sets is the shell's;
+    return leaves the file, and from a function the dot ran in, only the
+    file. Unlike bash, exit there leaves the file and not the shell.
+  - scripts/dot-test.sh compares four lines and a clockout with bash's .
 
 v0.60.90 (2026-10-09)  — NICKNAME AND FORGET (ALIAS, UNALIAS)
   - `nickname NAME=TEXT` is sh's alias under a kitchen name: a command

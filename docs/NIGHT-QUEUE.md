@@ -49,7 +49,7 @@ itself); bare `nickname` lists them, `nickname NAME` shows one, and
 alias where bash can be driven the same way (bash -i or shopt -s
 expand_aliases).
 
-## 3. . FILE
+## 3. . FILE — DONE v0.60.91
 
 POSIX's dot command, a special builtin, so it keeps its name: follow FILE
 in this shell, as follow already does. Compare with bash's . on a script
