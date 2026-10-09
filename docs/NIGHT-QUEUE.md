@@ -1,9 +1,10 @@
 # Night queue
 
-Thirty-fifth queue. The first thirty-four are in `docs/queue-archive-2026-10-0*.md`.
+Thirty-sixth queue. The first thirty-five are in `docs/queue-archive-2026-10-0*.md`.
 Items wait on a person in three archives (the seventh, the thirteenth and
-the twenty-fourth). The shell still has no elif and no { } group; then
-seal (readonly), pluck (getopts), and a check of "$@" and "$*".
+the twenty-fourth). A test that needs no program, builtins that read
+here-strings, a prompt that waits for the rest of an if, smoke (trap),
+and here-documents inside a script's multi-line blocks.
 
 ## Standing rules
 
@@ -34,34 +35,36 @@ seal (readonly), pluck (getopts), and a check of "$@" and "$*".
 
 ---
 
-## 1. elif — DONE v0.60.74 (and compounds over lines in scripts)
+## 1. taste and [ ... ] as builtins
 
-`if A ; then X ; elif B ; then Y ; else Z ; fi`, any number of elifs, as
-sh. Compare with bash, nested ifs and follow scripts included.
+Conditions start a program today (`cook taste.elf`). taste (test) as a
+builtin, the same operators as taste.elf, and `[ EXPR ]` the same with a
+closing ] required, as sh. Compare with bash's test and [.
 
-## 2. { ... ; } groups — DONE v0.60.75
+## 2. Builtins read <<< and <<WORD
 
-`{ a ; b ; }` runs a and b in this shell (variables stick), and the group
-takes > F, >> F, < F, | PROG, && and || as a whole, as a loop's done
-does. Compare with bash.
+`take a <<< x` reads the terminal (v0.60.76 noted it). A here-string or a
+here-document on a builtin's line, take above all, is its input. Compare
+with bash.
 
-## 3. seal NAME[=value] (readonly) — DONE v0.60.76
+## 3. The prompt waits for the rest
 
-A variable that cannot be set, discarded or stashed again; trying says
-so and is status 1. A kitchen name. `seal` alone lists them. Compare
-with bash's readonly.
+`for x in a b` and Enter runs nothing useful today. An unfinished if,
+for, while, until, case or { asks for more lines with a > prompt until it
+closes, as sh, then runs the whole; Ctrl-C drops it. Test by typing.
 
-## 4. pluck OPTSTRING NAME (getopts) — DONE v0.60.77
+## 4. smoke 'CMD' SIGNAL... (trap)
 
-sh's getopts under a kitchen name: OPTIND, OPTARG, a : after a letter for
-an argument, ? for one not known, a leading : for the quiet form; in a
-script or a function, over $1..$9. Compare with bash.
+sh's trap under a kitchen name (the smoke alarm): EXIT runs CMD when a
+script (or a clockout) ends, INT when Ctrl-C stops a script; `smoke ''
+SIG` ignores, `smoke - SIG` resets, bare `smoke` lists. Compare with
+bash where bash can be driven the same way.
 
-## 5. "$@" and "$*" — DONE v0.60.78
+## 5. Here-documents inside a script's multi-line blocks
 
-Check them against bash in every place a word can be: arguments, for
-lists, assignments, here-documents, with IFS's default; fix what
-differs.
+follow joins a compound's lines (v0.60.74) but skips <<WORD inside one.
+Read the document's lines where they are, inside the block. Compare
+with bash.
 
 ## 6. Doom at the framebuffer's own resolution — DEFERRED
 
@@ -71,5 +74,4 @@ Carried; the user asked to keep to OS work.
 
 ## Notes left by unattended runs
 
-- v0.60.76: `take a <<< x` reads the terminal; builtins do not get
-  here-strings (or <<WORD). Worth an item in the next queue.
+(none yet)
