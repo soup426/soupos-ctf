@@ -1,10 +1,10 @@
 # Night queue
 
-Forty-first queue. The first forty are in `docs/queue-archive-2026-10-0*.md`.
+Forty-second queue. The first forty-one are in `docs/queue-archive-2026-10-0*.md`.
 Items wait on a person in three archives (the seventh, the thirteenth and
-the twenty-fourth). The shell's no-op and its two answers, then programs
-the kitchen still lacks: a name's last part and the rest, base64, a
-SHA-256, and one that says the same thing forever.
+the twenty-fourth). A quoting bug the forty-first found, then three
+builtins scripts reach for (eval, wait, getopts) and two programs
+(comm and factor).
 
 ## Standing rules
 
@@ -35,41 +35,59 @@ SHA-256, and one that says the same thing forever.
 
 ---
 
-## 1. :, fresh and spoiled (true and false) — DONE v0.60.104
+## 1. "$(cmd)" keeps its newlines
 
-`:` is POSIX's special builtin, so it keeps its name: it does nothing,
-status 0, its words expanded (so `: ${x:=5}` sets x). true and false
-under kitchen names, fresh (0) and spoiled (1). Compare with bash.
+Found in v0.60.105: inside double quotes, `"$(cmd)"` turns cmd's inner
+newlines into spaces, where bash keeps them (only trailing newlines go).
+`slurp "$(cook stalk.elf a/b c/d)"` should be two lines. Unquoted `$(cmd)`
+still splits into words. Prove it first, then a test against bash: two
+and three lines, trailing newlines stripped, assigned to a variable
+(`x=$(...)` keeps them too), and inside a longer quoted string.
 
-## 2. peel and stalk (basename and dirname) — DONE v0.60.105
+## 2. brew WORDS (eval)
 
-Programs: peel.elf NAME [SUFFIX] the last part (the suffix off), stalk.elf
-NAME what leads to it, as the host's basename and dirname do with their
-edge cases (trailing /, no /, /, //). Compare with the host's.
+Its words joined by spaces and run as a command line, status that line's.
+Under a kitchen name (eval is a special builtin in POSIX, but the
+kitchen-names rule wins). Test against bash: building a variable name
+(`brew "v$i=x"`), a pipeline in a string, `;` and `&&` inside, quoting
+that survives one round, nested brew, and its status.
 
-## 3. brine.elf (base64) — DONE v0.60.106
+## 3. tend [%N|PID] (wait)
 
-Encode stdin or a file to base64, wrapped at 76 as GNU's; -d decodes.
-Compare with the host's base64, both ways, on text and on binary.
+Waits for a background job (or all of them with no argument), status
+the job's exit code (127 for one that does not exist, as bash). Measure
+how jobs are tracked first (job_spec, job_pid). Test: `cook marinate.elf
+1 & tend ; slurp $?`, a job that exits 3, `tend %1`, `tend` with nothing
+running, `$!`.
 
-## 4. brand.elf (sha256sum) — DONE v0.60.107
+## 4. prep OPTSTRING NAME (getopts)
 
-The SHA-256 of a file or stdin, as `HASH  NAME` lines; several files.
-Compare with the host's sha256sum, the empty file and a large one too.
+getopts under a kitchen name: one option per call from $1.. (or the words
+given), NAME set to the letter, OPTARG to its value for `x:`, OPTIND
+advanced; `?` for an unknown option, status 1 at the end; `-ab` bundled,
+`--` ends. A leading `:` in OPTSTRING is silent mode. Compare a
+`while prep ...; do case ...` loop with bash's getopts across a dozen
+argument lists, in a function and in a recipe.
 
-## 5. encore.elf (yes) — DONE v0.60.108
+## 5. potluck.elf (comm)
 
-Says y (or its words) forever, until what reads it stops: `cook encore.elf
-| skim.elf -n 3` ends. Compare with yes | head -n 3.
+What two sorted files brought: lines only in the first, only in the
+second, and in both, in three tab-indented columns; -1 -2 -3 drop
+columns (and combine, -12). Compare with the host's comm on files with
+repeated lines, an empty file, and stdin as -.
 
-## 6. Doom at the framebuffer's own resolution — DEFERRED
+## 6. portion.elf (factor)
 
-Carried; the user asked to keep to OS work.
+N: its prime factors in order, a line per number, from the words or
+stdin, as GNU's factor. Find out whether ulib can divide 64-bit numbers
+first (libgcc's __udivdi3); if not, 32-bit and say so in the usage. Test
+against the host's factor: 1, primes, squares, 2^31-1, 4294967295, and
+bad input (status 1).
 
----
+## 7. Doom at the framebuffer's own resolution — DEFERRED
+
+Skipped at the user's request: OS work only.
 
 ## Notes left by unattended runs
 
-- v0.60.105: "$(cmd)" in double quotes turns cmd's inner newlines into
-  spaces; bash keeps them ("$(dirname a/b c d/)" is three lines). Worth an
-  item in the next queue (only unquoted $( ) should be split).
+(none yet)
