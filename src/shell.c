@@ -907,6 +907,7 @@ static void cmd_menu(void) {
         {0, "    shift [N]          - drop the first N arguments ($2 becomes $1)"},
         {0, "    inspect [-t] NAME  - what NAME is: keyword, function, builtin or program"},
         {0, "    plain CMD / -v NAME - the builtin or program, not a function (sh's command)"},
+        {0, "    brew WORDS         - the words run as a command line (sh's eval)"},
         {0, "    seal NAME[=value]  - a variable nothing may change (sh's readonly)"},
         {0, "    pluck OPTS NAME    - the next -x option of $1.. (sh's getopts)"},
         {0, "    taste EXPR, [ EXPR ] - a condition: -f -d -e -z -n = != -eq -lt ... (sh's test)"},
@@ -3358,6 +3359,7 @@ static void cmd_shelve(const char *args);                 /* beside it (v0.60.99
 static void cmd_unshelve(const char *args);
 static void cmd_shelf(const char *args);
 static void cmd_plain(const char *args);                  /* v0.60.100 */
+static void cmd_brew(const char *args);                   /* v0.60.110 */
 static void run_file(const char *args, int dot);          /* . FILE (v0.60.91) */
 static void cmd_forget(const char *args);
 static int nick_find(const char *name);
@@ -4945,7 +4947,7 @@ static const char *const cmd_names[] = {
     "takeout", "bgclock", "yieldbg", "spinbg", "sleeptest", "vfstest",
     "dmesg", "pwd", "cd", "mkbowl", "rmbowl", "bowltest",
     "whoami", "roster", "clockout", "hire", "fire", "perms", "secret",
-    "break", "continue", "return", "exit", "inspect", "seal", "pluck", "taste", "[", "smoke", "eggtimer", "nickname", "forget", ".", "shelve", "unshelve", "shelf", "plain", ":", "fresh", "spoiled",
+    "break", "continue", "return", "exit", "inspect", "seal", "pluck", "taste", "[", "smoke", "eggtimer", "nickname", "forget", ".", "shelve", "unshelve", "shelf", "plain", "brew", ":", "fresh", "spoiled",
     "preempttest", "vmtest", "vgastress", "fatstress",
 };
 #define CMD_COUNT  (int)(sizeof(cmd_names) / sizeof(cmd_names[0]))
@@ -5216,6 +5218,7 @@ static void dispatch(const char *buf) {
     else if (str_eq(p, "unshelve") || str_startswith(p, "unshelve ")) cmd_unshelve(p + 8);
     else if (str_eq(p, "shelf") || str_startswith(p, "shelf ")) cmd_shelf(p + 5);
     else if (str_eq(p, "plain") || str_startswith(p, "plain ")) cmd_plain(p + 5);
+    else if (str_eq(p, "brew") || str_startswith(p, "brew ")) cmd_brew(p + 4);
     /* : (POSIX's special builtin, its name kept), fresh and spoiled (true and
      * false) (v0.60.104): nothing, then 0, 0 and 1. Their words are already
      * expanded by now, so `: ${x:=5}` has set x; `: > F` empties F. */
@@ -7439,11 +7442,45 @@ static void cmd_plain(const char *args) {
     dispatch(args);                                /* says it is not there, 127 */
 }
 
+/* brew WORDS (v0.60.110): sh's eval under a kitchen name. Its words,
+ * already expanded, lose one level of quoting each and are joined by
+ * spaces into a line run as if typed; its status is that line's. What an
+ * expansion wrote as text ('|' from c="a | b") is a pipe again, as eval
+ * reads its words afresh. */
+static __attribute__((noinline)) void cmd_brew(const char *args) {
+    shell_t *me = cur_shell();
+    char *line = kmalloc(INPUT_MAX), *w = kmalloc(INPUT_MAX);
+    if (!line || !w) { if (line) kfree(line); if (w) kfree(w); me->last_status = 1; return; }
+    int n = 0;
+    const char *c = args;
+    for (;;) {
+        while (*c == ' ' || *c == '\t') c++;
+        if (!*c) break;
+        int wl = 0; char q = 0;
+        while (*c && (q || (*c != ' ' && *c != '\t'))) {
+            if (q) { if (*c == q) q = 0; }
+            else if (*c == '\'' || *c == '"') q = *c;
+            if (wl < INPUT_MAX - 1) w[wl++] = *c;
+            c++;
+        }
+        w[wl] = '\0';
+        unquote(w);
+        if (n && n < INPUT_MAX - 1) line[n++] = ' ';
+        for (const char *d = w; *d && n < INPUT_MAX - 1; d++) line[n++] = *d;
+    }
+    line[n] = '\0';
+    kfree(w);
+    if (!n) { kfree(line); me->last_status = 0; return; }
+    run_line(line);
+    kfree(line);
+}
+
 /* The rest of running one command, once expanded. */
 static void run_ex(char *ex) {
     {
         const char *h = ex; while (*h == ' ') h++;
         if (is_kw(h, "plain")) { cmd_plain(h + 5); return; }   /* not a function's (v0.60.100) */
+        if (is_kw(h, "brew")) { cmd_brew(h + 4); return; }
     }
     if (prefix_assigns(ex)) return;
     if (try_assign(ex)) return;

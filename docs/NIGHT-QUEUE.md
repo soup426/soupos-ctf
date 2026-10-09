@@ -44,7 +44,7 @@ still splits into words. Prove it first, then a test against bash: two
 and three lines, trailing newlines stripped, assigned to a variable
 (`x=$(...)` keeps them too), and inside a longer quoted string.
 
-## 2. brew WORDS (eval)
+## 2. brew WORDS (eval) — DONE v0.60.110
 
 Its words joined by spaces and run as a command line, status that line's.
 Under a kitchen name (eval is a special builtin in POSIX, but the

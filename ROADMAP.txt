@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.109
+Current version: v0.60.110
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,13 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.110 (2026-10-09)  — BREW WORDS (EVAL)
+  - brew is sh's eval under a kitchen name: its words, expanded, lose one
+    level of quoting each and are joined by spaces into a line run as if
+    typed; its status is that line's (0 with no words). What an expansion
+    held as text is syntax again, so c="a | b" ; brew $c is a pipe.
+  - scripts/brew-test.sh compares eleven lines with bash's eval.
 
 v0.60.109 (2026-10-09)  — "$(cmd)" KEEPS ITS NEWLINES
   - Inside double quotes and as an assignment's value, $(cmd) keeps cmd's
