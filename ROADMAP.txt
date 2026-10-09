@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.58
+Current version: v0.60.59
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,14 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.59 (2026-10-08)  — SHIFT
+  - `shift [N]` drops the first N (1 if none) of a script's or function's
+    arguments; $1, $#, $@ and ${1} follow. Fewer than N, or a negative N,
+    changes nothing, status 1; a word that is not a number, status 2, as
+    bash's. sh's special builtin, so it keeps its name.
+  - scripts/shift-test.sh compares five prompt lines and a script with
+    bash, a function's own arguments included.
 
 v0.60.58 (2026-10-08)  — $RANDOM
   - $RANDOM, ${RANDOM} and RANDOM in arithmetic give a number from 0 to

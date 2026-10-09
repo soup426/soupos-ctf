@@ -35,7 +35,7 @@ arithmetic learns to stop early and to choose.
 
 ---
 
-## 1. shift [N]
+## 1. shift [N] — DONE v0.60.59
 
 Drops the first N (default 1) of a script's or function's arguments, so
 $1 is what $2 was, and $# and $@ follow. Status 1 when there are fewer

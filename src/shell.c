@@ -877,6 +877,7 @@ static void cmd_menu(void) {
         {0, "    continue [N]       - go round it again"},
         {0, "    return [N]         - leave a function"},
         {0, "    stash NAME[=value] - a function's own variable (sh's local)"},
+        {0, "    shift [N]          - drop the first N arguments ($2 becomes $1)"},
         {0, "    exit [N]           - leave a script (at the prompt, clockout)"},
         {0, "    kill <id>          - stop a background task"},
         {0, "    larder             - room left on the disk"},
@@ -3089,6 +3090,7 @@ static void cmd_hand(const char *args);  /* beside it (v0.60.26) */
 static void cmd_break(const char *args, int is_continue);   /* with the loops (v0.60.44) */
 static void cmd_return(const char *args, int is_exit);     /* beside it (v0.60.47) */
 static void cmd_stash(const char *args);                  /* beside it (v0.60.56) */
+static void cmd_shift(const char *args);                  /* beside it (v0.60.59) */
 static int status_before;
 static void cmd_read(const char *args);  /* beside run_line (v0.60.4) */
 
@@ -4587,7 +4589,7 @@ static const char *const cmd_names[] = {
     "jot", "ai", "cook", "soup", "hash",
     "beep", "mandelbrot", "vgademo", "uname", "cal",
     "clock", "wipe", "fortune", "bounce", "recipe", "leftovers", "spill",
-    "freeze", "reheat", "ps", "kitchen", "brigade", "logbook", "portions", "follow", "discard", "take", "orders", "plate", "steep", "hand", "rest", "stash", "kill", "scraps", "sample", "skewer", "larder", "whistle", "hatch", "hush", "pass", "vault",
+    "freeze", "reheat", "ps", "kitchen", "brigade", "logbook", "portions", "follow", "discard", "take", "orders", "plate", "steep", "hand", "rest", "stash", "shift", "kill", "scraps", "sample", "skewer", "larder", "whistle", "hatch", "hush", "pass", "vault",
 #ifndef NO_DOOM
     "sizzle", "hum",
 #endif
@@ -4834,6 +4836,7 @@ static void dispatch(const char *buf) {
     else if (str_eq(p, "hand") || str_startswith(p, "hand ")) cmd_hand(p + 4 + (p[4] == ' '));
     else if (str_eq(p, "rest") || str_startswith(p, "rest ")) cmd_rest(p + 4);
     else if (str_eq(p, "stash") || str_startswith(p, "stash ")) cmd_stash(p + 5);
+    else if (str_eq(p, "shift") || str_startswith(p, "shift ")) cmd_shift(p + 5);
     else if (str_eq(p, "break") || str_startswith(p, "break ")) cmd_break(p + 5, 0);
     else if (str_eq(p, "return") || str_startswith(p, "return ")) cmd_return(p + 6, 0);
     else if (str_eq(p, "exit") || str_startswith(p, "exit ")) cmd_return(p + 4, 1);
@@ -6306,6 +6309,34 @@ static int loop_after_body(shell_t *me) {
     }
     return 0;
 }
+/* shift [N] (v0.60.59): drop the first N (1 if none) of the script's or
+ * function's arguments, so $1 is what $N+1 was and $# and $@ follow. Fewer
+ * than N, or a negative N, changes nothing and gives status 1, as bash's;
+ * a word that is not a number says so, status 2 (bash's usage error). sh's special builtin, so
+ * it keeps its name. */
+static void cmd_shift(const char *args) {
+    shell_t *me = cur_shell();
+    char w[16];
+    first_word(args, w, sizeof(w));
+    int n = 1;
+    if (w[0]) {
+        const char *c = w; int neg = 0;
+        if (*c == '-') { neg = 1; c++; }
+        if (!*c) { t_printf("  shift: %s: numeric argument required\n", w); me->last_status = 2; return; }
+        n = 0;
+        for (; *c; c++) {
+            if (*c < '0' || *c > '9') { t_printf("  shift: %s: numeric argument required\n", w); me->last_status = 2; return; }
+            if (n < 1000) n = n * 10 + (*c - '0');
+        }
+        if (neg) n = -n;
+    }
+    if (n < 0 || n > me->npargs) { me->last_status = 1; return; }
+    for (int a = 0; a + n < me->npargs; a++) memcpy(me->parg[a], me->parg[a + n], sizeof(me->parg[a]));
+    for (int a = me->npargs - n; a < me->npargs; a++) me->parg[a][0] = '\0';
+    me->npargs -= n;
+    me->last_status = 0;
+}
+
 /* stash NAME[=value]... (v0.60.56): sh's local, under a kitchen name. In a
  * function, NAME becomes the function's own: what it was (or that it was
  * not set) comes back when the function returns, and anything it calls
