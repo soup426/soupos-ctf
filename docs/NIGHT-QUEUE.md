@@ -41,7 +41,7 @@ SHA-256, and one that says the same thing forever.
 status 0, its words expanded (so `: ${x:=5}` sets x). true and false
 under kitchen names, fresh (0) and spoiled (1). Compare with bash.
 
-## 2. peel and stalk (basename and dirname)
+## 2. peel and stalk (basename and dirname) — DONE v0.60.105
 
 Programs: peel.elf NAME [SUFFIX] the last part (the suffix off), stalk.elf
 NAME what leads to it, as the host's basename and dirname do with their
@@ -70,4 +70,6 @@ Carried; the user asked to keep to OS work.
 
 ## Notes left by unattended runs
 
-(none yet)
+- v0.60.105: "$(cmd)" in double quotes turns cmd's inner newlines into
+  spaces; bash keeps them ("$(dirname a/b c d/)" is three lines). Worth an
+  item in the next queue (only unquoted $( ) should be split).

@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.104
+Current version: v0.60.105
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,15 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.105 (2026-10-09)  — PEEL.ELF AND STALK.ELF (BASENAME, DIRNAME)
+  - peel.elf NAME [SUFFIX] is a name's last part (the suffix off unless
+    it is all there is), stalk.elf NAME... what leads to it (a line each),
+    as GNU's basename and dirname: trailing slashes do not count, slashes
+    only are /, no / is ., "" is "" and . respectively.
+  - Seen on the way: "$(cmd)" in double quotes makes cmd's inner newlines
+    spaces where bash keeps them; for the next queue.
+  - scripts/peelstalk-test.sh compares 19 lines with the host's.
 
 v0.60.104 (2026-10-09)  — :, FRESH AND SPOILED
   - `:` (POSIX's special builtin, so it keeps its name) does nothing,
