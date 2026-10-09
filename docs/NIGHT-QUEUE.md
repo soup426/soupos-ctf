@@ -1,20 +1,13 @@
 # Night queue
 
-Forty-eighth queue: a desktop for soupOS, at the user's request (2026-10-09:
-"start working on getting a desktop for soupOS ... whatever you want to get
-to that goal"). The first forty-seven are in `docs/queue-archive-2026-10-0*.md`.
-
-What is there to build on: the default image boots GRUB's 1024x768x32 linear
-framebuffer (fb.c); fbcon draws the text console onto it as 128x48 cells of
-font8x16; a PS/2 mouse reports cells (4 counts each); mode 13h programs
-pause fbcon and take the screen. The tests boot that image, inject keys and
-mouse moves through QEMU's monitor, and can screendump the pixels
-(framebuffer-test.sh compares glyphs against the font). The kernel heap is
-8 MB; a 1024x768x4 back buffer is 3 MB, so where the desktop's memory comes
-from is the first thing to measure.
-
-The desktop is `countertop` (the surface everything is set out on). Each
-item below leaves something that works and is tested by screendump.
+Forty-ninth queue: the desktop, carried on. The first forty-eight are in
+`docs/queue-archive-2026-10-0*.md`; queue 48 (`-09n`) built countertop up
+to windows for ring-3 programs (frost.elf), the files window and the
+taskbar. This one closes the two holes those items found (kernel copies
+from user memory nobody mapped; window calls nobody has attacked), then
+the wheel, a second graphical program, keyboard switching, and the test
+suite's typing time. Written by an unattended run when queue 48 ran out,
+as the loop it runs in asks; the user has not seen it.
 
 ## Standing rules
 
@@ -51,94 +44,85 @@ item below leaves something that works and is tested by screendump.
 
 ---
 
-## 1. The pointer in pixels — DONE v0.60.140
+## 1. A bad user pointer kills the caller, not the kernel
 
-mouse.c keeps text cells. Keep a pixel position too (the framebuffer's
-1024x768, clamped), with mouse_get_px(), and the cells derived from it as
-now so skewer, drag-select and the gate are unchanged. Test: injected moves
-land on the pixel expected (screendump not needed; a shell command or the
-serial log can say where).
+Read from the code in v0.60.146, not yet run: user_ok checks that a
+pointer is inside the user range, nothing more, so a syscall copying from
+an address the program never had (above its break, below its stack) would
+fault in ring 0, and isr.c's demand-paging hook would decline it and
+panic. Prove it first with a program that hands SYS_WRITE such a pointer
+(the smallest reproduction), then make that fault kill the program the
+way a ring-3 fault does, with the same "[user] fault" log line. Test:
+the program is killed, the kernel lives, the next command runs.
 
-## 2. countertop: the surface — DONE v0.60.141
+## 2. prod.elf: the window calls, attacked
 
-`countertop` takes the framebuffer (as mode 13h programs do: fbcon paused,
-then resumed): a desktop background, a bar along the top with "soupOS" and
-the time (expiry's), and a pointer drawn where the mouse is, moving with it;
-Esc gives the console back as it was. Drawn into a back buffer and copied
-out only where something changed. Measure first where 3 MB comes from (the
-heap, or pages of its own). Test by screendump: the bar, the background,
-the pointer where it was moved to, and the console intact after Esc.
+A program that does what frost would never: SYS_WIN_* with another
+program's id (opened by a second copy of itself), sizes of 0 and 641,
+a pixel pointer past the user range and one half past it, a title that
+is not terminated, an event pointer into kernel memory, calls after the
+desktop has gone. Each must give -1 and change nothing (screendump the
+other program's window before and after). Kitchen name: prod.
 
-## 3. Windows — DONE v0.60.142
+## 3. The wheel
 
-A window list in z-order: each with a title bar (its name, a close box), a
-border and a body. Click to focus and raise, drag the title bar to move,
-the close box to close. Two demo windows to start. Test by screendump after
-injected clicks and drags: raised, moved, closed.
+The PS/2 IntelliMouse handshake (sample rates 200, 100, 80; ID 3 means a
+wheel, 4-byte packets), with the 3-byte mouse kept working when the ID
+stays 0. QEMU's `mouse_move dx dy dz` turns it. The files window scrolls
+by it. Measure first that QEMU's PS/2 mouse answers ID 3. Test: the
+handshake's ID in the log, and a files window scrolled by dz (screendump).
 
-## 4. Terminal windows — DONE v0.60.143
+## 4. How fast can a program draw?
 
-A term_t whose cells are drawn into a window (font8x16), keyboard input to
-the focused window, and a shell task of its own in each (as pass and vault
-give a remote session one). Several at once, each its own cwd and history.
-Test: open two, type a different command in each, screendump, compare the
-glyphs against the font as framebuffer-test does.
+Measure before building anything: a program that puts N frames of
+640x480 and of 320x240 and reports ticks per frame, idle and with a
+terminal busy. If a full-body put is too slow for something like 30
+frames a second, add a put of a rectangle and measure again; if it is
+fast enough, close the item with the numbers.
 
-## 5. A bar of its own: launcher and taskbar — DONE v0.60.144
+## 5. swirl.elf: a Mandelbrot set in fixed point
 
-Along the bottom: a button that opens a terminal, one per open window
-(click to raise, or to bring back a minimised one), and the clock. A
-minimise box on each window. Test by screendump after clicks.
+A second program on the window calls: Mandelbrot in 16.16 fixed point
+(no FPU in ring 3), drawn row by row so the window fills as it computes;
+a click zooms in on that point, - zooms out, q quits. Test: the host
+computes the same fixed-point image in Python and the screendump matches
+it pixel for pixel; a click's zoom matches the host's too.
 
-## 6. A files window — DONE v0.60.145
+## 6. jot in a terminal window
 
-A bowl's entries (fat_ls), bowls first; a double click enters a bowl (and ..
-goes up), on a file opens a terminal window with it in pour (or jot for a
-text file). Test by screendump and by what the opened terminal shows.
+Does the editor work in a wterm (cursor moves, full-screen redraw, its
+keys)? Measure by running it there. If it does, the files window opens
+text files (.txt .md .sc .sh) in jot and the rest in pour; if it does
+not, fix what wterm lacks first, and test the edit by screendump and by
+the file on disk afterwards.
 
-Built with pour for every file: jot in a terminal window is untested, and
-a pour of a .elf prints its bytes (a "cook it" for .elf is a later choice).
+## 7. Switching windows from the keyboard
 
-## 7. Windows for ring-3 programs — DONE v0.60.146
+Alt+Tab raises the next window down (keyboard_key_pressed gives Alt;
+measure that Tab with Alt held arrives as '\t'). Minimised windows are
+skipped. Test: three windows, Alt+Tab twice, the focus on the third
+(screendump of the title bars and the taskbar's blue button).
 
-Syscalls to make a window, put a buffer of pixels into it, and wait for its
-events (keys, the mouse in its coordinates, close); a first program that
-uses them (a paint program, `doodle.elf`, or a Mandelbrot viewer). Test:
-cook it, draw with injected drags, screendump, close.
+## 8. The suite's typing time
 
-Built as frost.elf (doodle is not a kitchen name: icing a cake).
-
-## 8. Later: layer -s and - (paste), tally with decimals (seq) — DONE v0.60.147, v0.60.148
-
-Moved from queue 47 so the desktop comes first; as written there.
+seq-test went from 188 s to 7 s when its cases ran from a script on the
+disk instead of typed lines (v0.60.148). Measure which tests in
+check.sh's full run take longest and how much of that is typing; move
+the slowest such tests to scripts and measure check.sh's wall time
+before and after. A test whose point is the typing (line editing,
+history, keys) stays typed.
 
 ## 9. Doom at the framebuffer's own resolution — DEFERRED
 
-Skipped at the user's request: OS work only.
+Skipped at the user's request (queue 48): OS work only.
 
 ## Notes left by unattended runs
 
-- v0.60.143: a terminal window shows stderr, as SSH sessions do, so
-  peek.elf's "LS f SIZE NAME" serial markers (written for ls-test) appear
-  under its listing there. Cosmetic; worth deciding whether peek should
-  write them only when stderr is the serial log.
-- v0.60.145: the first check.sh run failed in the gate's boot segment
-  only ("[boot] could not drive the QEMU monitor", and every check after
-  it), with load near 22 and the whole run at 297 s, not ~180. The gate
-  alone passed (107 ok), and so did check.sh again (176 s). One failure
-  in three runs; if it comes back, look at qemu_keys' connect and login
-  waits under load before anything else.
-- v0.60.146: read from the code, not run: a syscall that copies from a
-  user address the program never mapped (inside the user range, outside
-  sbrk and the stack) would fault in the kernel, and isr.c would panic
-  rather than kill the program, since user_ok checks the range only.
-  Not new (SYS_WRITE and the rest share it); SYS_WIN_PUT copies up to 1.2 MB, so it is the
-  easiest way to hit it. Worth an item: prove it with a program, then
-  kill the caller instead.
-- v0.60.146: no test has a second program try another's window id
-  (countertop_win_* check the pid; nothing exercises it).
-- v0.60.148: seq-test typed each case and waited for its prompt: 57
-  cases took 188 s alone, 7 s once they ran from a script on the disk
-  (. /SEQ.SH). The other compare-with-the-host tests are built the same
-  way; check.sh's wall time is set by its slowest tests, so the same
-  change there is worth measuring.
+- From queue 48 (v0.60.143), still open: a terminal window shows stderr,
+  as SSH sessions do, so peek.elf's "LS f SIZE NAME" serial markers
+  (written for ls-test) appear under its listing there, and frost's
+  [frost] lines too. Cosmetic; worth deciding whether such markers
+  should go to the serial log only.
+- From queue 48 (v0.60.145): the gate's boot segment failed once in
+  three check.sh runs under load ("could not drive the QEMU monitor");
+  if it comes back, look at qemu_keys' connect and login waits first.
