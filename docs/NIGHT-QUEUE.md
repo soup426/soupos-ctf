@@ -69,7 +69,7 @@ is not terminated, an event pointer into kernel memory, calls after the
 desktop has gone. Each must give -1 and change nothing (screendump the
 other program's window before and after). Kitchen name: prod.
 
-## 3. The wheel
+## 3. The wheel — DONE v0.60.151
 
 The PS/2 IntelliMouse handshake (sample rates 200, 100, 80; ID 3 means a
 wheel, 4-byte packets), with the 3-byte mouse kept working when the ID

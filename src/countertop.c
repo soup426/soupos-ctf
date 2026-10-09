@@ -48,6 +48,8 @@
  * window, a file in a new terminal with `pour PATH` typed into it, so what
  * may be read is the shell's to decide, as it always is.
  *
+ * The wheel (v0.60.151) scrolls the files window under the pointer.
+ *
  * Programs' windows (v0.60.146, step 7). SYS_WIN_OPEN/PUT/EVENT/CLOSE: a
  * ring-3 program asks for a window, hands over its whole body of pixels,
  * and reads its events (keys while focused, a press/drag/release in its
@@ -181,6 +183,7 @@ static win_t win[MAX_WIN];
 static int order[MAX_WIN], nwin;                 /* z-order, bottom first */
 static int drag = -1, drag_dx, drag_dy, drag_ox, drag_oy, last_btn;
 static uint32_t presses_seen;                    /* mouse_presses() when last looked */
+static int wheel_seen;                           /* and mouse_wheel() (v0.60.151) */
 
 static void scopy(char *d, const char *s, int n) { int i = 0; for (; s[i] && i < n - 1; i++) d[i] = s[i]; d[i] = '\0'; }
 static int  topmost(void) {                      /* the focus: the top window not minimised */
@@ -927,6 +930,7 @@ int countertop_run(int (*avail)(void), int (*getch)(void), int uid) {
     mouse_get_px(&ptr_x, &ptr_y, &b);
     last_btn = b;
     presses_seen = mouse_presses(0, 0);
+    wheel_seen = mouse_wheel();
     flush();
     klog("[countertop] up %dx%d, %d pages for the back buffer\n", W, H, H);
     for (;;) {
@@ -941,6 +945,19 @@ int countertop_run(int (*avail)(void), int (*getch)(void), int uid) {
         int np = (int)(pc - presses_seen);
         presses_seen = pc;
         if (np || b != last_btn || drag >= 0 || app_drag >= 0) pointer_buttons(px, py, b, np);
+        int wh = mouse_wheel(), dw = wh - wheel_seen;
+        wheel_seen = wh;
+        if (dw) {                                    /* the wheel: a files window under the pointer scrolls */
+            int k = window_at(px, py);
+            if (k >= 0 && win[k].files) {
+                struct files *f = win[k].files;
+                int rows = files_rows(&win[k]), most = f->n > rows ? f->n - rows : 0;
+                int top = f->top + 3 * dw;
+                if (top > most) top = most;
+                if (top < 0) top = 0;
+                if (top != f->top) { f->top = top; repaint_win(k); klog("[countertop] files scrolled to row %d\n", top); }
+            }
+        }
         bar_clock();
         for (int i = 0; i < nwin; i++) {             /* terminals: drawn again, or gone */
             int k = order[i];

@@ -19,5 +19,9 @@ void mouse_get_px(int *x, int *y, int *buttons);
  * moving, a double click two presses close together. */
 uint32_t mouse_presses(uint32_t *last, uint32_t *prev);
 
+/* The wheel's notches since boot, down (toward the user) positive; 0
+ * always without a wheel (v0.60.151). Take the difference between looks. */
+int mouse_wheel(void);
+
 /* Packets accepted, and packets dropped because the stream had slipped. */
 void mouse_stats(uint32_t *moves, uint32_t *resyncs);

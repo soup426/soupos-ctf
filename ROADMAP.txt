@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.150
+Current version: v0.60.151
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,22 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.151 (2026-10-09)  — THE WHEEL
+  - mouse_init knocks as an IntelliMouse does (sample rates 200, 100, 80,
+    then the ID): QEMU's mouse answers 3, logged as "[mouse] id 3, a
+    wheel", and its packets become four bytes, the fourth's low nibble
+    the wheel. A mouse that stays 0 keeps three. mouse_wheel() is the
+    notches since boot, down positive, for the desktop to difference.
+  - The files window under the pointer scrolls three rows a notch,
+    stopping at the top and with the last entry on the last row.
+  - Measured: QEMU's `mouse_move 0 0 N` is one notch whatever N is, and
+    a positive N is the wheel turned up (-1 in the packet), as Linux
+    reads it too.
+  - scripts/ctwheel-test.sh: the ID, a notch each way read back from
+    screendumps, the top, a notch over the background doing nothing, and
+    thirty down stopping at row 59 of 81 with the disk's last file on
+    the last row. Six-wide soak 6 of 6.
 
 v0.60.150 (2026-10-09)  — THE WINDOW CALLS, ATTACKED
   - prod.elf victim, started at the console in the background, waits

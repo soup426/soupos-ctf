@@ -39,6 +39,8 @@
 #define MOUSE_SET_DEFAULTS 0xF6
 #define MOUSE_ENABLE       0xF4
 #define MOUSE_ACK          0xFA
+#define MOUSE_SET_RATE     0xF3
+#define MOUSE_GET_ID       0xF2
 
 /* Text cells, so the pointer lines up with everything else on screen. The
  * console's size is asked for rather than assumed, because a framebuffer boot
@@ -53,7 +55,9 @@ static inline void outb_(uint16_t p, uint8_t v) { __asm__ volatile ("outb %0,%1"
 static inline uint8_t inb_(uint16_t p) { uint8_t r; __asm__ volatile ("inb %1,%0" : "=a"(r) : "Nd"(p)); return r; }
 
 static int      present;
-static uint8_t  pkt[3];
+static uint8_t  pkt[4];
+static int      pkt_len = 3;         /* 4 once the mouse says it has a wheel (v0.60.151) */
+static volatile int wheel_total;     /* notches, down positive, since boot */
 static int      pkt_idx;
 static int      cur_x, cur_y;        /* cell coordinates          */
 static int      px_x, px_y;          /* pixels, a count each (v0.60.140) */
@@ -84,6 +88,7 @@ void mouse_get_px(int *x, int *y, int *btn) {
 /* How many times the left button has gone down, and when the last two were
  * (v0.60.145). Counted in the interrupt, so a click shorter than a poller's
  * nap is not lost, and a double click is timed by the presses themselves. */
+int mouse_wheel(void) { return wheel_total; }
 uint32_t mouse_presses(uint32_t *last, uint32_t *prev) {
     uint32_t n, a, b;
     do { n = press_count; a = press_last; b = press_prev; } while (n != press_count);
@@ -125,7 +130,7 @@ static void mouse_irq(registers_t *regs) {
     if (pkt_idx == 0 && !(b & 0x08)) { resyncs++; return; }
 
     pkt[pkt_idx++] = b;
-    if (pkt_idx < 3) return;
+    if (pkt_idx < pkt_len) return;
     pkt_idx = 0;
 
     uint8_t flags = pkt[0];
@@ -136,6 +141,11 @@ static void mouse_irq(registers_t *regs) {
     if (flags & 0x10) dx |= ~0xFF;      /* sign-extend from the flags byte */
     if (flags & 0x20) dy |= ~0xFF;
 
+    if (pkt_len == 4) {                 /* the wheel: the low nibble, signed */
+        int dz = pkt[3] & 0x0F;
+        if (dz & 0x08) dz -= 16;
+        wheel_total += dz;
+    }
     if ((flags & 1) && !(buttons & 1)) { press_prev = press_last; press_last = timer_get_ticks(); press_count++; }
     buttons = flags & 0x07;
 
@@ -179,6 +189,15 @@ int mouse_init(void) {
         klog("[mouse] no acknowledgement for set-defaults\n");
         return -1;
     }
+    /* The IntelliMouse knock (v0.60.151): sample rates 200, 100, 80, then
+     * ask the ID. 3 means a wheel and a fourth byte in every packet; a
+     * plain mouse stays 0 and its three bytes. */
+    static const uint8_t knock[3] = { 200, 100, 80 };
+    for (int i = 0; i < 3; i++) { aux_command(MOUSE_SET_RATE); aux_command(knock[i]); }
+    uint8_t id = 0;
+    if (aux_command(MOUSE_GET_ID) == MOUSE_ACK) { wait_read(); id = inb_(PS2_DATA); }
+    pkt_len = id == 3 ? 4 : 3;
+    klog("[mouse] id %u, %s\n", id, id == 3 ? "a wheel" : "no wheel");
     if (aux_command(MOUSE_ENABLE) != MOUSE_ACK) {
         klog("[mouse] no acknowledgement for enable\n");
         return -1;
