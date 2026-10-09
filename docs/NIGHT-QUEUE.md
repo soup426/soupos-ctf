@@ -59,7 +59,7 @@ length. Compare with bash.
 
 `until COMMANDS ; do ... ; done`, while's opposite. Compare with bash.
 
-## 5. break and continue
+## 5. break and continue — DONE v0.60.44
 
 In for, while and until, with an optional N for nested loops. Compare
 with bash.

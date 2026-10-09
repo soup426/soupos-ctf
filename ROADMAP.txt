@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.43
+Current version: v0.60.44
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,15 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.44 (2026-10-08)  — BREAK AND CONTINUE
+  - `break [N]` and `continue [N]` in for, while and until, as sh: N loops
+    out (1 by default; all of them if N is more than are open), from
+    inside if or case, from a while's condition, and in a piped loop.
+    Outside a loop they say so and the status is 0, as bash's. (sh's
+    keywords keep their names.) exec_range stops while one is pending and
+    each loop takes its share after its body.
+  - scripts/break-test.sh compares ten lines with bash.
 
 v0.60.43 (2026-10-08)  — UNTIL
   - `until COMMANDS ; do ... ; done`, while's loop running while the

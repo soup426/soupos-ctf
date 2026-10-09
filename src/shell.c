@@ -85,6 +85,8 @@ typedef struct {
     uint32_t started, last_input;/* ticks: for `who`                          */
     int     tabs;                /* Tabs in a row: the second lists (v0.60.10) */
     vfs_node_t *in_pipe;         /* `prog | while take ...`: take reads this (v0.60.34) */
+    int     loops;               /* loops open now, for break and continue (v0.60.44) */
+    int     brk, cont;           /* loops still to break out of / continue past */
     char    in_buf[512];
     int     in_pos, in_len;
     char    fname[16][16];       /* functions (v0.60.22): NAME() { BODY } */
@@ -2935,6 +2937,7 @@ static void dispatch(const char *buf);   /* forward decl for chef elevation */
 static void cmd_run(const char *args);  /* defined beside run_rc (v0.57.5) */
 static void cmd_unset(const char *args); /* beside run_line (v0.58.0) */
 static void cmd_hand(const char *args);  /* beside it (v0.60.26) */
+static void cmd_break(const char *args, int is_continue);   /* with the loops (v0.60.44) */
 static void cmd_read(const char *args);  /* beside run_line (v0.60.4) */
 
 /* The headchef's commands (v0.55.0). Until then any cook could close the
@@ -4670,6 +4673,8 @@ static void dispatch(const char *buf) {
     else if (str_eq(p, "follow") || str_startswith(p, "follow ")) cmd_run(p + 6);
     else if (str_startswith(p, "discard ")) cmd_unset(uq_args(p + 8));
     else if (str_eq(p, "hand") || str_startswith(p, "hand ")) cmd_hand(p + 4 + (p[4] == ' '));
+    else if (str_eq(p, "break") || str_startswith(p, "break ")) cmd_break(p + 5, 0);
+    else if (str_eq(p, "continue") || str_startswith(p, "continue ")) cmd_break(p + 8, 1);
     else if (str_eq(p, "take") || str_startswith(p, "take ")) cmd_read(p + 4);
     else if (str_startswith(p, "pour")) {
         const char *a = p + 4; while (*a == ' ') a++;
@@ -5900,6 +5905,33 @@ static int match_done(lseg_t *sg, int from, int to) {      /* for and while shar
     return -1;
 }
 
+/* break [N] and continue [N] (v0.60.44), as sh: N loops out (1 if not
+ * given, all of them if more than are open). exec_range stops at once
+ * while one is pending; each loop, after its body, takes its share. */
+static int loop_after_body(shell_t *me) {
+    if (me->brk) { me->brk--; return 1; }              /* this loop ends; the rest go on up */
+    if (me->cont) {
+        me->cont--;
+        if (me->cont) return 1;                        /* an outer loop's continue */
+        return 0;                                      /* ours: the next turn */
+    }
+    return 0;
+}
+static void cmd_break(const char *args, int is_continue) {
+    shell_t *me = cur_shell();
+    int n = 0;
+    while (*args == ' ') args++;
+    while (*args >= '0' && *args <= '9') n = n * 10 + (*args++ - '0');
+    if (!n) n = 1;
+    me->last_status = 0;
+    if (!me->loops) {
+        t_printf("  %s: only meaningful in a for, while or until loop\n", is_continue ? "continue" : "break");
+        return;
+    }
+    if (n > me->loops) n = me->loops;
+    if (is_continue) me->cont = n; else me->brk = n;
+}
+
 /* A compound fed into a pipe (v0.60.37): run its segments once more, from
  * inside the feed, with its first segment's && or || already decided. */
 typedef struct { lseg_t *sg; int from, to, depth; } range_ctx_t;
@@ -5920,6 +5952,7 @@ static void exec_range(lseg_t *sg, int from, int to, int depth) {
     if (depth > 8) { t_puts("  Nested eight deep; not going further.\n"); cur_shell()->last_status = 1; return; }
     int i = from;
     while (i < to && !cur_shell()->exiting) {
+        if (cur_shell()->brk || cur_shell()->cont) return;   /* break/continue on its way out (v0.60.44) */
         if (interrupted()) { cur_shell()->last_status = 130; return; }
         int status = cur_shell()->last_status, op = sg[i].op;
         int run = (op == ';') || (op == 'A' && status == 0) || (op == 'O' && status != 0);
@@ -6007,10 +6040,14 @@ static void exec_range(lseg_t *sg, int from, int to, int depth) {
                 kfree(ex);
                 if (wl->cut) t_printf("  for: the word list was cut (%d bytes, %d words at most); %d words kept.\n", FOR_TEXT, FOR_WORDS, wl->n);
                 cur_shell()->last_status = 0;
-                for (int w = 0; w < wl->n && !cur_shell()->exiting && !interrupted(); w++) {
+                shell_t *me = cur_shell();
+                me->loops++;
+                for (int w = 0; w < wl->n && !me->exiting && !interrupted(); w++) {
                     set_var(name, wl->list[w]);
                     exec_range(sg, i + 2, d, depth + 1);
+                    if (loop_after_body(me)) break;
                 }
+                me->loops--;
                 if (interrupted()) { kfree(wl); cur_shell()->last_status = 130; return; }
                 kfree(wl);
             }
@@ -6032,13 +6069,18 @@ static void exec_range(lseg_t *sg, int from, int to, int depth) {
             if (d < 0 || dd < 0) { t_printf("  %s: expected `%s ... ; do ... ; done`.\n", until ? "until" : "while", until ? "until" : "while"); cur_shell()->last_status = 2; return; }
             if (run) {
                 int body_status = 0;
+                shell_t *me = cur_shell();
+                me->loops++;
                 for (;;) {
-                    if (interrupted() || cur_shell()->exiting) break;
+                    if (interrupted() || me->exiting) break;
                     exec_range(sg, i + 1, dd, depth + 1);
-                    if (interrupted() || (cur_shell()->last_status != 0) != until) break;
+                    if (loop_after_body(me)) break;
+                    if (interrupted() || (me->last_status != 0) != until) break;
                     exec_range(sg, dd + 1, d, depth + 1);
-                    body_status = cur_shell()->last_status;
+                    body_status = me->last_status;
+                    if (loop_after_body(me)) break;
                 }
+                me->loops--;
                 if (interrupted()) { cur_shell()->last_status = 130; return; }
                 cur_shell()->last_status = body_status;
             }
@@ -6152,6 +6194,7 @@ static void run_line(const char *line) {
     if (!buf || !sg) { if (buf) kfree(buf); if (sg) kfree(sg); return; }
     strncpy(buf, line, INPUT_MAX * 2 - 1); buf[INPUT_MAX * 2 - 1] = '\0';
     int n = split_segs(buf, sg, LSEG_MAX);
+    if (run_depth == 0) { cur_shell()->brk = cur_shell()->cont = 0; cur_shell()->loops = 0; }
     if (run_depth++ == 0 && cur_shell()->term) intr_mark = cur_shell()->term->intr;
     exec_range(sg, 0, n, 0);
     run_depth--;
