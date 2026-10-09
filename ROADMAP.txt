@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.119
+Current version: v0.60.120
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,16 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.120 (2026-10-09)  — [[ STRING =~ REGEX ]] AND BASH_REMATCH
+  - =~ in [[ ]] (left out in v0.60.113) through rx.c, built into the
+    kernel's shell: status 0 a match, 1 none, 2 a bad regex (said
+    nothing, as bash). BASH_REMATCH is an array: the match, then each
+    group (empty for one that took no part); emptied when nothing matches.
+    Quoted pieces of the regex are text, unquoted ones regex, a variable's
+    value included; the word after =~ keeps its ( ) and the blanks inside
+    them, as bash reads it.
+  - scripts/rematch-test.sh compares 13 lines with bash.
 
 v0.60.119 (2026-10-09)  — REGULAR EXPRESSIONS: RX.C AND SIFT -E
   - user/rx.c: POSIX extended regular expressions in one file the

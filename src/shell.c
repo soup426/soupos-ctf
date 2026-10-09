@@ -52,6 +52,12 @@
 #include "doom.h"
 #endif
 
+/* POSIX extended regular expressions for [[ =~ ]] (v0.60.120): the same
+ * file sift.elf -E builds, with the kernel's heap. */
+#define RX_ALLOC(n) kmalloc(n)
+#define RX_FREE(p)  kfree(p)
+#include "../user/rx.c"
+
 #define INPUT_MAX   256
 #define HIST_MAX     16
 #define VARS_MAX     24          /* was 16; PWD and OLDPWD take two now (v0.60.32) */
@@ -8393,7 +8399,7 @@ static void db_operand(const char *raw, char *out) {
 /* The right side of == and != as a pattern: what was quoted is text (its
  * * ? [ \\ escaped for glob_match), what was not is pattern, an expansion
  * included, as bash's: "a"* is a then anything. */
-static __attribute__((noinline)) void db_pattern(const char *raw, char *out) {
+static __attribute__((noinline)) void db_pattern(const char *raw, char *out, int regex) {
     char piece[INPUT_MAX], ex[INPUT_MAX];
     int o = 0;
     const char *c = raw;
@@ -8418,11 +8424,41 @@ static __attribute__((noinline)) void db_pattern(const char *raw, char *out) {
         if (expand_into(piece, ex, INPUT_MAX)) ex[INPUT_MAX - 1] = '\0';
         unquote(ex);
         for (const char *e = ex; *e && o < INPUT_MAX - 2; e++) {
-            if (quoted && (*e == '*' || *e == '?' || *e == '[' || *e == '\\')) out[o++] = '\\';
+            static const char glob_sp[] = "*?[\\", rx_sp[] = ".[]()*+?{}|^$\\";
+            if (quoted && strchr(regex ? rx_sp : glob_sp, *e)) out[o++] = '\\';
             out[o++] = *e;
         }
     }
     out[o] = '\0';
+}
+/* STRING =~ REGEX (v0.60.120): through rx.c, as sift -E. 1 a match (and
+ * BASH_REMATCH the match and each group, an array), 0 none (BASH_REMATCH
+ * emptied), -1 a bad regex (BASH_REMATCH as it was). */
+static void set_var(const char *name, const char *value);
+static void cmd_unset(const char *args);
+static __attribute__((noinline)) int db_regex_match(const char *s, const char *re) {
+    rx_t *rx = kmalloc(sizeof(rx_t));
+    if (!rx) return -1;
+    if (rx_compile(rx, re, 0) < 0) { kfree(rx); return -1; }
+    int sub[RX_NCAP];
+    int m = rx_exec(rx, s, (int)strlen(s), 0, sub);
+    shell_t *me = cur_shell();
+    char joined[VAL_MAX]; int jl = 0;
+    if (m > 0)
+        for (int g = 0; g <= rx->ngrp; g++) {
+            if (g && jl < VAL_MAX - 1) joined[jl++] = '\x1f';
+            if (sub[2 * g] >= 0 && sub[2 * g + 1] >= sub[2 * g])
+                for (int i = sub[2 * g]; i < sub[2 * g + 1] && jl < VAL_MAX - 1; i++) joined[jl++] = s[i];
+        }
+    joined[jl] = '\0';
+    kfree(rx);
+    if (m < 0) return -1;
+    int st = me->last_status;
+    cmd_unset("BASH_REMATCH");
+    me->last_status = st;
+    arr_whole = 1; set_var("BASH_REMATCH", joined); arr_whole = 0;
+    if (m == 0) for (int v = 0; v < me->nvars; v++) if (str_eq(me->vname[v], "BASH_REMATCH")) me->varr[v] = 2;   /* () */
+    return m;
 }
 static int db_or(dbr_t *d, int skip);
 static __attribute__((noinline)) int db_test(dbr_t *d, int skip) {
@@ -8437,11 +8473,21 @@ static __attribute__((noinline)) int db_test(dbr_t *d, int skip) {
     if (isbin) {
         const char *L = d->w[d->i], *op = d->w[d->i + 1], *R = d->w[d->i + 2];
         d->i += 3;
-        if (str_eq(op, "=~")) { if (!skip) t_puts("  [[: =~ is not supported (no regular expressions)\n"); d->err = 2; kfree(a); return 0; }
+        if (str_eq(op, "=~")) {
+            if (!skip) {
+                db_operand(L, a[0]);
+                db_pattern(R, a[2], 1);
+                int m = db_regex_match(a[0], a[2]);
+                if (m < 0) d->err = 2;                   /* a bad regex: 2, said nothing, as bash */
+                r = m > 0;
+            }
+            kfree(a);
+            return r;
+        }
         if (!skip) {
             db_operand(L, a[0]);
             if (str_eq(op, "==") || str_eq(op, "=") || str_eq(op, "!=")) {
-                db_pattern(R, a[2]);
+                db_pattern(R, a[2], 0);
                 int m = glob_match(a[2], a[0]);
                 r = str_eq(op, "!=") ? !m : m;
             } else if (str_eq(op, "<") || str_eq(op, ">")) {
@@ -8510,6 +8556,9 @@ static __attribute__((noinline)) void cmd_dbracket(const char *args) {
         if (!*c) break;
         if ((c[0] == '&' && c[1] == '&') || (c[0] == '|' && c[1] == '|')) { d.op[d.n] = c[0] == '&' ? 'A' : 'O'; d.w[d.n++] = c; c[0] = '\0'; c += 2; continue; }
         if (*c == '(' || *c == ')') { d.op[d.n] = (uint8_t)*c; d.w[d.n++] = c; *c++ = '\0'; continue; }
+        /* the word after =~ is a regex: its ( ) are its own, and so are
+         * blanks inside them, as bash reads it (v0.60.120) */
+        int regex = d.n > 0 && !d.op[d.n - 1] && str_eq(d.w[d.n - 1], "=~");
         d.w[d.n] = c; d.op[d.n] = 0; d.n++;
         char q = 0; int depth = 0;
         while (*c) {
@@ -8517,7 +8566,7 @@ static __attribute__((noinline)) void cmd_dbracket(const char *args) {
             if (*c == '\'' || *c == '"') { q = *c++; continue; }
             if (*c == '\\' && c[1]) { c += 2; continue; }
             if (c[0] == '$' && c[1] == '(') { depth++; c += 2; continue; }
-            if (depth && *c == '(') { depth++; c++; continue; }
+            if ((depth || regex) && *c == '(') { depth++; c++; continue; }
             if (depth && *c == ')') { depth--; c++; continue; }
             if (depth) { c++; continue; }
             if (*c == ' ' || *c == '\t' || *c == '(' || *c == ')' || (c[0] == '&' && c[1] == '&') || (c[0] == '|' && c[1] == '|')) break;

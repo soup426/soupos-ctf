@@ -48,7 +48,7 @@ pattern cannot hang a program. `sift -E PATTERN` uses it, with -v -c -i -n
 -o as sift already has them. Test against GNU grep -E over a list of
 patterns and lines (probe with `command grep`, not the ugrep wrapper).
 
-## 2. [[ STRING =~ REGEX ]] and BASH_REMATCH
+## 2. [[ STRING =~ REGEX ]] and BASH_REMATCH — DONE v0.60.120
 
 The same matcher in the shell: status 0/1/2 as bash's, the whole match in
 BASH_REMATCH[0] and each ( ) group in [1].. (an array), an unquoted right
