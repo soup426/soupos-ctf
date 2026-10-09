@@ -60,7 +60,7 @@ script (or a clockout) ends, INT when Ctrl-C stops a script; `smoke ''
 SIG` ignores, `smoke - SIG` resets, bare `smoke` lists. Compare with
 bash where bash can be driven the same way.
 
-## 5. Here-documents inside a script's multi-line blocks
+## 5. Here-documents inside a script's multi-line blocks — DONE v0.60.83
 
 follow joins a compound's lines (v0.60.74) but skips <<WORD inside one.
 Read the document's lines where they are, inside the block. Compare

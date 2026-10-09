@@ -1715,6 +1715,28 @@ static char *pending_here;        /* a here-document's body for the next cook (v
 static int pending_here_len;
 static int pending_here_expand;   /* not quoted: expand it as the cook starts (v0.60.68) */
 static int here_armed;            /* the command now running is the one the document was on (v0.60.80) */
+/* Documents inside a script's multi-line block (v0.60.83): read as the
+ * block is joined, kept here, and named in the line by \x02 and a letter
+ * where <<WORD was; a stack, so a script run from inside a block keeps its
+ * caller's. */
+#define DOC_TAB_MAX 26                 /* A..Z */
+static char *doc_tab[DOC_TAB_MAX];
+static int doc_tab_len[DOC_TAB_MAX];
+static uint8_t doc_tab_exp[DOC_TAB_MAX];
+static int doc_tab_n;
+/* Make document k the pending one, for the command it is on. */
+static void doc_arm(int k) {
+    /* one gone (a function from a script that has ended) is empty, never
+     * the terminal */
+    int ok = k >= 0 && k < doc_tab_n && doc_tab[k];
+    char *b = kmalloc(ok ? (uint32_t)doc_tab_len[k] + 1 : 1);
+    if (!b) return;
+    if (ok) memcpy(b, doc_tab[k], (uint32_t)doc_tab_len[k]);
+    else { k = 0; }
+    if (pending_here) kfree(pending_here);
+    pending_here = b; pending_here_len = ok ? doc_tab_len[k] : 0; pending_here_expand = ok ? doc_tab_exp[k] : 0;
+    here_armed = 1;
+}
 static void heredoc_expand(const char *in, char *out, int max);
 /* The pending document, expanded unless its WORD was quoted, as a new
  * buffer of *len bytes; the pending one is gone (v0.60.80, out of cook). */
@@ -6487,6 +6509,8 @@ static void run_one(const char *seg) {
      * one with <<< WORD, gets the text as its input, as a program does. */
     here_armed = 0;
     for (char *m = ex; *m; m++) if (*m == '\x01') { *m = ' '; if (pending_here) here_armed = 1; }
+    for (char *m = ex; *m; m++)                    /* a document of a block (v0.60.83) */
+        if (m[0] == '\x02' && m[1]) { doc_arm(m[1] - 'A'); m[0] = m[1] = ' '; }
     const char *h = ex; while (*h == ' ') h++;
     const char *h2 = h + 4; while (*h2 == ' ') h2++;
     int is_cook = is_kw(h, "cook") || (is_kw(h, "chef") && is_kw(h2, "cook"));
@@ -6626,9 +6650,9 @@ static void split_closer(lseg_t *g, char *t) {
                 t[kl] = '\0';
                 r++; while (*r == ' ') r++;
                 g->out = r;
-            } else if (r[0] == '\x01') {               /* done <<WORD (v0.60.80) */
+            } else if (r[0] == '\x01' || r[0] == '\x02') {   /* done <<WORD (v0.60.80; in a block v0.60.83) */
                 t[kl] = '\0'; g->redir = r; g->rkind = 'D';
-                for (const char *c = r + 1; *c; c++) if (*c != ' ') g->junk = 1;
+                for (const char *c = r + (r[0] == '\x02' ? 2 : 1); *c; c++) if (*c != ' ') g->junk = 1;
             } else if (r[0] == '<' && r[1] == '<' && r[2] == '<') {   /* done <<< WORD (v0.60.80) */
                 r += 3; while (*r == ' ') r++;
                 if (!*r) g->junk = 1; else { t[kl] = '\0'; g->redir = r; g->rkind = 'H'; }
@@ -7260,7 +7284,10 @@ static void exec_range(lseg_t *sg, int from, int to, int depth) {
                         /* done <<WORD, done <<< WORD (v0.60.80): the text feeds
                          * the compound, as done < F does with a file */
                         char *text = 0; int tl = 0;
-                        if (kind == 'D') { if (pending_here) text = here_take(&tl); }
+                        if (kind == 'D') {
+                            if (rw[0] == '\x02' && rw[1]) doc_arm(rw[1] - 'A');
+                            if (pending_here) text = here_take(&tl);
+                        }
                         else {
                             char wx[INPUT_MAX], word[INPUT_MAX];
                             expand_into(rw, wx, INPUT_MAX);
@@ -7784,6 +7811,44 @@ static void join_onto(char *line, int *llp, const char *t) {
     *llp = ll;
 }
 
+/* The documents on one line of a block (v0.60.83): each <<WORD's lines,
+ * read from text at *next up to the WORD line, go in doc_tab; the line
+ * keeps \x02 and the slot's letter where <<WORD was. */
+static void block_docs(char *chunk, const char *text, uint32_t *next, uint32_t size) {
+    char word[32]; int quoted = 0;
+    char *mark;
+    while ((mark = heredoc_mark(chunk, word, sizeof(word), &quoted)) != 0) {
+        char *body = kmalloc(8193);
+        int bl = 0;
+        uint32_t j = *next;
+        while (j < size) {
+            uint32_t k = j;
+            while (k < size && text[k] != '\n' && text[k] != '\r') k++;
+            char bline[INPUT_MAX];
+            uint32_t m = k - j < INPUT_MAX - 1 ? k - j : INPUT_MAX - 1;
+            memcpy(bline, text + j, m); bline[m] = '\0';
+            j = k;
+            if (j < size && text[j] == '\r') j++;
+            if (j < size && text[j] == '\n') j++;
+            if (str_eq(bline, word)) break;
+            if (body) {
+                for (const char *c = bline; *c && bl < 8190; c++) body[bl++] = *c;
+                if (bl < 8191) body[bl++] = '\n';
+            }
+        }
+        *next = j;
+        if (!body || doc_tab_n >= DOC_TAB_MAX) {
+            t_printf("  follow: more than %d documents in blocks; this one is empty\n", DOC_TAB_MAX);
+            if (body) kfree(body);
+            mark[0] = '\x02'; mark[1] = (char)('A' + DOC_TAB_MAX);   /* no such one: empty */
+            continue;
+        }
+        doc_tab[doc_tab_n] = body; doc_tab_len[doc_tab_n] = bl; doc_tab_exp[doc_tab_n] = (uint8_t)!quoted;
+        mark[0] = '\x02'; mark[1] = (char)('A' + doc_tab_n);
+        doc_tab_n++;
+    }
+}
+
 static void cmd_run(const char *args) {
     static int depth;
     /* run FILE [ARGS...] (v0.60.2): the words after the file are the
@@ -7828,6 +7893,7 @@ static void cmd_run(const char *args) {
     int had_optind = ow != 0, optpos_was = me->optpos, seen_was = me->optind_seen;
     if (ow) { strncpy(optind_was, ow, sizeof(optind_was) - 1); optind_was[sizeof(optind_was) - 1] = '\0'; }
     set_var_quiet("OPTIND", "1"); me->optpos = 1; me->optind_seen = 1;
+    int doc_base = doc_tab_n;                  /* this script's block documents go after here (v0.60.83) */
     /* smoke: the script's own, ignored ones kept (v0.60.82) */
     uint8_t trap_was[2] = { me->trap_set[0], me->trap_set[1] };
     char *trap_cmd_was = kmalloc(sizeof(me->trap_cmd));
@@ -7851,6 +7917,7 @@ static void cmd_run(const char *args) {
              * then, do, else, in, ;;, {, |, && and ||. */
             int dd = compound_depth(l);
             int ll = (int)strlen(line);
+            if (dd > 0) block_docs(line, text, &next, size);
             while (dd > 0 && next < size) {
                 uint32_t e2 = next;
                 while (e2 < size && text[e2] != '\n' && text[e2] != '\r') e2++;
@@ -7858,8 +7925,9 @@ static void cmd_run(const char *args) {
                 uint32_t m = e2 - next < INPUT_MAX - 1 ? e2 - next : INPUT_MAX - 1;
                 memcpy(nl, text + next, m); nl[m] = '\0';
                 next = e2 + 1;
-                const char *t = nl; while (*t == ' ' || *t == '\t') t++;
+                char *t = nl; while (*t == ' ' || *t == '\t') t++;
                 if (!*t || *t == '#') continue;
+                block_docs(t, text, &next, size);
                 join_onto(line, &ll, t);
                 dd += compound_depth(t);
                 joined = 1;
@@ -7912,6 +7980,7 @@ static void cmd_run(const char *args) {
     me->scripts--;
     me->errexit = errexit_was; me->in_cond = cond_was;
     smoke_exit();                               /* the script's EXIT smoke, however it ended */
+    while (doc_tab_n > doc_base) { doc_tab_n--; kfree(doc_tab[doc_tab_n]); doc_tab[doc_tab_n] = 0; }
     me->trap_set[0] = trap_was[0]; me->trap_set[1] = trap_was[1];
     if (trap_cmd_was) { memcpy(me->trap_cmd, trap_cmd_was, sizeof(me->trap_cmd)); kfree(trap_cmd_was); }
     if (had_optind) set_var_quiet("OPTIND", optind_was); else cmd_unset("OPTIND");

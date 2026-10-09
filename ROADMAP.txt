@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.82
+Current version: v0.60.83
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,19 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.83 (2026-10-09)  — HERE-DOCUMENTS IN A SCRIPT'S BLOCKS
+  - A <<WORD inside an if, a loop, a { } or a function written over lines
+    in a script works now (v0.60.74 skipped it): as follow joins the
+    block, each document's lines are read where they are and kept in a
+    table, the line naming it by \x02 and a letter where <<WORD was; the
+    command it is on gets it each time it runs, expanded then, so a loop
+    sees each turn's $i. done <<WORD after a block too.
+  - The table lasts as long as the script, so a function defined in a
+    block and called later gets its document; one from a script that has
+    ended is an empty document, not the terminal. Twenty-six at most.
+  - scripts/blockdoc-test.sh compares a script of five such blocks with
+    bash.
 
 v0.60.82 (2026-10-09)  — SMOKE (TRAP)
   - `smoke 'CMD' SIG...` is sh's trap under the smoke alarm's name, for
