@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.121
+Current version: v0.60.122
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,18 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.122 (2026-10-09)  — SPOT.ELF (DIFF)
+  - spot.elf OLD NEW is diff under a kitchen name, in GNU's normal
+    format (2c2, 3,4d2, 5a6,7, < --- >, "\ No newline at end of file"),
+    status 0/1/2.
+  - Which lines it calls changed is GNU's choice, so its way of choosing
+    is GNU's, ported step for step: the shared start and end set aside,
+    discard_confusing_lines, Myers' middle snake (compareseq, diag), and
+    shift_boundaries. A plain longest common subsequence agreed on the
+    hand-made cases but not on ties in generated ones (either tie-break).
+  - scripts/spot-test.sh compares 55 pairs (15 by hand, 40 generated with
+    many repeated lines) and a missing file with GNU diff: 893 lines alike.
 
 v0.60.121 (2026-10-09)  — TAKE -A AND STOCK (READ -A, MAPFILE)
   - take -a NAME puts a line's words in the array NAME (with -r and the

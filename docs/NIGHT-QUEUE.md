@@ -61,7 +61,7 @@ NAME` (mapfile under a kitchen name) reads every line of its input into
 NAME, -t dropping the newlines. Both from a pipe (as runner reads one)
 and from <<<. Test against bash.
 
-## 4. spot.elf (diff)
+## 4. spot.elf (diff) — DONE v0.60.122
 
 What changed between two files, in diff's normal format (`2c2`, `< `,
 `---`, `> `, `a` and `d` with their ranges), from a longest common
