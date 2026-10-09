@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.44
+Current version: v0.60.45
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,13 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.45 (2026-10-08)  — <<< HERE-STRINGS
+  - `cook prog <<< WORD`: WORD (quotes removed, $v expanded, spaces kept
+    inside quotes) and a newline are the first stage's stdin, fed through
+    a pipe by the small feeder task the shell loops use. The later of <
+    and <<< wins, as in bash.
+  - scripts/herestr-test.sh compares eight files with bash.
 
 v0.60.44 (2026-10-08)  — BREAK AND CONTINUE
   - `break [N]` and `continue [N]` in for, while and until, as sh: N loops

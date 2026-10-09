@@ -1452,6 +1452,11 @@ static int shell_token(const char **sp, char *out, int max) {
         *sp = s + n;
         return 1;
     }
+    if (s[0] == '<' && s[1] == '<' && s[2] == '<') {   /* here-string (v0.60.45) */
+        out[0] = out[1] = out[2] = '<'; out[3] = '\0';
+        *sp = s + 3;
+        return 1;
+    }
     if (s[0] == '>' && s[1] == '>') {             /* append (v0.56.0) */
         out[0] = '>'; out[1] = '>'; out[2] = '\0';
         *sp = s + 2;
@@ -1590,6 +1595,22 @@ static void cook_err(const char *msg) {
     t_color(VGA_LIGHT_GREY, VGA_BLACK);
 }
 
+/* Feeds a captured builtin's output into a pipe for a shell loop that
+ * reads it (v0.60.34), or a here-string into a program (v0.60.45), then
+ * closes the pipe. */
+typedef struct { vfs_node_t *wr; char *buf; int len; } loopfeed_t;
+static void loopfeed_task(void *arg) {
+    loopfeed_t *f = arg;
+    for (int off = 0; off < f->len; ) {
+        int w = vfs_write(f->wr, f->buf + off, (uint32_t)(f->len - off));
+        if (w <= 0) break;
+        off += w;
+    }
+    vfs_close(f->wr);
+    kfree(f->buf); kfree(f);
+    task_exit();
+}
+
 static void build_env(char *out, int max);   /* with hand (v0.60.26) */
 static vfs_node_t *pending_in;   /* stdin for the next cook's first stage (v0.60.27, pipe_into) */
 static void (*pending_feed)(void);   /* run once the pipeline is up (v0.60.33, pipe_into) */
@@ -1622,13 +1643,14 @@ static vfs_node_t *open_for_writing(const char *name, int append, const char *fa
 static void cmd_cook(const char *args) {
     while (*args == ' ') args++;
     if (!*args) {
-        t_puts("Usage: cook <prog.elf> [args] [2> err] [| prog.elf ...] [< in] [> out] [&]\n");
+        t_puts("Usage: cook <prog.elf> [args] [2> err] [| prog.elf ...] [< in | <<< word] [> out] [&]\n");
         return;
     }
 
     stage_t st[PIPE_MAX_STAGES];
     char infile[FAT_PATH_MAX];  infile[0]  = '\0';
     char outfile[FAT_PATH_MAX]; outfile[0] = '\0';
+    char herestr[FAT_PATH_MAX]; int have_here = 0;      /* <<< (v0.60.45) */
     int  append = 0;                               /* >> (v0.56.0) */
     int  nst = 1, background = 0;
     st[0].prog[0] = st[0].args[0] = st[0].err[0] = '\0';
@@ -1644,6 +1666,14 @@ static void cmd_cook(const char *args) {
             unquote(cs->err);
             cs->err_append = (tok[2] == '>');
             cs->err_dup = 0;
+            continue;
+        }
+        if (str_eq(tok, "<<<")) {
+            /* cook prog <<< WORD (v0.60.45): WORD and a newline are the first
+             * stage's stdin; the later of < and <<< wins, as in bash. */
+            if (!shell_token(&sp, herestr, sizeof(herestr))) { cook_err("No word after <<<."); return; }
+            unquote(herestr);
+            have_here = 1; infile[0] = '\0';
             continue;
         }
         if (str_eq(tok, "2>&1")) {
@@ -1675,6 +1705,7 @@ static void cmd_cook(const char *args) {
                     cook_err("No file after <."); return;
                 }
                 unquote(infile);
+                have_here = 0;
                 break;
             case '>':
                 if (!shell_token(&sp, outfile, sizeof(outfile))) {
@@ -1714,6 +1745,17 @@ static void cmd_cook(const char *args) {
     /* Redirections. The process that receives one owns it and closes it on
      * exit, so nothing here is closed on the success path. */
     vfs_node_t *fin = 0, *fout = 0;
+    if (have_here) {
+        vfs_node_t *rd = 0, *wr = 0;
+        loopfeed_t *f = kmalloc(sizeof(loopfeed_t));
+        int hl = (int)strlen(herestr);
+        char *b = kmalloc((uint32_t)hl + 2);
+        if (!f || !b || vfs_pipe(&rd, &wr) < 0) { if (f) kfree(f); if (b) kfree(b); cook_err("Out of pipes."); return; }
+        memcpy(b, herestr, (uint32_t)hl); b[hl] = '\n';
+        f->wr = wr; f->buf = b; f->len = hl + 1;
+        if (!task_spawn("herestr", loopfeed_task, f)) { vfs_close(wr); vfs_close(rd); kfree(b); kfree(f); cook_err("Out of memory."); return; }
+        fin = rd;
+    }
     if (infile[0]) {
         char path[FAT_PATH_MAX];
         resolve_path(infile, path);
@@ -5504,20 +5546,6 @@ static void pipe_into(const char *left, const char *right) {
     if (pending_in) { vfs_close(pending_in); pending_in = 0; }
 }
 
-/* Feeds a captured builtin's output into a pipe for a shell loop that
- * reads it (v0.60.34), then closes the pipe. */
-typedef struct { vfs_node_t *wr; char *buf; int len; } loopfeed_t;
-static void loopfeed_task(void *arg) {
-    loopfeed_t *f = arg;
-    for (int off = 0; off < f->len; ) {
-        int w = vfs_write(f->wr, f->buf + off, (uint32_t)(f->len - off));
-        if (w <= 0) break;
-        off += w;
-    }
-    vfs_close(f->wr);
-    kfree(f->buf); kfree(f);
-    task_exit();
-}
 
 /* Start `left` writing into wr, for a shell loop to read (v0.60.34). A cook
  * line runs alongside the loop (its pids are left in pending_pids); anything

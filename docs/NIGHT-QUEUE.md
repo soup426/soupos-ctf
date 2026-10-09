@@ -64,7 +64,7 @@ length. Compare with bash.
 In for, while and until, with an optional N for nested loops. Compare
 with bash.
 
-## 6. <<< here-strings
+## 6. <<< here-strings — DONE v0.60.45
 
 `cook rack.elf <<< "c b a"`: the word, with a newline, as the first
 stage's stdin. Compare with bash.
