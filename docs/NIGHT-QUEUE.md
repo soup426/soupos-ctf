@@ -1,9 +1,9 @@
 # Night queue
 
-Thirty-ninth queue. The first thirty-eight are in `docs/queue-archive-2026-10-0*.md`.
+Fortieth queue. The first thirty-nine are in `docs/queue-archive-2026-10-0*.md`.
 Items wait on a person in three archives (the seventh, the thirteenth and
-the twenty-fourth). Builtins learn redirections at last, the shell's own
-variables, take's options, case's fall-through, and array keys.
+the twenty-fourth). A stack of bowls, a way past functions and nicknames to
+the builtin, rest -n, Tab for variables, and select.
 
 ## Standing rules
 
@@ -34,34 +34,34 @@ variables, take's options, case's fall-through, and array keys.
 
 ---
 
-## 1. Redirections on builtins and functions — DONE v0.60.94
+## 1. shelve, unshelve, shelf (pushd, popd, dirs)
 
-`slurp hi > /f.txt` prints "hi > /f.txt" today: only cook and a loop's
-done (or a { } group) take > F. A builtin's or a function's line takes
-> F, >> F and < F as `{ cmd ; } > F` would, wherever the redirection
-sits in the line. Compare the files with bash's.
+`shelve BOWL` goes there and keeps where it was on a stack; `unshelve`
+goes back to the top one; `shelf` lists the stack (the current bowl
+first, as dirs). Kitchen names. Compare with bash's pushd/popd/dirs.
 
-## 2. $$, $PPID, $SECONDS, $LINENO — DONE v0.60.95
+## 2. plain CMD (command)
 
-The shell's own number, its parent's, the seconds since it started (and
-SECONDS=N resets the count from N), and the line of the follow script
-being run. Test against what is known (two reads of $$ agree, $SECONDS
-moves with sleeptest, $LINENO counts a script's lines as bash does).
+Runs CMD as the builtin or the program it names, skipping a function or a
+nickname of the same name, as sh's command does; `plain -v NAME` says
+what it would run. A kitchen name. Compare with bash's command.
 
-## 3. take -p PROMPT, -n N, -t SECS — DONE v0.60.96
+## 3. rest -n
 
-read's prompt, its N characters and no more, and its timeout (status
-above 128 when it runs out, as bash). Test by typing and by not typing.
+Waits for the next background job to end, whichever it is, its status
+being that job's, as wait -n. Test with two jobs of different lengths.
 
-## 4. case ;& and ;;& — DONE v0.60.97
+## 4. Tab finishes $NAME
 
-;& runs the next arm's commands too, without testing it; ;;& goes on
-testing the arms after. Compare with bash.
+A word starting with $ (or ${) finishes from the shell's variable names,
+as bash's completion does. Test by typing.
 
-## 5. ${!a[@]} and ${!prefix*} — DONE v0.60.98
+## 5. select NAME in WORDS ; do ... ; done
 
-An array's indexes, and the names of the variables starting with prefix.
-Compare with bash.
+sh's select: a numbered menu of WORDS, a prompt ($PS3, or "#? "), the
+answer read; NAME is the chosen word (empty for a number out of range),
+REPLY what was typed; round again until break or the end of input.
+Test by typing.
 
 ## 6. Doom at the framebuffer's own resolution — DEFERRED
 
