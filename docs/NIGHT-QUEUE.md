@@ -1,10 +1,10 @@
 # Night queue
 
-Twenty-ninth queue. The first twenty-eight are in `docs/queue-archive-2026-10-0*.md`.
+Thirtieth queue. The first twenty-nine are in `docs/queue-archive-2026-10-0*.md`.
 Items wait on a person in three archives (the seventh, the thirteenth and
-the twenty-fourth). The shell grows the pieces of sh that scripts reach for
-next: assignments that keep their value, a variable for one command, the
-${...} forms, until, break and continue, and here-strings.
+the twenty-fourth). Scripts get the rest of what they lean on: leaving a
+function or a script early, background jobs to wait for, printf, (( )),
+and here-documents.
 
 ## Standing rules
 
@@ -35,51 +35,40 @@ ${...} forms, until, break and continue, and here-strings.
 
 ---
 
-## 1. w=$v keeps the whole value — DONE v0.60.40
+## 1. return and exit
 
-v="a b" ; w=$v : bash sets w to "a b" (an assignment's value is not split);
-soupOS expands the line to `w=a b`, which is no longer an assignment, and
-runs `b`. Expansions after NAME= at the start of a command must stay one
-value (the $(...) case already wraps itself; do the same for $NAME, $1..).
-Compare with bash.
+`return [N]` leaves a function with status N (the last command's if no
+N); `exit [N]` ends a `follow` script with status N (at the prompt it is
+clockout's business, so say so and do nothing there). sh's keywords keep
+their names. Compare with bash.
 
-## 2. A=1 cook prog: a variable for one command — DONE v0.60.41
+## 2. $! and rest (wait)
 
-`NAME=value cook prog` hands NAME=value to that program only (its
-environment), leaving the shell's NAME as it was; several prefixes may
-come first. try_assign says this is not supported; support it. Compare
-with bash's `NAME=value env | grep NAME` and the shell's value after.
+`$!` is the id of the last program started in the background; `rest`
+(wait, under a kitchen name) waits for all of this cook's background
+jobs, or for the one given, and its status is that job's. Compare the
+statuses with bash.
 
-## 3. ${VAR:-word}, ${VAR:=word} and ${#VAR} — DONE v0.60.42
+## 3. dish.elf (printf)
 
-The default when unset or empty, the default that also sets it, and the
-length. Compare with bash.
+`printf FORMAT ARGS...` under a kitchen name: %s %d %i %x %o %c %%, widths,
+`-` and `0` flags, precision for %s, \n \t \\ escapes, and the format
+reused while arguments remain. Compare with the host's printf byte for
+byte.
 
-## 4. until loops — DONE v0.60.43
+## 4. (( expr ))
 
-`until COMMANDS ; do ... ; done`, while's opposite. Compare with bash.
+The arithmetic command: status 0 when the expression is not zero, 1 when
+it is, with the $(( )) evaluator; `n=$((n+1))` gets `(( n = n + 1 ))`
+and `(( n++ ))`, `(( n += 2 ))` too. Compare with bash.
 
-## 5. break and continue — DONE v0.60.44
+## 5. Here-documents in scripts
 
-In for, while and until, with an optional N for nested loops. Compare
-with bash.
+In a `follow` script, `cook prog <<WORD` takes the lines up to WORD as
+the first stage's stdin, $NAME expanded in them (not with <<'WORD').
+Compare with bash running the same script.
 
-## 6. <<< here-strings — DONE v0.60.45
-
-`cook rack.elf <<< "c b a"`: the word, with a newline, as the first
-stage's stdin. Compare with bash.
-
-## 8. A loop, a program, then a loop: done | prog | while ... — DONE v0.60.46
-
-Found with item 4: `until ... ; done | stack.elf | while take x ; do ... ;
-done` hangs the shell (the same with while). split_segs looks for the |
-before a compound first, so "done | stack.elf" becomes a segment that
-pipes into the second loop, and the first loop's done never gets its out.
-sh runs the three as one pipeline. Make that work (the middle is a cook
-line between two shell sides), or at least refuse it with a message
-rather than hang; compare with bash.
-
-## 7. Doom at the framebuffer's own resolution — DEFERRED
+## 6. Doom at the framebuffer's own resolution — DEFERRED
 
 Carried; the user asked to keep to OS work.
 
