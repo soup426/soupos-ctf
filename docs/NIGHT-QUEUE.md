@@ -51,7 +51,7 @@ Compare with bash.
 With their op= forms where sh has them, at sh's precedence. Compare with
 bash.
 
-## 4. take -r
+## 4. take -r — DONE v0.60.67 (take was the -r one; plain take is read now)
 
 take turns \x into x today, as read does; -r keeps backslashes, as
 read -r. Compare with bash.

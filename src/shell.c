@@ -871,7 +871,7 @@ static void cmd_menu(void) {
         {0, "    follow [-e] <file> [..] - follow a recipe (a script); $1..$9 its args; -e stops at a failure"},
         {0, "    NAME=value, $NAME  - shell variables ($RANDOM: 0 to 32767)"},
         {0, "    discard NAME       - remove a variable"},
-        {0, "    take NAME...       - take a line from the terminal into variables"},
+        {0, "    take [-r] NAME...  - take a line into variables (-r: backslashes kept)"},
         {0, "    hand NAME[=value]  - hand a variable to programs (their getenv)"},
         {0, "    break [N]          - leave a for, while or until loop"},
         {0, "    continue [N]       - go round it again"},
@@ -5050,20 +5050,15 @@ static void set_var(const char *name, const char *value) {
 /* read NAME... (v0.60.4): a line from the terminal into variables, as sh's
  * read does - one word each, the last NAME taking the rest, spaces around
  * trimmed. At end of input before anything was typed the names are set
- * empty and the status is 1. */
-static void cmd_read(const char *args) {
-    char names[8][16]; int nn = 0;
-    const char *a = args;
-    while (*a && nn < 8) { a = first_word(a, names[nn], 16); if (names[nn][0]) nn++; }
-    if (!nn) { t_puts("Usage: take NAME...\n"); cur_shell()->last_status = 2; return; }
-    char line[INPUT_MAX];
-    int len = 0, eof = 0;
-    shell_t *me = cur_shell();
+ * empty and the status is 1. As sh's read since v0.60.67: \x is x (so
+ * `\ ` is a space inside a word), a \ at the end of a line joins the next
+ * line to it, and tabs part words as spaces do; `take -r` keeps every
+ * backslash as it is. */
+static int take_line(shell_t *me, char *line, int *lenp, int max) {
+    int len = *lenp, eof = 0;
     if (me->in_pipe) {
         /* From a pipe (v0.60.34): the line as written, no echo, as sh's read
-         * from a pipe. Reaching the end is status 1 even when a last line with
-         * no newline was read (its words are still set), as bash's read: so
-         * `while take` does not run for that line. */
+         * from a pipe. */
         for (;;) {
             if (me->in_pos == me->in_len) {
                 int n = vfs_read(me->in_pipe, me->in_buf, sizeof(me->in_buf));
@@ -5072,32 +5067,64 @@ static void cmd_read(const char *args) {
             }
             char c = me->in_buf[me->in_pos++];
             if (c == '\n') break;
-            if (c != '\r' && len < INPUT_MAX - 1) line[len++] = c;
+            if (c != '\r' && len < max - 1) line[len++] = c;
         }
     } else
     for (;;) {
         int c = t_getc();
         if (c < 0) { eof = 1; break; }
         if (c == '\n') { t_putc('\n'); break; }
-        if (c == '\b') { if (len > 0) { len--; t_putc('\b'); } continue; }
-        if (c >= ' ' && c < 127 && len < INPUT_MAX - 1) { line[len++] = (char)c; t_putc((char)c); }
+        if (c == '\b') { if (len > *lenp) { len--; t_putc('\b'); } continue; }
+        if (((c >= ' ' && c < 127) || c == '\t') && len < max - 1) { line[len++] = (char)c; t_putc((char)c); }
     }
-    line[len] = '\0';
-    const char *r = line;
-    for (int i = 0; i < nn; i++) {
-        char word[INPUT_MAX];
-        while (*r == ' ') r++;
-        if (i == nn - 1) {                       /* the last takes the rest */
-            int n = (int)strlen(r);
-            while (n > 0 && r[n - 1] == ' ') n--;
-            memcpy(word, r, (uint32_t)n); word[n] = '\0';
-        } else {
-            int n = 0;
-            while (*r && *r != ' ' && n < INPUT_MAX - 1) word[n++] = *r++;
-            word[n] = '\0';
+    *lenp = len;
+    return eof;
+}
+static void cmd_read(const char *args) {
+    char names[8][16]; int nn = 0, raw = 0;
+    const char *a = args;
+    while (*a && nn < 8) {
+        a = first_word(a, names[nn], 16);
+        if (!nn && !raw && str_eq(names[nn], "-r")) { raw = 1; continue; }
+        if (names[nn][0]) nn++;
+    }
+    if (!nn) { t_puts("Usage: take [-r] NAME...\n"); cur_shell()->last_status = 2; return; }
+    char line[INPUT_MAX];
+    int len = 0, eof = 0;
+    shell_t *me = cur_shell();
+    for (;;) {
+        eof = take_line(me, line, &len, INPUT_MAX);
+        int bs = 0;                                  /* backslashes ending it */
+        while (bs < len && line[len - 1 - bs] == '\\') bs++;
+        if (raw || eof || !(bs & 1)) break;
+        len--;                                       /* \ newline: the next line joins on */
+    }
+    /* what each byte is, after the backslashes: lit marks one that was
+     * escaped, which is never a separator and never trimmed */
+    char ch[INPUT_MAX]; char lit[INPUT_MAX]; int n = 0;
+    for (int i = 0; i < len; i++) {
+        if (!raw && line[i] == '\\') {
+            if (i + 1 < len) { ch[n] = line[++i]; lit[n++] = 1; }
+            continue;                                /* a last lone \ is dropped */
         }
+        ch[n] = line[i]; lit[n++] = 0;
+    }
+    int r = 0;
+    #define TAKE_SEP(x) (!lit[x] && (ch[x] == ' ' || ch[x] == '\t'))
+    for (int i = 0; i < nn; i++) {
+        char word[INPUT_MAX]; int w = 0;
+        while (r < n && TAKE_SEP(r)) r++;
+        if (i == nn - 1) {                           /* the last takes the rest */
+            int e = n;
+            while (e > r && TAKE_SEP(e - 1)) e--;
+            while (r < e && w < INPUT_MAX - 1) word[w++] = ch[r++];
+        } else {
+            while (r < n && !TAKE_SEP(r) && w < INPUT_MAX - 1) word[w++] = ch[r++];
+        }
+        word[w] = '\0';
         set_var(names[i], word);
     }
+    #undef TAKE_SEP
     cur_shell()->last_status = me->in_pipe ? (eof ? 1 : 0) : ((eof && len == 0) ? 1 : 0);
 }
 

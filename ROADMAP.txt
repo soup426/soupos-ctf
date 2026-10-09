@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.66
+Current version: v0.60.67
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,15 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.67 (2026-10-08)  — TAKE READS AS READ DOES, AND TAKE -R
+  - The queue had it backwards: take did nothing with backslashes, which
+    is read -r. Now plain take is sh's read: \x is x, `\ ` is a space
+    inside a word, \\ is one backslash, and a \ ending a line joins the
+    next line to it. `take -r` keeps every backslash, as read -r. Tabs part
+    words as spaces do, in both (a typed tab is taken now too).
+  - scripts/taker-test.sh reads one file three ways (take, take -r, one
+    name) and two typed lines, against bash's read and read -r.
 
 v0.60.66 (2026-10-08)  — BIT OPERATORS AND ** IN ARITHMETIC
   - $(( )) and (( )) know & | ^ ~ << >> and **, with &= |= ^= <<= >>=,
