@@ -49,7 +49,8 @@
  * PATH` for a text file, v0.60.154), so what may be read is the shell's to
  * decide, as it always is.
  *
- * The wheel (v0.60.151) scrolls the files window under the pointer.
+ * The wheel (v0.60.151) scrolls the files window under the pointer; Alt+Tab
+ * (v0.60.155) sends the focused window to the back.
  *
  * Programs' windows (v0.60.146, step 7). SYS_WIN_OPEN/PUT/EVENT/CLOSE: a
  * ring-3 program asks for a window, hands over its whole body of pixels,
@@ -644,6 +645,21 @@ static void files_open(int k, int r) {
     klog("[countertop] %s %s\n", verb, p);
 }
 
+/* Alt+Tab (v0.60.155): the focused window goes to the back, so the next one
+ * down has the focus; a second press reaches the third. Minimised windows
+ * are skipped because the focus skips them. Alt is read when the Tab
+ * arrives: measured held for QEMU's alt-tab (it holds keys 100 ms; the
+ * loop reads within ~20), as it is for a hand on the keys. */
+static void lower_window(int k) {
+    int at = -1;
+    for (int i = 0; i < nwin; i++) if (order[i] == k) at = i;
+    if (at <= 0) return;
+    for (int i = at; i > 0; i--) order[i] = order[i - 1];
+    order[0] = k;
+    repaint_win(k);                                   /* what now covers it */
+    int t = topmost();
+    if (t >= 0) { repaint_win(t); klog("[countertop] alt-tab to %s\n", win[t].title); }
+}
 static void raise_window(int k) {
     int at = -1;
     for (int i = 0; i < nwin; i++) if (order[i] == k) at = i;
@@ -1011,6 +1027,10 @@ int countertop_run(int (*avail)(void), int (*getch)(void), int uid) {
         apps_tick();
         while (avail()) {                            /* keys: the focused terminal's */
             int c = getch(), k = topmost();
+            if (c == '\t' && keyboard_key_pressed(KEY_SC_LALT) && k >= 0) {   /* Alt+Tab (v0.60.155) */
+                lower_window(k);
+                continue;
+            }
             if (k >= 0 && win[k].term) wt_key(win[k].term, c);
             else if (k >= 0 && win[k].app >= 0) app_push(win[k].app, WEV_KEY, (unsigned)c, 0, 0, 0);
             else if (k >= 0 && win[k].files && (c == KEY_UP || c == KEY_DOWN || c == '\n')) {

@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.154
+Current version: v0.60.155
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,18 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.155 (2026-10-09)  — ALT+TAB
+  - Alt+Tab sends the focused window to the back, so the next one down
+    has the focus and a second press reaches the third; a minimised
+    window is passed over (the focus skips it). Taken before the key
+    would go to a terminal.
+  - Measured first: Tab arrives as '\t' with keyboard_key_pressed() still
+    saying Alt is down for QEMU's alt-tab (it holds keys 100 ms; the
+    loop reads within ~20 ms), and not for a plain Tab.
+  - scripts/ctalttab-test.sh: three windows, Alt+Tab to the second, the
+    third and round again, then over a minimised Pantry; title bars and
+    taskbar buttons from screendumps, and the log. Six-wide soak 6 of 6.
 
 v0.60.154 (2026-10-09)  — jot IN A TERMINAL WINDOW
   - Measured first: in a desktop terminal jot said it needed the

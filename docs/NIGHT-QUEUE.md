@@ -109,7 +109,7 @@ text files (.txt .md .sc .sh) in jot and the rest in pour; if it does
 not, fix what wterm lacks first, and test the edit by screendump and by
 the file on disk afterwards.
 
-## 7. Switching windows from the keyboard
+## 7. Switching windows from the keyboard — DONE v0.60.155
 
 Alt+Tab raises the next window down (keyboard_key_pressed gives Alt;
 measure that Tab with Alt held arrives as '\t'). Minimised windows are
