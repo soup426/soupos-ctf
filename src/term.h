@@ -70,6 +70,8 @@ typedef struct term_stream {
     void    *wctx;
     int      cols, rows, row, col, fg_col, bg_col;
     volatile int closed;
+    uint16_t *shadow;                            /* (v0.60.159) put_cell's idea of the far screen, */
+    int      sh_cols, sh_rows, lost;             /* its size, and "the cursor is not where row,col say" */
     keyxlate_t x;
     int      ring[128];
     volatile uint32_t head, tail;

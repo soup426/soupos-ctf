@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.158
+Current version: v0.60.159
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,22 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.159 (2026-10-09)  — jot OVER SSH
+  - The stream terminal has a put_cell: VT100 cursor addressing and SGR
+    colours, with a shadow of the far screen so only cells that changed
+    are sent, the cursor moved only when a cell does not follow the last
+    (a short gap of unchanged cells in one colour is sent again instead,
+    a byte each against an 8-byte move), and the tracker marked lost past
+    the last column so the next move is absolute. jot now runs over SSH,
+    where it was refused. Off the console it sizes itself to the
+    terminal (all but the last row for text), since SSH clients are
+    often 24 rows.
+  - jot works out each cell once a frame. It blanked each row and then
+    painted it, changing every cell twice: measured over SSH, 13 typed
+    characters cost 9542 bytes; now 422. The first full draw is 2355.
+  - ssh-login.py jot and ssh-test.sh: log in, jot a new file, type,
+    Ctrl-S ("Saved."), Esc, pour it back; the byte counts in the line.
 
 v0.60.158 (2026-10-09)  — THE KITCHEN MENU
   - A Kitchen button on the top bar drops down the programs that open

@@ -3,7 +3,7 @@
 ## What this is
 
 soupOS is a 32-bit x86 hobby OS written in C and NASM assembly (currently
-**v0.60.158**; ROADMAP.txt is the authority on the version). It boots via GRUB and runs in protected mode with paging, a
+**v0.60.159**; ROADMAP.txt is the authority on the version). It boots via GRUB and runs in protected mode with paging, a
 physical/heap allocator, and a cooperative scheduler. On top of that:
 
 - **Filesystem**: FAT16 read/write with subdirectories ("bowls") and a VFS shim
@@ -137,7 +137,8 @@ src/
   doom.c / doom.h   Doom port (title, menu, level rendering)
   doom_libc.c       Freestanding C library (memcpy, etc.)
   shell.c           Interactive shell
-  editor.c / editor.h  jot — full-screen text editor (writes 0xB8000 directly)
+  editor.c / editor.h  jot — full-screen text editor (the console's cells directly; elsewhere
+                       term_t put_cell: a desktop window, or SSH through a shadowed stream, v0.60.159)
   soupyc.c          soupyc scripting language interpreter
   str.c             String utilities
   task.c / task.h   Scheduler (task_init, spawn, yield, exit, preemption)

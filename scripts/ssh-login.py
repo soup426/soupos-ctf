@@ -17,6 +17,9 @@ insists on a tty for its password prompt.
     ssh-login.py <port> hangup        cook glutton.elf &, then drop the connection with it running
     ssh-login.py <port> rekey         the CLIENT rekeys every 2 KB (RekeyLimit): menu twice, then
                                       whoami must still answer through the new keys
+    ssh-login.py <port> jot           (v0.60.159) jot over the wire: a new file, a line typed, Ctrl-S,
+                                      Esc, pour shows it; prints the bytes jot's first draw and the
+                                      typed line cost to stderr
 
 Exit status 0 on the expected outcome, 1 otherwise.
 """
@@ -109,6 +112,33 @@ try:
         c.expect("No soup for you"); c.expect(pexpect.EOF); c.close()
         if c.exitstatus != 127:
             print(f"ssh-login: exec status {c.exitstatus}, wanted 127", file=sys.stderr); sys.exit(1)
+    elif mode == "jot":
+        import time
+        class Count:                          # every byte the client is sent, as it arrives
+            n = 0
+            def write(self, b): Count.n += len(b)
+            def flush(self): pass
+        def drain():                          # read until a second goes by with nothing
+            try:
+                while True: c.read_nonblocking(65536, timeout=1)
+            except pexpect.TIMEOUT: pass
+        c = pexpect.spawn(f"ssh -p {port} {nokey} headchef@127.0.0.1", encoding="utf-8", timeout=25, dimensions=(24, 80))
+        c.logfile_read = Count()
+        c.expect("password:"); c.sendline("rosemary")
+        c.expect("a shell of your own"); drain()
+        before = Count.n
+        c.sendline("jot /SSHNOTE.TXT")
+        c.expect(r"\^S ESC")                 # the status bar: the first draw is done
+        drain()
+        drawn = Count.n - before
+        before = Count.n
+        c.send("over the wire"); time.sleep(1); drain()
+        typed = Count.n - before
+        c.sendcontrol("s"); c.expect("Saved.")
+        c.send("\x1b"); drain()
+        c.sendline("pour /SSHNOTE.TXT"); c.expect("over the wire")
+        c.sendline("clockout"); c.expect(pexpect.EOF)
+        print(f"ssh-login: jot's first draw {drawn} bytes, 13 typed characters {typed} bytes", file=sys.stderr)
     elif mode == "isolate":
         c = login(nokey)
         c.expect("password:"); c.sendline("rosemary")

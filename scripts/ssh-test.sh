@@ -98,6 +98,9 @@ python3 scripts/ssh-login.py "$PORT" isolate \
 grep -q "zebracake" "$LOG" \
     && { echo "  FAIL  the session's output reached the console"; fail=1; } \
     || echo "  ok    none of the session's output reached the console"
+jotsaid=$(python3 scripts/ssh-login.py "$PORT" jot 2>&1) \
+    && echo "  ok    jot over the wire: a new file typed, saved with Ctrl-S, poured back (v0.60.159; ${jotsaid#ssh-login: })" \
+    || { echo "  FAIL  jot over SSH: $jotsaid"; fail=1; }
 python3 scripts/ssh-login.py "$PORT" ctrlc \
     && echo "  ok    Ctrl-C over the wire kills the session's program" \
     || { echo "  FAIL  Ctrl-C over SSH"; fail=1; }

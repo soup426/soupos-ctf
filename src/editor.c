@@ -21,8 +21,11 @@ static term_t *ET;
 static int     on_con;
 #define VGA_W      (on_con ? vga_cols() : ET->cols(ET))
 #define VGA_H      (on_con ? vga_rows() : ET->rows(ET))
-#define TEXT_ROWS  24
-#define STATUS_ROW 24
+/* The console keeps the 25 rows jot always had; on another terminal the
+ * text fills all but its last row, the status bar's (v0.60.159: an SSH
+ * client is often 24 rows). */
+#define TEXT_ROWS  (on_con ? 24 : VGA_H - 1)
+#define STATUS_ROW (on_con ? 24 : VGA_H - 1)
 #define VGA_MEM    (vga_cells())   /* never 0xB8000: dead on FB boots */
 
 #define ATTR(fg, bg) ((uint8_t)(((bg) << 4) | (fg)))
@@ -35,9 +38,6 @@ static void put_cell(int row, int col, char c, uint8_t attr) {
 static int  e_getc(void)  { return on_con ? keyboard_getchar() : ET->getc(ET); }
 static int  e_avail(void) { return on_con ? keyboard_available() : ET->available(ET); }
 
-static void put_str(int row, int col, const char *s, uint8_t attr) {
-    for (; *s && col < VGA_W; s++, col++) put_cell(row, col, *s, attr);
-}
 
 /* ── Buffer ──────────────────────────────────────────────────────────────
  * A flat byte buffer; '\n' delimits lines. Edits shift the tail in place. */
@@ -177,23 +177,23 @@ static void render(void) {
     if (line < etop) etop = line;
     if (line >= etop + TEXT_ROWS) etop = line - TEXT_ROWS + 1;
 
-    /* Blank the text area, then paint visible lines. */
+    /* Each cell once, with what it ends up as (v0.60.159): blanking a row
+     * and then painting it changed every cell twice a frame, which over
+     * SSH sent ~730 bytes a keystroke. */
     for (int r = 0; r < TEXT_ROWS; r++) {
-        for (int c = 0; c < VGA_W; c++) put_cell(r, c, ' ', text);
         int L = etop + r, s, len;
-        if (line_bounds(L, &s, &len) == 0) {
-            int sel_lo, sel_hi;
-            sel_span(&sel_lo, &sel_hi);
-            for (int c = 0; c < len && c < VGA_W; c++) {
-                char ch = ebuf[s + c];
+        int have = line_bounds(L, &s, &len) == 0;
+        int sel_lo = -1, sel_hi = -1;
+        if (have) sel_span(&sel_lo, &sel_hi);
+        for (int c = 0; c < VGA_W; c++) {
+            char ch = ' '; uint8_t a = text;
+            if (have && c < len) {
+                ch = ebuf[s + c];
+                if (ch < ' ' || ch >= 127) ch = ' ';
                 int off = s + c;
-                uint8_t a = (sel_lo >= 0 && off >= sel_lo && off < sel_hi)
-                                ? ATTR(VGA_BLACK, VGA_LIGHT_GREY)   /* selected */
-                                : text;
-                put_cell(r, c, (ch >= ' ' && ch < 127) ? ch : ' ', a);
-            }
-        } else {
-            put_cell(r, 0, '~', tilde);   /* past end-of-file */
+                if (sel_lo >= 0 && off >= sel_lo && off < sel_hi) a = ATTR(VGA_BLACK, VGA_LIGHT_GREY);  /* selected */
+            } else if (!have && c == 0) { ch = '~'; a = tilde; }                  /* past end-of-file */
+            put_cell(r, c, ch, a);
         }
     }
 
@@ -209,9 +209,11 @@ static void render(void) {
         }
     }
 
-    /* Status bar. */
+    /* Status bar, built whole and then put a cell at a time (v0.60.159). */
     uint8_t st = ATTR(VGA_BLACK, VGA_LIGHT_GREY);
-    for (int c = 0; c < VGA_W; c++) put_cell(STATUS_ROW, c, ' ', st);
+    char row[256];
+    int W = VGA_W < (int)sizeof(row) ? VGA_W : (int)sizeof(row);
+    for (int c = 0; c < W; c++) row[c] = ' ';
     char bar[VGA_W + 1];
     const char *nm = epath;
     /* show just the basename to keep it short */
@@ -225,7 +227,7 @@ static void render(void) {
         for (const char *q = mk; *q && i < 47; q++) bar[i++] = *q;
     }
     bar[i] = '\0';
-    put_str(STATUS_ROW, 0, bar, st);
+    for (int c = 0; bar[c] && c < W; c++) row[c] = bar[c];
 
     char rc[40];
     /* "Ln L,Col C" right-ish; build manually */
@@ -240,14 +242,14 @@ static void render(void) {
     if (v == 0) num[k++] = '0'; else { while (v) { num[k++] = '0' + v % 10; v /= 10; } }
     while (k) rc[j++] = num[--k];
     rc[j] = '\0';
-    put_str(STATUS_ROW, 50, rc, st);
-    put_str(STATUS_ROW, 59, "^B mark ^C^X^V ^S ESC", st);
-
-    /* Transient message overrides the help text for one frame. */
-    if (emsg[0]) {
-        for (int c = 50; c < VGA_W; c++) put_cell(STATUS_ROW, c, ' ', st);
-        put_str(STATUS_ROW, 50, emsg, st);
+    if (emsg[0]) {                     /* a transient message replaces the help for one frame */
+        for (int c = 0; emsg[c] && 50 + c < W; c++) row[50 + c] = emsg[c];
+    } else {
+        for (int c = 0; rc[c] && 50 + c < W; c++) row[50 + c] = rc[c];
+        const char *help = "^B mark ^C^X^V ^S ESC";
+        for (int c = 0; help[c] && 59 + c < W; c++) row[59 + c] = help[c];
     }
+    for (int c = 0; c < W; c++) put_cell(STATUS_ROW, c, row[c], st);
 
     /* Hardware cursor on the editable cell. */
     int cy = line - etop;

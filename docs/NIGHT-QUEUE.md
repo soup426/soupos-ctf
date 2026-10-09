@@ -88,7 +88,7 @@ A "Kitchen" button on the top bar listing the programs that open
 windows (frost, swirl), each opening in a new terminal as the files
 window does with pour and jot. Test by screendump and the log.
 
-## 5. jot over SSH
+## 5. jot over SSH — DONE v0.60.159
 
 The stream terminal could implement put_cell with VT100 cursor
 addressing (ESC[row;colH) and SGR colours; then jot would work over

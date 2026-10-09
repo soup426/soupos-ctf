@@ -6,6 +6,7 @@
 #include "str.h"
 #include "task.h"
 #include "proc.h"
+#include "heap.h"
 #include <stdarg.h>
 
 /* ── the local console ─────────────────────────────────────────────────── */
@@ -149,6 +150,12 @@ static void s_cursor(term_t *t, int row, int col) {
     if (col < 0) col = 0;
     if (col > s->cols - 1) col = s->cols - 1;
     out_t o; o.s = s; o.n = 0;
+    if (s->lost) {                          /* put_cell left it past the last column: absolute */
+        out_str(&o, "\033["); out_num(&o, row + 1); out_byte(&o, ';'); out_num(&o, col + 1); out_byte(&o, 'H');
+        s->row = row; s->col = col; s->lost = 0;
+        out_flush(&o);
+        return;
+    }
     int dr = row - s->row;
     if (dr < 0) { out_str(&o, "\033["); out_num(&o, -dr); out_byte(&o, 'A'); }
     if (dr > 0) { out_str(&o, "\033["); out_num(&o,  dr); out_byte(&o, 'B'); }
@@ -169,7 +176,44 @@ static void s_clear(term_t *t) {
     out_t o; o.s = s; o.n = 0;
     out_str(&o, "\033[2J\033[H");
     out_flush(&o);
-    s->row = s->col = 0;
+    s->row = s->col = 0; s->lost = 0;
+    if (s->shadow) for (int i = 0; i < s->sh_cols * s->sh_rows; i++) s->shadow[i] = 0xFFFF;
+}
+
+/* One cell for a full-screen program (v0.60.159: jot over SSH). The far
+ * screen is kept in a shadow, so a redraw sends only the cells that
+ * changed; the cursor is moved absolutely only when a cell is not the one
+ * after the last, and colours only when they change. Measured with jot:
+ * see ROADMAP v0.60.159. */
+static void s_cell(term_t *t, int r, int c, char ch, int attr) {
+    term_stream_t *s = S_(t);
+    if (r < 0 || r >= s->rows || c < 0 || c >= s->cols) return;
+    if (!s->shadow || s->sh_cols != s->cols || s->sh_rows != s->rows) {
+        if (s->shadow) kfree(s->shadow);
+        s->shadow = kmalloc((uint32_t)(s->cols * s->rows) * sizeof(uint16_t));
+        if (!s->shadow) return;
+        s->sh_cols = s->cols; s->sh_rows = s->rows;
+        for (int i = 0; i < s->cols * s->rows; i++) s->shadow[i] = 0xFFFF;
+    }
+    if ((unsigned char)ch < ' ' || (unsigned char)ch > 126) ch = ' ';
+    uint16_t cell = (uint16_t)((unsigned char)ch | (attr & 0x7F) << 8);
+    if (s->shadow[r * s->cols + c] == cell) return;
+    s->shadow[r * s->cols + c] = cell;
+    s_color(t, attr & 15, (attr >> 4) & 7);
+    out_t o; o.s = s; o.n = 0;
+    /* A short gap of unchanged cells in the same colour on this row: send
+     * them again (a byte each) rather than an 8-byte move, which also keeps
+     * words whole on the wire ("^S ESC", not "^S", a move, "ESC"). */
+    int gap = !s->lost && s->row == r && s->col < c && c - s->col <= 6;
+    for (int k = s->col; gap && k < c; k++) if ((s->shadow[r * s->cols + k] >> 8) != (cell >> 8)) gap = 0;
+    if (gap) for (int k = s->col; k < c; k++) out_byte(&o, (char)(s->shadow[r * s->cols + k] & 0xFF));
+    else if (s->lost || s->row != r || s->col != c) {
+        out_str(&o, "\033["); out_num(&o, r + 1); out_byte(&o, ';'); out_num(&o, c + 1); out_byte(&o, 'H');
+    }
+    out_byte(&o, ch);
+    out_flush(&o);
+    s->row = r; s->col = c + 1; s->lost = 0;
+    if (s->col >= s->cols) { s->col = s->cols - 1; s->lost = 1; }   /* the far end's pending wrap */
 }
 
 static int s_avail(term_t *t) {
@@ -211,12 +255,14 @@ static void stream_key(int key, void *ctx) {
 
 void term_stream_init(term_stream_t *s, int cols, int rows,
                       void (*write)(const char *z, uint32_t n, void *ctx), void *ctx) {
+    if (s->shadow) kfree(s->shadow);         /* the slot's last session's */
     memset(s, 0, sizeof(*s));
     s->t.name = "stream";
     s->t.puts = s_puts;     s->t.putc = s_putc;     s->t.set_color = s_color;
     s->t.set_cursor = s_cursor; s->t.row = s_row;   s->t.col = s_col;
     s->t.cols = s_cols;     s->t.rows = s_rows;     s->t.clear = s_clear;
     s->t.getc = s_getc;     s->t.available = s_avail; s->t.flush_in = s_flush;
+    s->t.put_cell = s_cell;
     s->t.ctx  = s;
     s->write = write; s->wctx = ctx;
     s->cols  = (cols >= 20 && cols <= 500) ? cols : 80;
