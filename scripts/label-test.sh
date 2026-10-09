@@ -30,7 +30,12 @@ CASES=(
   "10#tally.elf 1000000 | label.elf | sift.elf 999999#seq 1000000 | nl -ba | grep 999999"
 )
 keys=("headchef" "rosemary" "WAIT:1")
-for c in "${CASES[@]}"; do IFS='#' read -r n soup host <<< "$c"; keys+=("cook $soup > /H$n.TXT" "UNTIL:headchef@soupOS:/> "); done
+# The cases run from a script on the disk (v0.60.156): typing each and
+# waiting for its prompt was most of this test's time.
+for c in "${CASES[@]}"; do IFS='#' read -r n soup host <<< "$c"; echo "cook $soup > /H$n.TXT"; done > "$WORK/CASES.SH"
+echo "slurp CASES-DONE" >> "$WORK/CASES.SH"
+mcopy -i "$WORK/disk.img" "$WORK/CASES.SH" ::/CASES.SH
+keys+=(". /CASES.SH" "UNTIL:CASES-DONE")
 keys+=("cook label.elf /NOPE.TXT" "WAIT:2")
 qemu-system-i386 -accel kvm -cpu host -drive "file=$WORK/disk.img,format=raw,if=ide,index=0" \
     -cdrom soupOS.iso -boot d -m 128M -no-reboot -no-shutdown -display none \

@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.155
+Current version: v0.60.156
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,23 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.156 (2026-10-09)  — THE SUITE'S TYPING TIME
+  - Fifteen compare-with-the-host tests now run their cases from a
+    script on the disk (. /CASES.SH, as seq-test since v0.60.148) instead
+    of typing each: find, cut, glob, flip, uniq, wc and tr, which also
+    waited a fixed 2 s a case and fell behind under load as cmp-test
+    did; and layer, headtail, sort, stack, label, knead, mince and
+    spread, which waited for each prompt. quote-test stays typed (the
+    quoting is the point) but waits for each prompt now.
+  - Measured, eight at once on the laptop, before / after:
+      wc 72/6 s, cut 63/6, tr 62/6, flip 57/10, uniq 47/6, find 52/27,
+      glob 53/21, quote 49/33; layer 92/11, headtail 66/7, sort 58/6,
+      label 46/11, stack 44/11, knead 42/11, mince 35/11, spread 31/11.
+    check.sh on CT 123 (32 jobs): 372 s before, 353 s after; its jobs'
+    summed time 8948 s to 8268 s. The wall time is now set by its
+    longest jobs (users, testcmd, bowls, cooks: 115-124 s under load)
+    and by the job cap, not by typing (queue 50 has both).
 
 v0.60.155 (2026-10-09)  — ALT+TAB
   - Alt+Tab sends the focused window to the back, so the next one down

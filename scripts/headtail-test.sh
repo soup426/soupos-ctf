@@ -34,7 +34,12 @@ CASES=(
   "16#spoon.elf /WIDE.TXT | dregs.elf -n 1#tail -n 1 WIDE.TXT"
 )
 keys=("headchef" "rosemary" "WAIT:1")
-for c in "${CASES[@]}"; do IFS='#' read -r n soup host <<< "$c"; keys+=("cook $soup > /H$n.TXT" "UNTIL:headchef@soupOS:/> "); done
+# The cases run from a script on the disk (v0.60.156): typing each and
+# waiting for its prompt was most of this test's time.
+for c in "${CASES[@]}"; do IFS='#' read -r n soup host <<< "$c"; echo "cook $soup > /H$n.TXT"; done > "$WORK/CASES.SH"
+echo "slurp CASES-DONE" >> "$WORK/CASES.SH"
+mcopy -i "$WORK/disk.img" "$WORK/CASES.SH" ::/CASES.SH
+keys+=(". /CASES.SH" "UNTIL:CASES-DONE")
 qemu-system-i386 -accel kvm -cpu host -drive "file=$WORK/disk.img,format=raw,if=ide,index=0" \
     -cdrom soupOS.iso -boot d -m 128M -no-reboot -no-shutdown -display none \
     -serial "file:$WORK/serial.log" -monitor "unix:$WORK/mon.sock,server,nowait" >/dev/null 2>&1 &

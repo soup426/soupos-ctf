@@ -116,7 +116,7 @@ measure that Tab with Alt held arrives as '\t'). Minimised windows are
 skipped. Test: three windows, Alt+Tab twice, the focus on the third
 (screendump of the title bars and the taskbar's blue button).
 
-## 8. The suite's typing time
+## 8. The suite's typing time — DONE v0.60.156
 
 seq-test went from 188 s to 7 s when its cases ran from a script on the
 disk instead of typed lines (v0.60.148). Measure which tests in
@@ -124,6 +124,11 @@ check.sh's full run take longest and how much of that is typing; move
 the slowest such tests to scripts and measure check.sh's wall time
 before and after. A test whose point is the typing (line editing,
 history, keys) stays typed.
+
+Fifteen tests moved to scripts (869 s to 194 s between them, eight at a
+time on the laptop); quote-test waits for prompts now. check.sh on CT
+123: 372 s to 353 s. The rest is its longest jobs and the job cap: at
+64 jobs it took 266 s but peaked at 7722 MB of the CT's 8192.
 
 ## 9. Doom at the framebuffer's own resolution — DEFERRED
 

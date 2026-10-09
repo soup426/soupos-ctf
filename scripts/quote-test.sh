@@ -22,7 +22,9 @@ CASES=(
   "8#cook spoon.elf \"/my file.txt\" > /Q8.TXT#cat \"my file.txt\" > Q8.TXT"
 )
 keys=("headchef" "rosemary" "WAIT:1")
-for c in "${CASES[@]}"; do IFS='#' read -r n soup host <<< "$c"; keys+=("$soup" "WAIT:2"); done
+# Typed, since the quoting is the point; each waits for the prompt rather
+# than a fixed 2 s, which fell behind under load (v0.60.156).
+for c in "${CASES[@]}"; do IFS='#' read -r n soup host <<< "$c"; keys+=("$soup" "UNTIL:headchef@soupOS:/> "); done
 qemu-system-i386 -accel kvm -cpu host -drive "file=$WORK/disk.img,format=raw,if=ide,index=0" \
     -cdrom soupOS.iso -boot d -m 128M -no-reboot -no-shutdown -display none \
     -serial "file:$WORK/serial.log" -monitor "unix:$WORK/mon.sock,server,nowait" >/dev/null 2>&1 &
