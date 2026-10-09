@@ -40,7 +40,7 @@ echo's -n (no newline at the end) and -e (\n \t \\ and the rest), and -E,
 in bash's way (options only first, -ne together, a word like -x printed).
 Compare with bash's echo.
 
-## 2. ${NAME^} ${NAME^^} ${NAME,} ${NAME,,} and ${!NAME}
+## 2. ${NAME^} ${NAME^^} ${NAME,} ${NAME,,} and ${!NAME} — DONE v0.60.85
 
 Upper and lower case, the first letter or all of them, and indirection
 (the variable whose name NAME holds). Compare with bash.

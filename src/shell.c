@@ -5975,8 +5975,9 @@ static int expand_into(const char *seg, char *ex, int max) {
          * expanded first ($X, quotes), as sh does. Anything else in braces
          * is left as typed. */
         if (seg[i] == '$' && seg[i + 1] == '{' && sq != '\'') {
-            int j = i + 2, len_of = 0;
+            int j = i + 2, len_of = 0, indirect = 0;
             if (seg[j] == '#' && seg[j + 1] != '}') { len_of = 1; j++; }
+            else if (seg[j] == '!' && seg[j + 1] != '}') { indirect = 1; j++; }   /* ${!NAME} (v0.60.85) */
             char name[16]; int nn = 0;
             if (seg[j] >= '1' && seg[j] <= '9') name[nn++] = seg[j++];
             else while ((seg[j] == '_' || (seg[j] >= 'A' && seg[j] <= 'Z') || (seg[j] >= 'a' && seg[j] <= 'z') ||
@@ -5998,6 +5999,13 @@ static int expand_into(const char *seg, char *ex, int max) {
                 j += op == 'R' ? 1 : 2;
             }
             else if (nn && !len_of && seg[j] == ':') { op = 'O'; j++; }
+            /* ${NAME^} ^^ , ,, (v0.60.85): the first letter or all of them,
+             * up or down; a pattern after picks which characters may */
+            else if (nn && !len_of && (seg[j] == '^' || seg[j] == ',')) {
+                int twice = seg[j + 1] == seg[j];
+                op = seg[j] == '^' ? (twice ? 'X' : 'x') : (twice ? 'Y' : 'y');
+                j += twice ? 2 : 1;
+            }
             int wstart = j;
             if (op) {                                    /* the word: to the matching } */
                 int dep = 0; char q = 0;
@@ -6012,14 +6020,40 @@ static int expand_into(const char *seg, char *ex, int max) {
             if (!nn || seg[j] != '}') { ex[k++] = seg[i]; continue; }
             shell_t *me = cur_shell();
             const char *val = 0;
-            if (name[0] >= '1' && name[0] <= '9') { if (name[0] - '1' < me->npargs) val = me->parg[name[0] - '1']; }
-            else if (str_eq(name, "RANDOM")) val = random_text();
-            else for (int v = 0; v < me->nvars; v++) if (str_eq(me->vname[v], name)) { val = me->vval[v]; break; }
+            for (int hop = 0; hop <= indirect; hop++) {
+                if (hop) {                                  /* ${!NAME}: the variable NAME names */
+                    char nm2[16]; int n2 = 0;
+                    const char *vv = val ? val : "";
+                    while (*vv && n2 < 15) nm2[n2++] = *vv++;
+                    nm2[n2] = '\0';
+                    strcpy(name, nm2);
+                    val = 0;
+                    if (!name[0] || *vv) break;
+                }
+                if (name[0] >= '1' && name[0] <= '9' && !name[1]) { if (name[0] - '1' < me->npargs) val = me->parg[name[0] - '1']; }
+                else if (str_eq(name, "RANDOM")) val = random_text();
+                else for (int v = 0; v < me->nvars; v++) if (str_eq(me->vname[v], name)) { val = me->vval[v]; break; }
+            }
             int mode = sq == '"' ? 1 : in_assign_value(ex, k) ? 2 : 0;
             if (len_of) {
                 char d[12]; int nd = 0; unsigned v = val ? (unsigned)strlen(val) : 0;
                 do { d[nd++] = (char)('0' + v % 10); v /= 10; } while (v);
                 while (nd && k < max - 1) ex[k++] = d[--nd];
+            } else if (op == 'x' || op == 'X' || op == 'y' || op == 'Y') {
+                char raw[INPUT_MAX], pat[INPUT_MAX], one[2] = { 0, 0 };
+                int rl = j - wstart < INPUT_MAX - 1 ? j - wstart : INPUT_MAX - 1;
+                memcpy(raw, seg + wstart, (uint32_t)rl); raw[rl] = '\0';
+                if (expand_into(raw, pat, INPUT_MAX)) cut = 1;
+                glob_pattern(pat);
+                const char *v = val ? val : "";
+                for (int c = 0; v[c]; c++) {
+                    char ch = v[c];
+                    one[0] = ch;
+                    int may = (op == 'X' || op == 'Y' || c == 0) && (!pat[0] || glob_match(pat, one));
+                    if (may && (op == 'x' || op == 'X') && ch >= 'a' && ch <= 'z') ch = (char)(ch - 32);
+                    if (may && (op == 'y' || op == 'Y') && ch >= 'A' && ch <= 'Z') ch = (char)(ch + 32);
+                    if (!put_lit(ex, &k, max, ch, mode)) { cut = 1; break; }
+                }
             } else if (op == 'R' || op == 'G' || op == 'P' || op == 'S') {
                 char raw[INPUT_MAX], pat[INPUT_MAX], rep[INPUT_MAX], part[INPUT_MAX];
                 int rn = 0, at = j, dep = 0; char q = 0;

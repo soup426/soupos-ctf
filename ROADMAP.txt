@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.84
+Current version: v0.60.85
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,14 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.85 (2026-10-09)  — ${NAME^^}, ${NAME,,} AND ${!NAME}
+  - ${NAME^} and ${NAME^^} raise the first letter or all of them,
+    ${NAME,} and ${NAME,,} lower them; a pattern after (${v^^[le]}) picks
+    which characters may change, as bash.
+  - ${!NAME} is the variable whose name NAME holds (a script argument's
+    number too, so k=2 ; ${!k} is $2); one that is not set is empty.
+  - scripts/casevar-test.sh compares eight lines with bash.
 
 v0.60.84 (2026-10-09)  — SLURP -N, -E AND -E
   - slurp takes echo's options as bash's echo does: leading words made of
