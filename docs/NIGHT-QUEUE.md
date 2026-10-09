@@ -69,7 +69,7 @@ subsequence; status 0 same, 1 different, 2 trouble. Compare with GNU diff
 on edits at the start, middle and end, insertions, deletions, an empty
 file, and identical files.
 
-## 5. carve.elf (split)
+## 5. carve.elf (split) — DONE v0.60.123
 
 A file (or stdin) into pieces: -l N lines (1000 by default) or -b N
 bytes, named PREFIX then aa, ab, ... (x by default). Compare the pieces
