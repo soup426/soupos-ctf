@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.111
+Current version: v0.60.112
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,18 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.112 (2026-10-09)  — PORTION.ELF (FACTOR)
+  - portion.elf N... is factor under a kitchen name: N, a colon, its
+    primes in order, from the words or stdin, up to 2^64-1 (GNU's goes
+    past with big numbers; portion says 2^64 is not one, status 1). Trial
+    division, Miller-Rabin with the twelve bases exact below 2^64, and
+    Pollard-Brent rho: two 32-bit primes multiplied take 0.15 s.
+  - User programs link libgcc for 64-bit division, as the kernel does;
+    only what a program calls is pulled in, and the other 46 programs
+    built byte for byte the same.
+  - scripts/portion-test.sh compares 16 numbers, the hard product, stdin
+    and bad input with the host's factor.
 
 v0.60.111 (2026-10-09)  — POTLUCK.ELF (COMM)
   - potluck.elf [-123] A B is comm under a kitchen name (what two sorted

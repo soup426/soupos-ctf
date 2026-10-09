@@ -102,12 +102,13 @@ OBJ_ASM = $(SRC_ASM:.asm=.o)
 OBJS    = $(OBJ_C) $(OBJ_ASM)
 
 # Ring-3 user programs (freestanding, linked high at USER_BASE; see user/user.ld).
-# Each links the user runtime (user/ulib.c) which provides _start + syscalls.
+# Each links the user runtime (user/ulib.c) which provides _start + syscalls,
+# and libgcc for 64-bit division (v0.60.112; only what a program uses is pulled in).
 UCFLAGS  = -m32 -ffreestanding -fno-pie -no-pie -fno-stack-protector \
            -nostdlib -Isrc -mgeneral-regs-only -O2
 USER_ELFS = user/greet.elf user/spoon.elf user/call.elf user/mise.elf user/whisk.elf \
             user/drop.elf user/unwrap.elf user/ticket.elf user/glutton.elf \
-            user/raise.elf user/weigh.elf user/measure.elf user/proof.elf user/stockpot.elf user/fridge.elf user/peek.elf user/toss.elf user/newbowl.elf user/sift.elf user/skim.elf user/dregs.elf user/rack.elf user/cull.elf user/divvy.elf user/slice.elf user/swap.elf user/tally.elf user/taste.elf user/forage.elf user/pair.elf user/flip.elf user/label.elf user/mince.elf user/knead.elf user/layer.elf user/stack.elf user/spread.elf user/labels.elf user/dish.elf user/marinate.elf user/peel.elf user/stalk.elf user/brine.elf user/brand.elf user/encore.elf user/potluck.elf
+            user/raise.elf user/weigh.elf user/measure.elf user/proof.elf user/stockpot.elf user/fridge.elf user/peek.elf user/toss.elf user/newbowl.elf user/sift.elf user/skim.elf user/dregs.elf user/rack.elf user/cull.elf user/divvy.elf user/slice.elf user/swap.elf user/tally.elf user/taste.elf user/forage.elf user/pair.elf user/flip.elf user/label.elf user/mince.elf user/knead.elf user/layer.elf user/stack.elf user/spread.elf user/labels.elf user/dish.elf user/marinate.elf user/peel.elf user/stalk.elf user/brine.elf user/brand.elf user/encore.elf user/potluck.elf user/portion.elf
 
 .PHONY: all clean distclean run run-ai run-console run-tcp iso disk user
 
@@ -116,7 +117,7 @@ all: iso
 # Build all user-mode ELF programs
 user: $(USER_ELFS)
 user/%.elf: user/%.c user/ulib.c user/ulib.h user/user.ld src/syscall_nr.h
-	$(CC) $(UCFLAGS) -Wl,-T,user/user.ld -o $@ user/ulib.c user/$*.c
+	$(CC) $(UCFLAGS) -Wl,-T,user/user.ld -o $@ user/ulib.c user/$*.c $(shell $(CC) -m32 -print-libgcc-file-name)
 
 # Static pattern rules, not plain pattern rules.
 #
@@ -290,6 +291,7 @@ $(DISK):
 	mcopy -i $(DISK) -o user/brand.elf    ::BRAND.ELF
 	mcopy -i $(DISK) -o user/encore.elf   ::ENCORE.ELF
 	mcopy -i $(DISK) -o user/potluck.elf  ::POTLUCK.ELF
+	mcopy -i $(DISK) -o user/portion.elf  ::PORTION.ELF
 	@if [ -f DOOM1.WAD ]; then \
 	    echo "  Copying DOOM1.WAD to disk image..."; \
 	    mcopy -i $(DISK) DOOM1.WAD ::DOOM1.WAD; \

@@ -87,7 +87,7 @@ second, and in both, in three tab-indented columns; -1 -2 -3 drop
 columns (and combine, -12). Compare with the host's comm on files with
 repeated lines, an empty file, and stdin as -.
 
-## 6. portion.elf (factor)
+## 6. portion.elf (factor) — DONE v0.60.112
 
 N: its prime factors in order, a line per number, from the words or
 stdin, as GNU's factor. Find out whether ulib can divide 64-bit numbers
