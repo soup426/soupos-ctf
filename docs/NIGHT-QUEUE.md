@@ -80,7 +80,7 @@ and read back the next time countertop starts. Test: choose one, Leave,
 countertop again, the background is the chosen one (screendump), and
 another cook's desktop is not.
 
-## 5. Notes from programs on the bar
+## 5. Notes from programs on the bar — DONE v0.60.170
 
 SYS_NOTE: a program puts a short line on the bar for a few seconds
 (queued if another is showing); oven.elf says "oven: done" there too,

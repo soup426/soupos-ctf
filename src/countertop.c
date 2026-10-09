@@ -983,10 +983,46 @@ static void bar_note(const char *msg) {          /* msg 0 clears it */
     fill(NOTE_X, 0, W - 8 * 8 - 12 - NOTE_X, BAR_H, BAR_RGB);
     if (msg) text(NOTE_X, (BAR_H - 16) / 2, msg, 0x00F0B040u);
 }
+/* Notes from programs (v0.60.170): queued here by SYS_NOTE (on the
+ * program's task, under app_mtx), shown on the bar a few seconds each by
+ * the loop. Leave's question has the bar first. */
+#define NOTE_Q 8
+#define NOTE_TICKS 400
+static char note_q[NOTE_Q][48];
+static int note_h, note_t, note_showing;
+static uint32_t note_at;
+int countertop_note(uint32_t pid, const char *line) {
+    mutex_lock(&app_mtx);
+    int r = -1;
+    if (ct_running && (note_t + 1) % NOTE_Q != note_h) {
+        scopy(note_q[note_t], line, (int)sizeof(note_q[0]));
+        for (char *c = note_q[note_t]; *c; c++) if ((unsigned char)*c < ' ' || (unsigned char)*c > 126) *c = ' ';
+        note_t = (note_t + 1) % NOTE_Q;
+        r = 0;
+    }
+    mutex_unlock(&app_mtx);
+    if (!r) klog("[countertop] note from pid %u queued\n", pid);
+    return r;
+}
+static void notes_tick(void) {
+    if (leave_armed) return;
+    if (note_showing && timer_get_ticks() - note_at >= NOTE_TICKS) { note_showing = 0; bar_note(0); }
+    if (note_showing) return;
+    char line[48];
+    mutex_lock(&app_mtx);
+    int have = note_h != note_t;
+    if (have) { scopy(line, note_q[note_h], (int)sizeof(line)); note_h = (note_h + 1) % NOTE_Q; }
+    mutex_unlock(&app_mtx);
+    if (!have) return;
+    bar_note(line);
+    note_showing = 1; note_at = timer_get_ticks();
+    klog("[countertop] note: %s\n", line);
+}
 static void ask_leave(void) {
     int n = apps_open();
     if (!n || (leave_armed && timer_get_ticks() - leave_armed_at < 500)) { leave_asked = 1; return; }
     leave_armed = 1; leave_armed_at = timer_get_ticks();
+    note_showing = 0;                                  /* the question has the bar now */
     char msg[64] = "programs open: Leave again to end them";
     if (n == 1) scopy(msg, "a program is open: Leave again to end it", (int)sizeof(msg));
     bar_note(msg);
@@ -1361,7 +1397,7 @@ int countertop_run(int (*avail)(void), int (*getch)(void), int uid) {
     load_settings();                                 /* before the first background (v0.60.169) */
     background();
     bar();
-    nwin = 0; drag = -1; last_btn = 0; leave_asked = 0; leave_armed = 0; menu_open = 0; rs_win = -1; sel_win = -1; fd_win = -1; ct_uid = uid; nterm = 0; task_sig = 0xFFFFFFFFu;
+    nwin = 0; drag = -1; last_btn = 0; leave_asked = 0; leave_armed = 0; note_h = note_t = note_showing = 0; menu_open = 0; rs_win = -1; sel_win = -1; fd_win = -1; ct_uid = uid; nterm = 0; task_sig = 0xFFFFFFFFu;
     for (int k = 0; k < MAX_WIN; k++) win[k].used = 0;
     app_drag = -1;
     mutex_lock(&app_mtx);                            /* programs may ask for windows now */
@@ -1465,6 +1501,7 @@ int countertop_run(int (*avail)(void), int (*getch)(void), int uid) {
         }
         if (leave_asked) break;
         if (leave_armed && timer_get_ticks() - leave_armed_at >= 500) { leave_armed = 0; bar_note(0); }   /* the question lapses */
+        notes_tick();
         {                                            /* the taskbar, when the windows changed */
             uint32_t sig = (uint32_t)topmost() * 2654435761u;
             for (int i = 0; i < MAX_WIN; i++) sig = sig * 31u + (uint32_t)(win[i].used * 2 + win[i].min);

@@ -34,6 +34,9 @@
 #define SYS_KILL   22  /* ebx = pid: end it, if it is the caller's own or the caller is
                         * the headchef, as the shell's kill decides; -> 0, -1 no such
                         * process, -2 not yours (v0.60.168)                             */
+#define SYS_NOTE   23  /* ebx = a line (47 characters are kept): shown on the desktop's bar
+                        * for 4 s, queued behind others; -> 0, or -1 with no desktop or a
+                        * full queue (v0.60.170)                                         */
 
 /* One directory entry for SYS_READDIR (v0.44.0): the long name when the
  * entry has one, else the 8.3 name. Shared by the kernel and ulib. */

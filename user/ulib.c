@@ -137,6 +137,11 @@ int sys_kill(unsigned pid) {
     __asm__ volatile ("int $0x80" : "=a"(ret) : "a"(SYS_KILL), "b"(pid) : "memory");
     return ret;
 }
+int sys_note(const char *line) {
+    int ret;
+    __asm__ volatile ("int $0x80" : "=a"(ret) : "a"(SYS_NOTE), "b"(line) : "memory");
+    return ret;
+}
 int sys_win_close(int id) {
     int ret;
     __asm__ volatile ("int $0x80" : "=a"(ret) : "a"(SYS_WIN_CLOSE), "b"(id) : "memory");

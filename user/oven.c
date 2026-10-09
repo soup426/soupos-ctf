@@ -7,7 +7,8 @@
  * MM:SS in seven-segment digits it draws itself (a program has no font),
  * counted down by the 100 Hz ticks, not by naps, so it does not drift. At
  * zero the window goes red, the mixer beeps (SYS_TONE; no sound card, no
- * beep) and it says "oven: done"; q or the close box ends it, early or
+ * beep) and it says "oven: done", on the bar too (SYS_NOTE, v0.60.170, which
+ * matters when its window is minimised); q or the close box ends it, early or
  * after ("oven: stopped at MM:SS").
  */
 #include "ulib.h"
@@ -68,6 +69,7 @@ int main(void) {
             done = 1;
             draw(id, 0, 1);
             sys_tone(880, 600);
+            sys_note("oven: done");                     /* on the bar too, for a minimised oven (v0.60.170) */
             print("oven: done\n");
         }
         uwinev_t e;

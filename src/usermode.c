@@ -756,6 +756,12 @@ void syscall_dispatch(registers_t *r) {
             r->eax = (uint32_t)(proc_kill(t->pid) == 0 ? 0 : -1);
             break;
         }
+        case SYS_NOTE: {                  /* (v0.60.170) a line on the desktop's bar */
+            char line[FAT_PATH_MAX];
+            if (!pr || copy_user_path(r->ebx, line) < 0) { r->eax = (uint32_t)-1; break; }
+            r->eax = (uint32_t)countertop_note(pr->pid, line);
+            break;
+        }
         case SYS_WIN_CLOSE:
             r->eax = (uint32_t)(pr ? countertop_win_close(pr->pid, (int)r->ebx) : -1);
             break;

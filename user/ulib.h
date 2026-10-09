@@ -38,6 +38,7 @@ int  sys_win_close(int id);
 int  sys_tone(unsigned hz, unsigned ms);      /* a beep, not waited for; -1 with no sound card (v0.60.164) */
 int  sys_procs(uproc_t *out, int max);         /* the live processes; how many (v0.60.168) */
 int  sys_kill(unsigned pid);                   /* 0, -1 no such process, -2 not yours (v0.60.168) */
+int  sys_note(const char *line);               /* a line on the desktop's bar for 4 s (v0.60.170) */
 __attribute__((noreturn)) void sys_exit(int code);
 
 /* conveniences */

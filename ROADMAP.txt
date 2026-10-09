@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.169
+Current version: v0.60.170
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,18 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.170 (2026-10-09)  — NOTES FROM PROGRAMS ON THE BAR
+  - SYS_NOTE (23): a program puts a line (47 characters kept, control
+    characters blanked) on the desktop's bar for 4 s, queued (eight)
+    behind any others; -1 with no desktop or a full queue. The queue is
+    filled under app_mtx on the program's task and shown by the loop;
+    Leave's question has the bar first.
+  - oven.elf says "oven: done" there too, which is how a minimised oven
+    is heard.
+  - scripts/ctnote-test.sh: two ovens of 3 s from one line, one
+    minimised; the note read back at zero, two shown one after the
+    other, then the bar clear. Six-wide soak 6 of 6.
 
 v0.60.169 (2026-10-09)  — SETTINGS THAT STAY
   - Four backgrounds (dusk, the one there was; sea; forest; plum). The
