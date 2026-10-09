@@ -80,6 +80,7 @@ typedef struct {
     char    vval[VARS_MAX][96];
     uint8_t vhand[VARS_MAX];     /* handed to programs (`hand`, v0.60.26) */
     uint8_t vseal[VARS_MAX];     /* sealed: sh's readonly (`seal`, v0.60.76) */
+    int     optpos, optind_seen; /* pluck's place inside a -abc, and the OPTIND it last wrote (v0.60.77) */
     char    vpend[8][16];        /* handed while unset: handed once set    */
     int     nvars, npend;
     char    parg[9][64];         /* a script's $1..$9 (v0.60.2)            */
@@ -881,6 +882,7 @@ static void cmd_menu(void) {
         {0, "    shift [N]          - drop the first N arguments ($2 becomes $1)"},
         {0, "    inspect [-t] NAME  - what NAME is: keyword, function, builtin or program"},
         {0, "    seal NAME[=value]  - a variable nothing may change (sh's readonly)"},
+        {0, "    pluck OPTS NAME    - the next -x option of $1.. (sh's getopts)"},
         {0, "    ! command          - run it and turn its status round"},
         {0, "    exit [N]           - leave a script (at the prompt, clockout)"},
         {0, "    kill <id>          - stop a background task"},
@@ -3142,6 +3144,7 @@ static void cmd_stash(const char *args);                  /* beside it (v0.60.56
 static void cmd_shift(const char *args);                  /* beside it (v0.60.59) */
 static void cmd_inspect(const char *args);                /* beside it (v0.60.72) */
 static void cmd_seal(const char *args);                   /* beside it (v0.60.76) */
+static void cmd_pluck(const char *args);                  /* beside it (v0.60.77) */
 static int status_before;
 static void cmd_read(const char *args);  /* beside run_line (v0.60.4) */
 
@@ -4648,7 +4651,7 @@ static const char *const cmd_names[] = {
     "takeout", "bgclock", "yieldbg", "spinbg", "sleeptest", "vfstest",
     "dmesg", "pwd", "cd", "mkbowl", "rmbowl", "bowltest",
     "whoami", "roster", "clockout", "hire", "fire", "perms", "secret",
-    "break", "continue", "return", "exit", "inspect", "seal",
+    "break", "continue", "return", "exit", "inspect", "seal", "pluck",
     "preempttest", "vmtest", "vgastress", "fatstress",
 };
 #define CMD_COUNT  (int)(sizeof(cmd_names) / sizeof(cmd_names[0]))
@@ -4892,6 +4895,7 @@ static void dispatch(const char *buf) {
     else if (str_eq(p, "shift") || str_startswith(p, "shift ")) cmd_shift(p + 5);
     else if (str_eq(p, "inspect") || str_startswith(p, "inspect ")) cmd_inspect(p + 7);
     else if (str_eq(p, "seal") || str_startswith(p, "seal ")) cmd_seal(p + 4);
+    else if (str_eq(p, "pluck") || str_startswith(p, "pluck ")) cmd_pluck(p + 5);
     else if (str_eq(p, "break") || str_startswith(p, "break ")) cmd_break(p + 5, 0);
     else if (str_eq(p, "return") || str_startswith(p, "return ")) cmd_return(p + 6, 0);
     else if (str_eq(p, "exit") || str_startswith(p, "exit ")) cmd_return(p + 4, 1);
@@ -6714,6 +6718,69 @@ static int loop_after_body(shell_t *me) {
     }
     return 0;
 }
+/* pluck OPTSTRING NAME [ARGS] (v0.60.77): sh's getopts. Each call takes
+ * the next option from ARGS, or from $1..$9 without them: NAME is its
+ * letter, OPTARG its argument when OPTSTRING has a : after the letter
+ * (the rest of the word, or the next word), OPTIND the next word's
+ * number. A letter not in OPTSTRING, or a missing argument, is NAME ?
+ * with a word on the terminal; with a : first in OPTSTRING it is quiet
+ * instead, NAME ? or : and OPTARG the letter. At the first word that is
+ * not an option, at --, or at the end, NAME is ? and the status 1. Where
+ * it is inside a -abc is kept here, and starts again when OPTIND is set
+ * to something it did not write. */
+static void cmd_pluck(const char *args) {
+    shell_t *me = cur_shell();
+    char opts[64], name[32];
+    const char *a = first_word(args, opts, sizeof(opts));
+    a = first_word(a, name, sizeof(name));
+    if (!opts[0] || !name[0]) { t_puts("Usage: pluck OPTSTRING NAME [ARGS...]\n"); me->last_status = 2; return; }
+    char given[9][64]; int ng = 0;
+    while (*a && ng < 9) { a = first_word(a, given[ng], 64); if (given[ng][0] || *a) ng++; }
+    int nargs = ng ? ng : me->npargs;
+    #define PLUCK_ARG(k) (ng ? given[k] : me->parg[k])
+    const char *oi = get_var("OPTIND");
+    int idx = 1;
+    if (oi && *oi) { idx = 0; for (const char *c = oi; *c >= '0' && *c <= '9'; c++) idx = idx * 10 + (*c - '0'); }
+    if (idx < 1) idx = 1;
+    if (idx != me->optind_seen || me->optpos < 1) me->optpos = 1;
+    int quiet = opts[0] == ':';
+    const char *os = opts + quiet;
+    char num[12], one[2] = { 0, 0 };
+    int st = 0;
+    #define PLUCK_SET_OPTIND(v) do { int _v = (v), _n = 0; char _d[12]; do { _d[_n++] = (char)('0' + _v % 10); _v /= 10; } while (_v); \
+        int _m = 0; while (_n) num[_m++] = _d[--_n]; num[_m] = '\0'; set_var("OPTIND", num); me->optind_seen = (v); } while (0)
+    if (idx > nargs) { set_var(name, "?"); PLUCK_SET_OPTIND(idx); me->optpos = 1; me->last_status = 1; return; }
+    const char *arg = PLUCK_ARG(idx - 1);
+    if (me->optpos == 1) {
+        if (arg[0] != '-' || arg[1] == '\0') { set_var(name, "?"); PLUCK_SET_OPTIND(idx); me->last_status = 1; return; }
+        if (arg[1] == '-' && arg[2] == '\0') { set_var(name, "?"); PLUCK_SET_OPTIND(idx + 1); me->optpos = 1; me->last_status = 1; return; }
+    }
+    char c = arg[me->optpos++];
+    const char *at = c && c != ':' ? strchr(os, c) : 0;
+    one[0] = c;
+    if (!at) {
+        if (quiet) { set_var(name, "?"); set_var("OPTARG", one); }
+        else { t_printf("  pluck: illegal option -- %c\n", c); set_var(name, "?"); cmd_unset("OPTARG"); }
+        if (!arg[me->optpos]) { idx++; me->optpos = 1; }
+    } else if (at[1] == ':') {
+        if (arg[me->optpos]) { set_var("OPTARG", arg + me->optpos); idx++; me->optpos = 1; set_var(name, one); }
+        else if (idx < nargs) { set_var("OPTARG", PLUCK_ARG(idx)); idx += 2; me->optpos = 1; set_var(name, one); }
+        else {
+            idx++; me->optpos = 1;
+            if (quiet) { set_var(name, ":"); set_var("OPTARG", one); }
+            else { t_printf("  pluck: option requires an argument -- %c\n", c); set_var(name, "?"); cmd_unset("OPTARG"); }
+        }
+    } else {
+        set_var(name, one);
+        cmd_unset("OPTARG");
+        if (!arg[me->optpos]) { idx++; me->optpos = 1; }
+    }
+    PLUCK_SET_OPTIND(idx);
+    #undef PLUCK_SET_OPTIND
+    #undef PLUCK_ARG
+    me->last_status = st;
+}
+
 /* seal [NAME[=value]]... (v0.60.76): sh's readonly. A sealed variable
  * cannot be set (=, take, for, a stash), discarded or stashed: each says
  * so and is status 1. A NAME not yet set is sealed empty. Bare `seal`
@@ -7457,6 +7524,12 @@ static void cmd_run(const char *args) {
     me->scripts++;
     int errexit_was = me->errexit, cond_was = me->in_cond;
     me->errexit = errexit; me->in_cond = 0;     /* -e is this script's alone */
+    /* A script starts pluck afresh, OPTIND 1, as a new sh does; the
+     * caller's comes back after (v0.60.77). */
+    char optind_was[24]; const char *ow = get_var("OPTIND");
+    int had_optind = ow != 0, optpos_was = me->optpos, seen_was = me->optind_seen;
+    if (ow) { strncpy(optind_was, ow, sizeof(optind_was) - 1); optind_was[sizeof(optind_was) - 1] = '\0'; }
+    set_var_quiet("OPTIND", "1"); me->optpos = 1; me->optind_seen = 1;
     cur_shell()->last_status = 0;
     uint32_t i = 0;
     while (i < size && !cur_shell()->exiting && !me->quit) {
@@ -7542,6 +7615,8 @@ static void cmd_run(const char *args) {
     depth--;
     me->scripts--;
     me->errexit = errexit_was; me->in_cond = cond_was;
+    if (had_optind) set_var_quiet("OPTIND", optind_was); else cmd_unset("OPTIND");
+    me->optpos = optpos_was; me->optind_seen = seen_was;
     me->quit = 0;                               /* exit ends this script, not its caller */
     memcpy(me->parg, saved, sizeof(me->parg));
     me->npargs = saved_n;

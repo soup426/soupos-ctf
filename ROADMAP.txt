@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.76
+Current version: v0.60.77
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,20 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.77 (2026-10-08)  — PLUCK (GETOPTS)
+  - `pluck OPTSTRING NAME [ARGS]` is sh's getopts under a kitchen name:
+    the next option of ARGS, or of $1..$9 without them, into NAME, with
+    OPTARG (the rest of the word or the next word, for a letter with a :
+    after it) and OPTIND; -acb a letter at a time; at --, a word that is
+    not an option, or the end, NAME ? and status 1. An unknown letter or
+    a missing argument is NAME ? and a word on the terminal, or quietly
+    ? or : with OPTARG the letter when OPTSTRING starts with :.
+  - Where it is inside a -acb is kept by the shell and starts again when
+    OPTIND is set to something pluck did not write; each follow script
+    starts at OPTIND 1, as a new sh does, and the caller's comes back.
+  - scripts/pluck-test.sh compares nine lines and a script with bash's
+    getopts.
 
 v0.60.76 (2026-10-08)  — SEAL (READONLY)
   - `seal NAME[=value]...` is sh's readonly under a kitchen name: a sealed

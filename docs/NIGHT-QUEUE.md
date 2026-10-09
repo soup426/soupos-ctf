@@ -51,7 +51,7 @@ A variable that cannot be set, discarded or stashed again; trying says
 so and is status 1. A kitchen name. `seal` alone lists them. Compare
 with bash's readonly.
 
-## 4. pluck OPTSTRING NAME (getopts)
+## 4. pluck OPTSTRING NAME (getopts) — DONE v0.60.77
 
 sh's getopts under a kitchen name: OPTIND, OPTARG, a : after a letter for
 an argument, ? for one not known, a leading : for the quiet form; in a
