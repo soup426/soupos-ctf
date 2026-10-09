@@ -113,6 +113,7 @@ typedef struct {
     int     nstash;              /* stash (local): what to give back as functions return (v0.60.56) */
     int     stash_floor;         /* where the running call's own stashes begin */
     int     errexit, in_cond;    /* follow -e, and how deep in a condition (v0.60.57) */
+    int     nounset, xtrace;     /* temper -u and -x (v0.60.115) */
     uint32_t last_bg;            /* the last job started with &: $! (v0.60.48) */
     uint32_t done_pid[16];       /* finished jobs the prompt reported, and their */
     uint8_t  done_st[16];        /* statuses, for a rest that comes after (as sh) */
@@ -908,6 +909,7 @@ static void cmd_menu(void) {
         {0, "    inspect [-t] NAME  - what NAME is: keyword, function, builtin or program"},
         {0, "    plain CMD / -v NAME - the builtin or program, not a function (sh's command)"},
         {0, "    brew WORDS         - the words run as a command line (sh's eval)"},
+        {0, "    temper [-eux] [--] [W..] - stop at failures, unset is an error, show commands; $1.. (sh's set)"},
         {0, "    seal NAME[=value]  - a variable nothing may change (sh's readonly)"},
         {0, "    pluck OPTS NAME    - the next -x option of $1.. (sh's getopts)"},
         {0, "    taste EXPR, [ EXPR ] - a condition: -f -d -e -z -n = != -eq -lt ... (sh's test)"},
@@ -3360,6 +3362,8 @@ static void cmd_unshelve(const char *args);
 static void cmd_shelf(const char *args);
 static void cmd_plain(const char *args);                  /* v0.60.100 */
 static void cmd_brew(const char *args);                   /* v0.60.110 */
+static void cmd_temper(const char *args);                 /* v0.60.115 */
+static int fn_name_len(const char *t);
 static void run_file(const char *args, int dot);          /* . FILE (v0.60.91) */
 static void cmd_forget(const char *args);
 static int nick_find(const char *name);
@@ -4947,7 +4951,7 @@ static const char *const cmd_names[] = {
     "takeout", "bgclock", "yieldbg", "spinbg", "sleeptest", "vfstest",
     "dmesg", "pwd", "cd", "mkbowl", "rmbowl", "bowltest",
     "whoami", "roster", "clockout", "hire", "fire", "perms", "secret",
-    "break", "continue", "return", "exit", "inspect", "seal", "pluck", "taste", "[", "smoke", "eggtimer", "nickname", "forget", ".", "shelve", "unshelve", "shelf", "plain", "brew", ":", "fresh", "spoiled",
+    "break", "continue", "return", "exit", "inspect", "seal", "pluck", "taste", "[", "smoke", "eggtimer", "nickname", "forget", ".", "shelve", "unshelve", "shelf", "plain", "brew", "temper", ":", "fresh", "spoiled",
     "preempttest", "vmtest", "vgastress", "fatstress",
 };
 #define CMD_COUNT  (int)(sizeof(cmd_names) / sizeof(cmd_names[0]))
@@ -5219,6 +5223,7 @@ static void dispatch(const char *buf) {
     else if (str_eq(p, "shelf") || str_startswith(p, "shelf ")) cmd_shelf(p + 5);
     else if (str_eq(p, "plain") || str_startswith(p, "plain ")) cmd_plain(p + 5);
     else if (str_eq(p, "brew") || str_startswith(p, "brew ")) cmd_brew(p + 4);
+    else if (str_eq(p, "temper") || str_startswith(p, "temper ")) cmd_temper(p + 6);
     /* : (POSIX's special builtin, its name kept), fresh and spoiled (true and
      * false) (v0.60.104): nothing, then 0, 0 and 1. Their words are already
      * expanded by now, so `: ${x:=5}` has set x; `: > F` empties F. */
@@ -5661,6 +5666,7 @@ static void build_env(char *out, int max) {
  * $NAME (empty or not a number: 0). C's precedence, as sh's. Division by
  * zero sets arith_err: the command is not run and its status is 1. */
 static int arith_err;
+static char unset_err[16];   /* temper -u: the unset name an expansion met (v0.60.115) */
 static const char *ap;               /* where the parser is */
 static long long a_eq(void);
 static void a_sp(void) { while (*ap == ' ') ap++; }
@@ -6266,7 +6272,7 @@ static int expand_into(const char *seg, char *ex, int max) {
             } else if (c - '1' < me->npargs) {
                 int mode = sq == '"' ? 1 : in_assign_value(ex, k) ? 2 : 0;
                 for (const char *v = me->parg[c - '1']; *v; v++) if (!put_lit(ex, &k, max, *v, mode)) { cut = 1; break; }
-            }
+            } else if (me->nounset && !unset_err[0]) { unset_err[0] = c; unset_err[1] = '\0'; }
             i++;
             continue;
         }
@@ -6599,13 +6605,16 @@ static int expand_into(const char *seg, char *ex, int max) {
                 i = j - 1;
                 continue;
             }
+            int found = 0;
             for (int v = 0; v < me->nvars; v++)
                 if (str_eq(me->vname[v], name)) {
                     int mode = sq == '"' ? 1 : in_assign_value(ex, k) ? 2 : 0;
                     for (const char *val = me->vval[v]; *val && *val != '\x1f'; val++)   /* an array: its first */
                         if (!put_lit(ex, &k, max, *val, mode)) { cut = 1; break; }
+                    found = 1;
                     break;
                 }
+            if (!found && me->nounset && !unset_err[0]) strcpy(unset_err, name);
             i = j - 1;
             continue;
         }
@@ -7315,6 +7324,7 @@ static void run_one(const char *seg) {
     char braced[INPUT_MAX];
     if (strchr(seg, '{')) { brace_line(seg, braced, INPUT_MAX); seg = braced; }   /* {a,b} {1..3} (v0.60.89) */
     arith_err = 0;
+    unset_err[0] = '\0';
     if (expand_into(seg, ex, INPUT_MAX) && !arith_err) {
         /* v0.60.30: it used to run cut short, which can name another file */
         t_printf("  The command is too long once expanded (%d bytes at most); not run.\n", INPUT_MAX - 1);
@@ -7324,6 +7334,14 @@ static void run_one(const char *seg) {
     if (arith_err) {
         t_puts(arith_err == 2 ? "  arithmetic: division by zero\n" : "  arithmetic: not an expression\n");
         cur_shell()->last_status = 1;
+        return;
+    }
+    if (unset_err[0]) {                            /* temper -u (v0.60.115): not run; a recipe stops, as sh's */
+        shell_t *me = cur_shell();
+        t_printf("  %s: unbound variable\n", unset_err);
+        unset_err[0] = '\0';
+        me->last_status = 1;
+        if (me->scripts) me->quit = 1;
         return;
     }
     {
@@ -7477,8 +7495,115 @@ static __attribute__((noinline)) void cmd_brew(const char *args) {
     kfree(line);
 }
 
+/* A word as bash's -x and set show it: in '...' when it holds a blank or
+ * anything sh would read as syntax, and for NAME=value only the value. */
+static void sh_quoted(char *out, int *o, int max, const char *w) {
+    int need = !*w;
+    for (const char *c = w; *c; c++)
+        if (*c == ' ' || *c == '\t' || *c == '\'' || *c == '"' || *c == '|' || *c == '&' || *c == ';' ||
+            *c == '<' || *c == '>' || *c == '(' || *c == ')' || *c == '$' || *c == '*' || *c == '?' || *c == '\\') need = 1;
+    if (need && *o < max - 1) out[(*o)++] = '\'';
+    for (const char *c = w; *c && *o < max - 5; c++) {
+        if (*c == '\'') { out[(*o)++] = '\''; out[(*o)++] = '\\'; out[(*o)++] = '\''; out[(*o)++] = '\''; }
+        else out[(*o)++] = *c;
+    }
+    if (need && *o < max - 1) out[(*o)++] = '\'';
+}
+/* temper -x (v0.60.115): + and the command as it will run, to where
+ * stderr would go: past a $( ) capture or a pipe stage, to the terminal. */
+static __attribute__((noinline)) void xtrace_line(const char *ex) {
+    char *out = kmalloc(INPUT_MAX * 2), *w = kmalloc(INPUT_MAX);
+    if (!out || !w) { if (out) kfree(out); if (w) kfree(w); return; }
+    int o = 0;
+    out[o++] = '+';
+    const char *c = ex;
+    for (;;) {
+        while (*c == ' ' || *c == '\t') c++;
+        if (!*c) break;
+        int wl = 0; char q = 0;
+        while (*c && (q || (*c != ' ' && *c != '\t'))) {
+            if (q) { if (*c == q) q = 0; }
+            else if (*c == '\'' || *c == '"') q = *c;
+            if (wl < INPUT_MAX - 1) w[wl++] = *c;
+            c++;
+        }
+        w[wl] = '\0';
+        int nl = fn_name_len(w);
+        int assign = o == 1 && nl && w[nl] == '=';
+        unquote(w);
+        out[o++] = ' ';
+        if (assign) { for (int i = 0; i <= nl && o < INPUT_MAX * 2 - 8; i++) out[o++] = w[i]; sh_quoted(out, &o, INPUT_MAX * 2, w + nl + 1); }
+        else sh_quoted(out, &o, INPUT_MAX * 2, w);
+    }
+    out[o++] = '\n'; out[o] = '\0';
+    term_t *t = cur_shell()->term;
+    while (t && t->name && str_eq(t->name, "subst") && t->ctx) t = (term_t *)t->ctx;
+    if (t) t->puts(t, out); else t_puts(out);
+    kfree(w); kfree(out);
+}
+
+/* temper [-eux] [+eux] [--] [WORDS] (v0.60.115): sh's set under a kitchen
+ * name. -e stops a recipe at a failure (follow -e's), -u makes an unset
+ * variable an error that runs nothing, -x shows each command as it runs;
+ * + turns one off. Words after the options (or after --, even none) are
+ * $1.. and $#. Bare, the variables, as set lists them. */
+static __attribute__((noinline)) void cmd_temper(const char *args) {
+    shell_t *me = cur_shell();
+    char w[64];
+    const char *rest = args;
+    while (*rest == ' ') rest++;
+    if (!*rest) {
+        char *line = kmalloc(INPUT_MAX * 2);
+        if (!line) return;
+        for (int v = 0; v < me->nvars; v++) {
+            if (me->varr[v]) continue;                    /* arrays: not in this list */
+            int o = 0;
+            for (const char *c = me->vname[v]; *c; c++) line[o++] = *c;
+            line[o++] = '=';
+            sh_quoted(line, &o, INPUT_MAX * 2 - 2, me->vval[v]);
+            line[o++] = '\n'; line[o] = '\0';
+            t_puts(line);
+        }
+        kfree(line);
+        me->last_status = 0;
+        return;
+    }
+    int set_args = 0;
+    for (;;) {
+        const char *at = rest;
+        while (*at == ' ') at++;
+        if (!*at) break;
+        const char *nx = first_word(at, w, sizeof(w));
+        if (str_eq(w, "--")) { rest = nx; set_args = 1; break; }
+        if ((w[0] == '-' || w[0] == '+') && w[1]) {
+            int on = w[0] == '-';
+            for (const char *c = w + 1; *c; c++) {
+                if (*c == 'e') me->errexit = on;
+                else if (*c == 'u') me->nounset = on;
+                else if (*c == 'x') me->xtrace = on;
+                else { t_printf("  temper: -%c: not an option (e, u, x)\n", *c); me->last_status = 2; return; }
+            }
+            rest = nx;
+            continue;
+        }
+        rest = at; set_args = 1;
+        break;
+    }
+    if (set_args) {
+        me->npargs = 0;
+        while (me->npargs < 9) {
+            while (*rest == ' ') rest++;
+            if (!*rest) break;
+            rest = first_word(rest, me->parg[me->npargs], 64);
+            me->npargs++;
+        }
+    }
+    me->last_status = 0;
+}
+
 /* The rest of running one command, once expanded. */
 static void run_ex(char *ex) {
+    if (cur_shell()->xtrace) xtrace_line(ex);
     {
         const char *h = ex; while (*h == ' ') h++;
         if (is_kw(h, "plain")) { cmd_plain(h + 5); return; }   /* not a function's (v0.60.100) */
@@ -9275,6 +9400,8 @@ static void run_file(const char *args, int dot) {
     if (dot) { me->dots++; me->dot_fns = me->fns; }
     int errexit_was = me->errexit, cond_was = me->in_cond;
     me->errexit = errexit; me->in_cond = 0;     /* -e is this script's alone */
+    int nounset_was = me->nounset, xtrace_was = me->xtrace;
+    if (!dot) me->nounset = me->xtrace = 0;     /* temper -u -x: a recipe's own, as a new sh's; . shares them (v0.60.115) */
     /* A script starts pluck afresh, OPTIND 1, as a new sh does; the
      * caller's comes back after (v0.60.77). */
     char optind_was[24]; const char *ow = get_var("OPTIND");
@@ -9370,6 +9497,7 @@ static void run_file(const char *args, int dot) {
     depth--;
     me->scripts--;
     me->errexit = errexit_was; me->in_cond = cond_was;
+    if (!dot) { me->nounset = nounset_was; me->xtrace = xtrace_was; }
     if (!dot) smoke_exit();                     /* the script's EXIT smoke, however it ended */
     while (doc_tab_n > doc_base) { doc_tab_n--; kfree(doc_tab[doc_tab_n]); doc_tab[doc_tab_n] = 0; }
     if (!dot) {

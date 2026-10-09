@@ -55,7 +55,7 @@ The other way bash writes a function; a keyword, so it keeps its name.
 Both forms, one line and over several, in a recipe, with stash, return
 and $1; inspect says it is a function. Test against bash.
 
-## 3. temper (set)
+## 3. temper (set) — DONE v0.60.115
 
 sh's set under a kitchen name: `temper -e` / `+e` (errexit, which today
 only `follow -e` turns on), `-u` (an unset variable is an error, status 1

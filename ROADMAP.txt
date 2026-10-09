@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.114
+Current version: v0.60.115
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,18 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.115 (2026-10-09)  — TEMPER (SET)
+  - temper is sh's set under a kitchen name. -e stops a recipe at a
+    failure (what follow -e did, now from inside), -u makes an unset $NAME
+    or $N an error ("NAME: unbound variable", not run, status 1, a recipe
+    stops; ${x:-y} is fine), -x writes + and each command as it will run,
+    words quoted as bash quotes them, past any $( ) capture to the
+    terminal; + turns each off. temper -- W.. and temper W.. set $1.. and
+    $#; bare temper lists the variables, as set does.
+  - A recipe starts with -u and -x off and leaves them as they were, as a
+    new sh does; a . file shares them.
+  - scripts/temper-test.sh compares 13 lines and the -x trace with bash.
 
 v0.60.114 (2026-10-09)  — function NAME { ... }
   - bash's other way to write a function (a keyword, its own name):
