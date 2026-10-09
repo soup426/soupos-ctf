@@ -911,6 +911,7 @@ static void cmd_menu(void) {
         {0, "    inspect [-t] NAME  - what NAME is: keyword, function, builtin or program"},
         {0, "    plain CMD / -v NAME - the builtin or program, not a function (sh's command)"},
         {0, "    brew WORDS         - the words run as a command line (sh's eval)"},
+        {0, "    runner [-n N] [-I R] [-r] CMD - stdin's words as CMD's arguments (xargs)"},
         {0, "    temper [-eux] [--] [W..] - stop at failures, unset is an error, show commands; $1.. (sh's set)"},
         {0, "    seal NAME[=value]  - a variable nothing may change (sh's readonly)"},
         {0, "    pluck OPTS NAME    - the next -x option of $1.. (sh's getopts)"},
@@ -3447,6 +3448,7 @@ static void cmd_plain(const char *args);                  /* v0.60.100 */
 static void cmd_brew(const char *args);                   /* v0.60.110 */
 static void cmd_temper(const char *args);                 /* v0.60.115 */
 static void cmd_rail(const char *args);                   /* v0.60.116 */
+static void cmd_runner(const char *args);                 /* v0.60.117 */
 static int fn_name_len(const char *t);
 static void run_file(const char *args, int dot);          /* . FILE (v0.60.91) */
 static void cmd_forget(const char *args);
@@ -5035,7 +5037,7 @@ static const char *const cmd_names[] = {
     "takeout", "bgclock", "yieldbg", "spinbg", "sleeptest", "vfstest",
     "dmesg", "pwd", "cd", "mkbowl", "rmbowl", "bowltest",
     "whoami", "roster", "clockout", "hire", "fire", "perms", "secret",
-    "break", "continue", "return", "exit", "inspect", "seal", "pluck", "taste", "[", "smoke", "eggtimer", "nickname", "forget", ".", "shelve", "unshelve", "shelf", "plain", "brew", "temper", "rail", ":", "fresh", "spoiled",
+    "break", "continue", "return", "exit", "inspect", "seal", "pluck", "taste", "[", "smoke", "eggtimer", "nickname", "forget", ".", "shelve", "unshelve", "shelf", "plain", "brew", "temper", "rail", "runner", ":", "fresh", "spoiled",
     "preempttest", "vmtest", "vgastress", "fatstress",
 };
 #define CMD_COUNT  (int)(sizeof(cmd_names) / sizeof(cmd_names[0]))
@@ -5309,6 +5311,7 @@ static void dispatch(const char *buf) {
     else if (str_eq(p, "brew") || str_startswith(p, "brew ")) cmd_brew(p + 4);
     else if (str_eq(p, "temper") || str_startswith(p, "temper ")) cmd_temper(p + 6);
     else if (str_eq(p, "rail") || str_startswith(p, "rail ")) cmd_rail(p + 4);
+    else if (str_eq(p, "runner") || str_startswith(p, "runner ")) cmd_runner(p + 6);
     /* : (POSIX's special builtin, its name kept), fresh and spoiled (true and
      * false) (v0.60.104): nothing, then 0, 0 and 1. Their words are already
      * expanded by now, so `: ${x:=5}` has set x; `: > F` empties F. */
@@ -7686,6 +7689,124 @@ static __attribute__((noinline)) void cmd_temper(const char *args) {
     me->last_status = 0;
 }
 
+/* runner [-n N] [-I R] [-r] [CMD...] (v0.60.117): xargs under a kitchen
+ * name, the one who carries the plates. The words of its input (blanks and
+ * newlines part them; '...', "..." and \x as xargs reads them) are added to
+ * CMD, as many to a command as fit (the shell's line, and a program's 128
+ * bytes of arguments), or N with -n; -I R runs CMD once for each line with
+ * R replaced by it. Each word goes in quoted, so it stays one. CMD is slurp
+ * when not given; with no input CMD still runs once, unless -r. Status 123
+ * if any run failed, 127 (and no more) if CMD is not there, as GNU's; an
+ * unmatched quote stops the reading, what came before still runs, 1. */
+static void runner_quote(char *out, int *o, int max, const char *w) {
+    if (*o < max - 1) out[(*o)++] = '\'';
+    for (; *w && *o < max - 6; w++) {
+        if (*w == '\'') { out[(*o)++] = '\''; out[(*o)++] = '\\'; out[(*o)++] = '\''; out[(*o)++] = '\''; }
+        else out[(*o)++] = *w;
+    }
+    if (*o < max - 1) out[(*o)++] = '\'';
+}
+static __attribute__((noinline)) void cmd_runner(const char *args) {
+    shell_t *me = cur_shell();
+    int per = 0, skip_empty = 0;
+    char rep[16]; rep[0] = '\0';
+    char w[64];
+    const char *r = args;
+    for (;;) {
+        while (*r == ' ') r++;
+        const char *nx = first_word(r, w, sizeof(w));
+        if (str_eq(w, "-n")) { r = first_word(nx, w, sizeof(w)); per = (int)parse_num(w); if (per < 1) per = 1; continue; }
+        if (str_eq(w, "-I")) { r = first_word(nx, w, sizeof(w)); strncpy(rep, w, sizeof(rep) - 1); rep[sizeof(rep) - 1] = '\0'; continue; }
+        if (str_eq(w, "-r")) { skip_empty = 1; r = nx; continue; }
+        break;
+    }
+    while (*r == ' ') r++;
+    const char *cmd = *r ? r : "slurp";
+    int cmdlen = (int)strlen(cmd);
+    int is_prog = is_kw(cmd, "cook");
+    /* the words (or lines), all of them first */
+    #define RUN_TEXT 8192
+    #define RUN_ITEMS 1024
+    char *text = kmalloc(RUN_TEXT), *line = kmalloc(INPUT_MAX), *out = kmalloc(INPUT_MAX * 2);
+    const char **item = kmalloc(sizeof(char *) * RUN_ITEMS);
+    if (!text || !line || !out || !item) {
+        if (text) kfree(text);
+        if (line) kfree(line);
+        if (out) kfree(out);
+        if (item) kfree((void *)item);
+        me->last_status = 1; return;
+    }
+    int used = 0, n = 0, badq = 0;
+    for (;;) {
+        int len = 0;
+        int eof = take_line(me, line, &len, INPUT_MAX, 0, 0);
+        line[len] = '\0';
+        if (eof && !len) break;
+        /* a line's words, or with -I the whole line, quotes and \\ as xargs
+         * reads them; an unmatched quote: said, no more read, status 1 */
+        const char *c = line;
+        int was_used = used, was_n = n;
+        for (;;) {
+            while (*c == ' ' || *c == '\t') c++;
+            if (!*c) break;
+            if (n >= RUN_ITEMS || used + 1 >= RUN_TEXT) break;
+            item[n] = text + used;
+            char q = 0;
+            while (*c && (q || rep[0] || (*c != ' ' && *c != '\t')) && used < RUN_TEXT - 1) {
+                if (q) { if (*c == q) { q = 0; c++; continue; } text[used++] = *c++; continue; }
+                if (*c == '\'' || *c == '"') { q = *c++; continue; }
+                if (*c == '\\' && c[1]) { c++; text[used++] = *c++; continue; }
+                text[used++] = *c++;
+            }
+            if (q) { t_printf("  runner: unmatched %s quote\n", q == '\'' ? "single" : "double"); badq = 1; used = was_used; n = was_n; break; }
+            if (rep[0]) while (used > 0 && (text[used - 1] == ' ' || text[used - 1] == '\t')) used--;
+            text[used++] = '\0';
+            n++;
+        }
+        if (badq) break;
+        if (eof) break;
+    }
+    int fail = 0, missing = 0;
+    if (rep[0]) {                                    /* -I: one command a line */
+        int rl = (int)strlen(rep);
+        for (int k = 0; k < n && !missing; k++) {
+            int o = 0;
+            for (const char *c = cmd; *c && o < INPUT_MAX * 2 - 8; ) {
+                if (strncmp(c, rep, (uint32_t)rl) == 0) { runner_quote(out, &o, INPUT_MAX * 2, item[k]); c += rl; }
+                else out[o++] = *c++;
+            }
+            out[o] = '\0';
+            run_line(out);
+            if (me->last_status == 127) missing = 1;
+            else if (me->last_status) fail = 1;
+        }
+    } else {
+        int k = 0;
+        int room = INPUT_MAX - 2 - cmdlen;
+        if (is_prog) { int pl = 0; const char *c = cmd + 5; while (*c == ' ') c++; while (c[pl] && c[pl] != ' ') pl++;
+                       int a = (int)strlen(c + pl); if (128 - 2 - a < room) room = 128 - 2 - a; }
+        do {
+            if (!n && skip_empty) break;
+            int o = 0, took = 0;
+            for (const char *c = cmd; *c; c++) out[o++] = *c;
+            while (k < n && (!per || took < per)) {
+                int need = 3 + (int)strlen(item[k]);
+                for (const char *c = item[k]; *c; c++) if (*c == '\'') need += 3;
+                if (took && (o - cmdlen) + need > room) break;
+                out[o++] = ' ';
+                runner_quote(out, &o, INPUT_MAX * 2, item[k]);
+                k++; took++;
+            }
+            out[o] = '\0';
+            run_line(out);
+            if (me->last_status == 127) { missing = 1; break; }
+            if (me->last_status) fail = 1;
+        } while (k < n);
+    }
+    kfree(text); kfree(line); kfree(out); kfree((void *)item);
+    me->last_status = missing ? 127 : fail ? 123 : badq ? 1 : 0;
+}
+
 /* The rest of running one command, once expanded. */
 static void run_ex(char *ex) {
     if (cur_shell()->xtrace) xtrace_line(ex);
@@ -7785,6 +7906,7 @@ static char *compound_bar(char *t) {
         const char *r = b + 1;
         while (*r == ' ') r++;
         if (is_kw(r, "while") || is_kw(r, "until") || is_kw(r, "for") || is_kw(r, "select") || is_kw(r, "if") || is_kw(r, "case") || is_kw(r, "{")) return (char *)b;
+        if (is_kw(r, "runner")) return (char *)b;     /* X | runner CMD reads X as a loop would (v0.60.117) */
     }
     return 0;
 }
@@ -7957,6 +8079,7 @@ static int match_end(lseg_t *sg, int from, int to, const char *open, const char 
 static int match_done(lseg_t *sg, int from, int to);
 static int compound_end(lseg_t *sg, int from, int to) {
     const char *c = sg[from].text;
+    if (is_kw(c, "runner")) return from;           /* one command, its input the pipe (v0.60.117) */
     if (is_kw(c, "for") || is_kw(c, "while") || is_kw(c, "until") || is_kw(c, "select")) return match_done(sg, from, to);
     if (is_kw(c, "if")) return match_end(sg, from, to, "if", "fi");
     if (is_kw(c, "case")) return match_end(sg, from, to, "case", "esac");

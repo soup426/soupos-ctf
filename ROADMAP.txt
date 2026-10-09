@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.116
+Current version: v0.60.117
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,19 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.117 (2026-10-09)  — RUNNER (XARGS)
+  - X | runner [-n N] [-I R] [-r] CMD is xargs under a kitchen name (the
+    one who carries the plates): X's words (quotes and \ as xargs reads
+    them) added to CMD, as many as fit a line (and a program's 128 bytes
+    of arguments), N with -n; -I R once a line with R replaced. Each word
+    goes in quoted. No input still runs CMD once unless -r; status 123 if
+    a run failed, 127 if CMD is not there, 1 at an unmatched quote (what
+    came before still runs), as GNU's.
+  - A pipe into runner feeds it as a pipe feeds a while loop (compound_bar
+    and compound_end know it), so it reads X with take's reader.
+  - scripts/runner-test.sh compares 18 lines with GNU xargs, and 100 words
+    through its batches.
 
 v0.60.116 (2026-10-09)  — RAIL (JOBS)
   - rail [-p] [%N] is bash's jobs under a kitchen name (the rail the order

@@ -70,7 +70,7 @@ The jobs this shell put in the background or set aside, as bash's jobs:
 job shown once, then gone), -p for the PIDs only. Measure what job_add
 and the prompt's reporting already keep.
 
-## 5. runner CMD (xargs)
+## 5. runner CMD (xargs) — DONE v0.60.117
 
 Lines (or blank-separated words) from stdin added as arguments to CMD,
 as xargs: in batches that fit (a program's arguments are 128 bytes at
