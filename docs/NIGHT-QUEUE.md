@@ -40,7 +40,7 @@ job numbers, and history expansion at the prompt.
 nested and with a prefix and suffix (x{a,b}y), not in quotes, before the
 other expansions, as bash. Compare with bash.
 
-## 2. nickname NAME=TEXT (alias)
+## 2. nickname NAME=TEXT (alias) — DONE v0.60.90
 
 The first word of a command that is a nickname is replaced by its text
 (again, for the text's own first word, but not a nickname inside

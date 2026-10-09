@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.89
+Current version: v0.60.90
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,19 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.90 (2026-10-09)  — NICKNAME AND FORGET (ALIAS, UNALIAS)
+  - `nickname NAME=TEXT` is sh's alias under a kitchen name: a command
+    typed at the prompt whose first word is NAME runs TEXT in its place,
+    read again (so TEXT may hold ; and |), and NAME inside its own TEXT
+    is not taken again. Bare nickname lists them by name as alias does,
+    `nickname NAME` shows one (status 1 if none); `forget NAME` (unalias)
+    and `forget -a`. inspect says "a nickname for `TEXT'" (-t alias).
+    Not in follow scripts, as bash does not expand aliases in one; a
+    clockout forgets them.
+  - Unlike bash, a nickname is taken as each command runs, not as the
+    line is read: `forget hi ; hi` does not run hi here (written down).
+  - scripts/nickname-test.sh compares fifteen lines with bash's alias.
 
 v0.60.89 (2026-10-09)  — BRACE EXPANSION
   - x{a,b}y is xay xby; {1..5} and {5..1}, {a..e}, {01..10} padded,

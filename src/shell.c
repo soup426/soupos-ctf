@@ -82,6 +82,9 @@ typedef struct {
     uint8_t vhand[VARS_MAX];     /* handed to programs (`hand`, v0.60.26) */
     uint8_t vseal[VARS_MAX];     /* sealed: sh's readonly (`seal`, v0.60.76) */
     uint8_t varr[VARS_MAX];      /* an array: elements parted by \x1f, 2 for one of none (v0.60.88) */
+    char    nick_name[16][16];   /* nickname (alias, v0.60.90) */
+    char    nick_text[16][128];
+    int     nnicks;
     int     optpos, optind_seen; /* pluck's place inside a -abc, and the OPTIND it last wrote (v0.60.77) */
     char    trap_cmd[2][INPUT_MAX]; /* smoke (trap): EXIT, INT (v0.60.82) */
     uint8_t trap_set[2];         /* 0 none, 1 a command, 2 ignored */
@@ -890,6 +893,8 @@ static void cmd_menu(void) {
         {0, "    taste EXPR, [ EXPR ] - a condition: -f -d -e -z -n = != -eq -lt ... (sh's test)"},
         {0, "    smoke 'CMD' EXIT|INT - run CMD when a script ends or is Ctrl-C'd (sh's trap)"},
         {0, "    eggtimer CMD       - run CMD and say how long it took (sh's time)"},
+        {0, "    nickname NAME=TEXT - TEXT in place of NAME at the prompt (sh's alias)"},
+        {0, "    forget NAME        - forget a nickname (sh's unalias)"},
         {0, "    ! command          - run it and turn its status round"},
         {0, "    exit [N]           - leave a script (at the prompt, clockout)"},
         {0, "    kill <id>          - stop a background task"},
@@ -3243,6 +3248,9 @@ static void cmd_seal(const char *args);                   /* beside it (v0.60.76
 static void cmd_pluck(const char *args);                  /* beside it (v0.60.77) */
 static void cmd_taste(const char *args, int bracket);     /* beside it (v0.60.79) */
 static void cmd_eggtimer(const char *args);               /* beside it (v0.60.87) */
+static void cmd_nickname(const char *args);               /* beside it (v0.60.90) */
+static void cmd_forget(const char *args);
+static int nick_find(const char *name);
 static int status_before;
 static void cmd_read(const char *args);  /* beside run_line (v0.60.4) */
 
@@ -3341,6 +3349,7 @@ static void hist_save(void);    /* with the history */
 static void cmd_clockout(void) {
     smoke_exit();                              /* the prompt's EXIT smoke (v0.60.82) */
     cur_shell()->trap_set[0] = cur_shell()->trap_set[1] = 0;
+    cur_shell()->nnicks = 0;                   /* nicknames are the cook's own (v0.60.90) */
     hist_save();                               /* the shift's leftovers, kept */
     if (cur_shell() != &the_shell) {           /* a session: clocking out leaves */
         t_printf("  %s clocks out. Goodbye.\n", users_current_name());
@@ -4811,7 +4820,7 @@ static const char *const cmd_names[] = {
     "takeout", "bgclock", "yieldbg", "spinbg", "sleeptest", "vfstest",
     "dmesg", "pwd", "cd", "mkbowl", "rmbowl", "bowltest",
     "whoami", "roster", "clockout", "hire", "fire", "perms", "secret",
-    "break", "continue", "return", "exit", "inspect", "seal", "pluck", "taste", "[", "smoke", "eggtimer",
+    "break", "continue", "return", "exit", "inspect", "seal", "pluck", "taste", "[", "smoke", "eggtimer", "nickname", "forget",
     "preempttest", "vmtest", "vgastress", "fatstress",
 };
 #define CMD_COUNT  (int)(sizeof(cmd_names) / sizeof(cmd_names[0]))
@@ -5058,6 +5067,8 @@ static void dispatch(const char *buf) {
     else if (str_eq(p, "pluck") || str_startswith(p, "pluck ")) cmd_pluck(p + 5);
     else if (str_eq(p, "smoke") || str_startswith(p, "smoke ")) cmd_smoke(p + 5);
     else if (str_eq(p, "eggtimer") || str_startswith(p, "eggtimer ")) cmd_eggtimer(p + 8);
+    else if (str_eq(p, "nickname") || str_startswith(p, "nickname ")) cmd_nickname(p + 8);
+    else if (str_eq(p, "forget") || str_startswith(p, "forget ")) cmd_forget(p + 6);
     else if (str_eq(p, "taste") || str_startswith(p, "taste ")) cmd_taste(p + 5, 0);
     else if (str_eq(p, "[") || str_startswith(p, "[ ")) cmd_taste(p + 1, 1);
     else if (str_eq(p, "break") || str_startswith(p, "break ")) cmd_break(p + 5, 0);
@@ -6889,6 +6900,27 @@ static void run_ex(char *ex);
 static void run_one(const char *seg) {
     const char *q = seg; while (*q == ' ') q++;
     if (!*q) return;
+    {
+        /* a nickname (v0.60.90): at the prompt, the first word */
+        static uint32_t nick_busy;
+        shell_t *me = cur_shell();
+        if (me->nnicks && !me->scripts) {
+            char w[16]; int n = 0;
+            while (q[n] && q[n] != ' ' && q[n] != '\t' && n < 15) { w[n] = q[n]; n++; }
+            w[n] = '\0';
+            int k = (q[n] == ' ' || q[n] == '\t' || !q[n]) ? nick_find(w) : -1;
+            if (k >= 0 && !(nick_busy & (1u << k))) {
+                char line[INPUT_MAX]; int l = 0;
+                for (const char *c = me->nick_text[k]; *c && l < INPUT_MAX - 1; c++) line[l++] = *c;
+                for (const char *c = q + n; *c && l < INPUT_MAX - 1; c++) line[l++] = *c;
+                line[l] = '\0';
+                nick_busy |= 1u << k;
+                run_line(line);
+                nick_busy &= ~(1u << k);
+                return;
+            }
+        }
+    }
     if (dish_into(q)) return;
     if (array_assign(q)) return;
     if (is_kw(q, "eggtimer")) { cmd_eggtimer(q + 8); return; }   /* the line as typed: expanded once, by what it runs */
@@ -7336,6 +7368,76 @@ static int loop_after_body(shell_t *me) {
     }
     return 0;
 }
+/* nickname [NAME[=TEXT]]... and forget NAME... (v0.60.90): sh's alias and
+ * unalias, under kitchen names. A command typed at the prompt whose first
+ * word is a nickname runs its text in that word's place, read again (so
+ * it may hold ; or |), and a nickname inside its own text is not taken
+ * again. Not in follow scripts, as bash does not expand aliases in one.
+ * Bare `nickname` lists them as alias does; `nickname NAME` shows one;
+ * `forget -a` forgets them all. */
+static int nick_find(const char *name) {
+    shell_t *me = cur_shell();
+    for (int k = 0; k < me->nnicks; k++) if (str_eq(me->nick_name[k], name)) return k;
+    return -1;
+}
+static void cmd_nickname(const char *args) {
+    shell_t *me = cur_shell();
+    me->last_status = 0;
+    while (*args == ' ') args++;
+    if (!*args) {                                  /* by name, as alias lists them */
+        int done[16] = { 0 };
+        for (int round = 0; round < me->nnicks; round++) {
+            int best = -1;
+            for (int k = 0; k < me->nnicks; k++)
+                if (!done[k] && (best < 0 || byte_cmp(me->nick_name[k], me->nick_name[best]) < 0)) best = k;
+            done[best] = 1;
+            t_printf("nickname %s='%s'\n", me->nick_name[best], me->nick_text[best]);
+        }
+        return;
+    }
+    const char *a = args;
+    while (*a) {
+        char w[INPUT_MAX];
+        a = first_word(a, w, sizeof(w));
+        if (!w[0]) break;
+        char *eq = strchr(w, '=');
+        if (eq) *eq = '\0';
+        int ok = w[0] && strlen(w) <= 15;
+        for (const char *c = w; ok && *c; c++) if (*c == '/' || *c == '$' || *c == '\'' || *c == '"' || *c == ' ') ok = 0;
+        if (!ok) { t_printf("  nickname: `%s': not a name\n", w); me->last_status = 1; continue; }
+        int k = nick_find(w);
+        if (!eq) {
+            if (k < 0) { t_printf("  nickname: %s: not found\n", w); me->last_status = 1; }
+            else t_printf("nickname %s='%s'\n", me->nick_name[k], me->nick_text[k]);
+            continue;
+        }
+        if (k < 0) {
+            if (me->nnicks >= 16) { t_puts("  nickname: sixteen already\n"); me->last_status = 1; continue; }
+            k = me->nnicks++;
+            strcpy(me->nick_name[k], w);
+        }
+        strncpy(me->nick_text[k], eq + 1, sizeof(me->nick_text[k]) - 1);
+        me->nick_text[k][sizeof(me->nick_text[k]) - 1] = '\0';
+    }
+}
+static void cmd_forget(const char *args) {
+    shell_t *me = cur_shell();
+    me->last_status = 0;
+    const char *a = args;
+    while (*a == ' ') a++;
+    if (!*a) { t_puts("Usage: forget NAME... | forget -a\n"); me->last_status = 2; return; }
+    while (*a) {
+        char w[32];
+        a = first_word(a, w, sizeof(w));
+        if (!w[0]) break;
+        if (str_eq(w, "-a")) { me->nnicks = 0; continue; }
+        int k = nick_find(w);
+        if (k < 0) { t_printf("  forget: %s: not a nickname\n", w); me->last_status = 1; continue; }
+        me->nnicks--;
+        if (k != me->nnicks) { strcpy(me->nick_name[k], me->nick_name[me->nnicks]); strcpy(me->nick_text[k], me->nick_text[me->nnicks]); }
+    }
+}
+
 /* eggtimer CMD (v0.60.87): sh's time under a kitchen name. Runs CMD (a
  * pipeline, a loop, anything a line can hold) and then says how long it
  * took, wall time to the hundredth (the timer's own grain, 100 Hz), as
@@ -7548,7 +7650,11 @@ static void cmd_inspect(const char *args) {
         if (!w[0]) break;
         if (!any && !terse && str_eq(w, "-t")) { terse = 1; continue; }
         any = 1;
-        int kw = 0, fn = -1, bi = 0;
+        int kw = 0, fn = -1, bi = 0, nk = nick_find(w);
+        if (nk >= 0) {                                 /* (v0.60.90) */
+            if (terse) t_puts("alias\n"); else t_printf("%s is a nickname for `%s'\n", w, me->nick_text[nk]);
+            continue;
+        }
         for (unsigned k = 0; k < sizeof(kws) / sizeof(kws[0]); k++) if (str_eq(w, kws[k])) kw = 1;
         for (int f = 0; f < me->nfuncs; f++) if (str_eq(me->fname[f], w)) fn = f;
         for (unsigned k = 0; k < sizeof(cmd_names) / sizeof(cmd_names[0]); k++) if (str_eq(w, cmd_names[k])) bi = 1;
