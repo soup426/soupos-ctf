@@ -35,7 +35,7 @@ builtins scripts reach for (eval, wait, getopts) and two programs
 
 ---
 
-## 1. "$(cmd)" keeps its newlines
+## 1. "$(cmd)" keeps its newlines — DONE v0.60.109
 
 Found in v0.60.105: inside double quotes, `"$(cmd)"` turns cmd's inner
 newlines into spaces, where bash keeps them (only trailing newlines go).

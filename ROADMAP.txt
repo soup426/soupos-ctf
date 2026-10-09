@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.108
+Current version: v0.60.109
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,14 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.109 (2026-10-09)  — "$(cmd)" KEEPS ITS NEWLINES
+  - Inside double quotes and as an assignment's value, $(cmd) keeps cmd's
+    inner newlines, as sh does (only the trailing ones go): "$(stalk a/b
+    c/d)" is two lines, and so is x=$(...). They had all become spaces.
+  - Bare, an expanded newline splits words, as sh's IFS does: $(cmd) as
+    before, and now $x when x holds one (it stayed a newline).
+  - scripts/substnl-test.sh compares eight lines with bash.
 
 v0.60.108 (2026-10-09)  — ENCORE.ELF (YES)
   - encore.elf [WORDS] is yes under a kitchen name (the call for more):

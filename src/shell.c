@@ -6088,6 +6088,7 @@ static int put_lit(char *ex, int *k, int max, char c, int in_dq) {
     const char *rep = one;
     int keep_blanks = in_dq == 2;          /* an assignment's value (v0.60.40) */
     if (in_dq == 1) { if (c == '"') rep = "\"'\"'\""; }
+    else if (c == '\n' && !keep_blanks) one[0] = ' ';   /* bare, a newline splits words (v0.60.109) */
     else if (c == '\'') rep = "\"'\"";
     else if (c == '"') rep = "'\"'";
     else if (c == '|' || c == '<' || c == '>' || c == '&' || (keep_blanks && (c == ' ' || c == '\t'))) {
@@ -6217,6 +6218,9 @@ static int expand_into(const char *seg, char *ex, int max) {
             if (assign && k < max - 1) ex[k++] = '"';
             char *out = kmalloc((uint32_t)max);
             if (out) {
+                /* In "..." or a value its inner newlines stay, as sh's do;
+                 * only a bare $(...) is split into words (v0.60.109). */
+                subst_keep_nl = assign || sq == '"';
                 int n = command_subst(inner, out, max - 2 - k);
                 if (subst_cut) cut = 1;
                 for (int o = 0; o < n; o++)
