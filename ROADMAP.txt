@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.63
+Current version: v0.60.64
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,14 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.64 (2026-10-08)  — ${NAME#PAT} AND ${NAME%PAT}
+  - ${NAME#pat} and ${NAME##pat} take the shortest or longest match of a
+    glob off the front of the value, ${NAME%pat} and ${NAME%%pat} off the
+    back, as sh. The pattern is expanded first ($X in it) and is a glob,
+    * ? and [..] alike; on $1..$9 too. A quoted glob character in the
+    pattern is still a glob (sh would take it as itself): written down.
+  - scripts/trim-test.sh compares eleven lines with bash.
 
 v0.60.63 (2026-10-08)  — && || THAT STOP EARLY, AND ?: IN ARITHMETIC
   - In $(( )) and (( )), the right side of && is done only when the left

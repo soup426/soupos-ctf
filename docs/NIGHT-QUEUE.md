@@ -35,7 +35,7 @@ the prompt.
 
 ---
 
-## 1. ${NAME#pat} ${NAME##pat} ${NAME%pat} ${NAME%%pat}
+## 1. ${NAME#pat} ${NAME##pat} ${NAME%pat} ${NAME%%pat} — DONE v0.60.64
 
 Strip the shortest or longest match of a glob pattern from the front or
 the back of a value, as sh. The pattern is a glob ([abc] included) and

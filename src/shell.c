@@ -5615,7 +5615,8 @@ static int expand_into(const char *seg, char *ex, int max) {
             i++;
             continue;
         }
-        /* ${NAME}, ${#NAME}, ${NAME:-word}, ${NAME:=word} (v0.60.42), with a
+        /* ${NAME}, ${#NAME}, ${NAME:-word}, ${NAME:=word} (v0.60.42), and
+         * ${NAME#pat}, ##, %, %% (v0.60.64), with a
          * name or a script argument 1..9: the value, its length, the word
          * when it is unset or empty, and the same setting it. The word is
          * expanded first ($X, quotes), as sh does. Anything else in braces
@@ -5630,6 +5631,13 @@ static int expand_into(const char *seg, char *ex, int max) {
             name[nn] = '\0';
             char op = 0;
             if (nn && !len_of && seg[j] == ':' && (seg[j + 1] == '-' || seg[j + 1] == '=')) { op = seg[j + 1]; j += 2; }
+            /* ${NAME#pat} ##, %, %% (v0.60.64): trim a match off the front
+             * or the back; H/h and T/t for shortest and longest */
+            else if (nn && !len_of && (seg[j] == '#' || seg[j] == '%')) {
+                int twice = seg[j + 1] == seg[j];
+                op = seg[j] == '#' ? (twice ? 'h' : 'H') : (twice ? 't' : 'T');
+                j += twice ? 2 : 1;
+            }
             int wstart = j;
             if (op) {                                    /* the word: to the matching } */
                 int dep = 0; char q = 0;
@@ -5652,6 +5660,27 @@ static int expand_into(const char *seg, char *ex, int max) {
                 char d[12]; int nd = 0; unsigned v = val ? (unsigned)strlen(val) : 0;
                 do { d[nd++] = (char)('0' + v % 10); v /= 10; } while (v);
                 while (nd && k < max - 1) ex[k++] = d[--nd];
+            } else if (op == 'H' || op == 'h' || op == 'T' || op == 't') {
+                char word[INPUT_MAX], pat[INPUT_MAX], part[INPUT_MAX];
+                int wl = j - wstart < INPUT_MAX - 1 ? j - wstart : INPUT_MAX - 1;
+                memcpy(word, seg + wstart, (uint32_t)wl); word[wl] = '\0';
+                if (expand_into(word, pat, INPUT_MAX)) cut = 1;
+                unquote(pat);
+                const char *v = val ? val : "";
+                int L = (int)strlen(v), from = 0, to = L;            /* the kept part: v[from..to) */
+                if (op == 'H' || op == 'h') {                        /* a prefix v[0..n) */
+                    for (int t = 0; t <= L; t++) {
+                        int n = op == 'H' ? t : L - t;
+                        memcpy(part, v, (uint32_t)n); part[n] = '\0';
+                        if (glob_match(pat, part)) { from = n; break; }
+                    }
+                } else {                                             /* a suffix v[n..L) */
+                    for (int t = 0; t <= L; t++) {
+                        int n = op == 'T' ? L - t : t;
+                        if (glob_match(pat, v + n)) { to = n; break; }
+                    }
+                }
+                for (int c = from; c < to; c++) if (!put_lit(ex, &k, max, v[c], mode)) { cut = 1; break; }
             } else if (op && (!val || !*val)) {
                 char word[INPUT_MAX], wex[INPUT_MAX];
                 int wl = j - wstart < INPUT_MAX - 1 ? j - wstart : INPUT_MAX - 1;
