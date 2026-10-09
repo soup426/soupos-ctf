@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.62
+Current version: v0.60.63
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,17 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.63 (2026-10-08)  — && || THAT STOP EARLY, AND ?: IN ARITHMETIC
+  - In $(( )) and (( )), the right side of && is done only when the left
+    is true and of || only when it is false; c ? a : b does one arm
+    (right to left, so 0 ? 1 : 0 ? 2 : 3 is 3). A side not done is still
+    read, but assigns nothing, ++ nothing, and dividing by zero there is
+    no error, as in sh.
+  - Found on the way: parentheses held only a comparison, so (a=1),
+    (1 || 0) and (c ? a : b) inside them did not work; they hold a whole
+    expression now, commas included.
+  - scripts/ternary-test.sh compares thirteen lines with bash.
 
 v0.60.62 (2026-10-08)  — & BETWEEN COMMANDS
   - A lone & ends a command as ; does: `cook a.elf & rest $!`, `a&b`, and

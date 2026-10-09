@@ -57,7 +57,7 @@ which the shell refuses today. Compare the file with bash's.
 `a & b` runs a in the background and b at once, as `a & ; b` does today.
 $! is a's. Compare with bash.
 
-## 5. && || and ?: in arithmetic
+## 5. && || and ?: in arithmetic — DONE v0.60.63
 
 $(( )) and (( )) evaluate both sides of && and || today; sh evaluates the
 right only when it counts, which matters for assignments and ++. Add

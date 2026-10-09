@@ -5205,7 +5205,12 @@ static long a_var(const char *name) {
 }
 /* (( )) and $(( )) assign (v0.60.50): NAME = op= ++ --, and a, b, as sh's. */
 static void set_var(const char *name, const char *value);
+/* While a_skip is up (v0.60.63) the expression is read but not done: the
+ * side of && or || that does not count, the arm of ?: not taken. Nothing
+ * is assigned and dividing by zero is no error, as in sh. */
+static int a_skip;
 static void a_set(const char *name, long v) {
+    if (a_skip) return;
     char d[24]; int k = 0, n = 0; char out[24];
     unsigned long u = v < 0 ? (unsigned long)(-v) : (unsigned long)v;
     do { d[k++] = (char)('0' + u % 10); u /= 10; } while (u);
@@ -5223,6 +5228,7 @@ static int a_name(char *name) {         /* an identifier at ap, read; 0 if none 
     name[n] = '\0';
     return 1;
 }
+static long a_comma(void);
 static long a_prim(void) {
     a_sp();
     if ((ap[0] == '+' && ap[1] == '+') || (ap[0] == '-' && ap[1] == '-')) {   /* ++n, --n */
@@ -5236,7 +5242,7 @@ static long a_prim(void) {
         return v;
     }
     if (*ap == '!') { ap++; return !a_prim(); }
-    if (*ap == '(') { ap++; long v = a_eq(); a_sp(); if (*ap == ')') ap++; else arith_err = 1; return v; }
+    if (*ap == '(') { ap++; long v = a_comma(); a_sp(); if (*ap == ')') ap++; else arith_err = 1; return v; }   /* a whole expression (v0.60.63; was a_eq: no && || = ?:) */
     if (*ap == '-') { ap++; return -a_prim(); }
     if (*ap == '+') { ap++; return a_prim(); }
     if (*ap >= '0' && *ap <= '9') { long v = 0; while (*ap >= '0' && *ap <= '9') v = v * 10 + (*ap++ - '0'); return v; }
@@ -5266,7 +5272,7 @@ static long a_mul(void) {
         ap++;
         long r = a_prim();
         if (o == '*') v *= r;
-        else if (r == 0) { arith_err = 2; return 0; }
+        else if (r == 0) { if (a_skip) r = 1; else { arith_err = 2; return 0; } }
         else if (o == '/') v /= r;
         else v %= r;
     }
@@ -5295,13 +5301,48 @@ static long a_eq(void) {
         else return v;
     }
 }
-static long a_and(void) {
+static long a_and(void) {                /* the right side only if the left is true */
     long v = a_eq();
-    for (;;) { a_sp(); if (ap[0] == '&' && ap[1] == '&') { ap += 2; long r = a_eq(); v = v && r; } else return v; }
+    for (;;) {
+        a_sp();
+        if (ap[0] == '&' && ap[1] == '&') {
+            ap += 2;
+            if (!v) a_skip++;
+            long r = a_eq();
+            if (!v) a_skip--;
+            v = v && r;
+        } else return v;
+    }
 }
-static long a_or(void) {
+static long a_or(void) {                 /* the right side only if the left is false */
     long v = a_and();
-    for (;;) { a_sp(); if (ap[0] == '|' && ap[1] == '|') { ap += 2; long r = a_and(); v = v || r; } else return v; }
+    for (;;) {
+        a_sp();
+        if (ap[0] == '|' && ap[1] == '|') {
+            ap += 2;
+            if (v) a_skip++;
+            long r = a_and();
+            if (v) a_skip--;
+            v = v || r;
+        } else return v;
+    }
+}
+static long a_assign(void);
+static long a_cond(void) {               /* c ? a : b, one arm done (v0.60.63) */
+    long c = a_or();
+    a_sp();
+    if (*ap != '?') return c;
+    ap++;
+    if (!c) a_skip++;
+    long x = a_assign();
+    if (!c) a_skip--;
+    a_sp();
+    if (*ap != ':') { arith_err = 1; return 0; }
+    ap++;
+    if (c) a_skip++;
+    long y = a_cond();
+    if (c) a_skip--;
+    return c ? x : y;
 }
 /* NAME = expr, NAME op= expr (right to left), else a plain expression. */
 static long a_assign(void) {
@@ -5316,14 +5357,14 @@ static long a_assign(void) {
         else if ((ap[0] == '+' || ap[0] == '-' || ap[0] == '*' || ap[0] == '/' || ap[0] == '%') && ap[1] == '=') { op = ap[0]; ap += 2; }
         if (op) {
             long r = a_assign(), v = a_var(name);
-            if ((op == '/' || op == '%') && r == 0) { arith_err = 2; return 0; }
+            if ((op == '/' || op == '%') && r == 0) { if (a_skip) r = 1; else { arith_err = 2; return 0; } }
             v = op == '=' ? r : op == '+' ? v + r : op == '-' ? v - r : op == '*' ? v * r : op == '/' ? v / r : v % r;
             a_set(name, v);
             return v;
         }
     }
     ap = save;
-    return a_or();
+    return a_cond();
 }
 static long a_comma(void) {               /* a, b: both, the value b's */
     long v = a_assign();
@@ -5331,6 +5372,7 @@ static long a_comma(void) {               /* a, b: both, the value b's */
 }
 static long arith(const char *expr) {
     ap = expr;
+    a_skip = 0;
     long v = a_comma();
     a_sp();
     if (*ap && !arith_err) arith_err = 1;            /* something left over */
