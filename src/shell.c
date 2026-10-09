@@ -1526,9 +1526,28 @@ static void unquote(char *w) {
     *o = '\0';
 }
 
-/* Globs (v0.58.2). */
+/* Globs (v0.58.2; [...] v0.60.55: a set, ranges, [!x] or [^x] for none of
+ * them; a ] first is one of the set; a [ with no ] is just a [). */
 static int glob_match(const char *pat, const char *name) {
     if (*pat == '\0') return *name == '\0';
+    if (*pat == '[') {
+        const char *p = pat + 1;
+        int neg = 0;
+        if (*p == '!' || *p == '^') { neg = 1; p++; }
+        const char *q = p;
+        if (*q == ']') q++;
+        while (*q && *q != ']') q++;
+        if (*q == ']') {
+            if (!*name) return 0;
+            int hit = 0;
+            for (const char *c = p; c < q; c++) {
+                if (c[1] == '-' && c + 2 < q) { if (*name >= c[0] && *name <= c[2]) hit = 1; c += 2; }
+                else if (*c == *name) hit = 1;
+            }
+            if (hit == neg) return 0;
+            return glob_match(q + 1, name + 1);
+        }
+    }
     if (*pat == '*') {
         for (const char *n = name; ; n++) {
             if (glob_match(pat + 1, n)) return 1;
@@ -1566,7 +1585,7 @@ static int stage_add_arg(stage_t *st, const char *tok) {
 static void glob_expand(const char *tok, void (*emit)(void *, const char *), void *ctx) {
     int globby = 0, quoted = 0;
     for (const char *c = tok; *c; c++) {
-        if (*c == '*' || *c == '?') globby = 1;
+        if (*c == '*' || *c == '?' || *c == '[') globby = 1;
         if (*c == '\'' || *c == '"') quoted = 1;
     }
     if (!globby || quoted) { emit(ctx, tok); return; }
@@ -1579,7 +1598,7 @@ static void glob_expand(const char *tok, void (*emit)(void *, const char *), voi
         memcpy(dirpart, tok, (uint32_t)dl); dirpart[dl] = '\0';
         strncpy(pat, slash + 1, sizeof(pat) - 1); pat[sizeof(pat) - 1] = '\0';
     } else { dirpart[0] = '\0'; strncpy(pat, tok, sizeof(pat) - 1); pat[sizeof(pat) - 1] = '\0'; }
-    for (const char *c = dirpart; *c; c++) if (*c == '*' || *c == '?') { emit(ctx, tok); return; }
+    for (const char *c = dirpart; *c; c++) if (*c == '*' || *c == '?' || *c == '[') { emit(ctx, tok); return; }
     char dir[FAT_PATH_MAX];
     if (dirpart[0]) resolve_path(dirpart, dir); else strcpy(dir, cur_shell()->cwd);
     if (!fat_is_dir(dir) || !may(dir, 'r')) { emit(ctx, tok); return; }

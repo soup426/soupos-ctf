@@ -43,7 +43,7 @@ must run (no "No soup for you"), and every builtin the dispatcher has
 must be listed. Test it: take the names from menu's own output and try
 each.
 
-## 2. [abc] and [a-z] in globs and case patterns
+## 2. [abc] and [a-z] in globs and case patterns — DONE v0.60.55
 
 glob_match knows * and ? only. Add bracket expressions, ranges and [!x],
 for file globs and case patterns alike. Compare with bash.
