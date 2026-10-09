@@ -41,7 +41,7 @@ checked against the menu and the programs first).
 
 ---
 
-## 1. for (( INIT ; COND ; STEP )) ; do ... ; done
+## 1. for (( INIT ; COND ; STEP )) ; do ... ; done — DONE v0.60.136
 
 bash's arithmetic for loop (a keyword form, its own name): INIT once,
 COND before each pass (empty is true), STEP after; break, continue and N

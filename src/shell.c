@@ -9394,6 +9394,61 @@ static void exec_range(lseg_t *sg, int from, int to, int depth) {
             i = e + 1;
             continue;
         }
+        if (is_kw(sg[i].text, "for") && sg[i].text[3] == ' ' && sg[i].text[4] == '(' && sg[i].text[5] == '(') {
+            /* for (( INIT ; COND ; STEP )) (v0.60.136), bash's arithmetic
+             * loop: INIT once, COND before each turn (empty is true), STEP
+             * after each, a continue's too; each part expanded when it is
+             * used, as $(( )) is. The status is the body's last, 0 if it
+             * never ran. */
+            int d = match_done(sg, i, to);
+            if (d < 0 || i + 1 >= d || !is_kw(sg[i + 1].text, "do")) {
+                t_puts("  for: expected `for (( INIT ; COND ; STEP )) ; do ... ; done`.\n");
+                cur_shell()->last_status = 2; return;
+            }
+            if (run) {
+                const char *a = sg[i].text + 6;
+                const char *z = a + strlen(a);
+                while (z > a && z[-1] == ' ') z--;
+                char part[3][INPUT_MAX]; int np = 0, pl = 0, dep = 0;
+                if (z - a < 2 || z[-1] != ')' || z[-2] != ')') { t_puts("  for: no )) to close it.\n"); cur_shell()->last_status = 2; return; }
+                z -= 2;
+                for (const char *c = a; c < z; c++) {
+                    if (*c == '(') dep++;
+                    else if (*c == ')') dep--;
+                    if (*c == ';' && !dep && np < 2) { part[np][pl] = '\0'; np++; pl = 0; continue; }
+                    if (pl < INPUT_MAX - 1) part[np][pl++] = *c;
+                }
+                part[np][pl] = '\0';
+                if (np != 2) { t_puts("  for: expected three parts, INIT ; COND ; STEP.\n"); cur_shell()->last_status = 2; return; }
+                shell_t *me = cur_shell();
+                char ex[INPUT_MAX];
+                #define FOR_ARITH(k, out) do { const char *pp = part[k]; while (*pp == ' ') pp++; \
+                    if (!*pp) { out = 1; break; } \
+                    arith_err = 0; expand_into(pp, ex, INPUT_MAX); out = arith(ex); \
+                    if (arith_err) { t_puts(arith_err == 2 ? "  arithmetic: division by zero\n" : "  arithmetic: not an expression\n"); \
+                                     me->last_status = 1; goto for_arith_end; } } while (0)
+                long long v;
+                me->last_status = 0;
+                me->loops++;
+                FOR_ARITH(0, v);
+                for (;;) {
+                    if (me->exiting || interrupted()) break;
+                    FOR_ARITH(1, v);
+                    if (!v) break;
+                    exec_range(sg, i + 2, d, depth + 1);
+                    if (loop_after_body(me)) break;
+                    int st = me->last_status;
+                    FOR_ARITH(2, v);
+                    me->last_status = st;
+                }
+            for_arith_end:
+                #undef FOR_ARITH
+                me->loops--;
+                if (interrupted()) { me->last_status = 130; return; }
+            }
+            i = d + 1;
+            continue;
+        }
         if (is_kw(sg[i].text, "for") || is_kw(sg[i].text, "select")) {
             /* select NAME in WORDS (v0.60.103) shares for's NAME in WORDS */
             int sel = is_kw(sg[i].text, "select");
@@ -9708,6 +9763,11 @@ static void run_line(const char *line) {
     strncpy(buf, line, INPUT_MAX * 2 - 1); buf[INPUT_MAX * 2 - 1] = '\0';
     for (const char *f = buf; *f; f++)
         if (f[0] == '$' && f[1] == '\'') { ansi_line(buf, INPUT_MAX * 2); break; }
+    for (char *f = buf; *f; f++)                    /* for((: for (( (v0.60.136) */
+        if (f[0] == 'f' && strncmp(f, "for((", 5) == 0 && (f == buf || f[-1] == ' ' || f[-1] == ';' || f[-1] == '&' || f[-1] == '|')) {
+            int l = (int)strlen(f);
+            if ((int)(f - buf) + l + 2 < INPUT_MAX * 2) { memmove(f + 4, f + 3, (uint32_t)l - 2); f[3] = ' '; }
+        }
     for (const char *f = buf; *f; f++)
         if (f[0] == 'f' && strncmp(f, "function", 8) == 0) { fn_keyword(buf, INPUT_MAX * 2); break; }
     int n = split_segs(buf, sg, LSEG_MAX);

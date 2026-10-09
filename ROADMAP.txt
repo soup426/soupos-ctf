@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.135
+Current version: v0.60.136
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,15 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.136 (2026-10-09)  — FOR (( INIT ; COND ; STEP ))
+  - bash's arithmetic for loop: INIT once, COND before each turn (empty is
+    true), STEP after each (a continue's too), each part expanded when it
+    is used; break, continue and their N; the status the body's last, 0
+    if it never ran. for(( with no space is made for (( as a line comes
+    in, so every reader after sees one form.
+  - scripts/cfor-test.sh compares 36 lines with bash, a recipe over
+    several lines included.
 
 v0.60.135 (2026-10-09)  — WEIGH OVER SEVERAL FILES, AND -L
   - weigh.elf FILE...: a line each and a `total` line, every count padded
