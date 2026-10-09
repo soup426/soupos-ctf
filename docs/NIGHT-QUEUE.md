@@ -55,7 +55,7 @@ windows keep their 80x25 cells for now (centred in the space); files
 and program windows keep their bodies too, so this item is the frame and
 the bookkeeping. Test by screendump: maximised, restored, both logged.
 
-## 2. Terminals that change size
+## 2. Terminals that change size — DONE v0.60.162
 
 Drag a terminal window's bottom-right corner to resize it, in whole
 cells (40x10 at least, as many as fit at most): the wterm's cells and

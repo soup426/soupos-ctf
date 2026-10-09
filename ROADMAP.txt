@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.161
+Current version: v0.60.162
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,21 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.162 (2026-10-09)  — TERMINALS THAT CHANGE SIZE
+  - A terminal window's bottom-right corner (12 pixels square) drags it
+    to a new size in whole cells, 40x10 at least and as many as fit
+    between the bars at most (127x43 storage). The wterm keeps its own
+    cols and rows; resizing keeps the rows around the cursor, so the
+    prompt stays in view, cuts or pads each row, and clears any
+    selection.
+  - Measured first: the shell's line editor asks t_cols() at every
+    redraw (VGA_W in shell.c), so it wraps at the new width from the next
+    line on; jot sizes itself to the terminal already (v0.60.159).
+  - scripts/ctresize-test.sh: dragged to 100x20, a 90-character line on
+    one row (it wraps at 80); dragged down to the 40x10 floor with the
+    prompt kept; screendumps against the font and the log. Six-wide soak
+    6 of 6.
 
 v0.60.161 (2026-10-09)  — MAXIMISE AND RESTORE
   - A double click on a title bar fills the space between the bars with

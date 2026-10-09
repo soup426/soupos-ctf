@@ -49,6 +49,7 @@
  * PATH` for a text file, v0.60.154), so what may be read is the shell's to
  * decide, as it always is.
  *
+ * A terminal's bottom-right corner drags it to a new size (v0.60.162).
  * The wheel (v0.60.151) scrolls the files window under the pointer, and
  * is a program's event over its window (v0.60.157); Alt+Tab
  * (v0.60.155) sends the focused window to the back.
@@ -201,11 +202,14 @@ static int  topmost(void) {                      /* the focus: the top window no
 
 /* ---- terminal windows (v0.60.143) --------------------------------------- */
 
-#define TCOLS 80
+#define TCOLS 80                        /* a new terminal's size */
 #define TROWS 25
+#define WMAXC 127                       /* the most that fit between the bars (v0.60.162) */
+#define WMAXR 43
 struct wterm {
     term_t t;                           /* first: a wterm_t is a term_t */
-    uint16_t cell[TROWS * TCOLS];       /* char | attribute << 8, as the console's */
+    uint16_t cell[WMAXR * WMAXC];       /* char | attribute << 8, as the console's; cols to a row */
+    int cols, rows;                     /* (v0.60.162) its size now */
     int row, col, attr;
     volatile int closed, changed;
     int sel_a, sel_b;                   /* (v0.60.160) a selection, cell indices; sel_a -1: none */
@@ -218,18 +222,18 @@ static const uint32_t vga_rgb[16] = {
 };
 static wterm_t *WT(term_t *t) { return (wterm_t *)t; }
 static void wt_scroll(wterm_t *w) {
-    memmove(w->cell, w->cell + TCOLS, sizeof(w->cell[0]) * TCOLS * (TROWS - 1));
-    for (int c = 0; c < TCOLS; c++) w->cell[(TROWS - 1) * TCOLS + c] = (uint16_t)(' ' | w->attr << 8);
-    w->row = TROWS - 1;
+    memmove(w->cell, w->cell + w->cols, sizeof(w->cell[0]) * w->cols * (w->rows - 1));
+    for (int c = 0; c < w->cols; c++) w->cell[(w->rows - 1) * w->cols + c] = (uint16_t)(' ' | w->attr << 8);
+    w->row = w->rows - 1;
 }
 static void wt_char(wterm_t *w, char c) {
-    if (c == '\n') { w->col = 0; if (++w->row >= TROWS) wt_scroll(w); }
+    if (c == '\n') { w->col = 0; if (++w->row >= w->rows) wt_scroll(w); }
     else if (c == '\r') w->col = 0;
-    else if (c == '\b') { if (w->col > 0) { w->col--; w->cell[w->row * TCOLS + w->col] = (uint16_t)(' ' | w->attr << 8); } }
+    else if (c == '\b') { if (w->col > 0) { w->col--; w->cell[w->row * w->cols + w->col] = (uint16_t)(' ' | w->attr << 8); } }
     else if (c == '\t') { do wt_char(w, ' '); while (w->col % 8); }
     else if ((unsigned char)c >= ' ') {
-        w->cell[w->row * TCOLS + w->col] = (uint16_t)((unsigned char)c | w->attr << 8);
-        if (++w->col >= TCOLS) { w->col = 0; if (++w->row >= TROWS) wt_scroll(w); }
+        w->cell[w->row * w->cols + w->col] = (uint16_t)((unsigned char)c | w->attr << 8);
+        if (++w->col >= w->cols) { w->col = 0; if (++w->row >= w->rows) wt_scroll(w); }
     }
     w->changed = 1;
 }
@@ -238,17 +242,17 @@ static void wt_putc(term_t *t, char c) { wt_char(WT(t), c); }
 static void wt_color(term_t *t, int fg, int bg) { WT(t)->attr = (fg & 15) | (bg & 7) << 4; }
 static void wt_cursor(term_t *t, int r, int c) {
     wterm_t *w = WT(t);
-    w->row = r < 0 ? 0 : r >= TROWS ? TROWS - 1 : r;
-    w->col = c < 0 ? 0 : c >= TCOLS ? TCOLS - 1 : c;
+    w->row = r < 0 ? 0 : r >= w->rows ? w->rows - 1 : r;
+    w->col = c < 0 ? 0 : c >= w->cols ? w->cols - 1 : c;
     w->changed = 1;
 }
 static int  wt_row(term_t *t)  { return WT(t)->row; }
 static int  wt_col(term_t *t)  { return WT(t)->col; }
-static int  wt_cols(term_t *t) { (void)t; return TCOLS; }
-static int  wt_rows(term_t *t) { (void)t; return TROWS; }
+static int  wt_cols(term_t *t) { return WT(t)->cols; }
+static int  wt_rows(term_t *t) { return WT(t)->rows; }
 static void wt_clear(term_t *t) {
     wterm_t *w = WT(t);
-    for (int i = 0; i < TROWS * TCOLS; i++) w->cell[i] = (uint16_t)(' ' | w->attr << 8);
+    for (int i = 0; i < w->rows * w->cols; i++) w->cell[i] = (uint16_t)(' ' | w->attr << 8);
     w->row = w->col = 0; w->changed = 1;
 }
 static int wt_avail(term_t *t) { wterm_t *w = WT(t); return w->closed || w->head != w->tail; }
@@ -263,10 +267,27 @@ static int wt_getc(term_t *t) {
     return k;
 }
 static void wt_flush(term_t *t) { wterm_t *w = WT(t); w->tail = w->head; }
+/* A new size (v0.60.162): the rows around the cursor are kept, so the
+ * prompt stays in view, and each row is cut or blank-padded to the new
+ * width; the selection goes. */
+static void wt_resize(wterm_t *w, int nc, int nr) {
+    static uint16_t old[WMAXR * WMAXC];
+    int oc = w->cols, orows = w->rows;
+    memcpy(old, w->cell, sizeof(old[0]) * (uint32_t)(oc * orows));
+    int shift = w->row >= nr ? w->row - (nr - 1) : 0;
+    for (int r = 0; r < nr; r++)
+        for (int c = 0; c < nc; c++)
+            w->cell[r * nc + c] = r + shift < orows && c < oc ? old[(r + shift) * oc + c] : (uint16_t)(' ' | w->attr << 8);
+    w->cols = nc; w->rows = nr;
+    w->row -= shift;
+    if (w->col >= nc) w->col = nc - 1;
+    w->sel_a = w->sel_b = -1;
+    w->changed = 1;
+}
 static void wt_cell(term_t *t, int r, int c, char ch, int attr) {   /* (v0.60.154) for jot */
     wterm_t *w = WT(t);
-    if (r < 0 || r >= TROWS || c < 0 || c >= TCOLS) return;
-    w->cell[r * TCOLS + c] = (uint16_t)((unsigned char)ch | (attr & 0x7F) << 8);
+    if (r < 0 || r >= w->rows || c < 0 || c >= w->cols) return;
+    w->cell[r * w->cols + c] = (uint16_t)((unsigned char)ch | (attr & 0x7F) << 8);
     w->changed = 1;
 }
 /* A key for the window: Ctrl-C and Ctrl-Z to its foreground program, as
@@ -292,22 +313,23 @@ static wterm_t *wt_new(void) {
     w->t.getc = wt_getc; w->t.available = wt_avail; w->t.flush_in = wt_flush; w->t.put_cell = wt_cell;
     w->t.ctx = w;
     w->attr = 0x07;
+    w->cols = TCOLS; w->rows = TROWS;
     w->sel_a = w->sel_b = -1;
     wt_clear(&w->t);
     return w;
 }
 /* The cells into the body at (x,y), within the clip; the cursor when focused. */
 static void draw_cells(wterm_t *w, int x, int y, int focused) {
-    for (int r = 0; r < TROWS; r++) {
+    for (int r = 0; r < w->rows; r++) {
         int py = y + r * 16;
         if (py + 16 <= cy0 || py >= cy1) continue;
-        for (int c = 0; c < TCOLS; c++) {
+        for (int c = 0; c < w->cols; c++) {
             int px = x + c * 8;
             if (px + 8 <= cx0 || px >= cx1) continue;
-            uint16_t cell = w->cell[r * TCOLS + c];
+            uint16_t cell = w->cell[r * w->cols + c];
             uint32_t fg = vga_rgb[(cell >> 8) & 15], bg = vga_rgb[(cell >> 12) & 7];
             if (w->sel_a >= 0) {                                /* selected: inverted */
-                int i = r * TCOLS + c, lo = w->sel_a < w->sel_b ? w->sel_a : w->sel_b, hi = w->sel_a ^ w->sel_b ^ lo;
+                int i = r * w->cols + c, lo = w->sel_a < w->sel_b ? w->sel_a : w->sel_b, hi = w->sel_a ^ w->sel_b ^ lo;
                 if (i >= lo && i <= hi) { uint32_t t = fg; fg = bg; bg = t; }
             }
             const uint8_t *g = font8x16[cell & 0xFF];
@@ -324,7 +346,7 @@ static void draw_cells(wterm_t *w, int x, int y, int focused) {
             }
         }
     }
-    dirty(x, y, TCOLS * 8, TROWS * 16);
+    dirty(x, y, w->cols * 8, w->rows * 16);
 }
 
 /* ---- files windows (v0.60.145) ----------------------------------------- */
@@ -524,7 +546,7 @@ static void draw_app(const win_t *w) {                /* within the clip */
 static void body_origin(const win_t *w, int *bx, int *by) {
     *bx = w->x + BORDER; *by = w->y + BORDER + TITLE_H;
     int iw = 0, ih = 0;
-    if (w->term) { iw = TCOLS * 8; ih = TROWS * 16; }
+    if (w->term) { iw = w->term->cols * 8; ih = w->term->rows * 16; }
     else if (w->app >= 0) { iw = app[w->app].w; ih = app[w->app].h; }
     else return;
     int ew = w->w - 2 * BORDER - iw, eh = w->h - 2 * BORDER - TITLE_H - ih;
@@ -899,6 +921,8 @@ static void maximise_window(int k) {
  * middle click types the clipboard into the terminal under it. A click
  * with no drag, or new output, clears the selection. */
 static int sel_win = -1;
+static int rs_win = -1, rs_dx, rs_dy;            /* a terminal being resized from its corner (v0.60.162) */
+#define GRIP 12
 static int cell_at(const win_t *w, int px, int py) {
     int bx, by;
     body_origin(w, &bx, &by);
@@ -906,22 +930,23 @@ static int cell_at(const win_t *w, int px, int py) {
     if (px < bx) c = -1;
     if (py < by) r = -1;
     if (c < 0) c = 0;
-    if (c >= TCOLS) c = TCOLS - 1;
+    if (c >= w->term->cols) c = w->term->cols - 1;
     if (r < 0) r = 0;
-    if (r >= TROWS) r = TROWS - 1;
-    return r * TCOLS + c;
+    if (r >= w->term->rows) r = w->term->rows - 1;
+    return r * w->term->cols + c;
 }
 static void sel_copy(int k) {
     wterm_t *t = win[k].term;
     int lo = t->sel_a < t->sel_b ? t->sel_a : t->sel_b, hi = t->sel_a ^ t->sel_b ^ lo;
-    static char buf[TROWS * (TCOLS + 1)];
+    static char buf[WMAXR * (WMAXC + 1)];
+    int C = t->cols;
     int n = 0;
-    for (int r = lo / TCOLS; r <= hi / TCOLS; r++) {
-        int c0 = r == lo / TCOLS ? lo % TCOLS : 0, c1 = r == hi / TCOLS ? hi % TCOLS : TCOLS - 1;
+    for (int r = lo / C; r <= hi / C; r++) {
+        int c0 = r == lo / C ? lo % C : 0, c1 = r == hi / C ? hi % C : C - 1;
         int start = n;
-        for (int c = c0; c <= c1; c++) buf[n++] = (char)(t->cell[r * TCOLS + c] & 0xFF);
+        for (int c = c0; c <= c1; c++) buf[n++] = (char)(t->cell[r * C + c] & 0xFF);
         while (n > start && buf[n - 1] == ' ') n--;          /* trailing blanks */
-        if (r < hi / TCOLS) buf[n++] = '\n';
+        if (r < hi / C) buf[n++] = '\n';
     }
     clip_set(buf, (uint32_t)n);
     klog("[countertop] copied %d bytes from %s\n", n, win[k].title);
@@ -932,6 +957,29 @@ static void sel_copy(int k) {
 static void pointer_buttons(int px, int py, int btn, int np) {
     int left = btn & 1, was = last_btn;
     last_btn = btn;
+    if (rs_win >= 0) {                                 /* a corner being dragged: whole cells */
+        win_t *w = &win[rs_win];
+        if (w->term) {
+            int maxc = (W - w->x - 2 * BORDER) / 8, maxr = (H - TASK_H - w->y - 2 * BORDER - TITLE_H) / 16;
+            if (maxc > WMAXC) maxc = WMAXC;
+            if (maxr > WMAXR) maxr = WMAXR;
+            int nc = (px + rs_dx - w->x - 2 * BORDER) / 8, nr = (py + rs_dy - w->y - 2 * BORDER - TITLE_H) / 16;
+            if (nc > maxc) nc = maxc;
+            if (nr > maxr) nr = maxr;
+            if (nc < 40) nc = 40;
+            if (nr < 10) nr = 10;
+            if (nc != w->term->cols || nr != w->term->rows) {
+                int ox = w->x, oy = w->y, ow = w->w, oh = w->h;
+                wt_resize(w->term, nc, nr);
+                w->w = nc * 8 + 2 * BORDER; w->h = nr * 16 + 2 * BORDER + TITLE_H;
+                repaint(ox, oy, ow, oh);
+                repaint_win(rs_win);
+            }
+            if (!left) klog("[countertop] resize %s to %dx%d\n", w->title, w->term->cols, w->term->rows);
+        }
+        if (!left || !w->term) rs_win = -1;
+        if (!np) return;
+    }
     if (sel_win >= 0) {                                /* a selection being dragged */
         win_t *w = &win[sel_win];
         if (w->term) {
@@ -1008,6 +1056,10 @@ static void pointer_buttons(int px, int py, int btn, int np) {
         }
         if (px >= bx - 4 - CLOSE_SZ && px < bx - 4 && py >= by && py < by + CLOSE_SZ) { minimise_window(k); return; }
         raise_window(k);
+        if (w->term && !w->maxed && px >= w->x + w->w - GRIP && py >= w->y + w->h - GRIP) {   /* its corner: resize */
+            rs_win = k; rs_dx = w->x + w->w - px; rs_dy = w->y + w->h - py;
+            return;
+        }
         if (w->term && py >= w->y + BORDER + TITLE_H) {     /* a terminal's cells: a selection starts */
             int had = w->term->sel_a >= 0;
             w->term->sel_a = w->term->sel_b = cell_at(w, px, py);
@@ -1142,7 +1194,7 @@ int countertop_run(int (*avail)(void), int (*getch)(void), int uid) {
     clip_all();
     background();
     bar();
-    nwin = 0; drag = -1; last_btn = 0; leave_asked = 0; menu_open = 0; ct_uid = uid; nterm = 0; task_sig = 0xFFFFFFFFu;
+    nwin = 0; drag = -1; last_btn = 0; leave_asked = 0; menu_open = 0; rs_win = -1; sel_win = -1; ct_uid = uid; nterm = 0; task_sig = 0xFFFFFFFFu;
     for (int k = 0; k < MAX_WIN; k++) win[k].used = 0;
     app_drag = -1;
     mutex_lock(&app_mtx);                            /* programs may ask for windows now */
@@ -1177,7 +1229,7 @@ int countertop_run(int (*avail)(void), int (*getch)(void), int uid) {
         uint32_t pc = mouse_presses(0, 0);
         int np = (int)(pc - presses_seen);
         presses_seen = pc;
-        if (np || b != last_btn || drag >= 0 || app_drag >= 0 || sel_win >= 0) pointer_buttons(px, py, b, np);
+        if (np || b != last_btn || drag >= 0 || app_drag >= 0 || sel_win >= 0 || rs_win >= 0) pointer_buttons(px, py, b, np);
         int wh = mouse_wheel(), dw = wh - wheel_seen;
         wheel_seen = wh;
         if (dw) {                                    /* the wheel: a files window under the pointer scrolls */
