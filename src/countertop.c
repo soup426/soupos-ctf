@@ -902,6 +902,32 @@ static void restore_window(int k) {
 }
 
 static int leave_asked;
+/* Leave with programs' windows open (v0.60.165): the first Leave (its button
+ * or Esc) says how many on the bar and arms it; a second within 5 s
+ * leaves. With none open it leaves at once. */
+#define NOTE_X (BTN_KITCHEN_X + BTN_KITCHEN_W + 16)
+static int leave_armed;
+static uint32_t leave_armed_at;
+static int apps_open(void) {
+    int n = 0;
+    mutex_lock(&app_mtx);
+    for (int i = 0; i < APP_MAX; i++) if (app[i].used && app[i].win >= 0 && !app[i].gone) n++;
+    mutex_unlock(&app_mtx);
+    return n;
+}
+static void bar_note(const char *msg) {          /* msg 0 clears it */
+    fill(NOTE_X, 0, W - 8 * 8 - 12 - NOTE_X, BAR_H, BAR_RGB);
+    if (msg) text(NOTE_X, (BAR_H - 16) / 2, msg, 0x00F0B040u);
+}
+static void ask_leave(void) {
+    int n = apps_open();
+    if (!n || (leave_armed && timer_get_ticks() - leave_armed_at < 500)) { leave_asked = 1; return; }
+    leave_armed = 1; leave_armed_at = timer_get_ticks();
+    char msg[64] = "programs open: Leave again to end them";
+    if (n == 1) scopy(msg, "a program is open: Leave again to end it", (int)sizeof(msg));
+    bar_note(msg);
+    klog("[countertop] leave: %d program window%s open, asking again\n", n, n == 1 ? "" : "s");
+}
 static uint32_t task_sig;                         /* the windows as the taskbar last showed them */
 /* Maximise and restore (v0.60.161): a double click on a title bar fills
  * the space between the bars with the window, and another puts it back. */
@@ -1060,7 +1086,7 @@ static void pointer_buttons(int px, int py, int btn, int np) {
     if (np && py < BAR_H) {
         if (px >= BTN_KITCHEN_X && px < BTN_KITCHEN_X + BTN_KITCHEN_W) { menu_set(1); return; }
         if (px >= BTN_TERM_X && px < BTN_TERM_X + BTN_TERM_W) open_terminal();
-        else if (px >= BTN_LEAVE_X && px < BTN_LEAVE_X + BTN_LEAVE_W) leave_asked = 1;
+        else if (px >= BTN_LEAVE_X && px < BTN_LEAVE_X + BTN_LEAVE_W) ask_leave();
         else if (px >= BTN_FILES_X && px < BTN_FILES_X + BTN_FILES_W) open_files("/");
         return;
     }
@@ -1223,7 +1249,7 @@ int countertop_run(int (*avail)(void), int (*getch)(void), int uid) {
     clip_all();
     background();
     bar();
-    nwin = 0; drag = -1; last_btn = 0; leave_asked = 0; menu_open = 0; rs_win = -1; sel_win = -1; fd_win = -1; ct_uid = uid; nterm = 0; task_sig = 0xFFFFFFFFu;
+    nwin = 0; drag = -1; last_btn = 0; leave_asked = 0; leave_armed = 0; menu_open = 0; rs_win = -1; sel_win = -1; fd_win = -1; ct_uid = uid; nterm = 0; task_sig = 0xFFFFFFFFu;
     for (int k = 0; k < MAX_WIN; k++) win[k].used = 0;
     app_drag = -1;
     mutex_lock(&app_mtx);                            /* programs may ask for windows now */
@@ -1309,9 +1335,10 @@ int countertop_run(int (*avail)(void), int (*getch)(void), int uid) {
                     repaint_win(k);
                 }
             }
-            else if (c == 27) leave_asked = 1;
+            else if (c == 27) ask_leave();
         }
         if (leave_asked) break;
+        if (leave_armed && timer_get_ticks() - leave_armed_at >= 500) { leave_armed = 0; bar_note(0); }   /* the question lapses */
         {                                            /* the taskbar, when the windows changed */
             uint32_t sig = (uint32_t)topmost() * 2654435761u;
             for (int i = 0; i < MAX_WIN; i++) sig = sig * 31u + (uint32_t)(win[i].used * 2 + win[i].min);

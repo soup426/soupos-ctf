@@ -79,11 +79,13 @@ going red. `eggtimer` the shell builtin already exists: this is the
 windowed one, named for the oven. Test: a short time, screendumps of
 the count and the end, the log of the beep.
 
-## 5. Leave asks first when programs have windows
+## 5. Leave asks first when programs have windows — DONE v0.60.165
 
 Leave with program windows open ends those programs with the desktop.
 The first click on Leave with any open says how many (in the bar) and a
-second within a few seconds leaves; none open, it leaves at once. Test:
+second within a few seconds leaves; none open, it leaves at once.
+(Built with 5 s: 3 s lapsed before a test's second click, QEMU's monitor
+taking half a second a command.) Test:
 frost open, Leave once (still up, the bar says so), Leave again (down).
 
 ## 6. Doom at the framebuffer's own resolution — DEFERRED

@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.164
+Current version: v0.60.165
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,17 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.165 (2026-10-09)  — LEAVE ASKS FIRST
+  - With programs' windows open, the first Leave (its button or Esc)
+    keeps the desktop up and says so on the bar ("a program is open:
+    Leave again to end it"); a second within 5 s leaves, ending them.
+    The question lapses after 5 s and the note goes. With none open,
+    Leave is at once, as before.
+  - scripts/ctleave-test.sh: frost open, one Leave (the note read back
+    against the font), the lapse, two Leaves. prodwin-test clicks Leave
+    twice now (its victim's window is open). Soaked six wide, three of
+    each: all passed.
 
 v0.60.164 (2026-10-09)  — oven.elf: A KITCHEN TIMER IN A WINDOW
   - `cook oven.elf 90`: MM:SS in seven-segment digits the program draws

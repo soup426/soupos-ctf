@@ -9,6 +9,8 @@
 # own (the victim's among them), then closes its own twice. Every attack
 # gives -1, the victim's window stays green, and once the desktop has
 # left the victim's put, event and open give -1 and its close frees it.
+# Leave is clicked twice: with the victim's window open the first only
+# asks (v0.60.165).
 set -uo pipefail
 cd "$(dirname "$0")/.."
 fail=0
@@ -23,7 +25,8 @@ keys=("headchef" "rosemary" "WAIT:1" "cook prod.elf victim &" "WAIT:1" "countert
       "cook prod.elf limits > /LIMITS.OUT" "UNTIL:/prod.elf exited with code" "WAIT:1"
       "MON:mouse_move 300 734" "WAIT:1" "MON:mouse_button 1" "WAIT:1" "MON:mouse_button 0" "WAIT:2"
       "MON:screendump $WORK/s1.ppm" "WAIT:1"
-      "MON:mouse_move -212 -734" "WAIT:1" "MON:mouse_button 1" "WAIT:1" "MON:mouse_button 0" "WAIT:4"
+      "MON:mouse_move -212 -734" "WAIT:1" "MON:mouse_button 1" "WAIT:1" "MON:mouse_button 0" "WAIT:1"
+      "MON:mouse_button 1" "WAIT:1" "MON:mouse_button 0" "WAIT:4"
       "slurp PRODWIN-DONE" "UNTIL:PRODWIN-DONE")
 qemu-system-i386 -accel kvm -cpu host -drive "file=$WORK/disk.img,format=raw,if=ide,index=0" \
     -cdrom soupOS.iso -boot d -m 128M -no-reboot -no-shutdown -display none \
