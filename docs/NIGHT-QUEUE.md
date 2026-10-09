@@ -1,9 +1,10 @@
 # Night queue
 
-Fortieth queue. The first thirty-nine are in `docs/queue-archive-2026-10-0*.md`.
+Forty-first queue. The first forty are in `docs/queue-archive-2026-10-0*.md`.
 Items wait on a person in three archives (the seventh, the thirteenth and
-the twenty-fourth). A stack of bowls, a way past functions and nicknames to
-the builtin, rest -n, Tab for variables, and select.
+the twenty-fourth). The shell's no-op and its two answers, then programs
+the kitchen still lacks: a name's last part and the rest, base64, a
+SHA-256, and one that says the same thing forever.
 
 ## Standing rules
 
@@ -34,34 +35,32 @@ the builtin, rest -n, Tab for variables, and select.
 
 ---
 
-## 1. shelve, unshelve, shelf (pushd, popd, dirs) — DONE v0.60.99
+## 1. :, fresh and spoiled (true and false)
 
-`shelve BOWL` goes there and keeps where it was on a stack; `unshelve`
-goes back to the top one; `shelf` lists the stack (the current bowl
-first, as dirs). Kitchen names. Compare with bash's pushd/popd/dirs.
+`:` is POSIX's special builtin, so it keeps its name: it does nothing,
+status 0, its words expanded (so `: ${x:=5}` sets x). true and false
+under kitchen names, fresh (0) and spoiled (1). Compare with bash.
 
-## 2. plain CMD (command) — DONE v0.60.100
+## 2. peel and stalk (basename and dirname)
 
-Runs CMD as the builtin or the program it names, skipping a function or a
-nickname of the same name, as sh's command does; `plain -v NAME` says
-what it would run. A kitchen name. Compare with bash's command.
+Programs: peel.elf NAME [SUFFIX] the last part (the suffix off), stalk.elf
+NAME what leads to it, as the host's basename and dirname do with their
+edge cases (trailing /, no /, /, //). Compare with the host's.
 
-## 3. rest -n — DONE v0.60.101 (with SYS_SLEEP and marinate.elf)
+## 3. brine.elf (base64)
 
-Waits for the next background job to end, whichever it is, its status
-being that job's, as wait -n. Test with two jobs of different lengths.
+Encode stdin or a file to base64, wrapped at 76 as GNU's; -d decodes.
+Compare with the host's base64, both ways, on text and on binary.
 
-## 4. Tab finishes $NAME — DONE v0.60.102
+## 4. brand.elf (sha256sum)
 
-A word starting with $ (or ${) finishes from the shell's variable names,
-as bash's completion does. Test by typing.
+The SHA-256 of a file or stdin, as `HASH  NAME` lines; several files.
+Compare with the host's sha256sum, the empty file and a large one too.
 
-## 5. select NAME in WORDS ; do ... ; done — DONE v0.60.103
+## 5. encore.elf (yes)
 
-sh's select: a numbered menu of WORDS, a prompt ($PS3, or "#? "), the
-answer read; NAME is the chosen word (empty for a number out of range),
-REPLY what was typed; round again until break or the end of input.
-Test by typing.
+Says y (or its words) forever, until what reads it stops: `cook encore.elf
+| skim.elf -n 3` ends. Compare with yes | head -n 3.
 
 ## 6. Doom at the framebuffer's own resolution — DEFERRED
 
