@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.142
+Current version: v0.60.143
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,25 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.143 (2026-10-09)  — COUNTERTOP: TERMINAL WINDOWS (STEP 4)
+  - The bar has Terminal and Leave buttons. Terminal opens a window with a
+    shell of its own: a wterm_t (a term_t of 80x25 cells with a key ring)
+    and shell_session_start on it, as the SSH server gives each channel,
+    so each window has its own task, cook, cwd, history and jobs. Its
+    output lands in its cells and the window is drawn again; the cursor
+    shows in the focused one.
+  - Keys go to the focused terminal (Ctrl-C and Ctrl-Z to its foreground
+    program); Esc leaves only when no terminal has the focus. clockout or
+    exit in a terminal closes its window; its close box hangs the session
+    up (programs killed, getc -1); its memory goes once its task is done.
+    Leave hangs every session up and waits for them.
+  - A terminal window shows stderr, as an SSH session does (peek.elf's
+    serial markers included).
+  - scripts/ctterm-test.sh reads each window's text back from screendumps,
+    cell by cell against font8x16: two shells apart (cd in one only),
+    clockout closing a window, a click giving the keyboard back, Leave
+    ending both sessions.
 
 v0.60.142 (2026-10-09)  — COUNTERTOP: WINDOWS (STEP 3)
   - Windows on the desktop, in z-order: a border, a title bar (the name,

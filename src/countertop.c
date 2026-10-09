@@ -24,6 +24,16 @@
  * by construction. A press raises and focuses the window under it (the
  * close box closes it; the title bar starts a drag that follows the
  * pointer until the button comes up).
+ *
+ * Terminals (v0.60.143, step 4). A window can hold a wterm_t: a term_t of
+ * 80x25 cells (a character and a VGA attribute each, as the console keeps
+ * them) with a ring of keys, and a shell session of its own on it, as the
+ * SSH server gives each channel: its own task, cook, cwd, history and
+ * foreground job. Its output lands in the cells and the window is drawn
+ * again; the keyboard goes to the focused window's ring (Ctrl-C and Ctrl-Z
+ * to its foreground program, as the console's IRQ does). Closing it hangs
+ * the session up (its programs killed, its getc -1); typing clockout or
+ * exit in it closes the window. Its memory goes only once its task is done.
  */
 #include "countertop.h"
 #include "fb.h"
@@ -34,6 +44,11 @@
 #include "task.h"
 #include "klog.h"
 #include "font8x16.h"
+#include "term.h"
+#include "shell.h"
+#include "heap.h"
+#include "proc.h"
+#include "str.h"
 
 #define MAX_H     1200
 #define BAR_H     24
@@ -42,6 +57,12 @@
 #define DIM_RGB   0x00A0A8B0u
 #define TOP_RGB   0x001E3A5Fu      /* the background, top to bottom */
 #define BOT_RGB   0x00D87A3Eu
+/* The bar's buttons (v0.60.143): [x, x+w) along it. */
+#define BTN_TERM_X 170
+#define BTN_TERM_W (8 * 10)
+#define BTN_LEAVE_X (BTN_TERM_X + BTN_TERM_W + 10)
+#define BTN_LEAVE_W (8 * 7)
+#define BTN_RGB    0x003A3F48u
 
 static uint32_t *row[MAX_H];
 static int W, H;
@@ -116,11 +137,14 @@ static void background(void) {                  /* within the clip */
 #define FOCUS_RGB 0x003A6EA5u
 #define BLUR_RGB  0x005A5F66u
 #define SHUT_RGB  0x00C0504Du
+typedef struct wterm wterm_t;
 typedef struct {
     int used, x, y, w, h;
     char title[32];
     uint32_t body;
     const char *lines[8];
+    wterm_t *term;                      /* a terminal window's cells, or 0 */
+    void *sess;                         /* and the shell session on them */
 } win_t;
 static win_t win[MAX_WIN];
 static int order[MAX_WIN], nwin;                 /* z-order, bottom first */
@@ -128,6 +152,122 @@ static int drag = -1, drag_dx, drag_dy, drag_ox, drag_oy, last_btn;
 
 static void scopy(char *d, const char *s, int n) { int i = 0; for (; s[i] && i < n - 1; i++) d[i] = s[i]; d[i] = '\0'; }
 static int  topmost(void) { return nwin ? order[nwin - 1] : -1; }
+
+/* ---- terminal windows (v0.60.143) --------------------------------------- */
+
+#define TCOLS 80
+#define TROWS 25
+struct wterm {
+    term_t t;                           /* first: a wterm_t is a term_t */
+    uint16_t cell[TROWS * TCOLS];       /* char | attribute << 8, as the console's */
+    int row, col, attr;
+    volatile int closed, changed;
+    int ring[128];
+    volatile uint32_t head, tail;
+};
+static const uint32_t vga_rgb[16] = {
+    0x000000, 0x0000AA, 0x00AA00, 0x00AAAA, 0xAA0000, 0xAA00AA, 0xAA5500, 0xAAAAAA,
+    0x555555, 0x5555FF, 0x55FF55, 0x55FFFF, 0xFF5555, 0xFF55FF, 0xFFFF55, 0xFFFFFF,
+};
+static wterm_t *WT(term_t *t) { return (wterm_t *)t; }
+static void wt_scroll(wterm_t *w) {
+    memmove(w->cell, w->cell + TCOLS, sizeof(w->cell[0]) * TCOLS * (TROWS - 1));
+    for (int c = 0; c < TCOLS; c++) w->cell[(TROWS - 1) * TCOLS + c] = (uint16_t)(' ' | w->attr << 8);
+    w->row = TROWS - 1;
+}
+static void wt_char(wterm_t *w, char c) {
+    if (c == '\n') { w->col = 0; if (++w->row >= TROWS) wt_scroll(w); }
+    else if (c == '\r') w->col = 0;
+    else if (c == '\b') { if (w->col > 0) { w->col--; w->cell[w->row * TCOLS + w->col] = (uint16_t)(' ' | w->attr << 8); } }
+    else if (c == '\t') { do wt_char(w, ' '); while (w->col % 8); }
+    else if ((unsigned char)c >= ' ') {
+        w->cell[w->row * TCOLS + w->col] = (uint16_t)((unsigned char)c | w->attr << 8);
+        if (++w->col >= TCOLS) { w->col = 0; if (++w->row >= TROWS) wt_scroll(w); }
+    }
+    w->changed = 1;
+}
+static void wt_puts(term_t *t, const char *z) { while (*z) wt_char(WT(t), *z++); }
+static void wt_putc(term_t *t, char c) { wt_char(WT(t), c); }
+static void wt_color(term_t *t, int fg, int bg) { WT(t)->attr = (fg & 15) | (bg & 7) << 4; }
+static void wt_cursor(term_t *t, int r, int c) {
+    wterm_t *w = WT(t);
+    w->row = r < 0 ? 0 : r >= TROWS ? TROWS - 1 : r;
+    w->col = c < 0 ? 0 : c >= TCOLS ? TCOLS - 1 : c;
+    w->changed = 1;
+}
+static int  wt_row(term_t *t)  { return WT(t)->row; }
+static int  wt_col(term_t *t)  { return WT(t)->col; }
+static int  wt_cols(term_t *t) { (void)t; return TCOLS; }
+static int  wt_rows(term_t *t) { (void)t; return TROWS; }
+static void wt_clear(term_t *t) {
+    wterm_t *w = WT(t);
+    for (int i = 0; i < TROWS * TCOLS; i++) w->cell[i] = (uint16_t)(' ' | w->attr << 8);
+    w->row = w->col = 0; w->changed = 1;
+}
+static int wt_avail(term_t *t) { wterm_t *w = WT(t); return w->closed || w->head != w->tail; }
+static int wt_getc(term_t *t) {
+    wterm_t *w = WT(t);
+    while (w->head == w->tail) {
+        if (w->closed) return -1;
+        task_sleep(10);
+    }
+    int k = w->ring[w->tail % 128];
+    w->tail++;
+    return k;
+}
+static void wt_flush(term_t *t) { wterm_t *w = WT(t); w->tail = w->head; }
+/* A key for the window: Ctrl-C and Ctrl-Z to its foreground program, as
+ * the keyboard IRQ does for the console and the stream terminal for SSH. */
+static void wt_key(wterm_t *w, int key) {
+    if (key == 0x03) w->t.intr++;
+    if ((key == 0x03 || key == 0x1A) && w->t.fg) {
+        if (key == 0x03) proc_kill(w->t.fg->pid);
+        else             proc_flag_stop(w->t.fg);
+        return;
+    }
+    if (w->head - w->tail >= 128) return;
+    w->ring[w->head % 128] = key;
+    w->head++;
+}
+static wterm_t *wt_new(void) {
+    wterm_t *w = kmalloc(sizeof(wterm_t));
+    if (!w) return 0;
+    memset(w, 0, sizeof(*w));
+    w->t.name = "countertop";
+    w->t.puts = wt_puts; w->t.putc = wt_putc; w->t.set_color = wt_color; w->t.set_cursor = wt_cursor;
+    w->t.row = wt_row; w->t.col = wt_col; w->t.cols = wt_cols; w->t.rows = wt_rows; w->t.clear = wt_clear;
+    w->t.getc = wt_getc; w->t.available = wt_avail; w->t.flush_in = wt_flush;
+    w->t.ctx = w;
+    w->attr = 0x07;
+    wt_clear(&w->t);
+    return w;
+}
+/* The cells into the body at (x,y), within the clip; the cursor when focused. */
+static void draw_cells(wterm_t *w, int x, int y, int focused) {
+    for (int r = 0; r < TROWS; r++) {
+        int py = y + r * 16;
+        if (py + 16 <= cy0 || py >= cy1) continue;
+        for (int c = 0; c < TCOLS; c++) {
+            int px = x + c * 8;
+            if (px + 8 <= cx0 || px >= cx1) continue;
+            uint16_t cell = w->cell[r * TCOLS + c];
+            uint32_t fg = vga_rgb[(cell >> 8) & 15], bg = vga_rgb[(cell >> 12) & 7];
+            const uint8_t *g = font8x16[cell & 0xFF];
+            int cur = focused && !w->closed && r == w->row && c == w->col;
+            for (int j = 0; j < 16; j++) {
+                if (py + j < cy0 || py + j >= cy1) continue;
+                uint32_t *dst = row[py + j];
+                for (int i = 0; i < 8; i++) {
+                    if (px + i < cx0 || px + i >= cx1) continue;
+                    int on = (g[j] >> (7 - i)) & 1;
+                    if (cur && j >= 14) on = 1;                 /* an underline cursor */
+                    dst[px + i] = on ? fg : bg;
+                }
+            }
+        }
+    }
+    dirty(x, y, TCOLS * 8, TROWS * 16);
+}
 
 static void draw_window(int k) {
     win_t *w = &win[k];
@@ -142,6 +282,7 @@ static void draw_window(int k) {
         fill(bx + CLOSE_SZ - 1 - i, by + i, 1, 1, TEXT_RGB);
     }
     int top = w->y + BORDER + TITLE_H;
+    if (w->term) { draw_cells(w->term, w->x + BORDER, top, focused); return; }
     fill(w->x + BORDER, top, w->w - 2 * BORDER, w->h - 2 * BORDER - TITLE_H, w->body);
     for (int i = 0; i < 8 && w->lines[i]; i++) text(w->x + BORDER + 10, top + 8 + i * 18, w->lines[i], 0x00202020u);
 }
@@ -162,7 +303,7 @@ static void repaint_win(int k) { repaint(win[k].x, win[k].y, win[k].w, win[k].h)
 static int open_window(int x, int y, int w, int h, const char *title, uint32_t body, const char *const *lines) {
     for (int k = 0; k < MAX_WIN; k++) if (!win[k].used) {
         win_t *v = &win[k];
-        v->used = 1; v->x = x; v->y = y; v->w = w; v->h = h; v->body = body;
+        v->used = 1; v->x = x; v->y = y; v->w = w; v->h = h; v->body = body; v->term = 0; v->sess = 0;
         scopy(v->title, title, sizeof(v->title));
         for (int i = 0; i < 8; i++) v->lines[i] = lines && lines[i] ? lines[i] : 0;
         int was = topmost();
@@ -173,6 +314,28 @@ static int open_window(int x, int y, int w, int h, const char *title, uint32_t b
     }
     return -1;
 }
+static void close_window(int k);
+static int ct_uid, nterm;
+static int open_terminal(void) {
+    wterm_t *t = wt_new();
+    if (!t) return -1;
+    static const char *const none[] = { 0 };
+    int ww = TCOLS * 8 + 2 * BORDER, wh = TROWS * 16 + 2 * BORDER + TITLE_H;
+    int off = (nterm % 6) * 28;
+    char title[32] = "Terminal ";
+    int n = ++nterm, l = 9;
+    if (n >= 10) title[l++] = (char)('0' + n / 10 % 10);
+    title[l++] = (char)('0' + n % 10); title[l] = '\0';
+    int k = open_window(60 + off, 60 + off, ww, wh, title, 0, none);
+    if (k < 0) { kfree(t); return -1; }
+    win[k].term = t;
+    win[k].sess = shell_session_start(&t->t, ct_uid, 0, "countertop");
+    if (!win[k].sess) { win[k].term = 0; close_window(k); kfree(t); return -1; }
+    klog("[countertop] open %s\n", win[k].title);
+    repaint_win(k);
+    return k;
+}
+
 static void raise_window(int k) {
     int at = -1;
     for (int i = 0; i < nwin; i++) if (order[i] == k) at = i;
@@ -184,7 +347,23 @@ static void raise_window(int k) {
     repaint_win(k);
     klog("[countertop] raise %s\n", win[k].title);
 }
+/* Sessions whose windows have gone, kept until their tasks are done. */
+static struct { wterm_t *term; void *sess; } dying[MAX_WIN];
+static void reap_dying(void) {
+    for (int i = 0; i < MAX_WIN; i++)
+        if (dying[i].sess && shell_session_done(dying[i].sess, 0)) {
+            shell_session_free(dying[i].sess);
+            kfree(dying[i].term);
+            dying[i].sess = 0; dying[i].term = 0;
+        }
+}
 static void close_window(int k) {
+    if (win[k].term) {
+        win[k].term->closed = 1;                       /* its shell's getc gives -1 */
+        shell_session_hangup(win[k].sess);             /* its programs die with it */
+        for (int i = 0; i < MAX_WIN; i++) if (!dying[i].sess) { dying[i].sess = win[k].sess; dying[i].term = win[k].term; break; }
+        win[k].term = 0; win[k].sess = 0;
+    }
     int at = -1;
     for (int i = 0; i < nwin; i++) if (order[i] == k) at = i;
     if (at < 0) return;
@@ -205,9 +384,15 @@ static int window_at(int x, int y) {
 
 /* The mouse's buttons, once a tick: a press picks a window, a drag moves
  * it, the close box closes it. */
+static int leave_asked;
 static void pointer_buttons(int px, int py, int btn) {
     int left = btn & 1, was = last_btn & 1;
     last_btn = btn;
+    if (left && !was && py < BAR_H) {
+        if (px >= BTN_TERM_X && px < BTN_TERM_X + BTN_TERM_W) open_terminal();
+        else if (px >= BTN_LEAVE_X && px < BTN_LEAVE_X + BTN_LEAVE_W) leave_asked = 1;
+        return;
+    }
     if (left && !was) {
         int k = window_at(px, py);
         if (k < 0) return;
@@ -252,10 +437,16 @@ static void bar_clock(void) {
     text(W - 8 * 8 - 8, (BAR_H - 16) / 2, s, TEXT_RGB);
 }
 
+static void button(int x, int w, const char *label) {
+    fill(x, 3, w, BAR_H - 6, BTN_RGB);
+    text(x + 8, (BAR_H - 16) / 2, label, TEXT_RGB);
+}
 static void bar(void) {
     fill(0, 0, W, BAR_H, BAR_RGB);
     text(10, (BAR_H - 16) / 2, "soupOS", TEXT_RGB);
     text(10 + 8 * 7, (BAR_H - 16) / 2, "countertop", DIM_RGB);
+    button(BTN_TERM_X, BTN_TERM_W, "Terminal");
+    button(BTN_LEAVE_X, BTN_LEAVE_W, "Leave");
     clock_sec = -1;
     bar_clock();
 }
@@ -294,7 +485,7 @@ static void release(int pages) {
     for (int i = 0; i < pages; i++) { pmm_free_page(row[i]); row[i] = 0; }
 }
 
-int countertop_run(int (*avail)(void), int (*getch)(void)) {
+int countertop_run(int (*avail)(void), int (*getch)(void), int uid) {
     if (!fb_present()) return -1;
     W = (int)fb_width(); H = (int)fb_height();
     if (H > MAX_H || W > 2048) return -1;
@@ -307,7 +498,7 @@ int countertop_run(int (*avail)(void), int (*getch)(void)) {
     clip_all();
     background();
     bar();
-    nwin = 0; drag = -1; last_btn = 0;
+    nwin = 0; drag = -1; last_btn = 0; leave_asked = 0; ct_uid = uid; nterm = 0;
     for (int k = 0; k < MAX_WIN; k++) win[k].used = 0;
     static const char *const welcome[] = { "Welcome to countertop.", "", "Drag a window by its title bar,",
                                            "click one to bring it forward,", "and the red box closes it.", "",
@@ -331,9 +522,37 @@ int countertop_run(int (*avail)(void), int (*getch)(void)) {
         }
         if (b != last_btn || drag >= 0) pointer_buttons(px, py, b);
         bar_clock();
-        if (avail()) { if (getch() == 27) break; }
+        for (int i = 0; i < nwin; i++) {             /* terminals: drawn again, or gone */
+            int k = order[i];
+            if (!win[k].term) continue;
+            if (shell_session_done(win[k].sess, 0)) { close_window(k); i = -1; continue; }
+            if (win[k].term->changed) { win[k].term->changed = 0; repaint_win(k); }
+        }
+        reap_dying();
+        while (avail()) {                            /* keys: the focused terminal's */
+            int c = getch(), k = topmost();
+            if (k >= 0 && win[k].term) wt_key(win[k].term, c);
+            else if (c == 27) leave_asked = 1;
+        }
+        if (leave_asked) break;
         flush();
         task_sleep(15);
+    }
+    for (int i = 0; i < nwin; i++) {                 /* every session hung up, no window "closed" */
+        win_t *w = &win[order[i]];
+        if (!w->term) continue;
+        w->term->closed = 1;
+        shell_session_hangup(w->sess);
+        for (int d = 0; d < MAX_WIN; d++) if (!dying[d].sess) { dying[d].sess = w->sess; dying[d].term = w->term; break; }
+        w->term = 0; w->sess = 0;
+    }
+    nwin = 0;
+    for (int tries = 0; tries < 300; tries++) {      /* and given 3 s to end */
+        reap_dying();
+        int left = 0;
+        for (int i = 0; i < MAX_WIN; i++) if (dying[i].sess) left++;
+        if (!left) break;
+        task_sleep(10);
     }
     release(H);
     fb_clear(0x00101828);                 /* the console's border, as vga13h leaves it */

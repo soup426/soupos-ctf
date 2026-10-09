@@ -4812,7 +4812,7 @@ static int ct_getch(void) { return t_getc(); }
 static void cmd_countertop(void) {
     if (needs_console("countertop")) return;
     t_flush_in();
-    int r = countertop_run(ct_avail, ct_getch);
+    int r = countertop_run(ct_avail, ct_getch, cur_shell()->uid);
     t_flush_in();
     if (r == -1) { t_puts("  countertop needs the framebuffer (the default image has it).\n"); cur_shell()->last_status = 1; return; }
     if (r == -2) { t_puts("  countertop: no memory for its back buffer.\n"); cur_shell()->last_status = 1; return; }
@@ -10564,8 +10564,11 @@ static void session_task(void *arg) {
         int  pos = 0, len = 0, hb = 0;
         input[0] = saved[0] = '\0';
         t_color(VGA_LIGHT_CYAN, VGA_BLACK);
-        t_printf("\n  soupOS over SSH: a shell of your own. Welcome to the kitchen, %s.\n\n",
-                 users_current_name());
+        if (str_eq(sh->where, "countertop"))           /* a terminal window (v0.60.143) */
+            t_printf("\n  A terminal on the countertop. Welcome to the kitchen, %s.\n\n", users_current_name());
+        else
+            t_printf("\n  soupOS over SSH: a shell of your own. Welcome to the kitchen, %s.\n\n",
+                     users_current_name());
         t_color(VGA_LIGHT_GREY, VGA_BLACK);
         show_motd();
         run_profile();

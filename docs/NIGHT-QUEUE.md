@@ -76,7 +76,7 @@ border and a body. Click to focus and raise, drag the title bar to move,
 the close box to close. Two demo windows to start. Test by screendump after
 injected clicks and drags: raised, moved, closed.
 
-## 4. Terminal windows
+## 4. Terminal windows — DONE v0.60.143
 
 A term_t whose cells are drawn into a window (font8x16), keyboard input to
 the focused window, and a shell task of its own in each (as pass and vault
@@ -113,4 +113,7 @@ Skipped at the user's request: OS work only.
 
 ## Notes left by unattended runs
 
-(none yet)
+- v0.60.143: a terminal window shows stderr, as SSH sessions do, so
+  peek.elf's "LS f SIZE NAME" serial markers (written for ls-test) appear
+  under its listing there. Cosmetic; worth deciding whether peek should
+  write them only when stderr is the serial log.

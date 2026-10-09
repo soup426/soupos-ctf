@@ -6,4 +6,4 @@
  *
  * avail/getch read the keyboard of the shell that started it. 0 when it
  * ended on Esc; -1 with no framebuffer; -2 with no memory for its pages. */
-int countertop_run(int (*avail)(void), int (*getch)(void));
+int countertop_run(int (*avail)(void), int (*getch)(void), int uid);   /* uid: whose terminals (v0.60.143) */
