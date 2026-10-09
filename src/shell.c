@@ -8797,10 +8797,85 @@ static int ends_open(const char *s) {
  * or ends in && || | (v0.60.81): sh asks for more with a > prompt until it closes, and runs
  * the whole, joined as follow joins a script's. Ctrl-C drops it (130);
  * the end of input is sh's "unexpected end of file" (2). */
+/* History expansion (v0.60.93), as bash's at its prompt: !! the last line,
+ * !N leftovers' line N, !-N the Nth back, !word the last starting so, !$
+ * the last line's last word. Not in '...', not \!, not a ! before a blank,
+ * = or ( (so `! cmd` and != stand), not $! or ${!. The line as it comes
+ * out is shown before it runs and is what history keeps. -1: not found
+ * (said so), 0: nothing to do, 1: expanded into out. */
+static int hist_expand(const char *in, char *out, int max) {
+    int o = 0, did = 0, arith = 0; char q = 0;
+    shell_t *me = cur_shell();
+    for (const char *c = in; *c; c++) {
+        /* unlike bash: a ! inside (( )) or $(( )) is arithmetic's, and [! a
+         * glob's, never history */
+        if (!q && c[0] == '(' && c[1] == '(') arith++;
+        else if (!q && arith && c[0] == ')' && c[1] == ')') arith--;
+        if (q == '\'') { if (*c == '\'') q = 0; if (o < max - 1) out[o++] = *c; continue; }
+        if (*c == '\\' && c[1] == '!') { if (o < max - 1) out[o++] = '!'; c++; did = 1; continue; }
+        if (*c == '\'' && !q) { q = '\''; if (o < max - 1) out[o++] = *c; continue; }
+        if (*c == '"') q = q ? 0 : '"';
+        if (*c != '!' || !c[1] || c[1] == ' ' || c[1] == '\t' || c[1] == '=' || c[1] == '(' || arith ||
+            (c > in && c[-1] == '[') ||
+            (c > in && c[-1] == '$') || (c > in + 1 && c[-1] == '{' && c[-2] == '$')) {
+            if (o < max - 1) out[o++] = *c;
+            continue;
+        }
+        const char *src = 0, *end = c + 1;
+        char word[64]; int wl = 0;
+        if (c[1] == '!') { src = hist_get(1); end = c + 2; }
+        else if (c[1] == '$') {                         /* the last word of the last line */
+            const char *h = hist_get(1);
+            if (h) {
+                const char *lw = h, *x = h;
+                while (*x) { while (*x == ' ') x++; if (*x) lw = x; while (*x && *x != ' ') x++; }
+                static char last[INPUT_MAX]; int n = 0;
+                while (lw[n] && lw[n] != ' ' && n < INPUT_MAX - 1) { last[n] = lw[n]; n++; }
+                last[n] = '\0'; src = last;
+            }
+            end = c + 2;
+        } else if (c[1] == '-' || (c[1] >= '0' && c[1] <= '9')) {
+            int neg = c[1] == '-', n = 0; const char *d = c + 1 + neg;
+            while (*d >= '0' && *d <= '9') n = n * 10 + (*d++ - '0');
+            end = d;
+            src = neg ? hist_get(n) : hist_get(me->hist_size - n + 1);
+        } else {
+            const char *d = c + 1;
+            while (*d && *d != ' ' && *d != '\t' && *d != ';' && *d != '|' && *d != '&' && *d != '<' && *d != '>' &&
+                   *d != '(' && *d != ')' && *d != '"' && *d != '\'' && wl < 63) word[wl++] = *d++;
+            word[wl] = '\0';
+            end = d;
+            if (!wl) { if (o < max - 1) out[o++] = *c; continue; }   /* "hi!": a ! with nothing after is itself */
+            for (int k = 1; k <= me->hist_size && !src; k++) {
+                const char *h = hist_get(k);
+                if (h && strncmp(h, word, (uint32_t)wl) == 0) src = h;
+            }
+        }
+        if (!src) {
+            char ev[64]; int n = 0;
+            for (const char *x = c; x < end && n < 63; x++) ev[n++] = *x;
+            ev[n] = '\0';
+            t_printf("  %s: event not found\n", ev);
+            return -1;
+        }
+        for (const char *x = src; *x && o < max - 1; x++) out[o++] = *x;
+        c = end - 1;
+        did = 1;
+    }
+    out[o] = '\0';
+    return did;
+}
+
 static void run_typed(const char *input) {
     char cmd[INPUT_MAX], word[32];
     int quoted = 0;
-    strncpy(cmd, input, sizeof(cmd) - 1); cmd[sizeof(cmd) - 1] = '\0';
+    {
+        char hx[INPUT_MAX];
+        int r = hist_expand(input, hx, sizeof(hx));
+        if (r < 0) { cur_shell()->last_status = 1; return; }
+        if (r > 0) { t_printf("%s\n", hx); strncpy(cmd, hx, sizeof(cmd) - 1); cmd[sizeof(cmd) - 1] = '\0'; }
+        else { strncpy(cmd, input, sizeof(cmd) - 1); cmd[sizeof(cmd) - 1] = '\0'; }
+    }
     int dd = compound_depth(cmd), ll = (int)strlen(cmd);
     while (dd > 0 || ends_open(cmd)) {
         char more[INPUT_MAX];

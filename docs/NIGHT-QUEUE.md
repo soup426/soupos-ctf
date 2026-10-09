@@ -61,7 +61,7 @@ kill, plate, steep and rest take %N (the Nth background job, as orders
 lists them), %% and %+ (the newest), %- (the one before); orders shows
 the numbers. Test with two jobs.
 
-## 5. History expansion at the prompt
+## 5. History expansion at the prompt — DONE v0.60.93
 
 !! (the last line), !N, !-N, !word (the last line starting so), and !$ (the
 last word of the last line), shown before they run, as bash does at its

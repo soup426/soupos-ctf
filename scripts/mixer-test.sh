@@ -17,6 +17,9 @@
 # mixing bug when it was a timing artefact.
 set -uo pipefail
 cd "$(dirname "$0")/.."
+# v0.60.93: after sizzle it waits for the prompt and then 3 s, not a flat
+# 6 s from the keystrokes; under a loaded full check (twice on 2026-10-09)
+# the capture came back silent, and the error now says which way it failed.
 
 LOG=$(mktemp /tmp/soupos-mix.XXXXXX.log)
 MON=$(mktemp -u /tmp/soupos-mix.XXXXXX.sock)
@@ -39,7 +42,7 @@ PID=$!
 sleep 4
 
 python3 scripts/qemu_keys.py "$MON" "headchef" "rosemary" "WAIT:1" \
-    "sizzle DSSAWUP DSPISTOL" "WAIT:6" >/dev/null 2>&1 \
+    "sizzle DSSAWUP DSPISTOL" "UNTIL:@soupOS:" "WAIT:3" >/dev/null 2>&1 \
     || { echo "  FAIL  could not drive QEMU"; exit 1; }
 sleep 1; kill "$PID" 2>/dev/null; PID=""
 
@@ -112,6 +115,7 @@ try:
 except SystemExit:
     raise
 except Exception as e:
-    print(f"  FAIL  could not check the capture: {e}")
+    print(f"  FAIL  could not check the capture: {type(e).__name__} {e}"
+          + (" (no sample ever loud: the sound never played)" if isinstance(e, StopIteration) else ""))
     sys.exit(1)
 PYCHECK

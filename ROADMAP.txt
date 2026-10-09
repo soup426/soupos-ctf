@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.92
+Current version: v0.60.93
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,22 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.93 (2026-10-09)  — HISTORY EXPANSION AT THE PROMPT
+  - A typed line's !! is the last line, !N leftovers' line N, !-N the Nth
+    back, !word the last line starting with word, !$ the last line's last
+    word, as bash's at its prompt; the line that comes out is shown before
+    it runs and is what history keeps. An event not there says so and
+    nothing runs (status 1). Left alone: in '...', \!, a ! before a
+    blank, = or ( (so `! cmd` and != stand), "hi!", $! and ${!. Typed
+    lines only, as bash, not scripts. Unlike bash, a ! inside (( )) or
+    $(( )), or right after [ (a glob's [!a]), is never history: typed tests
+    use both, and bash would take them for events.
+  - mixer-test.sh waits for the prompt after sizzle and then 3 s, not a
+    flat 6 s; it came back silent twice under a loaded full check
+    (docs/flakes/2026-10-09-mixer.log), and its error now names the
+    exception.
+  - scripts/histexp-test.sh types eleven lines.
 
 v0.60.92 (2026-10-09)  — JOB NUMBERS
   - A job put in the background (cook ... &) or set aside (Ctrl-Z) gets a
