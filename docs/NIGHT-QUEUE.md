@@ -80,7 +80,7 @@ score) puts the bar above the effects. Again on v0.60.50's first check:
 music 2987, 8.2 s captured. Measure where the capture starts
 relative to `hum` (the serial log has both) and anchor the windows there.
 
-## 8. Backslash in the shell
+## 8. Backslash in the shell — DONE v0.60.53
 
 Found with item 3: sh treats \ as an escape: outside quotes it makes the
 next character plain (\; \| \$ \  a space), inside "..." it does so for

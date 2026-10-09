@@ -5383,6 +5383,27 @@ static int expand_into(const char *seg, char *ex, int max) {
     if (cur_shell()->uid == 0) strcpy(home, "/");
     else { strcpy(home, "/home/"); strncpy(home + 6, users_name_of(cur_shell()->uid), sizeof(home) - 7); home[sizeof(home) - 1] = '\0'; }
     for (int i = 0; seg[i] && k < max - 1; i++) {
+        /* Backslash (v0.60.53), as sh: outside quotes \X is X as text,
+         * written single-quoted so every reader after takes it so; inside
+         * "..." \\ \" \$ and \` are the character, other pairs stay as
+         * typed; inside '...' it is just a backslash. */
+        if (seg[i] == '\\' && seg[i + 1] && sq != '\'') {
+            char c = seg[i + 1];
+            if (!sq) {
+                const char *rep = c == '\'' ? "\"'\"" : 0;
+                char one[4] = { '\'', c, '\'', 0 };
+                if (!rep) rep = one;
+                int n = (int)strlen(rep);
+                if (k + n >= max - 1) { cut = 1; break; }
+                memcpy(ex + k, rep, (uint32_t)n); k += n;
+                i++;
+                continue;
+            }
+            if (c == '\\' || c == '$' || c == '`') { ex[k++] = c; i++; continue; }
+            if (c == '"') { if (!put_lit(ex, &k, max, '"', 1)) { cut = 1; break; } i++; continue; }
+            ex[k++] = seg[i];                        /* \n inside "..." stays \n */
+            continue;
+        }
         if (seg[i] == '\'' && sq != '"') sq = sq ? 0 : '\'';
         else if (seg[i] == '"' && sq != '\'') sq = sq ? 0 : '"';
         char prev = i ? seg[i - 1] : ' ';
@@ -5638,7 +5659,8 @@ static void run_line(const char *line);
 static const char *pipe_bar(const char *seg) {
     char q = 0; int dep = 0;
     for (const char *s = seg; *s; s++) {
-        if (q) { if (*s == q) q = 0; continue; }
+        if (q) { if (q == '"' && *s == '\\' && s[1]) { s++; continue; } if (*s == q) q = 0; continue; }
+        if (*s == '\\' && s[1]) { s++; continue; }           /* \| is not a pipe (v0.60.53) */
         if (*s == '\'' || *s == '"') { q = *s; continue; }
         if (s[0] == '$' && s[1] == '(') { dep++; s++; continue; }
         if (dep && *s == '(') { dep++; continue; }
@@ -5926,6 +5948,7 @@ static char *fndef_end(char *t) {
 static char *pattern_close(char *t) {
     char q = 0;
     for (; *t; t++) {
+        if (!q && *t == '\\' && t[1]) { t++; continue; }    /* \) (v0.60.53) */
         if (q) { if (*t == q) q = 0; }
         else if (*t == '\'' || *t == '"') q = *t;
         else if (*t == ')') return t;
@@ -5985,7 +6008,12 @@ static int split_segs(char *buf, lseg_t *sg, int max) {
         char *defend = fndef_end(start);          /* NAME() { ... }: one segment (v0.60.22) */
         if (defend) s = defend;
         while (*s) {
-            if (inq) { if (*s == inq) inq = 0; s++; continue; }
+            if (inq) {
+                if (inq == '"' && *s == '\\' && s[1]) { s += 2; continue; }   /* \" inside "..." (v0.60.53) */
+                if (*s == inq) inq = 0;
+                s++; continue;
+            }
+            if (*s == '\\' && s[1]) { s += 2; continue; }      /* \; \| \' are not syntax (v0.60.53) */
             if (*s == '\'' || *s == '"') { inq = *s; s++; continue; }
             if (s[0] == '$' && s[1] == '(') { pdepth++; s += 2; continue; }
             if (s[0] == '(' && s[1] == '(') { pdepth += 2; s += 2; continue; }   /* (( ... )) (v0.60.50) */

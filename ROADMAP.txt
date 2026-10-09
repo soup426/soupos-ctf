@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.52
+Current version: v0.60.53
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,19 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.53 (2026-10-08)  — BACKSLASH
+  - \ is sh's escape now: outside quotes \X is X as text (\  \$ \; \| \'
+    and so on), inside "..." \\ \" \$ and \` are the character and other
+    pairs stay as typed (so "\n" reaches printf as \n), inside '...' it is
+    just a backslash. It gave \ no meaning anywhere before, so "a\\c"
+    stayed two backslashes and \; still split the line.
+  - expand_seg writes each escaped character in the quoting every reader
+    after it already understands (single quotes, or put_lit's form for a
+    " inside "..."), so uargv, slurp, first_word and unquote need nothing
+    new; split_segs, pipe_bar and the case-pattern scan skip escaped
+    characters, since they read the line before it is expanded.
+  - scripts/backslash-test.sh compares thirteen lines with bash.
 
 v0.60.52 (2026-10-08)  — HERE-DOCUMENTS IN SCRIPTS
   - In a follow script, `cook prog <<WORD` takes the lines up to one that
