@@ -69,7 +69,7 @@ out only where something changed. Measure first where 3 MB comes from (the
 heap, or pages of its own). Test by screendump: the bar, the background,
 the pointer where it was moved to, and the console intact after Esc.
 
-## 3. Windows
+## 3. Windows — DONE v0.60.142
 
 A window list in z-order: each with a title bar (its name, a close box), a
 border and a body. Click to focus and raise, drag the title bar to move,

@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.141
+Current version: v0.60.142
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,20 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.142 (2026-10-09)  — COUNTERTOP: WINDOWS (STEP 3)
+  - Windows on the desktop, in z-order: a border, a title bar (the name,
+    blue when focused and grey when not, a red close box) and a body with
+    lines of text. A press raises and focuses the one under the pointer;
+    the close box closes it; the title bar drags it until the button
+    comes up (kept below the bar and with a title left on screen).
+  - Nothing keeps what a window covers: a changed rectangle is repainted
+    from scratch, the background then every window bottom to top, clipped
+    to it, so overlap is right by construction.
+  - Two windows to start, Welcome (how to use it) and Pantry over it.
+  - scripts/ctwin-test.sh: from screendumps, Pantry on top, a click raising
+    Welcome, a 100,80 drag, the close box, and the background back where
+    they were; the log's raise, moved and close lines.
 
 v0.60.141 (2026-10-09)  — COUNTERTOP: THE DESKTOP'S SURFACE (STEP 2)
   - `countertop` (src/countertop.c) takes the framebuffer as mode 13h
