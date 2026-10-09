@@ -5242,7 +5242,7 @@ static void build_env(char *out, int max) {
  * zero sets arith_err: the command is not run and its status is 1. */
 static int arith_err;
 static const char *ap;               /* where the parser is */
-static long a_eq(void);
+static long long a_eq(void);
 static void a_sp(void) { while (*ap == ' ') ap++; }
 /* $RANDOM (v0.60.58): 0..32767, new at each expansion, from the kernel's
  * entropy pool. Always a new one: unlike bash, assigning RANDOM does not
@@ -5258,12 +5258,12 @@ static const char *random_text(void) {
     out[n] = '\0';
     return out;
 }
-static long a_var(const char *name) {
+static long long a_var(const char *name) {
     shell_t *me = cur_shell();
-    if (str_eq(name, "RANDOM")) { const char *x = random_text(); long n = 0; while (*x) n = n * 10 + (*x++ - '0'); return n; }
+    if (str_eq(name, "RANDOM")) { const char *x = random_text(); long long n = 0; while (*x) n = n * 10 + (*x++ - '0'); return n; }
     for (int v = 0; v < me->nvars; v++)
         if (str_eq(me->vname[v], name)) {
-            const char *x = me->vval[v]; long n = 0; int neg = 0;
+            const char *x = me->vval[v]; long long n = 0; int neg = 0;
             while (*x == ' ') x++;
             if (*x == '-') { neg = 1; x++; }
             while (*x >= '0' && *x <= '9') n = n * 10 + (*x++ - '0');
@@ -5277,10 +5277,10 @@ static void set_var(const char *name, const char *value);
  * side of && or || that does not count, the arm of ?: not taken. Nothing
  * is assigned and dividing by zero is no error, as in sh. */
 static int a_skip;
-static void a_set(const char *name, long v) {
+static void a_set(const char *name, long long v) {
     if (a_skip) return;
     char d[24]; int k = 0, n = 0; char out[24];
-    unsigned long u = v < 0 ? (unsigned long)(-v) : (unsigned long)v;
+    unsigned long long u = v < 0 ? 0ULL - (unsigned long long)v : (unsigned long long)v;
     do { d[k++] = (char)('0' + u % 10); u /= 10; } while (u);
     if (v < 0) out[n++] = '-';
     while (k) out[n++] = d[--k];
@@ -5296,8 +5296,43 @@ static int a_name(char *name) {         /* an identifier at ap, read; 0 if none 
     name[n] = '\0';
     return 1;
 }
-static long a_comma(void);
-static long a_prim(void) {
+/* A number (v0.60.71), as bash's: 0x1f hex, 017 octal, BASE#DIGITS for a
+ * base from 2 to 64 (digits 0-9, then a-z, A-Z, @, _; below 37 the case of
+ * a letter does not matter), else decimal. A digit too big for its base
+ * is an error. */
+static int a_digit(char c, int base) {
+    int d = c >= '0' && c <= '9' ? c - '0' :
+            c >= 'a' && c <= 'z' ? c - 'a' + 10 :
+            c >= 'A' && c <= 'Z' ? (base <= 36 ? c - 'A' + 10 : c - 'A' + 36) :
+            c == '@' ? 62 : c == '_' ? 63 : -1;
+    return d;
+}
+static int a_word_char(char c) {
+    return (c >= '0' && c <= '9') || (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c == '@' || c == '_';
+}
+static long long a_number(void) {
+    int base = 10;
+    if (ap[0] == '0' && (ap[1] == 'x' || ap[1] == 'X')) { base = 16; ap += 2; }
+    else {
+        const char *q = ap; long long b = 0;
+        while (*q >= '0' && *q <= '9') { b = b * 10 + (*q - '0'); q++; }
+        if (*q == '#') {
+            if (b < 2 || b > 64) { arith_err = 1; return 0; }
+            base = (int)b; ap = q + 1;
+        } else if (ap[0] == '0' && q - ap > 1) base = 8;
+    }
+    long long v = 0; int any = 0;
+    while (a_word_char(*ap)) {
+        int d = a_digit(*ap, base);
+        if (d < 0 || d >= base) { arith_err = 1; return 0; }   /* "value too great for base" */
+        v = (long long)((unsigned long long)v * (unsigned long long)base + (unsigned long long)d);
+        ap++; any = 1;
+    }
+    if (!any && base != 8) { arith_err = 1; return 0; }
+    return v;
+}
+static long long a_comma(void);
+static long long a_prim(void) {
     a_sp();
     if ((ap[0] == '+' && ap[1] == '+') || (ap[0] == '-' && ap[1] == '-')) {   /* ++n, --n */
         int up = ap[0] == '+';
@@ -5305,20 +5340,20 @@ static long a_prim(void) {
         if (*ap == '$') ap++;
         char name[16];
         if (!a_name(name)) { arith_err = 1; return 0; }
-        long v = a_var(name) + (up ? 1 : -1);
+        long long v = a_var(name) + (up ? 1 : -1);
         a_set(name, v);
         return v;
     }
     if (*ap == '!') { ap++; return !a_prim(); }
     if (*ap == '~') { ap++; return ~a_prim(); }               /* (v0.60.66) */
-    if (*ap == '(') { ap++; long v = a_comma(); a_sp(); if (*ap == ')') ap++; else arith_err = 1; return v; }   /* a whole expression (v0.60.63; was a_eq: no && || = ?:) */
+    if (*ap == '(') { ap++; long long v = a_comma(); a_sp(); if (*ap == ')') ap++; else arith_err = 1; return v; }   /* a whole expression (v0.60.63; was a_eq: no && || = ?:) */
     if (*ap == '-') { ap++; return -a_prim(); }
     if (*ap == '+') { ap++; return a_prim(); }
-    if (*ap >= '0' && *ap <= '9') { long v = 0; while (*ap >= '0' && *ap <= '9') v = v * 10 + (*ap++ - '0'); return v; }
+    if (*ap >= '0' && *ap <= '9') return a_number();
     if (*ap == '$') ap++;
     char name[16];
     if (a_name(name)) {
-        long v = a_var(name);
+        long long v = a_var(name);
         const char *save = ap;
         a_sp();
         if ((ap[0] == '+' && ap[1] == '+') || (ap[0] == '-' && ap[1] == '-')) {   /* n++, n-- */
@@ -5334,48 +5369,48 @@ static long a_prim(void) {
 }
 /* a ** b (v0.60.66): right to left, below the unary signs as in bash, so
  * -2**2 is 4; a negative power is an error. */
-static long a_pow(void) {
-    long v = a_prim();
+static long long a_pow(void) {
+    long long v = a_prim();
     a_sp();
     if (ap[0] == '*' && ap[1] == '*') {
         ap += 2;
-        long r = a_pow();
+        long long r = a_pow();
         if (r < 0) { if (!a_skip) arith_err = 1; return 0; }
-        long out = 1;
-        while (r-- > 0) { out *= v; if (out == 0 || v == 1 || v == 0) break; }
+        long long out = 1, b = v;                     /* square and multiply (v0.60.71) */
+        while (r > 0) { if (r & 1) out *= b; b *= b; r >>= 1; }
         return out;
     }
     return v;
 }
-static long a_mul(void) {
-    long v = a_pow();
+static long long a_mul(void) {
+    long long v = a_pow();
     for (;;) {
         a_sp();
         char o = *ap;
         if (o != '*' && o != '/' && o != '%') return v;
         ap++;
-        long r = a_pow();
+        long long r = a_pow();
         if (o == '*') v *= r;
         else if (r == 0) { if (a_skip) r = 1; else { arith_err = 2; return 0; } }
         else if (o == '/') v /= r;
         else v %= r;
     }
 }
-static long a_add(void) {
-    long v = a_mul();
+static long long a_add(void) {
+    long long v = a_mul();
     for (;;) { a_sp(); if (*ap == '+') { ap++; v += a_mul(); } else if (*ap == '-') { ap++; v -= a_mul(); } else return v; }
 }
-static long a_shift(void) {               /* << >> (v0.60.66) */
-    long v = a_add();
+static long long a_shift(void) {               /* << >> (v0.60.66) */
+    long long v = a_add();
     for (;;) {
         a_sp();
-        if (ap[0] == '<' && ap[1] == '<') { ap += 2; v = (long)((unsigned long)v << (a_add() & 31)); }
-        else if (ap[0] == '>' && ap[1] == '>') { ap += 2; v = v >> (a_add() & 31); }
+        if (ap[0] == '<' && ap[1] == '<') { ap += 2; v = (long long)((unsigned long long)v << (a_add() & 63)); }
+        else if (ap[0] == '>' && ap[1] == '>') { ap += 2; v = v >> (a_add() & 63); }
         else return v;
     }
 }
-static long a_rel(void) {
-    long v = a_shift();
+static long long a_rel(void) {
+    long long v = a_shift();
     for (;;) {
         a_sp();
         if (ap[0] == '<' && ap[1] == '=') { ap += 2; v = v <= a_shift(); }
@@ -5385,8 +5420,8 @@ static long a_rel(void) {
         else return v;
     }
 }
-static long a_eq(void) {
-    long v = a_rel();
+static long long a_eq(void) {
+    long long v = a_rel();
     for (;;) {
         a_sp();
         if (ap[0] == '=' && ap[1] == '=') { ap += 2; v = v == a_rel(); }
@@ -5394,63 +5429,63 @@ static long a_eq(void) {
         else return v;
     }
 }
-static long a_band(void) {               /* & ^ | (v0.60.66), each below the last */
-    long v = a_eq();
+static long long a_band(void) {               /* & ^ | (v0.60.66), each below the last */
+    long long v = a_eq();
     for (;;) { a_sp(); if (ap[0] == '&' && ap[1] != '&' && ap[1] != '=') { ap++; v &= a_eq(); } else return v; }
 }
-static long a_bxor(void) {
-    long v = a_band();
+static long long a_bxor(void) {
+    long long v = a_band();
     for (;;) { a_sp(); if (ap[0] == '^' && ap[1] != '=') { ap++; v ^= a_band(); } else return v; }
 }
-static long a_bor(void) {
-    long v = a_bxor();
+static long long a_bor(void) {
+    long long v = a_bxor();
     for (;;) { a_sp(); if (ap[0] == '|' && ap[1] != '|' && ap[1] != '=') { ap++; v |= a_bxor(); } else return v; }
 }
-static long a_and(void) {                /* the right side only if the left is true */
-    long v = a_bor();
+static long long a_and(void) {                /* the right side only if the left is true */
+    long long v = a_bor();
     for (;;) {
         a_sp();
         if (ap[0] == '&' && ap[1] == '&') {
             ap += 2;
             if (!v) a_skip++;
-            long r = a_bor();
+            long long r = a_bor();
             if (!v) a_skip--;
             v = v && r;
         } else return v;
     }
 }
-static long a_or(void) {                 /* the right side only if the left is false */
-    long v = a_and();
+static long long a_or(void) {                 /* the right side only if the left is false */
+    long long v = a_and();
     for (;;) {
         a_sp();
         if (ap[0] == '|' && ap[1] == '|') {
             ap += 2;
             if (v) a_skip++;
-            long r = a_and();
+            long long r = a_and();
             if (v) a_skip--;
             v = v || r;
         } else return v;
     }
 }
-static long a_assign(void);
-static long a_cond(void) {               /* c ? a : b, one arm done (v0.60.63) */
-    long c = a_or();
+static long long a_assign(void);
+static long long a_cond(void) {               /* c ? a : b, one arm done (v0.60.63) */
+    long long c = a_or();
     a_sp();
     if (*ap != '?') return c;
     ap++;
     if (!c) a_skip++;
-    long x = a_assign();
+    long long x = a_assign();
     if (!c) a_skip--;
     a_sp();
     if (*ap != ':') { arith_err = 1; return 0; }
     ap++;
     if (c) a_skip++;
-    long y = a_cond();
+    long long y = a_cond();
     if (c) a_skip--;
     return c ? x : y;
 }
 /* NAME = expr, NAME op= expr (right to left), else a plain expression. */
-static long a_assign(void) {
+static long long a_assign(void) {
     a_sp();
     const char *save = ap;
     char name[16];
@@ -5464,11 +5499,11 @@ static long a_assign(void) {
         else if (ap[0] == '<' && ap[1] == '<' && ap[2] == '=') { op = 'L'; ap += 3; }   /* <<= >>= (v0.60.66) */
         else if (ap[0] == '>' && ap[1] == '>' && ap[2] == '=') { op = 'R'; ap += 3; }
         if (op) {
-            long r = a_assign(), v = a_var(name);
+            long long r = a_assign(), v = a_var(name);
             if ((op == '/' || op == '%') && r == 0) { if (a_skip) r = 1; else { arith_err = 2; return 0; } }
             v = op == '=' ? r : op == '+' ? v + r : op == '-' ? v - r : op == '*' ? v * r : op == '/' ? v / r :
                 op == '%' ? v % r : op == '&' ? (v & r) : op == '|' ? (v | r) : op == '^' ? (v ^ r) :
-                op == 'L' ? (long)((unsigned long)v << (r & 31)) : v >> (r & 31);
+                op == 'L' ? (long long)((unsigned long long)v << (r & 63)) : v >> (r & 63);
             a_set(name, v);
             return v;
         }
@@ -5476,14 +5511,14 @@ static long a_assign(void) {
     ap = save;
     return a_cond();
 }
-static long a_comma(void) {               /* a, b: both, the value b's */
-    long v = a_assign();
+static long long a_comma(void) {               /* a, b: both, the value b's */
+    long long v = a_assign();
     for (;;) { a_sp(); if (*ap == ',') { ap++; v = a_assign(); } else return v; }
 }
-static long arith(const char *expr) {
+static long long arith(const char *expr) {
     ap = expr;
     a_skip = 0;
-    long v = a_comma();
+    long long v = a_comma();
     a_sp();
     if (*ap && !arith_err) arith_err = 1;            /* something left over */
     return v;
@@ -5664,8 +5699,8 @@ static int expand_into(const char *seg, char *ex, int max) {
             if (!seg[j]) { ex[k++] = seg[i]; continue; }       /* no )): leave it */
             char expr[INPUT_MAX]; int el = j - (i + 3);
             memcpy(expr, seg + i + 3, (uint32_t)el); expr[el] = '\0';
-            long v = arith(expr);
-            char d[24]; int nd = 0; unsigned long u = v < 0 ? (unsigned long)(-v) : (unsigned long)v;
+            long long v = arith(expr);                     /* 64 bits, as bash (v0.60.71) */
+            char d[24]; int nd = 0; unsigned long long u = v < 0 ? 0ULL - (unsigned long long)v : (unsigned long long)v;
             do { d[nd++] = (char)('0' + u % 10); u /= 10; } while (u);
             if (v < 0) d[nd++] = '-';
             while (nd && k < max - 1) ex[k++] = d[--nd];
@@ -5832,7 +5867,7 @@ static int expand_into(const char *seg, char *ex, int max) {
                     else if (seg[c] == ':' && !dep) { at = c; break; }
                 }
                 const char *v = val ? val : "";
-                long L = (long)strlen(v), off, len = L;
+                long long L = (long long)strlen(v), off, len = L;
                 int ol = at - wstart < INPUT_MAX - 1 ? at - wstart : INPUT_MAX - 1;
                 memcpy(raw, seg + wstart, (uint32_t)ol); raw[ol] = '\0';
                 if (expand_into(raw, ox, INPUT_MAX)) cut = 1;
@@ -5848,7 +5883,7 @@ static int expand_into(const char *seg, char *ex, int max) {
                     if (len < 0) len = 0;
                 }
                 if (off + len > L) len = L - off;
-                for (long c = off; c < off + len; c++) if (!put_lit(ex, &k, max, v[c], mode)) { cut = 1; break; }
+                for (long long c = off; c < off + len; c++) if (!put_lit(ex, &k, max, v[c], mode)) { cut = 1; break; }
             } else if (op == 'H' || op == 'h' || op == 'T' || op == 't') {
                 char word[INPUT_MAX], pat[INPUT_MAX], part[INPUT_MAX];
                 int wl = j - wstart < INPUT_MAX - 1 ? j - wstart : INPUT_MAX - 1;
@@ -6261,7 +6296,7 @@ static void run_one(const char *seg) {
             int xl = el - 4 < INPUT_MAX - 1 ? el - 4 : INPUT_MAX - 1;
             memcpy(expr, e + 2, (uint32_t)xl); expr[xl] = '\0';
             arith_err = 0;
-            long v = arith(expr);
+            long long v = arith(expr);
             if (arith_err) {
                 t_puts(arith_err == 2 ? "  arithmetic: division by zero\n" : "  arithmetic: not an expression\n");
                 cur_shell()->last_status = 1;
@@ -7139,10 +7174,10 @@ static void heredoc_expand(const char *in, char *out, int max) {
                 memcpy(inner, in + i + 3, (uint32_t)il); inner[il] = '\0';
                 heredoc_expand(inner, iex, sizeof(iex));
                 arith_err = 0;
-                long v = arith(iex);
+                long long v = arith(iex);
                 if (!arith_err) {
                     char d[24]; int nd = 0, m = 0;
-                    unsigned long u = v < 0 ? (unsigned long)(-v) : (unsigned long)v;
+                    unsigned long long u = v < 0 ? 0ULL - (unsigned long long)v : (unsigned long long)v;
                     do { d[nd++] = (char)('0' + u % 10); u /= 10; } while (u);
                     if (v < 0) num[m++] = '-';
                     while (nd) num[m++] = d[--nd];

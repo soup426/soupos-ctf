@@ -46,7 +46,7 @@ character. Compare with bash.
 heredoc_expand knows $NAME, ${NAME}, $1, $? and $(( )), not $( ).
 Compare with bash, in a script and at the prompt.
 
-## 3. 64-bit arithmetic
+## 3. 64-bit arithmetic — DONE v0.60.71 (with 0x, 017 and BASE#N)
 
 $(( )) is 32 bits (a long on i386); bash's is 64. Make it 64, which needs
 64-bit division and remainder in the kernel (libgcc's __divdi3 and

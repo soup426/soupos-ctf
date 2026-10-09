@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.70
+Current version: v0.60.71
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,17 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.71 (2026-10-08)  — 64-BIT ARITHMETIC, AND BASH'S NUMBERS
+  - $(( )), (( )), ${v:off:len} and here-documents' $(( )) are 64 bits
+    now, as bash's: they wrap at 2**63 as bash's do; / and % come from
+    libgcc (__divdi3, __moddi3), which the kernel already linked; shifts
+    take their count mod 64; ** squares and multiplies, so 3**1000000000
+    is done at once. The 32-bit gap v0.60.66 wrote down is closed.
+  - Numbers as bash reads them: 0x1f hex, 017 octal, BASE#DIGITS for a
+    base from 2 to 64; a digit too big for its base (08, 2#12) is an
+    error.
+  - scripts/wide-test.sh compares twelve lines with bash.
 
 v0.60.70 (2026-10-08)  — $( ) IN HERE-DOCUMENTS
   - A here-document's $(CMD) is CMD's output, its newlines kept (but the
