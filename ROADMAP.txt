@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.129
+Current version: v0.60.130
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,19 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.130 (2026-10-09)  — GLOBS IN BUILTINS' WORDS
+  - Measured: only a program's words (cook) and a for loop's were ever
+    globbed; `slurp /SP*.ELF`, `pour /SPOT*` and a bare $x holding a
+    pattern all got the pattern itself. (Queue 46 item 1 took this for a
+    big glob that did not fit the line; it was every glob in a builtin.)
+  - Now a builtin's or a function's unquoted words with * ? or [...] are
+    their matches, sorted, a name with a blank kept one word; no match
+    leaves the word; NAME=value words and cook lines are left to what
+    they were; [ and ] alone are not globs. A result too long for the
+    line is said and not run (status 1), never the pattern instead.
+  - scripts/bglob-test.sh compares 16 lines with bash, and the 302-name
+    glob's refusal.
 
 v0.60.129 (2026-10-09)  — CULL -U AND -I
   - cull.elf -u prints only the lines that are not repeated, -i compares

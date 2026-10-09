@@ -7978,7 +7978,76 @@ static __attribute__((noinline)) void cmd_runner(const char *args) {
 }
 
 /* The rest of running one command, once expanded. */
+/* Globs in a builtin's or a function's words (v0.60.130), as sh expands
+ * them for every command: until now only a program's (cook) and a for
+ * loop's were, and `slurp /SP*.ELF` printed the pattern. Each unquoted word
+ * with * ? or a [...] becomes its matches, sorted, written quoted when they
+ * hold a blank; no match leaves it as it is. Not NAME=value words, nor a
+ * cook line (which globs its own). 0, or -1 if the result does not fit
+ * the line, which is then said and not run (a 302-name glob printed the
+ * pattern before, as if nothing had matched). */
+typedef struct { char *out; int o, max, cut; const char *tok; } bglob_t;
+static void bglob_emit(void *ctx, const char *w) {
+    bglob_t *g = (bglob_t *)ctx;
+    int raw = w == g->tok || str_eq(w, g->tok);
+    int quote = 0;
+    if (!raw) for (const char *c = w; *c; c++) if (*c == ' ' || *c == '\t' || *c == '\'' || *c == '"' || *c == '|' || *c == '&' || *c == ';' || *c == '<' || *c == '>' || *c == '$') quote = 1;
+    int need = (int)strlen(w) + 1 + (quote ? 2 : 0);
+    for (const char *c = w; quote && *c; c++) if (*c == '\'') need += 3;
+    if (g->o + need >= g->max - 1) { g->cut = 1; return; }
+    if (g->o) g->out[g->o++] = ' ';
+    if (quote) g->out[g->o++] = '\'';
+    for (const char *c = w; *c; c++) {
+        if (quote && *c == '\'') { g->out[g->o++] = '\''; g->out[g->o++] = '"'; g->out[g->o++] = '\''; g->out[g->o++] = '"'; }
+        g->out[g->o++] = *c;
+    }
+    if (quote) g->out[g->o++] = '\'';
+}
+static __attribute__((noinline)) int builtin_globs(char *ex) {
+    const char *h = ex; while (*h == ' ') h++;
+    if (is_kw(h, "cook")) return 0;
+    int any = 0;                                    /* nothing to do: no listing at all */
+    for (const char *c = h; *c; c++) if (*c == '*' || *c == '?' || *c == '[') { any = 1; break; }
+    if (!any) return 0;
+    char *out = kmalloc(INPUT_MAX), *w = kmalloc(INPUT_MAX);
+    if (!out || !w) { if (out) kfree(out); if (w) kfree(w); return 0; }
+    bglob_t g = { out, 0, INPUT_MAX, 0, 0 };
+    const char *c = h;
+    for (;;) {
+        while (*c == ' ' || *c == '\t') c++;
+        if (!*c) break;
+        int wl = 0; char q = 0;
+        while (*c && (q || (*c != ' ' && *c != '\t'))) {
+            if (q) { if (*c == q) q = 0; }
+            else if (*c == '\'' || *c == '"') q = *c;
+            if (wl < INPUT_MAX - 1) w[wl++] = *c;
+            c++;
+        }
+        w[wl] = '\0';
+        int globby = 0, nl = fn_name_len(w);
+        for (int i = 0; w[i]; i++) {
+            if (w[i] == '*' || w[i] == '?') globby = 1;
+            else if (w[i] == '[') for (int j = i + 1; w[j]; j++) if (w[j] == ']') { globby = 1; break; }
+        }
+        if (nl && w[nl] == '=') globby = 0;          /* NAME=value: not globbed, as sh's */
+        g.tok = w;
+        if (globby) glob_expand(w, bglob_emit, &g);
+        else bglob_emit(&g, w);
+        if (g.cut) break;
+    }
+    out[g.o] = '\0';
+    int cut = g.cut;
+    if (!cut) strcpy(ex, out);
+    kfree(out); kfree(w);
+    return cut ? -1 : 0;
+}
+
 static void run_ex(char *ex) {
+    if (builtin_globs(ex) < 0) {
+        t_printf("  The command is too long once expanded (%d bytes at most); not run.\n", INPUT_MAX - 1);
+        cur_shell()->last_status = 1;
+        return;
+    }
     if (cur_shell()->xtrace) xtrace_line(ex);
     {
         const char *h = ex; while (*h == ' ') h++;

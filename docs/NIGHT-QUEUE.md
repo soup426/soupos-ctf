@@ -41,7 +41,7 @@ counterparts (each checked first).
 
 ---
 
-## 1. A builtin's glob too big for the line
+## 1. A builtin's glob too big for the line — DONE v0.60.130 (builtins did not glob at all)
 
 Found in v0.60.125: `slurp /big/*` over 302 names prints `/big/*`, the
 pattern as typed, because the words do not fit the 256-byte line. bash
