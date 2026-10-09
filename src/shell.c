@@ -878,6 +878,7 @@ static void cmd_menu(void) {
         {0, "    return [N]         - leave a function"},
         {0, "    stash NAME[=value] - a function's own variable (sh's local)"},
         {0, "    shift [N]          - drop the first N arguments ($2 becomes $1)"},
+        {0, "    inspect [-t] NAME  - what NAME is: keyword, function, builtin or program"},
         {0, "    ! command          - run it and turn its status round"},
         {0, "    exit [N]           - leave a script (at the prompt, clockout)"},
         {0, "    kill <id>          - stop a background task"},
@@ -3137,6 +3138,7 @@ static void cmd_break(const char *args, int is_continue);   /* with the loops (v
 static void cmd_return(const char *args, int is_exit);     /* beside it (v0.60.47) */
 static void cmd_stash(const char *args);                  /* beside it (v0.60.56) */
 static void cmd_shift(const char *args);                  /* beside it (v0.60.59) */
+static void cmd_inspect(const char *args);                /* beside it (v0.60.72) */
 static int status_before;
 static void cmd_read(const char *args);  /* beside run_line (v0.60.4) */
 
@@ -4643,6 +4645,8 @@ static const char *const cmd_names[] = {
     "takeout", "bgclock", "yieldbg", "spinbg", "sleeptest", "vfstest",
     "dmesg", "pwd", "cd", "mkbowl", "rmbowl", "bowltest",
     "whoami", "roster", "clockout", "hire", "fire", "perms", "secret",
+    "break", "continue", "return", "exit", "inspect",
+    "preempttest", "vmtest", "vgastress", "fatstress",
 };
 #define CMD_COUNT  (int)(sizeof(cmd_names) / sizeof(cmd_names[0]))
 
@@ -4883,6 +4887,7 @@ static void dispatch(const char *buf) {
     else if (str_eq(p, "rest") || str_startswith(p, "rest ")) cmd_rest(p + 4);
     else if (str_eq(p, "stash") || str_startswith(p, "stash ")) cmd_stash(p + 5);
     else if (str_eq(p, "shift") || str_startswith(p, "shift ")) cmd_shift(p + 5);
+    else if (str_eq(p, "inspect") || str_startswith(p, "inspect ")) cmd_inspect(p + 7);
     else if (str_eq(p, "break") || str_startswith(p, "break ")) cmd_break(p + 5, 0);
     else if (str_eq(p, "return") || str_startswith(p, "return ")) cmd_return(p + 6, 0);
     else if (str_eq(p, "exit") || str_startswith(p, "exit ")) cmd_return(p + 4, 1);
@@ -6637,6 +6642,51 @@ static int loop_after_body(shell_t *me) {
     }
     return 0;
 }
+/* inspect [-t] NAME... (v0.60.72): sh's type, under the health inspector's
+ * name. What each NAME is, in sh's order: a keyword, a function (and its
+ * body), a builtin, or a program (and where it is, found as cook finds
+ * it); -t says only which, as type -t. A NAME that is none of them is
+ * not found, and the status is 1. */
+static void cmd_inspect(const char *args) {
+    static const char *const kws[] = { "if", "then", "else", "fi", "for", "while", "until",
+                                       "do", "done", "case", "esac", "in", "!" };
+    shell_t *me = cur_shell();
+    int terse = 0, missing = 0, any = 0;
+    const char *a = args;
+    while (*a) {
+        char w[FAT_PATH_MAX];
+        a = first_word(a, w, sizeof(w));
+        if (!w[0]) break;
+        if (!any && !terse && str_eq(w, "-t")) { terse = 1; continue; }
+        any = 1;
+        int kw = 0, fn = -1, bi = 0;
+        for (unsigned k = 0; k < sizeof(kws) / sizeof(kws[0]); k++) if (str_eq(w, kws[k])) kw = 1;
+        for (int f = 0; f < me->nfuncs; f++) if (str_eq(me->fname[f], w)) fn = f;
+        for (unsigned k = 0; k < sizeof(cmd_names) / sizeof(cmd_names[0]); k++) if (str_eq(w, cmd_names[k])) bi = 1;
+        if (kw) { if (terse) t_puts("keyword\n"); else t_printf("%s is a shell keyword\n", w); continue; }
+        if (fn >= 0) {
+            if (terse) t_puts("function\n");
+            else t_printf("%s is a function\n%s() { %s }\n", w, w, me->fbody[fn]);
+            continue;
+        }
+        if (bi) { if (terse) t_puts("builtin\n"); else t_printf("%s is a shell builtin\n", w); continue; }
+        char path[FAT_PATH_MAX];
+        resolve_path(w, path);
+        if ((!fat_exists(path) || fat_is_dir(path)) && w[0] != '/') {   /* as cook looks: the root too */
+            char alt[FAT_PATH_MAX];
+            alt[0] = '/'; strncpy(alt + 1, w, sizeof(alt) - 2); alt[sizeof(alt) - 1] = '\0';
+            if (fat_exists(alt) && !fat_is_dir(alt)) strcpy(path, alt);
+        }
+        if (fat_exists(path) && !fat_is_dir(path)) {
+            if (terse) t_puts("file\n"); else t_printf("%s is %s\n", w, path);
+            continue;
+        }
+        if (!terse) t_printf("  inspect: %s: not found\n", w);
+        missing = 1;
+    }
+    me->last_status = missing ? 1 : 0;
+}
+
 /* shift [N] (v0.60.59): drop the first N (1 if none) of the script's or
  * function's arguments, so $1 is what $N+1 was and $# and $@ follow. Fewer
  * than N, or a negative N, changes nothing and gives status 1, as bash's;

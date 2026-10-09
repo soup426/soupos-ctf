@@ -20,4 +20,10 @@ unlisted=$(comm -13 <(echo "$m") <(echo "$d") | tr '\n' ' ')
     || { echo "  FAIL  on the menu but not a command: $missing"; fail=1; }
 [ -z "$unlisted" ] && echo "  ok    every command the shell runs ($(echo "$d" | wc -l), not counting: $HIDDEN) is on the menu" \
     || { echo "  FAIL  commands missing from the menu: $unlisted"; fail=1; }
+# cmd_names (Tab, and inspect's builtins since v0.60.72) must name the same set
+c=$(awk '/^static const char \*const cmd_names\[\] = \{/,/^};/' src/shell.c | grep -o '"[a-z]*"' | tr -d '"' | sort -u)
+cmiss=$(comm -23 <(echo "$d") <(echo "$c") | tr '\n' ' ')
+cextra=$(comm -13 <(echo "$d") <(echo "$c") | tr '\n' ' ')
+[ -z "$cmiss$cextra" ] && echo "  ok    cmd_names (Tab, inspect) names the same $(echo "$c" | wc -l) commands" \
+    || { echo "  FAIL  cmd_names lacks: $cmiss; has extra: $cextra"; fail=1; }
 exit $fail

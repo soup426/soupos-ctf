@@ -52,7 +52,7 @@ $(( )) is 32 bits (a long on i386); bash's is 64. Make it 64, which needs
 64-bit division and remainder in the kernel (libgcc's __divdi3 and
 friends, or our own). Compare with bash past 2**31.
 
-## 4. inspect NAME (sh's type)
+## 4. inspect NAME (sh's type) — DONE v0.60.72
 
 Says what each NAME is: a keyword, a builtin, a function (with its body),
 or a program (with its path), or not found (status 1). A kitchen name,

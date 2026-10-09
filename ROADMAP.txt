@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.71
+Current version: v0.60.72
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,17 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.72 (2026-10-08)  — INSPECT (TYPE)
+  - `inspect NAME...` is sh's type under the health inspector's name: a
+    shell keyword, a function (and its body), a shell builtin, or a
+    program and where cook would find it, in sh's order; `inspect -t`
+    says only which (keyword, function, builtin, file), as type -t. Not
+    found is status 1.
+  - cmd_names (the list Tab finishes from, and inspect's builtins) lacked
+    break, continue, return, exit and four self-tests; it has them, and
+    menu-test.sh now holds it to dispatch() too.
+  - scripts/inspect-test.sh compares four lines with bash's type.
 
 v0.60.71 (2026-10-08)  — 64-BIT ARITHMETIC, AND BASH'S NUMBERS
   - $(( )), (( )), ${v:off:len} and here-documents' $(( )) are 64 bits
