@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.152
+Current version: v0.60.153
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,17 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.153 (2026-10-09)  — swirl.elf: THE MANDELBROT SET
+  - A second program on the window calls: 320x240, 16.16 fixed point
+    (64-bit products, arithmetic shifts), 64 iterations, drawn and put
+    eight rows at a time so the window fills as it computes. A click
+    centres on that pixel and halves the step, - doubles it, q or the
+    close box ends it.
+  - scripts/swirl-test.sh redoes the integer arithmetic in Python and
+    compares all 76800 pixels of the first view and of a click's zoom
+    with screendumps; q, its window closed by it, 60 puts. Six-wide soak
+    6 of 6.
 
 v0.60.152 (2026-10-09)  — HOW FAST A PROGRAM CAN DRAW (MEASURED)
   - sear.elf W H N puts N frames and times its fill and its puts with

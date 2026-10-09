@@ -3,7 +3,7 @@
 ## What this is
 
 soupOS is a 32-bit x86 hobby OS written in C and NASM assembly (currently
-**v0.60.152**; ROADMAP.txt is the authority on the version). It boots via GRUB and runs in protected mode with paging, a
+**v0.60.153**; ROADMAP.txt is the authority on the version). It boots via GRUB and runs in protected mode with paging, a
 physical/heap allocator, and a cooperative scheduler. On top of that:
 
 - **Filesystem**: FAT16 read/write with subdirectories ("bowls") and a VFS shim
@@ -492,7 +492,8 @@ soupOS runs real ring-3 user programs with hardware memory protection.
 
 `SYS_WIN_OPEN/PUT/EVENT/CLOSE` (16-19, `syscall_nr.h`, `uwinev_t`) give a
 ring-3 program a window on countertop; `user/frost.elf` (paint) is the
-first user. The calls run on the program's task and only touch a slot in
+first user, `user/swirl.elf` (Mandelbrot, 16.16 fixed point, checked pixel
+for pixel against Python by swirl-test.sh) the second. The calls run on the program's task and only touch a slot in
 countertop.c's `app[]` under `app_mtx`; the desktop loop is the only
 drawer (it shows new slots, repaints dirty ones, closes the windows of
 programs that closed them or ended). PUT copies the program's whole body

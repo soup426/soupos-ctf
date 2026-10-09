@@ -93,7 +93,7 @@ CPU hog (300-550 a second); the desktop draws one in ~0.8 ms and shows
 45-50 frames a second, held by its 15 ms nap. Fast enough: no rectangle
 put. Numbers in ROADMAP v0.60.152.
 
-## 5. swirl.elf: a Mandelbrot set in fixed point
+## 5. swirl.elf: a Mandelbrot set in fixed point — DONE v0.60.153
 
 A second program on the window calls: Mandelbrot in 16.16 fixed point
 (no FPU in ring 3), drawn row by row so the window fills as it computes;
