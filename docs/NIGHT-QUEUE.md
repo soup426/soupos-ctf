@@ -49,7 +49,7 @@ cheap (sift has no regex): otherwise left out and said so. Test against
 bash: a variable holding spaces unquoted, patterns, && || ! ( ), in if,
 while and with && after it.
 
-## 2. function NAME { ...; } and function NAME() { ...; }
+## 2. function NAME { ...; } and function NAME() { ...; } — DONE v0.60.114
 
 The other way bash writes a function; a keyword, so it keeps its name.
 Both forms, one line and over several, in a recipe, with stash, return

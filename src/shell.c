@@ -8926,11 +8926,52 @@ static void exec_range(lseg_t *sg, int from, int to, int depth) {
     }
 }
 
+/* function NAME { ... } and function NAME() { ... } (v0.60.114): bash's
+ * other way to write a function, made NAME() { ... } where a command
+ * starts (not in quotes), which is what the rest of the shell reads. */
+static __attribute__((noinline)) void fn_keyword(char *buf, int max) {
+    char *out = kmalloc((uint32_t)max);
+    if (!out) return;
+    int o = 0, cmdpos = 1, did = 0; char q = 0;
+    const char *s = buf;
+    while (*s && o < max - 3) {
+        if (q) { if (*s == q) q = 0; out[o++] = *s++; continue; }
+        if (*s == '\'' || *s == '"') { q = *s; cmdpos = 0; out[o++] = *s++; continue; }
+        if (*s == '\\' && s[1]) { out[o++] = *s++; out[o++] = *s++; cmdpos = 0; continue; }
+        if (*s == ' ' || *s == '\t') { out[o++] = *s++; continue; }
+        if (*s == ';' || *s == '&' || *s == '|' || *s == '{' || *s == '}' || *s == '(' || *s == ')') { cmdpos = 1; out[o++] = *s++; continue; }
+        if (cmdpos && strncmp(s, "function", 8) == 0 && (s[8] == ' ' || s[8] == '\t')) {
+            const char *n = s + 8; while (*n == ' ' || *n == '\t') n++;
+            int k = fn_name_len(n);
+            if (k) {
+                for (int i = 0; i < k && o < max - 3; i++) out[o++] = n[i];
+                s = n + k;
+                const char *r = s; while (*r == ' ' || *r == '\t') r++;
+                if (!(r[0] == '(' && r[1] == ')')) { out[o++] = '('; out[o++] = ')'; }
+                did = 1; cmdpos = 0;
+                continue;
+            }
+        }
+        /* any other word: then, do, else ... leave a command position behind them */
+        const char *w = s;
+        while (*s && *s != ' ' && *s != '\t' && *s != ';' && *s != '&' && *s != '|' && *s != '(' && *s != ')' && *s != '\'' && *s != '"' && o < max - 3)
+            out[o++] = *s++;
+        int wl = (int)(s - w);
+        cmdpos = (wl == 4 && !strncmp(w, "then", 4)) || (wl == 2 && !strncmp(w, "do", 2)) ||
+                 (wl == 4 && !strncmp(w, "else", 4)) || (wl == 1 && *w == '!');
+    }
+    out[o] = '\0';
+    if (did) strcpy(buf, out);
+    kfree(out);
+}
+
 static void run_line(const char *line) {
     char *buf = kmalloc(INPUT_MAX * 2);
     lseg_t *sg = kmalloc(sizeof(lseg_t) * LSEG_MAX);
     if (!buf || !sg) { if (buf) kfree(buf); if (sg) kfree(sg); return; }
     strncpy(buf, line, INPUT_MAX * 2 - 1); buf[INPUT_MAX * 2 - 1] = '\0';
+    for (const char *f = buf; *f; f++)
+        if (f[0] == 'f' && strncmp(f, "function", 8) == 0) { fn_keyword(buf, INPUT_MAX * 2); break; }
     int n = split_segs(buf, sg, LSEG_MAX);
     if (run_depth == 0) { cur_shell()->brk = cur_shell()->cont = 0; cur_shell()->loops = 0; cur_shell()->ret = cur_shell()->quit = 0;
                           cur_shell()->nstash = cur_shell()->stash_floor = 0; }
@@ -9099,7 +9140,7 @@ static void heredoc_expand(const char *in, char *out, int max) {
  * esac or }. follow joins lines while it is above 0, so an if or a loop
  * may run over several lines, as in sh. */
 static int compound_depth(const char *s) {
-    int d = 0, cmdpos = 1; char q = 0;
+    int d = 0, cmdpos = 1, fnname = 0; char q = 0;
     while (*s) {
         if (q) { if (*s == q) q = 0; s++; continue; }
         if (*s == '\'' || *s == '"') { q = *s; cmdpos = 0; s++; continue; }
@@ -9110,6 +9151,8 @@ static int compound_depth(const char *s) {
         while (*s && *s != ' ' && *s != '\t' && *s != ';' && *s != '&' && *s != '|' && *s != '(' && *s != ')' && *s != '\'' && *s != '"') s++;
         int n = (int)(s - w);
         #define WORD_IS(k) (n == (int)strlen(k) && strncmp(w, k, (uint32_t)n) == 0)
+        if (fnname) { fnname = 0; cmdpos = 1; continue; }        /* function NAME: a { may follow */
+        if (cmdpos && WORD_IS("function")) { fnname = 1; cmdpos = 0; continue; }
         if (cmdpos) {
             if (WORD_IS("if") || WORD_IS("while") || WORD_IS("until") || WORD_IS("{")) { d++; continue; }
             if (WORD_IS("for") || WORD_IS("case") || WORD_IS("select")) { d++; cmdpos = 0; continue; }
