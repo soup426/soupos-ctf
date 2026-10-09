@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.118
+Current version: v0.60.119
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,20 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.119 (2026-10-09)  — REGULAR EXPRESSIONS: RX.C AND SIFT -E
+  - user/rx.c: POSIX extended regular expressions in one file the
+    programs and the kernel can both include (each says how to allocate).
+    Literals, ., [...] with ranges, [^...] and [:class:], * + ? {m,n}, ^ $,
+    |, ( ) with nine groups saved, \w \W \s \S \b \B \< \>, and GNU's
+    quirks (a leading * repeats nothing; a ) with no ( and a { that is not
+    a count are literal). Compiled to a small program and run as a Pike
+    VM, so time is text times pattern and nothing can make it hang;
+    leftmost-longest, as grep -o reports; no recursion in the matcher.
+  - sift.elf -E PATTERN uses it, with -v -c -i -n -o as before; a bad
+    pattern is status 2.
+  - scripts/ere-test.sh compares 119 runs (29 patterns, four modes each,
+    three exponential for backtracking, three bad) with GNU grep -E.
 
 v0.60.118 (2026-10-09)  — TUMBLE.ELF (SHUF) AND SYS_RANDOM
   - SYS_RANDOM (15): up to 256 bytes a call from the kernel's entropy pool

@@ -12,6 +12,9 @@
  * a line, printed with one, as grep does. Exit code 0 if any line was
  * selected, 1 if none, 2 for a usage error or an unreadable file.
  *
+ * -E (v0.60.119): the pattern is a POSIX extended regular expression, as
+ * grep -E's, through rx.c; -o then prints each leftmost-longest match.
+ *
  * -n and -o (v0.60.35) as GNU grep 3.12 does them, measured: -n puts "N:"
  * before each line or match; -o prints each match (non-overlapping, as
  * written in the line when -i folds) on a line of its own. With -v, or an
@@ -21,8 +24,13 @@
  * may be a wrapper around ugrep, which differs on all three.)
  */
 #include "ulib.h"
+#define RX_ALLOC(n) malloc(n)
+#define RX_FREE(p)  ((void)(p))              /* the bump allocator keeps all */
+#include "rx.c"
 
-static int  invert, count_only, nocase, numbers, only;
+static int  invert, count_only, nocase, numbers, only, ere;
+static rx_t rx;                       /* -E (v0.60.119) */
+static int  sub[RX_NCAP];
 static char *line;
 static int  cap, len;
 
@@ -38,6 +46,7 @@ static int find_at(const char *hay, int hn, const char *pat, int pn, int from) {
     return -1;
 }
 static int contains(const char *hay, int hn, const char *pat, int pn) {
+    if (ere) return rx_exec(&rx, hay, hn, 0, sub) > 0;
     if (pn == 0) return 1;
     return find_at(hay, hn, pat, pn, 0) >= 0;
 }
@@ -71,12 +80,14 @@ int main(void) {
             else if (*f == 'i') nocase = 1;
             else if (*f == 'n') numbers = 1;
             else if (*f == 'o') only = 1;
+            else if (*f == 'E') ere = 1;
             else { print("sift: unknown flag -"); char c[2] = { *f, 0 }; print(c); print("\n"); return 2; }
         }
     }
-    if (t >= nt) { print("usage: sift.elf [-vcino] word [file]\n"); return 2; }
+    if (t >= nt) { print("usage: sift.elf [-vcinoE] word [file]\n"); return 2; }
     const char *pat = tok[t++];
     int pn = strlen_(pat);
+    if (ere && rx_compile(&rx, pat, nocase) < 0) { eprint("sift: "); eprint(rx.err); eprint("\n"); return 2; }
     int fd = FD_STDIN;
     if (t < nt) {
         fd = sys_open(tok[t], O_READ);
@@ -84,7 +95,7 @@ int main(void) {
     }
 
     int selected = 0, lineno = 0;
-    int matches = only && !invert && pn > 0;   /* -o in force */
+    int matches = only && !invert && (pn > 0 || ere);   /* -o in force */
     char buf[512];
     int got, eof = 0;
     grow(256);
@@ -99,7 +110,17 @@ int main(void) {
             if (contains(line, len, pat, pn) != invert) {
                 selected++;
                 if (count_only) { len = 0; continue; }
-                if (matches) {
+                if (matches && ere) {
+                    /* each leftmost-longest match after the last; an empty
+                     * one is passed over, not printed, as grep's -o */
+                    for (int from = 0; from <= len && rx_exec(&rx, line, len, from, sub) > 0; ) {
+                        if (sub[1] > sub[0]) {
+                            if (numbers) put_number(lineno);
+                            sys_write(FD_STDOUT, line + sub[0], sub[1] - sub[0]); sys_write(FD_STDOUT, "\n", 1);
+                            from = sub[1];
+                        } else from = sub[0] + 1;
+                    }
+                } else if (matches) {
                     for (int at = find_at(line, len, pat, pn, 0); at >= 0; at = find_at(line, len, pat, pn, at + pn)) {
                         if (numbers) put_number(lineno);
                         sys_write(FD_STDOUT, line + at, pn); sys_write(FD_STDOUT, "\n", 1);

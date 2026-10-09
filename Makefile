@@ -116,7 +116,7 @@ all: iso
 
 # Build all user-mode ELF programs
 user: $(USER_ELFS)
-user/%.elf: user/%.c user/ulib.c user/ulib.h user/user.ld src/syscall_nr.h
+user/%.elf: user/%.c user/ulib.c user/ulib.h user/user.ld src/syscall_nr.h user/rx.c
 	$(CC) $(UCFLAGS) -Wl,-T,user/user.ld -o $@ user/ulib.c user/$*.c $(shell $(CC) -m32 -print-libgcc-file-name)
 
 # Static pattern rules, not plain pattern rules.

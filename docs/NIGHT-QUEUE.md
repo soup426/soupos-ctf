@@ -38,7 +38,7 @@ out), no read -a or mapfile, no diff, split or expr.
 
 ---
 
-## 1. Regular expressions, and sift -E
+## 1. Regular expressions, and sift -E — DONE v0.60.119
 
 A small POSIX ERE matcher in one file both sides can build (user/rx.c,
 included by programs and by the kernel): literals, `.`, `[...]` with ranges
