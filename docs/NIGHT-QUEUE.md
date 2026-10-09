@@ -49,7 +49,7 @@ their names. Compare with bash.
 jobs, or for the one given, and its status is that job's. Compare the
 statuses with bash.
 
-## 3. dish.elf (printf)
+## 3. dish.elf (printf) — DONE v0.60.49
 
 `printf FORMAT ARGS...` under a kitchen name: %s %d %i %x %o %c %%, widths,
 `-` and `0` flags, precision for %s, \n \t \\ escapes, and the format
@@ -78,6 +78,15 @@ again as loud as the loudest music quarter second; a louder baseline
 (the capture starting late, so 1.0-3.5 s holds the louder part of the
 score) puts the bar above the effects. Measure where the capture starts
 relative to `hum` (the serial log has both) and anchor the windows there.
+
+## 8. Backslash in the shell
+
+Found with item 3: sh treats \ as an escape: outside quotes it makes the
+next character plain (\; \| \$ \  a space), inside "..." it does so for
+\ " $ and ` (so "a\\c" is a\c), inside '...' it is just a character.
+soupOS gives \ no meaning anywhere. Teach the quote handling (split_segs,
+expand_seg, uargv's caller, unquote, slurp) the same, and compare with
+bash; a program's arguments are where it shows (dish, sift).
 
 ## 6. Doom at the framebuffer's own resolution — DEFERRED
 
