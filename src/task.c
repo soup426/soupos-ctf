@@ -2,6 +2,7 @@
 #include "heap.h"
 #include "timer.h"
 #include "paging.h"
+#include "gdt.h"
 
 #define DEFAULT_STACK_SIZE (16 * 1024)
 
@@ -120,6 +121,11 @@ void task_init(void) {
     t->entry      = 0;
     t->arg        = 0;
     t->preempt_depth = 0;   /* kmalloc does not zero */
+    t->sys_write     = 0;   /* not inside a kernel-internal write (v0.55.5) */
+    t->user_resume_esp = 0; /* never been in ring 3 */
+    t->proc          = 0;
+    t->term          = 0;
+    t->shell         = 0;
     t->page_dir      = paging_kernel_dir();
 
     const char nm[] = "kernel";
@@ -145,7 +151,14 @@ task_t *task_spawn(const char *name, void (*entry)(void *), void *arg) {
     t->entry      = entry;
     t->arg        = arg;
     t->preempt_depth = 0;   /* kmalloc does not zero */
+    t->sys_write     = 0;   /* not inside a kernel-internal write (v0.55.5) */
+    t->user_resume_esp = 0; /* never been in ring 3 */
+    t->proc          = 0;
     t->page_dir      = paging_kernel_dir();
+    /* A task prints where its parent prints: a program cooked from an SSH
+     * session writes to that session, a script's spawn to the same place. */
+    t->term          = current ? current->term  : 0;
+    t->shell         = current ? current->shell : 0;
 
     uint32_t i = 0;
     while (name && name[i] && i < sizeof(t->name) - 1) {
@@ -195,6 +208,13 @@ void task_yield(void) {
     if (next->page_dir && next->page_dir != prev->page_dir)
         paging_switch(next->page_dir);
 
+    /* Follow the task onto its own ring-0 stack. The TSS holds exactly one
+     * esp0, so with two ring-3 programs alive it has to move with `current`:
+     * otherwise the second program to trap pushes its frame onto the stack
+     * where the first one's suspended frame still lives. */
+    tss_set_esp0(next->user_resume_esp ? next->user_resume_esp
+                                       : tss_boot_esp0());
+
     task_switch(&prev->esp, next->esp);
     sched_unlock();
 }
@@ -229,7 +249,7 @@ void task_exit(void) {
         task_yield();
         /* If nothing else is runnable, park until the next IRQ wakes
          * a blocked task. Without this we would spin burning CPU. */
-        __asm__ volatile ("hlt");
+        cpu_halt();
     }
 }
 
@@ -240,6 +260,71 @@ uint32_t task_count(void) {
     uint32_t n = 0;
     task_t *t = list_head;
     do { n++; t = t->next; } while (t != list_head);
+    return n;
+}
+
+/* Tasks that have not exited. task_count() includes DEAD tasks the reaper has
+ * not collected yet, which is a surprise for a caller asking "is anything else
+ * running?": every finished program left `doom` refusing to start until the
+ * next yield swept it up. */
+/* A service belongs to nobody's terminal, whoever happened to start it. */
+void task_set_service(void) { if (current) { current->service = 1; current->term = 0; current->shell = 0; } }
+
+static volatile int halting;
+static uint32_t idle_window, idle_last;
+
+void cpu_halt(void) {
+    halting = 1;
+    __asm__ volatile ("hlt");
+    halting = 0;
+}
+uint32_t task_idle_last(void) { return idle_last; }
+
+void task_cpu_tick(void) {
+    static uint32_t in_second;
+    /* A tick that lands while the cpu is halted belongs to nobody. Without
+     * this the task that halted is charged for it, and a shell waiting at a
+     * prompt reads as the busiest thing on the machine. */
+    if (halting)      idle_window++;
+    else if (current) current->cpu_window++;
+
+    if (++in_second < 100) return;          /* 100 Hz timer, so one second */
+    in_second = 0;
+
+    /* Roll every task's window at once, so the figures in a listing all
+     * describe the same second rather than drifting apart. */
+    idle_last = idle_window; idle_window = 0;
+    if (!list_head) return;
+    task_t *t = list_head;
+    do {
+        t->cpu_last   = t->cpu_window;
+        t->cpu_window = 0;
+        t = t->next;
+    } while (t != list_head);
+}
+
+/* Alive, minus the background services. A framebuffer console and a sound
+ * mixer are permanent now, so "is anything else running?" has to mean
+ * "is another PROGRAM running?" or nothing can ever claim the machine. */
+uint32_t task_count_users(void) {
+    if (!list_head) return 0;
+    uint32_t n = 0;
+    task_t *t = list_head;
+    do {
+        if (t->state != TASK_DEAD && !t->service) n++;
+        t = t->next;
+    } while (t != list_head);
+    return n;
+}
+
+uint32_t task_count_alive(void) {
+    if (!list_head) return 0;
+    uint32_t n = 0;
+    task_t *t = list_head;
+    do {
+        if (t->state != TASK_DEAD) n++;
+        t = t->next;
+    } while (t != list_head);
     return n;
 }
 
@@ -287,7 +372,7 @@ void task_sleep(uint32_t ms) {
         uint32_t ticks = (ms + 9) / 10;
         uint32_t start = timer_get_ticks();
         while ((timer_get_ticks() - start) < ticks)
-            __asm__ volatile ("hlt");
+            cpu_halt();
         return;
     }
 
@@ -306,7 +391,7 @@ void task_sleep(uint32_t ms) {
         /* If we're still blocked after yielding, hlt until the next
          * timer IRQ fires (same pattern as keyboard_getchar). */
         if (current->state == TASK_BLOCKED)
-            __asm__ volatile ("hlt");
+            cpu_halt();
     }
 }
 
@@ -365,14 +450,30 @@ void task_block_on(wait_queue_t *wq) {
         tail->wq_next = current;
     }
 
-    current->state = TASK_BLOCKED;
+    current->state      = TASK_BLOCKED;
+    current->blocked_on = wq;
 
     /* Yield until someone calls task_wake / task_wake_one for us. */
     while (current->state == TASK_BLOCKED) {
         task_yield();
         if (current->state == TASK_BLOCKED)
-            __asm__ volatile ("hlt");
+            cpu_halt();
     }
+    current->blocked_on = 0;
+}
+
+void task_unblock(task_t *t) {
+    if (!t || t->state != TASK_BLOCKED || !t->blocked_on) return;
+    wait_queue_t *wq = t->blocked_on;
+    if (wq->head == t) {
+        wq->head = t->wq_next;
+    } else {
+        for (task_t *q = wq->head; q; q = q->wq_next)
+            if (q->wq_next == t) { q->wq_next = t->wq_next; break; }
+    }
+    t->wq_next    = 0;
+    t->blocked_on = 0;
+    t->state      = TASK_READY;
 }
 
 /* Wake ALL tasks on the queue. */

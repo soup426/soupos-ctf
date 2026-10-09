@@ -1,0 +1,6 @@
+2026-10-09, during the v0.60.124 full check: ls-test "entry counts differ: peek.elf
+49 (said ?), mtools 79" and "a missing directory did not report an error". Alone:
+79 of 79. The test waited a flat two seconds for `cook peek.elf /`; under the loaded
+full check the listing ran past it. (Not SYS_READDIR's one pass per entry, as first
+thought: measured afterwards, the listing takes 40 to 90 ms on an idle machine.)
+Fixed in v0.60.124: it waits for the prompt.

@@ -11,15 +11,25 @@
 #define FAT_ATTR_LFN     0x0F   /* all four low bits set */
 
 #define FAT_NAME_MAX  13        /* 8 + '.' + 3 + '\0' */
+/* Long names, as VFAT stores them. 63 is a working limit rather than the
+ * format's 255: an entry sits in arrays of FAT_LS_MAX, so every byte here
+ * costs 128 of them, and nothing on this disk needs more. */
+#define FAT_LFN_MAX   64
 #define FAT_PATH_MAX  128       /* absolute path buffer size */
 #define FAT_LS_MAX    128
 
 typedef struct {
-    char     name[FAT_NAME_MAX];
+    char     name[FAT_NAME_MAX];   /* the 8.3 name, always present      */
+    char     lfn[FAT_LFN_MAX];     /* the long name, or "" if it has none */
     uint8_t  attr;
     uint32_t cluster;
     uint32_t size;
 } fat_entry_t;
+
+/* What to show a person: the long name when there is one. */
+static inline const char *fat_display_name(const fat_entry_t *e) {
+    return e->lfn[0] ? e->lfn : e->name;
+}
 
 /* Returns 0=ok, -1=no drive / unrecognised filesystem */
 int fat_init(void);
@@ -37,16 +47,35 @@ const char *fat_label(void);      /* volume label, trimmed */
 /* List a directory. Returns entry count written (up to max). -1 on error.
    `.` and `..` are omitted. path "/" lists the root. */
 int fat_ls(const char *path, fat_entry_t *out, int max);
+/* The same, past the first `skip` entries (v0.60.125): a directory of more
+ * than FAT_LS_MAX is listed a piece at a time. */
+int  fat_ls_from(const char *path, fat_entry_t *out, int max, int skip);
 
-/* Read a file into buf (up to bufsize bytes). *out_size = actual file size.
+/* Read a file into buf (up to bufsize bytes). *out_size = actual file size,
+   WHICH MAY BE LARGER THAN bufsize: clamp before using it as a byte count.
+   (Five callers did not, v0.39.1: an out-of-bounds write in three of them.)
    Returns 0=ok, -1=not found / is a directory / error. */
 int fat_read(const char *path, uint8_t *buf, uint32_t bufsize, uint32_t *out_size);
 
 /* Create or overwrite a file. FAT16 only. Returns 0=ok, -1=error. */
 int fat_write(const char *path, const uint8_t *buf, uint32_t size);
+/* The same whole-file write, pulling its bytes from `src` in order: src(ctx,
+ * offset, dst, n) copies n bytes at offset into dst, 0 or -1 (v0.56.4). */
+typedef int (*fat_source_fn)(void *ctx, uint32_t off, uint8_t *dst, uint32_t n);
+int fat_write_from(const char *path, uint32_t size, fat_source_fn src, void *ctx);
 
 /* Delete a file (not a directory - use fat_rmdir). FAT16 only. */
 int fat_delete(const char *path);
+
+/* Free and total data clusters, and the size of one in bytes. Any pointer may
+ * be NULL. Walks the FAT, so it is a command-speed call, not a hot path. */
+void fat_space(uint32_t *out_free, uint32_t *out_total, uint32_t *out_cluster_bytes);
+/* Sectors the volume occupies from the start of the disk; what lies past it
+ * belongs to nobody on the FAT side, which is where swap lives. 0 if unmounted. */
+uint32_t fat_volume_sectors(void);
+uint32_t fat_cluster_bytes(void);              /* bytes per cluster */
+uint32_t fat_chain_clusters(uint32_t first);   /* clusters in a chain (du) */
+uint32_t fat_first_cluster(const char *path);   /* 0 for the root or missing */
 
 /* Create a directory ("bowl"). FAT16 only. Fails if it already exists,
    the parent is missing, or the disk is full. Returns 0=ok, -1=error. */
@@ -63,8 +92,8 @@ int fat_is_dir(const char *path);
 int fat_exists(const char *path);
 
 /* ── Permissions ───────────────────────────────────────────────────────────
- * soupOS stamps an owner uid and an rwx mode into two spare bytes of every
- * FAT directory entry. The mode byte's high bit (FAT_PERM_MARK) flags the
+ * soupOS stamps an owner uid and an rwx mode into the creation-time bytes of
+ * every FAT directory entry (bytes 13-14; see meta_get in fat.c, v0.41.0). The mode byte's high bit (FAT_PERM_MARK) flags the
  * metadata as present; entries without it (files written by other tools)
  * read back as owned by headchef (uid 0) with default permissions.
  * Enforcement is advisory - done by the shell, since soupOS runs in ring 0.
@@ -82,6 +111,15 @@ int fat_exists(const char *path);
 
 /* uid stamped as owner on files/bowls created from here on. */
 void fat_set_creator(uint8_t uid);
+/* If set, consulted instead of the fat_set_creator value: the uid of the
+ * task creating the file, so a file made from an SSH session is that cook's. */
+void fat_set_creator_hook(uint8_t (*hook)(void));
+/* The last FAT_RESERVE_CLUSTERS free clusters are kept for writes the hook
+ * allows (the headchef's, and the kernel's own on anyone's behalf): one
+ * cook filling the disk used to stop the headchef opening the vault, which
+ * writes its host key (v0.55.5). No hook: no reserve. */
+#define FAT_RESERVE_CLUSTERS 128
+void fat_set_reserve_hook(int (*hook)(void));
 
 /* Read a path's owner uid and permission mode. Returns 0=ok, -1=missing. */
 int  fat_stat (const char *path, uint8_t *owner, uint8_t *mode);

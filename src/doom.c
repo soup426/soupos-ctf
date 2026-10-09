@@ -12,10 +12,14 @@
 
 #include "doom.h"
 #include "wad.h"
+#include "doomsnd.h"
+#include "music.h"
+#include "fb.h"
 #include "vga.h"
 #include "vga13h.h"
 #include "keyboard.h"
 #include "timer.h"
+#include "klog.h"
 #include "speaker.h"
 #include "heap.h"
 #include "str.h"
@@ -58,6 +62,50 @@ static void set_doom_palette(void) {
                       playpal[i*3+2] >> 2);
 }
 
+/* ── Frame profiling (build with PROFILE=1) ───────────────────────────────
+ * Diagnostic only: where does a frame's time actually go? Reports to the
+ * serial log every PF_EVERY frames, so it can be read headless. */
+#ifdef DOOM_PROFILE
+static inline uint64_t pf_tsc(void) {
+    uint32_t lo, hi;
+    __asm__ volatile ("rdtsc" : "=a"(lo), "=d"(hi));
+    return ((uint64_t)hi << 32) | lo;
+}
+#define PF_EVERY 50
+static uint64_t pf_flats, pf_bsp, pf_things, pf_sprites, pf_bar;
+static uint64_t pf_vbl, pf_copy, pf_total;
+static uint32_t pf_frames, pf_tick0;
+#define PF_T0(v)        uint64_t v = pf_tsc()
+#define PF_ACC(acc, v)  do { (acc) += pf_tsc() - (v); } while (0)
+
+/* kilocycles per frame */
+static uint32_t pf_kc(uint64_t acc, uint32_t frames) {
+    if (!frames) return 0;
+    return (uint32_t)(acc / frames / 1000);
+}
+
+static void pf_maybe_report(void) {
+    if (++pf_frames < PF_EVERY) return;
+    uint32_t ticks = timer_get_ticks() - pf_tick0;
+    if (ticks == 0) ticks = 1;
+    uint32_t f = pf_frames;
+    klog("[doomprof] fps=%u frame=%uk flats=%uk bsp=%uk things=%uk "
+         "spr=%uk bar=%uk vbl=%uk copy=%uk\n",
+         (f * 100u) / ticks,
+         pf_kc(pf_total, f), pf_kc(pf_flats, f), pf_kc(pf_bsp, f),
+         pf_kc(pf_things, f), pf_kc(pf_sprites, f), pf_kc(pf_bar, f),
+         pf_kc(pf_vbl, f), pf_kc(pf_copy, f));
+    pf_flats = pf_bsp = pf_things = pf_sprites = pf_bar = 0;
+    pf_vbl = pf_copy = pf_total = 0;
+    pf_frames = 0;
+    pf_tick0  = timer_get_ticks();
+}
+#else
+#define PF_T0(v)        do { } while (0)
+#define PF_ACC(acc, v)  do { } while (0)
+#define pf_maybe_report()  do { } while (0)
+#endif
+
 /* ── Double-buffer ────────────────────────────────────────────────────────── */
 static uint8_t g_backbuf[VGA13_W * VGA13_H];
 
@@ -66,11 +114,22 @@ static inline uint8_t vga_inb(uint16_t port) {
 }
 
 static void present_frame(void) {
-    /* Wait for vertical blank then copy — eliminates tearing/flicker */
-    while ( vga_inb(0x3DA) & 8) {}  /* wait for end of any current vblank */
-    while (!(vga_inb(0x3DA) & 8)) {}  /* wait for start of next vblank    */
+    /* Wait for vertical blank then copy — eliminates tearing/flicker.
+     * On a framebuffer boot there is no CRT to chase: 0x3DA's status bits
+     * belong to a VGA mode that is not running, and polling them would spin
+     * forever. The scaler writes a whole frame at once instead. */
+    if (!fb_present()) {
+        PF_T0(t_vbl);
+        while ( vga_inb(0x3DA) & 8) {}  /* end of any current vblank */
+        while (!(vga_inb(0x3DA) & 8)) {}  /* start of the next       */
+        PF_ACC(pf_vbl, t_vbl);
+    }
+
+    PF_T0(t_copy);
     uint8_t *fb = vga13h_fb();
     for (int i = 0; i < VGA13_W * VGA13_H; i++) fb[i] = g_backbuf[i];
+    vga13h_present();
+    PF_ACC(pf_copy, t_copy);
 }
 
 static void bb_fill_rect(int x, int y, int w, int h, uint8_t c) {
@@ -360,8 +419,8 @@ typedef struct { uint8_t state; uint8_t atk_cd; int16_t hp; } thing_ai_t;
 static thing_ai_t *lv_thing_ai = NULL;
 
 /* Player position × 256 (fixed-point sub-unit).
- * pl_angle: fine view angle 0-31 (32 steps, 11.25° each; 0=East, 8=North).
- * pl_dir: coarse 8-direction (= pl_angle / 4) kept for movement tables. */
+ * pl_angle: fine view angle 0-127 (128 steps, 2.8125° each; 0=East).
+ * pl_dir: coarse 8-direction (= pl_angle / ANG_PER_DIR), for sprite rotation. */
 static int32_t pl_x = 0, pl_y = 0;
 static int     pl_angle = 0;
 static int     pl_dir   = 0;
@@ -377,19 +436,58 @@ static const int sin128[8] = {   0,  91, 128,  91,    0, -91, -128, -91 };
 /* ── Fine view angle tables: cos/sin scaled ×1024, 32 steps of 11.25° ──────
  * Index 0 = East (0°), 8 = North (90°), 16 = West, 24 = South.
  * Derived from cos(2πk/32) and sin(2πk/32). */
-static const int16_t view_cos[32] = {
-    1024, 1004,  946,  851,  724,  567,  391,  199,
-       0, -199, -391, -567, -724, -851, -946,-1004,
-   -1024,-1004, -946, -851, -724, -567, -391, -199,
-       0,  199,  391,  567,  724,  851,  946, 1004
-};
-static const int16_t view_sin[32] = {
-       0,  199,  391,  567,  724,  851,  946, 1004,
-    1024, 1004,  946,  851,  724,  567,  391,  199,
-       0, -199, -391, -567, -724, -851, -946,-1004,
-   -1024,-1004, -946, -851, -724, -567, -391, -199
-};
+/* View angles. 128 steps of 2.8125 degrees.
+ *
+ * This was 32 steps (11.25 degrees each), which made turning visibly jump:
+ * the whole world rotated an eighth of a right angle per keypress. The step
+ * count is the only thing that changed; everything derived from it goes
+ * through ANG_* below, so the turn RATE is unchanged (TURN_DELAY drops from 4
+ * ticks to 1, giving 4x as many steps that are each a quarter of the size).
+ *
+ * Tables are cosine/sine x1024, index 0 = East, increasing counter-clockwise. */
+#define ANG_N        128            /* angles in a full turn            */
+#define ANG_MASK     (ANG_N - 1)
+#define ANG_90       (ANG_N / 4)    /* quarter turn, for strafing       */
+#define ANG_270      (ANG_N * 3 / 4)
+#define ANG_PER_DIR  (ANG_N / 8)    /* angles per 8-way sprite rotation */
+#define ANG_SKY_U    (256 / ANG_N)  /* sky texels per angle step        */
 
+static const int16_t view_cos[ANG_N] = {
+     1024,  1023,  1019,  1013,  1004,   993,   980,   964,
+      946,   926,   903,   878,   851,   822,   792,   759,
+      724,   688,   650,   610,   569,   526,   483,   438,
+      392,   345,   297,   249,   200,   150,   100,    50,
+        0,   -50,  -100,  -150,  -200,  -249,  -297,  -345,
+     -392,  -438,  -483,  -526,  -569,  -610,  -650,  -688,
+     -724,  -759,  -792,  -822,  -851,  -878,  -903,  -926,
+     -946,  -964,  -980,  -993, -1004, -1013, -1019, -1023,
+    -1024, -1023, -1019, -1013, -1004,  -993,  -980,  -964,
+     -946,  -926,  -903,  -878,  -851,  -822,  -792,  -759,
+     -724,  -688,  -650,  -610,  -569,  -526,  -483,  -438,
+     -392,  -345,  -297,  -249,  -200,  -150,  -100,   -50,
+        0,    50,   100,   150,   200,   249,   297,   345,
+      392,   438,   483,   526,   569,   610,   650,   688,
+      724,   759,   792,   822,   851,   878,   903,   926,
+      946,   964,   980,   993,  1004,  1013,  1019,  1023
+};
+static const int16_t view_sin[ANG_N] = {
+        0,    50,   100,   150,   200,   249,   297,   345,
+      392,   438,   483,   526,   569,   610,   650,   688,
+      724,   759,   792,   822,   851,   878,   903,   926,
+      946,   964,   980,   993,  1004,  1013,  1019,  1023,
+     1024,  1023,  1019,  1013,  1004,   993,   980,   964,
+      946,   926,   903,   878,   851,   822,   792,   759,
+      724,   688,   650,   610,   569,   526,   483,   438,
+      392,   345,   297,   249,   200,   150,   100,    50,
+        0,   -50,  -100,  -150,  -200,  -249,  -297,  -345,
+     -392,  -438,  -483,  -526,  -569,  -610,  -650,  -688,
+     -724,  -759,  -792,  -822,  -851,  -878,  -903,  -926,
+     -946,  -964,  -980,  -993, -1004, -1013, -1019, -1023,
+    -1024, -1023, -1019, -1013, -1004,  -993,  -980,  -964,
+     -946,  -926,  -903,  -878,  -851,  -822,  -792,  -759,
+     -724,  -688,  -650,  -610,  -569,  -526,  -483,  -438,
+     -392,  -345,  -297,  -249,  -200,  -150,  -100,   -50
+};
 /* Forward declarations — texture/sprite systems are defined in the Stage 6/7 block below */
 static void tex_shutdown(void);
 static void tex_init(void);
@@ -520,8 +618,8 @@ static int level_load(const char *name) {
                     pl_x = (int32_t)lv_things[i].x << 8;
                     pl_y = (int32_t)lv_things[i].y << 8;
                     /* Doom angle (degrees, 0=East) → fine angle (0-31, 32=full) */
-                    pl_angle = ((int)lv_things[i].angle * 32 / 360) & 31;
-                    pl_dir   = pl_angle / 4;
+                    pl_angle = ((int)lv_things[i].angle * ANG_N / 360) & ANG_MASK;
+                    pl_dir   = pl_angle / ANG_PER_DIR;
                     break;
                 }
             }
@@ -748,6 +846,68 @@ static void sky_ensure(void) {
 /* Per-row raycaster. Fills floor/ceiling rows before the BSP wall pass.
  * Samples the sector per-column (with a last-sector cache so BSP walks happen
  * only at sector transitions) so flats and sky are correct across boundaries. */
+/* ── Per-row sector runs ──────────────────────────────────────────────────
+ *
+ * find_sector_at() is a BSP descent followed by four dependent lookups
+ * (subsector -> seg -> linedef -> sidedef), roughly 100 cycles. draw_flats
+ * used to call it once per floor/ceiling pixel: 53,760 descents per frame,
+ * which measured at ~87% of the entire frame.
+ *
+ * It does not need to. Along one screen row the visible floor lies on a single
+ * straight line in world space, so the sector can only change where that line
+ * crosses a sector boundary: a handful of times per row at most. Sample every
+ * FLAT_STEP pixels, and when two samples disagree, bisect to find the exact
+ * pixel where it changed.
+ *
+ * Exact at every boundary it finds. The one thing it can miss is a sector
+ * that both starts and ends inside a single FLAT_STEP window, which for floors
+ * means a sliver under 16 pixels wide; that is rare, and the cost of being
+ * wrong is one run of flat drawn with a neighbour's texture.
+ */
+#define FLAT_STEP      16
+#define FLAT_MAX_RUNS  48
+
+static int flat_sec_px(int32_t wx0, int32_t wy0,
+                       int32_t step_x, int32_t step_y, int sx, int psec) {
+    int s = find_sector_at((wx0 + step_x * sx) >> 8,
+                           (wy0 + step_y * sx) >> 8);
+    if (s < 0 || s >= lv_nsectors)
+        s = (psec >= 0 && psec < lv_nsectors) ? psec : -1;
+    return s;
+}
+
+/* Split one row into runs of constant sector. Run i covers pixels up to and
+ * including end[i] and has sector sec[i]. Returns the number of runs. */
+static int flat_row_runs(int32_t wx0, int32_t wy0,
+                         int32_t step_x, int32_t step_y, int psec,
+                         int *end, int *sec) {
+    int n    = 0;
+    int xa   = 0;
+    int seca = flat_sec_px(wx0, wy0, step_x, step_y, 0, psec);
+
+    while (xa < VGA13_W - 1) {
+        int xb = xa + FLAT_STEP;
+        if (xb > VGA13_W - 1) xb = VGA13_W - 1;
+        int secb = flat_sec_px(wx0, wy0, step_x, step_y, xb, psec);
+        if (secb == seca) { xa = xb; continue; }   /* same run, keep going */
+
+        /* A boundary lies in (xa, xb]. Narrow it to one pixel: lo always has
+         * sector seca, hi always has something else. */
+        int lo = xa, hi = xb;
+        while (hi - lo > 1) {
+            int mid  = (lo + hi) / 2;
+            int secm = flat_sec_px(wx0, wy0, step_x, step_y, mid, psec);
+            if (secm == seca) lo = mid;
+            else            { hi = mid; secb = secm; }
+        }
+        if (n < FLAT_MAX_RUNS - 1) { end[n] = lo; sec[n] = seca; n++; }
+        xa = hi; seca = secb;
+    }
+
+    end[n] = VGA13_W - 1; sec[n] = seca; n++;
+    return n;
+}
+
 static void draw_flats(int psec) {
     sky_ensure();
 
@@ -785,7 +945,7 @@ static void draw_flats(int psec) {
 
         uint8_t *row = g_backbuf + y * VGA13_W;
 
-        int sky_u_base = ((int)pl_angle * 8) & 255;
+        int sky_u_base = ((int)pl_angle * ANG_SKY_U) & 255;
         int sky_v = y * 128 / VIEW_HALF_H;
         if (sky_v > 127) sky_v = 127;
 
@@ -794,11 +954,15 @@ static void draw_flats(int psec) {
         const uint8_t *cmap = NULL;
         int is_sky_here = 0;
 
+        /* Where this row changes sector, found with a few dozen BSP descents
+         * instead of one per pixel. */
+        int run_end[FLAT_MAX_RUNS], run_sec[FLAT_MAX_RUNS];
+        flat_row_runs(wx_fp, wy_fp, step_x, step_y, psec, run_end, run_sec);
+        int ri  = 0;
+        int sec = run_sec[0];
+
         for (int sx = 0; sx < VGA13_W; sx++, wx_fp += step_x, wy_fp += step_y) {
-            int32_t wx_mu = wx_fp >> 8;
-            int32_t wy_mu = wy_fp >> 8;
-            int sec = find_sector_at(wx_mu, wy_mu);
-            if (sec < 0 || sec >= lv_nsectors) sec = (psec >= 0) ? psec : -1;
+            if (sx > run_end[ri]) { ri++; sec = run_sec[ri]; }
             if (sec < 0 || sec >= lv_nsectors) continue;
 
             if (sec != last_sec) {
@@ -1925,6 +2089,7 @@ static void fire_weapon(void) {
     if (!lv_things || !lv_thing_ai) return;
     pl_ammo--;
     pl_fire_cd = FIRE_CD_TICKS;
+    doomsnd_play("DSPISTOL");       /* non-blocking: the frame carries on */
     int32_t px   = pl_x >> 8, py = pl_y >> 8;
     int32_t fw_x = view_cos[pl_angle];   /* forward vector ×1024 */
     int32_t fw_y = view_sin[pl_angle];
@@ -2014,6 +2179,7 @@ static void door_activate(int sec, int stays_open) {
         return;
     }
     if (g_ndoors >= MAX_DOORS) return;
+    doomsnd_play("DSDOROPN");
     d = &g_doors[g_ndoors++];
     d->sec        = sec;
     d->close_h    = lv_sectors[sec].ceil_h;
@@ -2258,13 +2424,13 @@ static void lifts_tick(void) {
     }
 }
 
-/* Return the 32-step angle (0-31) from (mx,my) toward the player. */
+/* Return the view angle (0..ANG_N-1) from (mx,my) toward the player. */
 static int angle_to_player_32(int32_t mx, int32_t my) {
     int32_t dx = (pl_x >> 8) - mx;
     int32_t dy = (pl_y >> 8) - my;
     int best = 0;
     int64_t best_dot = (int64_t)view_cos[0]*dx + (int64_t)view_sin[0]*dy;
-    for (int a = 1; a < 32; a++) {
+    for (int a = 1; a < ANG_N; a++) {
         int64_t dot = (int64_t)view_cos[a]*dx + (int64_t)view_sin[a]*dy;
         if (dot > best_dot) { best_dot = dot; best = a; }
     }
@@ -2349,9 +2515,9 @@ static void build_vissprites(void) {
         if (is_monster_type(th->type) && lv_thing_ai
             && lv_thing_ai[i].state != AI_DEAD) {
             int dir = angle_to_player_32((int32_t)th->x, (int32_t)th->y);
-            int mon_facing = (int)(th->angle) * 32 / 360;
-            int delta = (dir - mon_facing + 32) & 31;
-            rot_char = (char)('1' + delta / 4);
+            int mon_facing = (int)(th->angle) * ANG_N / 360;
+            int delta = (dir - mon_facing + ANG_N) & ANG_MASK;
+            rot_char = (char)('1' + delta / ANG_PER_DIR);
         } else {
             rot_char = '0';
         }
@@ -2564,30 +2730,48 @@ static void draw_3d(void) {
     if (psec >= 0 && psec < lv_nsectors)
         pl_eye_z = lv_sectors[psec].floor_h + 41;
 
+    PF_T0(t_total);
+
     bb_fill_rect(0,           0, VGA13_W, VIEW_HALF_H,          CEIL_COL);
     bb_fill_rect(0, VIEW_HALF_H, VGA13_W, VIEW_H - VIEW_HALF_H, FLOOR_COL);
 
+    PF_T0(t_flats);
     draw_flats(psec);
+    PF_ACC(pf_flats, t_flats);
 
     spans_reset();
     build_vissprites();
 
+    PF_T0(t_bsp);
     if (lv_nnodes > 0)
         bsp_traverse(lv_nnodes - 1);
     else if (lv_nssects > 0)
         bsp_traverse(0x8000);
+    PF_ACC(pf_bsp, t_bsp);
 
+    PF_T0(t_things);
     doors_tick();
     lifts_tick();
     sectors_tick(psec);
     try_pickups();
     thing_think();
     projs_tick();
+    PF_ACC(pf_things, t_things);
+
+    PF_T0(t_spr);
     draw_vissprites();
     projs_draw();
     draw_weapon();
+    PF_ACC(pf_sprites, t_spr);
+
+    PF_T0(t_bar);
     draw_statusbar();
+    PF_ACC(pf_bar, t_bar);
+
     present_frame();
+
+    PF_ACC(pf_total, t_total);
+    pf_maybe_report();
 }
 
 /* ── doom_play_level ──────────────────────────────────────────────────────── */
@@ -2601,7 +2785,7 @@ void doom_play_level(int ep, int skill) {
 
 #define MOVE_SPEED    8
 #define MOVE_DELAY    1
-#define TURN_DELAY    4
+#define TURN_DELAY    1
 #define ZOOM_DELAY    3
 #define ZOOM_STEP    32
 #define FRAME_TICKS   2
@@ -2618,7 +2802,8 @@ void doom_play_level(int ep, int skill) {
         g_level_exit = 0;
 
         if (level_load(mapname) < 0) {
-            vga13h_exit();
+            music_stop();
+    vga13h_exit();
             vga_set_cursor(vga_get_row(), vga_get_col());
             vga_set_color(VGA_LIGHT_RED, VGA_BLACK);
             vga_printf("  %s not found in WAD.\n", mapname);
@@ -2628,6 +2813,13 @@ void doom_play_level(int ep, int skill) {
             vga13h_enter(); set_doom_palette();
             break;
         }
+
+        /* The level's own music: D_ plus the map name, looping. Started after
+         * the load succeeds, so a missing map does not leave a tune playing
+         * over the error. */
+        char mustune[8] = {'D','_',0,0,0,0,0,0};
+        for (int mi = 0; mi < 4; mi++) mustune[2 + mi] = mapname[mi];
+        music_play(mustune, 1);
 
         am_fit();
         am_cx = pl_x >> 8;
@@ -2670,13 +2862,13 @@ void doom_play_level(int ep, int skill) {
 
             /* ── Strafe ───────────────────────────────────────────────────── */
             if (keyboard_key_pressed(KEY_SC_A)) {
-                int sa = (pl_angle + 8) & 31;
+                int sa = (pl_angle + ANG_90) & ANG_MASK;
                 int32_t dx = (int32_t)view_cos[sa] / 8 * MOVE_SPEED * 2;
                 int32_t dy = (int32_t)view_sin[sa] / 8 * MOVE_SPEED * 2;
                 if (try_move(dx, dy)) moved = 1;
             }
             if (keyboard_key_pressed(KEY_SC_D)) {
-                int sa = (pl_angle + 24) & 31;
+                int sa = (pl_angle + ANG_270) & ANG_MASK;
                 int32_t dx = (int32_t)view_cos[sa] / 8 * MOVE_SPEED * 2;
                 int32_t dy = (int32_t)view_sin[sa] / 8 * MOVE_SPEED * 2;
                 if (try_move(dx, dy)) moved = 1;
@@ -2687,12 +2879,12 @@ void doom_play_level(int ep, int skill) {
             /* ── Turn (rate-limited, fine angle) ─────────────────────────── */
             if (now - turn_last >= TURN_DELAY) {
                 if (keyboard_key_pressed(KEY_SC_LEFT)) {
-                    pl_angle = (pl_angle + 1) & 31;
-                    pl_dir   = pl_angle / 4;
+                    pl_angle = (pl_angle + 1) & ANG_MASK;
+                    pl_dir   = pl_angle / ANG_PER_DIR;
                     turn_last = now; moved = 1;
                 } else if (keyboard_key_pressed(KEY_SC_RIGHT)) {
-                    pl_angle = (pl_angle + 31) & 31;
-                    pl_dir   = pl_angle / 4;
+                    pl_angle = (pl_angle + ANG_MASK) & ANG_MASK;
+                    pl_dir   = pl_angle / ANG_PER_DIR;
                     turn_last = now; moved = 1;
                 }
             }
@@ -2751,7 +2943,8 @@ void doom_play_level(int ep, int skill) {
 
         if (g_level_exit) {
             /* Brief level-complete screen in text mode, then load next map */
-            vga13h_exit();
+            music_stop();
+    vga13h_exit();
             vga_set_cursor(vga_get_row(), vga_get_col());
             vga_set_color(VGA_YELLOW, VGA_BLACK);
             vga_printf("\n  ** E%dM%d COMPLETE! **\n", ep + 1, map);
@@ -2776,7 +2969,8 @@ void doom_play_level(int ep, int skill) {
 
         if (pl_health <= 0) {
             /* Death screen: red text, 2.5-second pause, then back to menu */
-            vga13h_exit();
+            music_stop();
+    vga13h_exit();
             vga_set_cursor(vga_get_row(), vga_get_col());
             vga_set_color(VGA_LIGHT_RED, VGA_BLACK);
             vga_puts("\n  YOU DIED.\n");
@@ -2917,6 +3111,7 @@ void doom_menu_run(void) {
         if (running) draw_frame();
     }
 
+    music_stop();
     vga13h_exit();
     vga_set_cursor(vga_get_row(), vga_get_col());
 }
@@ -2949,6 +3144,7 @@ void doom_titlescreen(void) {
     keyboard_flush();
     keyboard_getchar();
 
+    music_stop();
     vga13h_exit();
     vga_set_cursor(vga_get_row(), vga_get_col());
 }

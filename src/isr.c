@@ -1,6 +1,8 @@
 #include "isr.h"
 #include "usermode.h"
+#include "proc.h"
 #include "vga.h"
+#include "term.h"
 #include "klog.h"
 #include "task.h"
 
@@ -70,17 +72,31 @@ void isr_handler(registers_t *regs) {
      * program, and usermode_in_user() confirms one is actually running.
      * Without this, `cook`ing an ELF with a bad instruction panicked and
      * halted the whole box, which defeats the point of having ring 3. */
+    /* A page fault in a process's heap below its break is not an error, it
+     * is the first touch of a page sbrk promised: map it and retry. That
+     * goes for the kernel too, when a syscall copies into a buffer the
+     * program has not touched yet, which is why this sits ahead of both the
+     * kill and the panic. Anything else is the fault it always was. */
+    if (regs->int_no == 14) {
+        uint32_t cr2;
+        __asm__ volatile ("mov %%cr2, %0" : "=r"(cr2));
+        if (usermode_demand_page(cr2, regs->err_code) == 0) return;
+    }
+
     if ((regs->cs & 3) == 3 && usermode_in_user()) {
         uint32_t cr2 = 0;
         if (regs->int_no == 14)
             __asm__ volatile ("mov %%cr2, %0" : "=r"(cr2));
-        vga_set_color(VGA_LIGHT_RED, VGA_BLACK);
-        vga_printf("\n  [program killed] exception %u: %s\n",
-                   regs->int_no, name);
-        vga_printf("  eip=0x%x err=0x%x", regs->eip, regs->err_code);
-        if (regs->int_no == 14) vga_printf(" cr2=0x%x", cr2);
-        vga_puts("\n");
-        vga_set_color(VGA_LIGHT_GREY, VGA_BLACK);
+        /* To the terminal the program was cooked on, which for a program
+         * run over SSH is not this screen. */
+        term_t *tt = term_current();
+        term_color(tt, VGA_LIGHT_RED, VGA_BLACK);
+        term_printf(tt, "\n  [program killed] exception %u: %s\n",
+                    regs->int_no, name);
+        term_printf(tt, "  eip=0x%x err=0x%x", regs->eip, regs->err_code);
+        if (regs->int_no == 14) term_printf(tt, " cr2=0x%x", cr2);
+        term_puts(tt, "\n");
+        term_color(tt, VGA_LIGHT_GREY, VGA_BLACK);
         klog("[user] fault exc=%u err=0x%x eip=0x%x cr2=0x%x -> program killed\n",
              regs->int_no, regs->err_code, regs->eip, cr2);
         usermode_fault(regs->int_no, regs->err_code, regs->eip, cr2);
@@ -131,6 +147,28 @@ void isr_handler(registers_t *regs) {
 /* Table of registered IRQ handlers */
 static irq_handler_t irq_handlers[16];
 
+/* Let an IRQ line through the PIC. idt_init unmasks only the timer and the
+ * keyboard, so any driver that wants interrupts has to ask; a line on the
+ * slave also needs the cascade (IRQ2) open on the master, which is the part
+ * that is easy to forget. */
+static inline uint8_t inb(uint16_t port) {
+    uint8_t r;
+    __asm__ volatile ("inb %1,%0" : "=a"(r) : "Nd"(port));
+    return r;
+}
+
+void irq_unmask(uint8_t irq) {
+    if (irq < 8) {
+        uint8_t m = inb(0x21);
+        outb(0x21, (uint8_t)(m & ~(1u << irq)));
+    } else if (irq < 16) {
+        uint8_t m = inb(0xA1);
+        outb(0xA1, (uint8_t)(m & ~(1u << (irq - 8))));
+        uint8_t mm = inb(0x21);
+        outb(0x21, (uint8_t)(mm & ~(1u << 2)));
+    }
+}
+
 void irq_register(uint8_t irq, irq_handler_t handler) {
     if (irq < 16)
         irq_handlers[irq] = handler;
@@ -148,6 +186,25 @@ void irq_handler(registers_t *regs) {
     if (irq >= 8)
         outb(0xA0, 0x20);   /* slave PIC EOI */
     outb(0x20, 0x20);       /* master PIC EOI */
+
+    /* A kill flagged against the running process takes effect here, but only
+     * if this interrupt arrived from ring 3 ((cs & 3) == 3). Then the program
+     * itself was executing, the kernel holds no locks, and the frame can be
+     * abandoned. An IRQ that interrupted the *kernel* half of a syscall must
+     * not unwind: that code may hold the FAT mutex, and abandoning its frame
+     * would leave the filesystem locked forever. Those kills are taken by
+     * syscall_dispatch instead, which checks on the way in and the way out.
+     *
+     * This is also how a program that makes no syscalls at all gets killed:
+     * the 100 Hz timer is the only thing that ever re-enters the kernel. */
+    if ((regs->cs & 3) == 3) {
+        proc_t *pr = proc_current();
+        /* Stop first: a stopped process that is also flagged for death gets
+         * woken by proc_kill and takes the kill on the way out of the park. */
+        if (pr && pr->stop_pending) proc_take_stop();
+        if (proc_kill_pending())
+            usermode_killed("irq");     /* does not return */
+    }
 
     /* Timer-driven preemption: do it AFTER the EOI (so the PIC is ready for
      * the next tick) and still with interrupts disabled. sched_preempt may

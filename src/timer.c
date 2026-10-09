@@ -1,5 +1,7 @@
 #include "timer.h"
+#include "task.h"
 #include "isr.h"
+#include "random.h"
 
 static volatile uint32_t ticks = 0;
 
@@ -10,6 +12,8 @@ static inline void outb(uint16_t port, uint8_t val) {
 static void timer_handler(registers_t *regs) {
     (void)regs;
     ticks++;
+    random_stir(ticks);     /* the TSC at each tick is jitter for the pool */
+    task_cpu_tick();    /* charge the tick to whoever is running */
 }
 
 void timer_init(void) {

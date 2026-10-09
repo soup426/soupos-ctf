@@ -101,3 +101,11 @@ void gdt_init(void) {
 void tss_set_esp0(uint32_t esp0) {
     tss.esp0 = esp0;
 }
+
+/* Top of the boot ring-0 stack. Used as tss.esp0 whenever the task being
+ * switched to has never entered ring 3: nothing can trap from ring 3 under it,
+ * so the value is never actually consulted, but leaving a finished process's
+ * frame address in the TSS is a trap waiting for the next bug. */
+uint32_t tss_boot_esp0(void) {
+    return (uint32_t)(kstack + sizeof(kstack));
+}

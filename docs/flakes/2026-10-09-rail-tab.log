@@ -1,0 +1,15 @@
+2026-10-09, the first v0.60.130 full check: rail-test "rail differs from jobs:" with
+an empty diff under it, and tab-test "pap<Tab> in /tabs did not become 'slurp
+paprika.txt '". Alone, both pass; the full check run again straight after passed
+(rail-test 61 s, tab-test 104 s). Neither has a glob in it, so v0.60.130's builtin
+globs are not on their path. The kept directories were removed before they were read,
+so the cause is not known: an empty diff under a cmp failure suggests one side's file
+was not written in time (rail-test), and a Tab that arrives before the line is ready
+(tab-test). If either recurs, keep the directory and read got/want before rerunning.
+
+Update, v0.60.140 (the same rail-test failure again, its directory kept this time):
+the diff was not empty, check.sh's summary shows only FAIL lines. greet.elf had not
+yet exited half a second after it was started (listed Running, not Exit 42), and the
+13-second pipeline was Done before the last line was typed, so every line after
+shifted. Fixed: greet gets 2 s, the long jobs 30 and 31 s. tab-test's cause is still
+unknown.

@@ -11,5 +11,13 @@
 void gdt_init(void);
 
 /* Set the ring-0 stack the CPU switches to on a ring3->ring0 transition
- * (interrupt or syscall from user mode). Call before entering user mode. */
+ * (interrupt or syscall from user mode).
+ *
+ * This is PER-TASK state. With more than one ring-3 program alive, each has to
+ * trap onto its own kernel stack, or one program's trap frame lands on top of
+ * the frame another left there and neither can return. task_yield keeps it in
+ * step with `current`; the value itself is task_t.user_resume_esp. */
 void tss_set_esp0(uint32_t esp0);
+
+/* Top of the boot ring-0 stack: the esp0 for a task that is not in ring 3. */
+uint32_t tss_boot_esp0(void);

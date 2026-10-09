@@ -1,0 +1,5 @@
+2026-10-09, during the v0.60.108 full check: gate desk "in-kernel self-test passes
+(no match for /\[sample\] [0-9]+ tests, 0 failed/)" while "busiest service" matched,
+so a test inside sample failed; the only load-dependent one is "services are not
+busy" (any service over 50% of one second). Alone: 107 checks pass, busiest 0%.
+Fixed in v0.60.108: a second over 50% is measured again a second later.

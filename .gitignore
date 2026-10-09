@@ -12,3 +12,4 @@ iso/boot/kernel.elf
 handout/
 
 .build-config
+src/*.d

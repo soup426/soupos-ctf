@@ -1,6 +1,9 @@
 #include "keyboard.h"
+#include "term.h"
+#include "random.h"
 #include "isr.h"
 #include "task.h"
+#include "proc.h"
 #include "console.h"
 
 /* PS/2 scancodes set 1 -> ASCII, unshifted */
@@ -79,6 +82,7 @@ void keyboard_inject(int c) { kb_push(c); }
 static void keyboard_irq_handler(registers_t *regs) {
     (void)regs;
     uint8_t sc = inb(0x60);
+    random_stir(sc);        /* keystroke timing feeds the pool */
 
     /* Extended key sequence prefix */
     if (sc == 0xE0) { e0_prefix = 1; return; }
@@ -131,6 +135,21 @@ static void keyboard_irq_handler(registers_t *regs) {
             if (ctl != '\b' && ctl != '\t' && ctl != '\n' && ctl != '\r')
                 c = (char)ctl;
         }
+        /* Ctrl-C is the terminal driver's job, not the shell's. While a
+         * foreground program runs, the shell is blocked in proc_wait and
+         * nobody is reading keys, so the interrupt has to be raised here, from
+         * the IRQ. Flag the program and swallow the key. With no foreground
+         * program it falls through to the shell, which uses 0x03 to cancel the
+         * input line. */
+        if (c == 0x03) term_vga.intr++;          /* for shell loops (v0.60.1) */
+        if (c == 0x03 || c == 0x1A) {
+            proc_t *fg = proc_foreground();
+            if (fg) {
+                if (c == 0x03) proc_flag_kill(fg);   /* Ctrl-C: terminate */
+                else           proc_flag_stop(fg);   /* Ctrl-Z: park it   */
+                return;
+            }
+        }
         kb_push((int)(unsigned char)c);
     }
 }
@@ -180,7 +199,7 @@ int keyboard_getchar(void) {
         /* If nothing else was runnable we just spun back here. Park the
          * CPU until the next IRQ (keyboard or 100 Hz timer) wakes us. */
         if (!keyboard_available())
-            __asm__ volatile ("hlt");
+            cpu_halt();
     }
     int c = kb_buf[kb_read];
     kb_read = (kb_read + 1) % KB_BUF_SIZE;

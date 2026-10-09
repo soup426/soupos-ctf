@@ -1,0 +1,233 @@
+[boot] kernel_main
+[boot] GDT ok
+[boot] IDT ok
+[boot] timer ok
+[boot] keyboard ok
+[random] pool seeded (rdrand absent)
+[boot] PMM ok
+[boot] paging on
+[boot] heap ok
+[boot] interrupts enabled
+[ata] bus-master DMA at io 0xc600
+[boot] ATA ok
+[swap] 4096 pages past the volume, sectors 65536 to 98304
+[boot] FAT ok
+[boot] VFS ok
+[fat] counted 14118 free clusters in 1 ticks
+[boot] users ok
+[boot] ai bridge off (no COM2)
+[boot] syscall gate ok (int 0x80)
+▄███████     ▄█████▄    ███   ███   ▄███████▄    ▄█████▄    ▄███████
+███   ███   ███   ███   ███   ███   ███   ███   ███   ███   ███   ███
+███   █▀    ███   ███   ███   ███   ███   ███   ███   ███   ███   █▀
+███▄▄▄▄▄▄   ███   ███   ███   ███   ███   ███   ███   ███   ███▄▄▄▄▄▄
+▀▀▀▀▀▀███   ███   ███   ███   ███   ███▄▄▄██▀   ███   ███   ▀▀▀▀▀▀███
+ ▄█   ███   ███   ███   ███   ███   ███▀▀▀▀     ███   ███    ▄█   ███
+███   ███   ███   ███   ███   ███   ███         ███   ███   ███   ███
+ ▀███████    ▀█████▀    ████████▀   ███          ▀█████▀     ▀███████
+                           a shitty kernel
+
+[OK] Multiboot handoff verified
+[OK] GDT loaded (flat 32-bit, ring 0)
+[OK] IDT loaded (32 exceptions + 16 IRQs)
+[OK] 8259 PIC remapped (IRQs -> vectors 32-47)
+[OK] Timer running at 100 Hz (IRQ0)
+[OK] Keyboard driver ready (IRQ1)
+[OK] PMM ready     - 119596 KB free / 130556 KB total
+[OK] Paging on     - 127 MB identity-mapped
+[OK] Heap ready    - 8191 KB
+[OK] ATA drive     - 48 MB
+[OK] FAT16 volume   - SOUPOS
+[OK] VFS ready     - files + /dev/{null,zero,serial,kbd}
+[OK] Kernel log    - ring buffer + serial mirror (see: dmesg)
+[mouse] ps/2 mouse ready at 64,24
+[OK] Mouse         - PS/2 auxiliary device on IRQ 12
+[fb] 1024x768 at 32 bpp, pitch 4096, 3072 KB at fd000000
+[OK] Framebuffer   - 1024x768 at 32 bpp
+[ac97] ready, mixer at c000, bus master at c500, 48000 Hz
+[OK] Sound         - AC97 at 48000 Hz
+[net] rtl8139 at io 0xc400 irq 11 mac 52:54:0:12:34:56
+[net] ip 10.0.2.15 gw 10.0.2.2
+[dhcp] lease 10.0.2.15 mask 255.255.255.0 gw 10.0.2.2 dns 10.0.2.3 for 86400s
+[OK] Network       - RTL8139, MAC 52:54:0:12:34:56
+                     IP 10.0.2.15 (dhcp), gateway 10.0.2.2
+[mixer] 4 voices over a 65536-sample ring
+[OK] Mixer         - 4 voices into the AC97 ring
+[fbcon] 128x48 console at 0,0 on the 1024x768 framebuffer
+[OK] Console       - 128x48 on the framebuffer
+[boot] scheduler ok (kernel is task 0)
+[OK] Scheduler ok  - kernel is task 0 (kernel)
+
+[boot] scheduler self-test:
+[boot] spawned counter task, driving scheduler...
+  [task 3:counter] tick 1
+A  [task 3:counter] tick 2
+B  [task 3:counter] tick 3
+C  [task 3:counter] tick 4
+D  [task 3:counter] tick 5
+E  [task counter] done, exiting
+
+[boot] counter task exited
+[boot] scheduler self-test complete
+[boot] self-test complete, tasks alive: 3
+
+[boot] preemption enabled (IRQ0 @ 100 Hz)
+Type 'menu' to see available commands.
+
+
+  soupOS kitchen -- clock in to start your shift.
+  cook:   headchef
+  secret: ********
+[users] headchef: pbkdf2 check took 178 ticks
+
+  Welcome to the kitchen, headchef. (headchef -- run of the kitchen)
+
+headchef@soupOS:/> sample
+  tasting the soup...
+  heap alloc/write/free        ok
+[sample] heap alloc/write/free ok
+  heap 16x1KB allocation       ok
+[sample] heap 16x1KB allocation ok
+  heap recovers freed space    ok
+[sample] heap recovers freed space ok
+  heap recovers after reverse free ok
+[sample] heap recovers after reverse free ok
+  heap refuses the absurd      ok
+[sample] heap refuses the absurd ok
+  vfs table fills              ok
+[sample] vfs table fills ok
+  vfs table refuses when full  ok
+[sample] vfs table refuses when full ok
+  vfs table frees on close     ok
+[sample] vfs table frees on close ok
+  pipe create                  ok
+[sample] pipe create ok
+  pipe survives ring wrap      ok
+[sample] pipe survives ring wrap ok
+  pipe reads EOF after close   ok
+[sample] pipe reads EOF after close ok
+  checksum known answer        ok
+[sample] checksum known answer ok
+  fat write                    ok
+[sample] fat write ok
+  fat read matches             ok
+[sample] fat read matches ok
+  fat delete                   ok
+[sample] fat delete ok
+  fat gives back what it took  ok
+[sample] fat gives back what it took ok
+  vga scroll moves 24 rows     ok
+[sample] vga scroll moves 24 rows ok
+[sample] busiest service: fbcon at 55%
+  services are not busy        FAIL
+[sample] services are not busy FAIL
+  memset fills                 ok
+[sample] memset fills ok
+  strcpy/strlen                ok
+[sample] strcpy/strlen ok
+  strcmp orders                ok
+[sample] strcmp orders ok
+  memmove handles overlap      ok
+[sample] memmove handles overlap ok
+  sha256 empty                 ok
+[sample] sha256 empty ok
+  sha256 abc                   ok
+[sample] sha256 abc ok
+  sha256 448-bit (pad spills)  ok
+[sample] sha256 448-bit (pad spills) ok
+  sha256 million a's           ok
+[sample] sha256 million a's ok
+  hmac rfc4231 #1              ok
+[sample] hmac rfc4231 #1 ok
+  hmac rfc4231 #2              ok
+[sample] hmac rfc4231 #2 ok
+  hmac key longer than block   ok
+[sample] hmac key longer than block ok
+  pbkdf2-sha256 1 iteration    ok
+[sample] pbkdf2-sha256 1 iteration ok
+[sample] pbkdf2 4096 iterations took 67 ticks
+  pbkdf2-sha256 4096 iterations ok
+[sample] pbkdf2-sha256 4096 iterations ok
+  random draws differ          ok
+[sample] random draws differ ok
+[sample] random draw: 7e10aadb5d54f93d
+[sample] random 64KB: 262433 ones, 261736 runs
+  random monobit               ok
+[sample] random monobit ok
+  random runs                  ok
+[sample] random runs ok
+  chacha20 rfc8439 2.4.2       ok
+[sample] chacha20 rfc8439 2.4.2 ok
+  poly1305 rfc8439 2.5.2       ok
+[sample] poly1305 rfc8439 2.5.2 ok
+  aead rfc8439 2.8.2 ciphertext ok
+[sample] aead rfc8439 2.8.2 ciphertext ok
+  aead rfc8439 2.8.2 tag       ok
+[sample] aead rfc8439 2.8.2 tag ok
+  aead round trip              ok
+[sample] aead round trip ok
+  aead refuses a flipped bit   ok
+[sample] aead refuses a flipped bit ok
+  x25519 rfc7748 #1            ok
+[sample] x25519 rfc7748 #1 ok
+[sample] x25519 took 26 ticks
+  x25519 rfc7748 #2            ok
+[sample] x25519 rfc7748 #2 ok
+  x25519 iterated once         ok
+[sample] x25519 iterated once ok
+  sha512 abc                   ok
+[sample] sha512 abc ok
+  sha512 896-bit               ok
+[sample] sha512 896-bit ok
+[sample] ed25519: three keygen+sign+verify took 173 ticks
+  ed25519 rfc8032 public keys  ok
+[sample] ed25519 rfc8032 public keys ok
+  ed25519 rfc8032 signatures   ok
+[sample] ed25519 rfc8032 signatures ok
+  ed25519 signatures verify    ok
+[sample] ed25519 signatures verify ok
+  ed25519 refuses a changed byte ok
+[sample] ed25519 refuses a changed byte ok
+  49 tests, 1 failed
+[sample] 49 tests, 1 failed
+  something is off in the kitchen.
+headchef@soupOS:/> skewer
+  pointing at 10,5  buttons:
+  4 packets, 0 resyncs
+[mouse] at 10,5 buttons=0 packets=4 resyncs=0
+headchef@soupOS:/> strain MOUSE.TXT
+  Cannot strain: MOUSE.TXT
+  (not found, or it is a bowl - use rmbowl)
+headchef@soupOS:/> jot MOUSE.TXT
+[clip] set 5 bytes
+headchef@soupOS:/> scraps
+  5 bytes:
+  abcde
+[clip] 5 bytes: abcde
+headchef@soupOS:/> strain CLIP.TXT
+  Cannot strain: CLIP.TXT
+  (not found, or it is a bowl - use rmbowl)
+headchef@soupOS:/> soup is good[clip] set 12 bytes
+            scraps
+  12 bytes:
+  soup is good
+[clip] 12 bytes: soup is good
+headchef@soupOS:/> jot CLIP.TXT
+[clip] set 7 bytes
+headchef@soupOS:/> cook weigh.elf < CLIP.TXT
+[proc 4] spawned /weigh.elf 
+  cooking /weigh.elf in ring 3...
+[proc 4] ring3 esp0=0x20d738
+ 0  3 14
+WCOUT lines=0 words=3 bytes=14
+[proc 4] /weigh.elf exited with code 0, 29898 pages free, 0 ticks
+  [/weigh.elf exited with code 0]
+headchef@soupOS:/> scraps[clip] set 6 bytes
+      scraps
+  6 bytes:
+  scraps
+[clip] 6 bytes: scraps
+headchef@soupOS:/> kitchen
+[kitchen] 4 frames, idle 100%, self 0%
+  left the kitchen after 4 frames (idle 100%, this shell 0%).
+headchef@soupOS:/> 

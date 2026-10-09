@@ -6,6 +6,8 @@
  * AND, once preemption is enabled, when the 100 Hz timer IRQ preempts them -
  * so a task that never yields can no longer monopolise the CPU. */
 
+struct proc;   /* ring-3 process (proc.h); tasks only hold a pointer */
+
 typedef enum {
     TASK_READY   = 0,    /* runnable, waiting for CPU */
     TASK_RUNNING = 1,    /* currently executing */
@@ -22,11 +24,35 @@ typedef struct task {
     task_state_t  state;
     struct task  *next;          /* intrusive circular ready list        */
     struct task  *wq_next;       /* linkage on a wait_queue_t (or NULL)  */
+    struct wait_queue *blocked_on; /* the queue we are parked on, or NULL */
     uint32_t      wake_tick;     /* for task_sleep: PIT tick to wake at  */
     void        (*entry)(void *);/* first-run entry point (via trampoline) */
     void         *arg;           /* argument passed to entry             */
     int           preempt_depth; /* >0 = this task must not be preempted */
     uint32_t     *page_dir;      /* address space; kernel's unless in exec */
+    /* Ring-0 esp to resume at when this task leaves ring 3, and the esp0 the
+     * CPU must load if it traps *from* ring 3. The same word serves both: it
+     * is the kernel esp captured by user_mode_enter after its own pushes, so a
+     * trap frame pushed there lands below the frame user_mode_enter left on
+     * this stack instead of on top of it. Zero when the task has never entered
+     * ring 3. task_yield keeps tss.esp0 in step with it. */
+    uint32_t      user_resume_esp;
+    struct proc  *proc;          /* ring-3 process this task runs, or NULL  */
+    struct term  *term;          /* where it prints and reads; NULL = the console.
+                                  * Inherited by every task it spawns (v0.36.0) */
+    void         *shell;         /* the shell it belongs to (shell_t), inherited */
+    void         *soupyc;        /* soupyc_ctx_t while this task interprets  */
+    int           service;       /* a background service (fbcon, mixer): it
+                                  * is alive, but it is not another program
+                                  * competing for the machine */
+    uint32_t      cpu_window;    /* timer ticks held in the second so far   */
+    uint32_t      cpu_last;      /* ... and in the second just finished:
+                                  * the window is 100 ticks, so this IS a
+                                  * percentage, no division needed          */
+    int           sys_write;     /* inside a kernel-internal write (the roster,
+                                  * the login record, a home...): may use the
+                                  * disk's reserve whoever the task's cook is
+                                  * (v0.55.5) */
 } task_t;
 
 /* Simple intrusive wait queue - FIFO singly-linked list of blocked tasks.
@@ -66,6 +92,26 @@ void     task_exit(void) __attribute__((noreturn));
 task_t  *task_current(void);
 uint32_t task_count(void);
 
+/* Like task_count(), but ignores DEAD tasks awaiting the reaper. Use this to
+ * ask "is any other task actually running?". */
+uint32_t task_count_alive(void);
+
+/* Alive tasks that are not background services. This is the number a program
+ * asking "do I have the machine to myself?" actually wants. */
+uint32_t task_count_users(void);
+
+/* Mark the calling task a background service. */
+void     task_set_service(void);
+
+/* Charge this timer tick to whichever task is running, and roll the window
+ * once a second. Called from the timer interrupt and nowhere else.
+ *
+ * It measures WHO HELD THE CPU, which is not the same as who did work: a task
+ * halted in a wait loop is still the current task, so the shell sitting at a
+ * prompt reads as busy. What the number is good for is the opposite question -
+ * whether a background service is costing more than it should. */
+void     task_cpu_tick(void);
+
 /* Iteration. Start at task_list_head() (NULL if no tasks), follow .next
  * until it wraps back to the head. The list is circular so do not
  * dereference past the head a second time. */
@@ -85,6 +131,12 @@ char     task_state_letter(task_state_t s);
  * (100 Hz, 10 ms per tick); sub-10ms sleeps are rounded up to one tick.
  * Safe to call before task_init() - falls back to busy-hlt. */
 void     task_sleep(uint32_t ms);
+
+/* Halt until the next interrupt, and have the timer charge that time to IDLE
+ * rather than to whoever was waiting. Every wait loop in the kernel ends in
+ * this; a bare `hlt` makes the shell "use" 90% of the cpu at a prompt. */
+void     cpu_halt(void);
+uint32_t task_idle_last(void);     /* idle ticks in the last second: a percentage */
 
 /* Wait-queue primitives. task_block_on marks the current task BLOCKED,
  * links it onto wq, and yields. task_wake / task_wake_one move tasks
@@ -114,3 +166,8 @@ void     mutex_unlock(mutex_t *m);
 void     task_block_on(wait_queue_t *wq);
 void     task_wake(wait_queue_t *wq);
 void     task_wake_one(wait_queue_t *wq);
+/* Pull one task off whatever queue it is blocked on and make it ready. For a
+ * kill: a process parked in a pipe read never reaches the point that honours
+ * the flag unless something wakes it. Every block site loops and re-checks
+ * its condition, so an early wake is always safe. */
+void     task_unblock(task_t *t);

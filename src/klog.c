@@ -1,6 +1,7 @@
 /* klog.c - kernel log ring buffer. See klog.h for the design. */
 
 #include "klog.h"
+#include "task.h"
 #include "serial.h"
 #include <stdarg.h>
 
@@ -20,8 +21,17 @@ void klog_putc(char c) {
     serial_putc(c);                 /* mirror every byte to COM1 */
 }
 
+/* A line is written whole. Without this a task's log line and another
+ * task's output interleave on the serial port whenever a switch lands mid-
+ * line, which is what the "flaky" job-control check was: the kernel's
+ * "[proc 5] /ticket.elf continued" torn in two by the process it had just
+ * resumed. Holding off preemption (not interrupts) for the length of a line
+ * costs other tasks the line's transmit time on real hardware; an interrupt
+ * handler's own klog can still land inside a task's line. */
 void klog_puts(const char *s) {
+    preempt_disable();
     while (*s) klog_putc(*s++);
+    preempt_enable();
 }
 
 /* ---- minimal formatting helpers ---- */
@@ -48,6 +58,7 @@ static void emit_hex(uint32_t v) {
 }
 
 void klog(const char *fmt, ...) {
+    preempt_disable();
     va_list ap;
     va_start(ap, fmt);
     for (; *fmt; fmt++) {
@@ -69,11 +80,12 @@ void klog(const char *fmt, ...) {
                 break;
             case 'c': klog_putc((char)va_arg(ap, int)); break;
             case '%': klog_putc('%'); break;
-            case '\0': va_end(ap); return;     /* trailing '%' */
+            case '\0': va_end(ap); preempt_enable(); return;     /* trailing '%' */
             default:  klog_putc('%'); klog_putc(*fmt); break;
         }
     }
     va_end(ap);
+    preempt_enable();
 }
 
 uint32_t klog_len(void) {

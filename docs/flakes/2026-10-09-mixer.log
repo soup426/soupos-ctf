@@ -1,0 +1,12 @@
+2026-10-09, during the v0.60.90 full check (scripts/check.sh, everything in parallel):
+  FAIL  mixer-test  could not check the capture:   (the audio capture came back empty)
+The same build, alone right after: "two voices mixed (1.486s, matches the sum)";
+the full check run again: CHECK PASSED. Not the shell change (nicknames); a
+capture under load. The second one-off of the night after x25519's; if mixer-test
+fails this way again, look at how long it waits for the capture file.
+
+Again in the v0.60.93 full check (same "could not check the capture:", empty
+message: a StopIteration, no sample ever loud). The test typed sizzle and then
+waited a flat 6 s from the keystrokes; under load that ran out before the sound.
+Fixed in v0.60.93: it waits for the prompt after sizzle, then 3 s; two runs alone
+and the full check pass.

@@ -1,0 +1,6 @@
+2026-10-09, during the v0.60.101 full check: heredoc-test "here-documents differ
+from bash", every O*.TXT missing. The serial log ended mid-script ("cooking
+/raise.elf"): the login took 35 ticks of pbkdf2 under load, `follow /H1.SH arg1`
+was typed before the prompt, and the prompt printed after the login satisfied
+UNTIL:@soupOS: before the script had run. Passed alone twice.
+Fixed in v0.60.101 in qemu_keys.py: UNTIL looks only after the typed line's echo.

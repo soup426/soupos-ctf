@@ -12,8 +12,21 @@ CC      = gcc
 # (no CR4.OSFXSR / FXSAVE area), and QEMU's default `qemu32` CPU does not even
 # expose SSE2 — so the first such instruction is an invalid opcode, which with
 # no IDT loaded yet triple-faults the machine before the GDT is installed.
+# -Werror, because one tolerated warning teaches you to read past the rest:
+# the `sink` one sat there for a whole session and trained the eye to skip the
+# compiler's output. The extra flags beyond -Wall -Wextra earn their place -
+# -Wshadow caught a global shadowing vga13h_blit's parameter the day it was
+# added. WERROR=0 turns it off for bisecting or for a newer GCC that invents a
+# warning this code has not met yet.
+WERROR ?= 1
+ifeq ($(WERROR),1)
+  WARNFLAGS = -Werror
+endif
+
 CFLAGS  = -m32 -std=gnu99 -ffreestanding -fno-stack-protector -fno-builtin \
           -nostdlib -Wall -Wextra -Iinclude -Isrc \
+          -Wshadow -Wpointer-arith -Wstrict-prototypes -Wold-style-definition \
+          $(WARNFLAGS) \
           -mgeneral-regs-only \
           -O2 -g -fno-omit-frame-pointer
 
@@ -30,9 +43,23 @@ SRC_ASM = $(wildcard src/*.asm)
 # builds with DOOM=0: 3000 lines parsing a 4 MB data file is a lot of extra
 # attack surface in an image whose whole value is a precisely specified solve
 # path, and the WAD is 4 MB of a 32 MB disk.
+# FB asks GRUB for a linear framebuffer in the multiboot header. ON by
+# default since v0.14.0: the framebuffer console is the normal way to run
+# soupOS, and mode 13h programs (doom, vgademo, bounce) scale into it.
+#
+# FB=0 still builds the text-mode kernel, which is the only way to get real
+# mode 13h and the hardware text console. The request has to be a build flag
+# rather than a boot menu entry because it OVERRIDES grub.cfg's gfxpayload -
+# see the note in src/boot.asm.
+FB     ?= 1
+ifeq ($(FB),1)
+  CFLAGS  += -DFB_REQUEST
+  ASFLAGS += -DFB_REQUEST
+endif
+
 DOOM   ?= 1
 ifeq ($(DOOM),0)
-  SRC_C  := $(filter-out src/doom.c src/wad.c,$(SRC_C))
+  SRC_C  := $(filter-out src/doom.c src/wad.c src/doomsnd.c src/music.c,$(SRC_C))
   CFLAGS += -DNO_DOOM
 endif
 
@@ -43,6 +70,13 @@ endif
 # so the secure path is the default and the vulnerable one has to be asked for.
 #   make                      -> normal soupOS
 #   make CHALLENGE=1 DOOM=0   -> the CTF image
+# Frame profiling for the Doom port: per-phase cycle counts to the serial log.
+# Diagnostic, off by default.
+PROFILE ?= 0
+ifeq ($(PROFILE),1)
+  CFLAGS += -DDOOM_PROFILE
+endif
+
 CHALLENGE ?= 0
 ifeq ($(CHALLENGE),0)
   SRC_C  := $(filter-out src/challenge.c,$(SRC_C))
@@ -55,7 +89,7 @@ endif
 # from the link while a stale object still references it, so you get an
 # undefined reference to something you deliberately compiled out. Stamp the
 # config into a file and make every object depend on it.
-CONFIG_SIG := DOOM=$(DOOM) CHALLENGE=$(CHALLENGE)
+CONFIG_SIG := DOOM=$(DOOM) CHALLENGE=$(CHALLENGE) PROFILE=$(PROFILE) FB=$(FB) WERROR=$(WERROR)
 
 # Rewrite the stamp during parsing, before any rule runs, so .build-config is
 # just an ordinary prerequisite. Done with $(shell ...) rather than a FORCE
@@ -68,10 +102,13 @@ OBJ_ASM = $(SRC_ASM:.asm=.o)
 OBJS    = $(OBJ_C) $(OBJ_ASM)
 
 # Ring-3 user programs (freestanding, linked high at USER_BASE; see user/user.ld).
-# Each links the user runtime (user/ulib.c) which provides _start + syscalls.
+# Each links the user runtime (user/ulib.c) which provides _start + syscalls,
+# and libgcc for 64-bit division (v0.60.112; only what a program uses is pulled in).
 UCFLAGS  = -m32 -ffreestanding -fno-pie -no-pie -fno-stack-protector \
            -nostdlib -Isrc -mgeneral-regs-only -O2
-USER_ELFS = user/hello.elf user/cat.elf user/echo.elf user/systest.elf user/spin.elf user/crash.elf user/unhex.elf
+USER_ELFS = user/greet.elf user/spoon.elf user/call.elf user/mise.elf user/whisk.elf \
+            user/drop.elf user/unwrap.elf user/ticket.elf user/glutton.elf \
+            user/raise.elf user/weigh.elf user/measure.elf user/proof.elf user/stockpot.elf user/fridge.elf user/peek.elf user/toss.elf user/newbowl.elf user/sift.elf user/skim.elf user/dregs.elf user/rack.elf user/cull.elf user/divvy.elf user/slice.elf user/swap.elf user/tally.elf user/taste.elf user/forage.elf user/pair.elf user/flip.elf user/label.elf user/mince.elf user/knead.elf user/layer.elf user/stack.elf user/spread.elf user/labels.elf user/dish.elf user/marinate.elf user/peel.elf user/stalk.elf user/brine.elf user/brand.elf user/encore.elf user/potluck.elf user/portion.elf user/tumble.elf user/spot.elf user/carve.elf user/reckon.elf user/frost.elf user/prod.elf user/sear.elf user/swirl.elf
 
 .PHONY: all clean distclean run run-ai run-console run-tcp iso disk user
 
@@ -79,8 +116,8 @@ all: iso
 
 # Build all user-mode ELF programs
 user: $(USER_ELFS)
-user/%.elf: user/%.c user/ulib.c user/ulib.h user/user.ld src/syscall_nr.h
-	$(CC) $(UCFLAGS) -Wl,-T,user/user.ld -o $@ user/ulib.c user/$*.c
+user/%.elf: user/%.c user/ulib.c user/ulib.h user/user.ld src/syscall_nr.h user/rx.c
+	$(CC) $(UCFLAGS) -Wl,-T,user/user.ld -o $@ user/ulib.c user/$*.c $(shell $(CC) -m32 -print-libgcc-file-name)
 
 # Static pattern rules, not plain pattern rules.
 #
@@ -94,8 +131,24 @@ user/%.elf: user/%.c user/ulib.c user/ulib.h user/user.ld src/syscall_nr.h
 # both versions agree. Keeping .build-config a normal prerequisite (rather than
 # order-only) is deliberate: order-only prerequisites do not trigger a rebuild
 # when they change, which is the entire point of the config stamp.
+# -MMD writes a .d file of the headers each object actually included, and the
+# -include below reads them back, so a change to a header rebuilds everything
+# that uses it. Without this, editing a struct in task.h recompiled task.c
+# alone and left every other object with the old layout: the kernel booted,
+# ran, and hung the moment a process trapped. That cost an hour in v0.27.0.
 $(OBJ_C): src/%.o: src/%.c .build-config
-	$(CC) $(CFLAGS) -c $< -o $@
+	$(CC) $(CFLAGS) -MMD -MP -c $< -o $@
+-include $(OBJ_C:.o=.d)
+
+# The boot logo. assets/logo.txt is the source of truth; src/logo.h is
+# generated from it and COMMITTED, so a build without Python still works. This
+# rule only fires when the asset is newer than the header.
+src/logo.h: assets/logo.txt scripts/gen-logo.py
+	@command -v python3 >/dev/null 2>&1 \
+	  && python3 scripts/gen-logo.py \
+	  || echo "  (no python3: keeping the committed src/logo.h)"
+
+src/kernel.o: src/logo.h
 
 $(OBJ_ASM): src/%.o: src/%.asm .build-config
 	$(AS) $(ASFLAGS) $< -o $@
@@ -109,13 +162,30 @@ iso: $(TARGET)
 	cp $(TARGET) iso/boot/kernel.elf
 	grub-mkrescue -o $(ISO) iso 2>/dev/null
 
+# The same kernel booted into the framebuffer menu entry instead of the text
+# one. A separate image rather than a build flag, because the difference is
+# entirely GRUB's gfxpayload: the kernel is identical and decides at runtime.
+# The text-mode image: the same tree built with FB=0, so mode 13h is real and
+# the console is the hardware text buffer. `iso` builds the framebuffer image.
+ISO_TEXT = soupOS-text.iso
+iso-text:
+	$(MAKE) clean >/dev/null
+	$(MAKE) FB=0 $(TARGET)
+	rm -rf .iso-text && cp -r iso .iso-text
+	cp $(TARGET) .iso-text/boot/kernel.elf
+	grub-mkrescue -o $(ISO_TEXT) .iso-text 2>/dev/null
+	rm -rf .iso-text
+	$(MAKE) clean >/dev/null
+
 # Create FAT16 disk image with test files (32 MB, primary master)
 $(DISK):
-	dd if=/dev/zero of=$(DISK) bs=1M count=32 2>/dev/null
-	mkfs.fat -F 16 -n "SOUPOS" $(DISK) >/dev/null
+	# 48 MB, of which the FAT volume takes the first 32 MB (the block count
+	# is in KB). The 16 MB past the volume is swap: see src/swap.c.
+	dd if=/dev/zero of=$(DISK) bs=1M count=48 2>/dev/null
+	mkfs.fat -F 16 -n "SOUPOS" $(DISK) 32768 >/dev/null
 	printf 'Hello from soupOS!\nA warm bowl of kernel soup.\n' \
 	    | mcopy -i $(DISK) - ::HELLO.TXT
-	printf 'soupOS v0.7.6\nA 32-bit hobby OS built in C and NASM.\nFeatures: GDT IDT PMM Paging Heap FAT16 bowls users VFS scheduler preempt ring3 syscalls ELF soupyc jot ai\n' \
+	printf 'soupOS v0.8.0\nA 32-bit hobby OS built in C and NASM.\nFeatures: GDT IDT PMM Paging Heap FAT16 bowls users VFS scheduler preempt ring3 syscalls ELF processes jobs soupyc jot ai\n' \
 	    | mcopy -i $(DISK) - ::README.TXT
 	printf 'Ingredients:\n  - C source code\n  - NASM stubs\n  - A linker script\n  - love\n' \
 	    | mcopy -i $(DISK) - ::RECIPE.TXT
@@ -139,18 +209,97 @@ $(DISK):
 	    | mcopy -i $(DISK) - ::ARRAY.SC
 	printf '# soupyc file I/O demo - run with: soup FILEIO.SC\nlet f = open("NOTE.TXT", "w")\nwrite(f, "soup is best served hot")\nclose(f)\npour "wrote NOTE.TXT"\nlet g = open("NOTE.TXT")\npour "read back: " + read(g, 40)\nclose(g)\nlet log = open("/dev/serial", "w")\nwrite(log, "FILEIO.SC logged this on the serial port\\n")\nclose(log)\npour "logged a line to /dev/serial"\n' \
 	    | mcopy -i $(DISK) - ::FILEIO.SC
+	printf '# Heap-backed strings - run with: soup LONGSTR.SC\n# Every line here would have failed or truncated at 47 characters.\nlet s = ""\nfor i in 1..21 {\n    s = s + "soup "\n}\npour "built " + len(s)\nlet lit = "this one literal is far longer than the forty-seven characters a soupyc string value used to hold"\npour "literal " + len(lit)\nlet f = open("README.TXT")\nlet body = read(f, 100)\nclose(f)\npour "file " + len(body)\npour "upper " + len(upper(s))\npour "slice " + len(substr(s, 0, 73))\npour "tail " + substr(s, 90, 10)\nlet w = open("RMTEST.TMP", "w")\nwrite(w, "bye")\nclose(w)\npour "removed " + remove("RMTEST.TMP")\n' \
+	    | mcopy -i $(DISK) - ::LONGSTR.SC
+	printf '# Runaway strings - must fail cleanly, not take the kernel down\nlet s = "x"\nlet n = 0\nwhile n < 100000 {\n    s = s + "xxxxxxxxxx"\n    n = n + 1\n}\npour "never gets here"\n' \
+	    | mcopy -i $(DISK) - ::RUNAWAY.SC
+	printf '# spawn - run a soupyc function as a background task\nfn ticker() {\n    let i = 0\n    while i < 5 {\n        pour "[child] tick " + i\n        sleep(400)\n        i = i + 1\n    }\n    let mine = [7, 8, 9]\n    pour "[child] array " + len(mine) + " " + mine[1]\n    pour "[child] done"\n}\nlet kept = [1, 2]\nlet id = spawn("ticker")\npour "[parent] spawned " + id\nsleep(600)\npour "[parent] array still " + len(kept) + " " + kept[1]\npour "[parent] leaving"\n' \
+	    | mcopy -i $(DISK) - ::SPAWN.SC
+	printf '# scroll timing: 600 lines, in ticks (10 ms each)\nlet t0 = time()\nlet i = 0\nwhile i < 600 {\n    pour "scroll line " + i\n    i = i + 1\n}\nlet t1 = time()\npour "SCROLLTICKS " + (t1 - t0)\n' \
+	    | mcopy -i $(DISK) - ::SCROLL.SC
+	printf '# Fill the disk past full, then clean up. Free space must come back.\n# A write that runs out of room halfway used to strand its clusters.\n# (A `let` inside the loop body is fine since v0.10.5; these stay\n# hoisted because the handles are reused anyway.)\nlet s = "x"\nlet i = 0\nwhile i < 18 {\n    s = s + s\n    i = i + 1\n}\npour "CHUNK " + len(s)\nlet f = 0\nlet n = 0\nwhile n < 130 {\n    f = open("FZ" + n + ".TMP", "w")\n    write(f, s)\n    close(f)\n    n = n + 1\n}\npour "FILLED"\nlet gone = 0\nn = 0\nwhile n < 130 {\n    if remove("FZ" + n + ".TMP") == 1 {\n        gone = gone + 1\n    }\n    n = n + 1\n}\npour "CLEANED " + gone\n' \
+	    | mcopy -i $(DISK) - ::FILLDISK.SC
+	printf '# A `let` inside a while body used to accumulate a binding per pass and\n# die at 64 iterations with "too many variables".\nlet n = 0\nlet total = 0\nwhile n < 200 {\n    let item = n * 2\n    total = total + item\n    n = n + 1\n}\npour "SCOPE total " + total\n' \
+	    | mcopy -i $(DISK) - ::SCOPE.SC
+	printf '# Write files whose names do not fit 8.3, then read them back.\n# The last two collide on their alias stem, which is what exercises ~N.\nlet f = 0\nf = open("My Long Note.txt", "w")\nwrite(f, "written by soupOS")\nclose(f)\nf = open("My Long Novel.txt", "w")\nwrite(f, "the second one")\nclose(f)\npour "wrote it"\nf = open("My Long Note.txt")\npour "read back " + read(f, 40)\nclose(f)\nf = open("My Long Novel.txt")\npour "read two " + read(f, 40)\nclose(f)\n' \
+	    | mcopy -i $(DISK) - ::LONGWR.SC
+	# A seed for lines()/write_lines(): mixed line lengths, an empty line,
+	# and one line longer than the old 47-character string. The script
+	# numbers, upper-cases and reverses it into SOUPUP.TXT, which
+	# scripts/lines-test.sh then compares byte for byte with the host.
+	printf 'stock\nsimmer the bones for six hours\n\nskim\nseason to taste, then serve it hot to whoever is hungry and waiting at the table\nserve\n' \
+	    | mcopy -i $(DISK) - ::SOUP.TXT
+	printf '# lines() and write_lines(): a file from a file - run with: soup LINES.SC\nlet src = lines(\"SOUP.TXT\")\npour \"read \" + len(src) + \" lines\"\nlet out = []\nlet i = len(src) - 1\nwhile i >= 0 {\n    push(out, (i + 1) + \": \" + upper(src[i]))\n    i = i - 1\n}\npour \"wrote \" + write_lines(\"SOUPUP.TXT\", out) + \" lines\"\nlet back = lines(\"SOUPUP.TXT\")\npour \"first line back: \" + back[0]\n' \
+	    | mcopy -i $(DISK) - ::LINES.SC
+	# A script larger than soup's 8 KB buffer, which used to write past it.
+	yes '# filler, to make this script longer than eight kilobytes' | head -c 10000 \
+	    | mcopy -i $(DISK) - ::BIGSCRIPT.SC
+	# Long names, for the VFAT read path. mtools writes a proper LFN chain
+	# plus the mangled 8.3 alias, which is exactly what has to be parsed.
+	printf 'A file whose name does not fit in 8.3 at all.\n' \
+	    | mcopy -i $(DISK) - ::"A Long Recipe Name.txt"
+	printf 'Second long name, to prove the chain resets between entries.\n' \
+	    | mcopy -i $(DISK) - ::"kitchen notes for tomorrow.md"
 	printf '# a tiny library - included by INCLUDE.SC\nfn cube(n) { return n * n * n }\n' \
 	    | mcopy -i $(DISK) - ::MATHLIB.SC
 	printf '# include + new builtins demo - run with: soup INCLUDE.SC\ninclude "MATHLIB.SC"\npour "cube(3)  = " + cube(3)\nlet nums = [5, 2, 9, 1, 7]\nsort(nums)\npour "sorted   ="\npour nums\npour "sum      = " + sum(nums)\nreverse(nums)\npour "reversed ="\npour nums\npour "find OS  = " + find("soupOS", "OS")\n' \
 	    | mcopy -i $(DISK) - ::INCLUDE.SC
 	$(MAKE) user
-	mcopy -i $(DISK) -o user/hello.elf   ::HELLO.ELF
-	mcopy -i $(DISK) -o user/cat.elf     ::CAT.ELF
-	mcopy -i $(DISK) -o user/echo.elf    ::ECHO.ELF
-	mcopy -i $(DISK) -o user/systest.elf ::SYSTEST.ELF
-	mcopy -i $(DISK) -o user/spin.elf    ::SPIN.ELF
-	mcopy -i $(DISK) -o user/crash.elf   ::CRASH.ELF
-	mcopy -i $(DISK) -o user/unhex.elf   ::UNHEX.ELF
+	mcopy -i $(DISK) -o user/greet.elf   ::GREET.ELF
+	mcopy -i $(DISK) -o user/spoon.elf     ::SPOON.ELF
+	mcopy -i $(DISK) -o user/call.elf    ::CALL.ELF
+	mcopy -i $(DISK) -o user/mise.elf ::MISE.ELF
+	mcopy -i $(DISK) -o user/whisk.elf    ::WHISK.ELF
+	mcopy -i $(DISK) -o user/drop.elf   ::DROP.ELF
+	mcopy -i $(DISK) -o user/unwrap.elf   ::UNWRAP.ELF
+	mcopy -i $(DISK) -o user/ticket.elf  ::TICKET.ELF
+	mcopy -i $(DISK) -o user/glutton.elf     ::GLUTTON.ELF
+	mcopy -i $(DISK) -o user/raise.elf   ::RAISE.ELF
+	mcopy -i $(DISK) -o user/weigh.elf      ::WEIGH.ELF
+	mcopy -i $(DISK) -o user/measure.elf ::MEASURE.ELF
+	mcopy -i $(DISK) -o user/proof.elf    ::PROOF.ELF
+	mcopy -i $(DISK) -o user/stockpot.elf    ::STOCKPOT.ELF
+	mcopy -i $(DISK) -o user/fridge.elf ::FRIDGE.ELF
+	mcopy -i $(DISK) -o user/peek.elf      ::PEEK.ELF
+	mcopy -i $(DISK) -o user/toss.elf      ::TOSS.ELF
+	mcopy -i $(DISK) -o user/newbowl.elf   ::NEWBOWL.ELF
+	mcopy -i $(DISK) -o user/sift.elf    ::SIFT.ELF
+	mcopy -i $(DISK) -o user/skim.elf    ::SKIM.ELF
+	mcopy -i $(DISK) -o user/dregs.elf    ::DREGS.ELF
+	mcopy -i $(DISK) -o user/rack.elf    ::RACK.ELF
+	mcopy -i $(DISK) -o user/cull.elf    ::CULL.ELF
+	mcopy -i $(DISK) -o user/divvy.elf     ::DIVVY.ELF
+	mcopy -i $(DISK) -o user/slice.elf     ::SLICE.ELF
+	mcopy -i $(DISK) -o user/swap.elf      ::SWAP.ELF
+	mcopy -i $(DISK) -o user/tally.elf     ::TALLY.ELF
+	mcopy -i $(DISK) -o user/taste.elf    ::TASTE.ELF
+	mcopy -i $(DISK) -o user/forage.elf    ::FORAGE.ELF
+	mcopy -i $(DISK) -o user/pair.elf     ::PAIR.ELF
+	mcopy -i $(DISK) -o user/flip.elf     ::FLIP.ELF
+	mcopy -i $(DISK) -o user/label.elf    ::LABEL.ELF
+	mcopy -i $(DISK) -o user/mince.elf    ::MINCE.ELF
+	mcopy -i $(DISK) -o user/knead.elf    ::KNEAD.ELF
+	mcopy -i $(DISK) -o user/layer.elf    ::LAYER.ELF
+	mcopy -i $(DISK) -o user/stack.elf    ::STACK.ELF
+	mcopy -i $(DISK) -o user/spread.elf   ::SPREAD.ELF
+	mcopy -i $(DISK) -o user/labels.elf   ::LABELS.ELF
+	mcopy -i $(DISK) -o user/dish.elf     ::DISH.ELF
+	mcopy -i $(DISK) -o user/marinate.elf ::MARINATE.ELF
+	mcopy -i $(DISK) -o user/peel.elf     ::PEEL.ELF
+	mcopy -i $(DISK) -o user/stalk.elf    ::STALK.ELF
+	mcopy -i $(DISK) -o user/brine.elf    ::BRINE.ELF
+	mcopy -i $(DISK) -o user/brand.elf    ::BRAND.ELF
+	mcopy -i $(DISK) -o user/encore.elf   ::ENCORE.ELF
+	mcopy -i $(DISK) -o user/potluck.elf  ::POTLUCK.ELF
+	mcopy -i $(DISK) -o user/portion.elf  ::PORTION.ELF
+	mcopy -i $(DISK) -o user/tumble.elf   ::TUMBLE.ELF
+	mcopy -i $(DISK) -o user/spot.elf     ::SPOT.ELF
+	mcopy -i $(DISK) -o user/carve.elf    ::CARVE.ELF
+	mcopy -i $(DISK) -o user/reckon.elf   ::RECKON.ELF
+	mcopy -i $(DISK) -o user/frost.elf    ::FROST.ELF
+	mcopy -i $(DISK) -o user/prod.elf     ::PROD.ELF
+	mcopy -i $(DISK) -o user/sear.elf     ::SEAR.ELF
+	mcopy -i $(DISK) -o user/swirl.elf    ::SWIRL.ELF
 	@if [ -f DOOM1.WAD ]; then \
 	    echo "  Copying DOOM1.WAD to disk image..."; \
 	    mcopy -i $(DISK) DOOM1.WAD ::DOOM1.WAD; \
@@ -170,10 +319,34 @@ wad: $(DISK)
 	    echo "Copy the shareware WAD here and run: make wad"; \
 	fi
 
+# Hardware virtualisation for the interactive targets.
+#
+# Without this QEMU emulates every instruction with TCG, which costs about 6x.
+# Measured on the Doom renderer, same scene: 1.53M cycles per frame with KVM
+# against 9.9M under TCG. /dev/kvm is world-accessible on this machine, but the
+# probe keeps the targets working anywhere (CI, a host without KVM) by falling
+# back to TCG rather than failing to start.
+#
+# The smoke test deliberately does NOT use this, for two reasons: its checks are
+# about ordering and timing and should behave the same everywhere, and it keeps
+# QEMU's default qemu32 CPU, which has no SSE2. That is what caught the GCC
+# auto-vectorisation triple-fault in v0.7.4 (see CFLAGS above); `-cpu host`
+# would have masked it by making the invalid opcode valid.
+ACCEL := $(shell test -w /dev/kvm && echo '-accel kvm -cpu host' || echo '-accel tcg')
+
+# User-mode (SLIRP) networking: 10.0.2.15 for the guest, 10.0.2.2 as the
+# gateway, no privileges needed. NET_DUMP=1 additionally writes every frame to
+# net.pcap, which is ground truth when the stack misbehaves.
+NET   := -netdev user,id=n0 -device rtl8139,netdev=n0
+NET_DUMP ?= 0
+ifeq ($(NET_DUMP),1)
+  NET += -object filter-dump,id=d0,netdev=n0,file=net.pcap
+endif
+
 # Run with VGA window (interactive — click the window to type, Ctrl+Alt+G to release)
 # Primary master (index=0) = disk.img   Secondary master (index=2) = cdrom
 run: iso $(DISK)
-	qemu-system-i386 \
+	qemu-system-i386 $(ACCEL) $(NET) \
 	    -drive file=$(DISK),format=raw,if=ide,index=0 \
 	    -cdrom $(ISO) -boot d \
 	    -m 128M -no-reboot -no-shutdown \
@@ -187,7 +360,7 @@ run-ai: iso $(DISK)
 	@rm -f /tmp/soupos-ai.sock
 	@echo "soupOS + AI bridge.  (AI_FAKE=1 for offline replies; else needs Ollama)"
 	@python3 tools/ai_bridge.py /tmp/soupos-ai.sock & echo $$! > /tmp/soupos-ai.pid; \
-	qemu-system-i386 \
+	qemu-system-i386 $(ACCEL) $(NET) \
 	    -drive file=$(DISK),format=raw,if=ide,index=0 \
 	    -cdrom $(ISO) -boot d \
 	    -m 128M -no-reboot -no-shutdown \
@@ -203,7 +376,7 @@ run-ai: iso $(DISK)
 # Console on this terminal. Ctrl+A X quits QEMU.
 run-console: iso $(DISK)
 	@echo "soupOS console on this terminal.  (Ctrl+A then X to quit QEMU)"
-	qemu-system-i386 \
+	qemu-system-i386 $(ACCEL) $(NET) \
 	    -drive file=$(DISK),format=raw,if=ide,index=0 \
 	    -cdrom $(ISO) -boot d \
 	    -m 128M -no-reboot -no-shutdown \
@@ -215,14 +388,14 @@ run-console: iso $(DISK)
 CONSOLE_PORT ?= 4444
 run-tcp: iso $(DISK)
 	@echo "soupOS console on tcp/$(CONSOLE_PORT) — connect with:  nc 127.0.0.1 $(CONSOLE_PORT)"
-	qemu-system-i386 \
+	qemu-system-i386 $(ACCEL) $(NET) \
 	    -drive file=$(DISK),format=raw,if=ide,index=0 \
 	    -cdrom $(ISO) -boot d \
 	    -m 128M -no-reboot -no-shutdown \
 	    -display none -serial tcp:127.0.0.1:$(CONSOLE_PORT),server
 
 clean:
-	rm -f src/*.o $(TARGET) $(ISO) iso/boot/kernel.elf user/*.elf .build-config
+	rm -f src/*.o src/*.d $(TARGET) $(ISO) iso/boot/kernel.elf user/*.elf .build-config
 
 # Also removes the disk image (user data)
 distclean: clean

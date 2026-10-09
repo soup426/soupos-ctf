@@ -12,7 +12,56 @@
  */
 
 #include "vga13h.h"
+#include "fb.h"
+#include "fbcon.h"
 #include "str.h"     /* memset */
+
+/* ── The pixel store, and where it goes ─────────────────────────────────────
+ *
+ * On a text-mode boot this is the real mode 13h framebuffer at 0xA0000 and a
+ * write is already on screen. On a framebuffer boot there is no mode 13h: the
+ * card is scanning out a 32-bit linear framebuffer, so the store is a RAM
+ * array and vga13h_present() scales it up through the palette.
+ *
+ * Same shape as the text console's cell store (see vga.c): one pointer, set
+ * once at boot, and every caller carries on unchanged. */
+/* Named pixel_store, not pixels: vga13h_blit takes a parameter called
+ * `pixels` for its source image, and a global of the same name shadows it -
+ * harmless there, a trap for whoever edits that function next. The newcomer
+ * yields the name. */
+static uint8_t  shadow_pixels[VGA13_W * VGA13_H];
+static uint8_t *pixel_store = (uint8_t *)0xA0000u;
+static uint32_t pal32[256];              /* the palette as the LFB wants it */
+static int      to_fb;                   /* scaling, rather than direct     */
+
+uint8_t *vga13h_pixels(void) { return pixel_store; }
+
+void vga13h_init_target(void) {
+    if (fb_present()) { pixel_store = shadow_pixels; to_fb = 1; }
+}
+
+/* Integer scale, so the picture stays crisp. 3x of 320x200 is 960x600, which
+ * is the largest whole multiple that fits a 1024x768 framebuffer. */
+#define SCALE 3
+
+void vga13h_present(void) {
+    if (!to_fb) return;                  /* writes already landed in VRAM */
+
+    static uint32_t line[VGA13_W * SCALE];
+    uint32_t ox = (fb_width()  - VGA13_W * SCALE) / 2;
+    uint32_t oy = (fb_height() - VGA13_H * SCALE) / 2;
+
+    for (int sy = 0; sy < VGA13_H; sy++) {
+        const uint8_t *src = pixel_store + sy * VGA13_W;
+        for (int sx = 0; sx < VGA13_W; sx++) {
+            uint32_t c = pal32[src[sx]];
+            uint32_t *o = &line[sx * SCALE];
+            for (int k = 0; k < SCALE; k++) o[k] = c;
+        }
+        for (int k = 0; k < SCALE; k++)
+            fb_blit_row(ox, oy + (uint32_t)(sy * SCALE + k), line, VGA13_W * SCALE);
+    }
+}
 
 /* ── port helpers ─────────────────────────────────────────────── */
 static inline void outb(uint16_t p, uint8_t v) {
@@ -112,6 +161,17 @@ static const uint8_t m13_gc[9]   = { 0x00,0x00,0x00,0x00,0x00,0x40,0x05,0x0F,0xF
 
 /* ── public: enter / exit ─────────────────────────────────────── */
 void vga13h_enter(void) {
+    /* On a framebuffer boot there is no mode to switch to: the card is
+     * scanning out the LFB and reprogramming these registers would either do
+     * nothing or corrupt the scanout. The store is already a RAM shadow, so
+     * drawing works and vga13h_present() puts it on screen. */
+    if (to_fb) {
+        fbcon_pause();                 /* the console must stop painting */
+        for (int i = 0; i < VGA13_W * VGA13_H; i++) pixel_store[i] = 0;
+        fb_clear(0x00000000);
+        return;
+    }
+
     save_regs();
     save_font();      /* plane 2 is about to become pixel data */
 
@@ -149,6 +209,8 @@ void vga13h_enter(void) {
 }
 
 void vga13h_exit(void) {
+    if (to_fb) { fb_clear(0x00101828); fbcon_resume(); return; }
+
     restore_regs();
     restore_font();
     /* font_access_begin reprogrammed the sequencer and graphics controller to
@@ -158,6 +220,23 @@ void vga13h_exit(void) {
 
 /* ── palette ──────────────────────────────────────────────────── */
 void vga13h_setpal(uint8_t idx, uint8_t r, uint8_t g, uint8_t b) {
+    /* Always keep the software copy: the scaler needs it, and a DAC write
+     * cannot be read back.
+     *
+     * Widening 6 bits to 8 is bit replication, (v<<2)|(v>>4), so that full
+     * scale lands on 255 rather than 252. A plain <<2 leaves every bright
+     * colour a shade dark, which is invisible on its own and obvious beside
+     * the real mode 13h output.
+     *
+     * It does NOT reproduce QEMU's VGA exactly: that renders odd values as
+     * (v<<2)|3, replicating the low bit, which is an emulator artefact rather
+     * than what hardware does. Matching it would make a screendump comparison
+     * bit-identical and the colours slightly wrong, so the comparison in
+     * scripts/doom-fb-test.sh carries a tolerance instead. */
+    #define W6(v) (uint32_t)((((v) & 0x3F) << 2) | (((v) & 0x3F) >> 4))
+    pal32[idx] = (W6(r) << 16) | (W6(g) << 8) | W6(b);
+    #undef W6
+    if (to_fb) return;                   /* no DAC to program */
     outb(0x3C8, idx);
     outb(0x3C9, r & 0x3F);
     outb(0x3C9, g & 0x3F);

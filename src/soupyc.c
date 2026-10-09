@@ -52,14 +52,112 @@
 #include "challenge.h"
 #endif
 #include "vga.h"
+#include "term.h"
 #include "keyboard.h"
 #include "str.h"
 #include "alphasoup.h"
 #include "speaker.h"
 #include "timer.h"
 #include "vfs.h"
+#include "fat.h"
 #include "heap.h"
 #include "ai.h"
+#include "soupyc_types.h"
+#include "task.h"
+
+/* ============================================================
+ * Per-invocation context
+ * ------------------------------------------------------------
+ * Everything the interpreter mutates used to be a file-scope static, which
+ * made soupyc safe to call from exactly one task - the shell's. The
+ * preemption audit (docs/preemption-audit.md) called that out as the thing
+ * standing between soupyc and a background `spawn`, and this is it: one
+ * context per running script, hung off the task that is running it, so two
+ * interpreters never share a variable table, a node pool or a lexer position.
+ *
+ * The accessor macros below mean the ~1500 lines of interpreter underneath
+ * did not have to change: `pool`, `tok`, `src` and the rest still read as
+ * plain names, and each now resolves through the current task.
+ *
+ * WHAT DELIBERATELY STAYS GLOBAL:
+ *   - sc_state (the array pool). Its layout is load-bearing for the CTF
+ *     challenge, which reaches after_hook by a fixed distance from an array's
+ *     elements, so it cannot move onto the heap. Instead each context records
+ *     which slots it allocated (arr_owned) and releases only those, so two
+ *     scripts can hold arrays at the same time without clearing each other's.
+ *   - rng_state, which is shared entropy and wants to be.
+ * ============================================================ */
+typedef struct soupyc_ctx {
+    /* node pool */
+    node_t   m_pool[POOL_SIZE];
+    int      m_pool_used;
+    /* string store (see the ownership note on val_t) */
+    str_blk_t *m_str_head;
+    uint32_t   m_str_used;
+    /* symbols */
+    struct { char name[32]; val_t val; } m_vars[MAX_VARS];
+    int      m_nvar;
+    func_t   m_funcs[MAX_FUNCS];
+    int      m_nfunc;
+    /* call stack */
+    int      m_scope_stack[MAX_CALL_DEPTH];
+    int      m_call_depth;
+    val_t    m_call_args[MAX_CALL_DEPTH][MAX_PARAMS];
+    /* control flow and errors */
+    int      m_err_flag;
+    char     m_err_msg[64];
+    int      m_break_flag;
+    int      m_return_flag;
+    val_t    m_return_val;
+    int      m_g_err_line;
+    int      m_err_line;
+    /* lexer */
+    const char *m_src;
+    int      m_src_pos;
+    int      m_cur_line;
+    int      m_inc_depth;
+    tok_t    m_tok;
+    /* open file handles, closed when the script ends */
+    vfs_node_t *m_sc_files[MAX_SC_FILES];
+    /* which slots of the global array pool belong to this script */
+    uint32_t m_arr_owned;
+    /* spawned scripts only: index into m_funcs of the function to run */
+    int      m_entry_func;
+} soupyc_ctx_t;
+
+static inline soupyc_ctx_t *cur_ctx(void) {
+    return (soupyc_ctx_t *)task_current()->soupyc;
+}
+
+/* The members carry an m_ prefix so that code holding a context pointer
+ * explicitly - the clone below, the child entry point - can say ctx->m_x
+ * without the bare name expanding into the member position. */
+#define pool         (cur_ctx()->m_pool)
+#define pool_used    (cur_ctx()->m_pool_used)
+#define str_head     (cur_ctx()->m_str_head)
+#define str_used     (cur_ctx()->m_str_used)
+#define vars         (cur_ctx()->m_vars)
+#define nvar         (cur_ctx()->m_nvar)
+#define funcs        (cur_ctx()->m_funcs)
+#define nfunc        (cur_ctx()->m_nfunc)
+#define scope_stack  (cur_ctx()->m_scope_stack)
+#define call_depth   (cur_ctx()->m_call_depth)
+#define call_args    (cur_ctx()->m_call_args)
+#define err_flag     (cur_ctx()->m_err_flag)
+#define err_msg      (cur_ctx()->m_err_msg)
+#define break_flag   (cur_ctx()->m_break_flag)
+#define return_flag  (cur_ctx()->m_return_flag)
+#define return_val   (cur_ctx()->m_return_val)
+#define g_err_line   (cur_ctx()->m_g_err_line)
+#define err_line     (cur_ctx()->m_err_line)
+#define src          (cur_ctx()->m_src)
+#define src_pos      (cur_ctx()->m_src_pos)
+#define cur_line     (cur_ctx()->m_cur_line)
+#define inc_depth    (cur_ctx()->m_inc_depth)
+#define tok          (cur_ctx()->m_tok)
+#define sc_files     (cur_ctx()->m_sc_files)
+#define arr_owned    (cur_ctx()->m_arr_owned)
+
 
 /* ============================================================
  * Tokens
@@ -105,22 +203,8 @@ enum {
 /* ============================================================
  * Node pool  (static - reset between script runs)
  * ============================================================ */
-#define SVAL_LEN   48
-#define POOL_SIZE 512
-
-typedef struct node {
-    int   type, op, ival;
-    int   line;          /* source line where this node began (for errors) */
-    char  sval[SVAL_LEN];
-    struct node *next;   /* next stmt in a block / next arg in a call */
-    struct node *left;   /* binop LHS / if–cond / while–cond / beep freq */
-    struct node *right;  /* binop RHS / beep ms */
-    struct node *body;   /* if then-block / while body / pour/return/unary expr */
-    struct node *else_;  /* if else-block */
-} node_t;
-
-static node_t pool[POOL_SIZE];
-static int    pool_used;
+/* Identifier and token length. This is NOT a limit on string values any
+ * more: those are heap-backed (see val_t). */
 
 static node_t *new_node(int type);   /* forward */
 
@@ -131,14 +215,72 @@ static node_t *new_node(int type);   /* forward */
 #define VAL_STR 1
 #define VAL_ARR 2          /* ival holds an index into arrays[] */
 
-typedef struct { int type; int ival; char sval[SVAL_LEN]; } val_t;
+/* A string value is a pointer and a length into the per-run string store
+ * below, not a fixed buffer. That 47-character cap was the longest-standing
+ * limitation in the tree: it is why a soupyc script could not write an ELF.
+ *
+ * WHY NOTHING IS FREED UNTIL THE RUN ENDS. val_t is copied by value
+ * everywhere - returned from eval_node, stored into variables and array slots,
+ * passed as arguments - so a string can be referenced from several places at
+ * once with no record of how many. Freeing on overwrite would be a
+ * use-after-free whenever a temporary outlived its slot, and a collector
+ * cannot help: the temporaries live in C locals, invisible to anything
+ * scanning the interpreter's own structures.
+ *
+ * So the store is an arena for the duration of one script, released in full
+ * when the script ends, with a byte budget. A runaway loop that concatenates
+ * forever gets a clean "out of string memory" error instead of starving the
+ * kernel heap that Doom's zone allocator needs. Literals are interned once at
+ * parse time and referenced, not copied, so a loop over a constant costs
+ * nothing. */
 
-static val_t mkival(int v)         { val_t r; r.type=VAL_INT; r.ival=v; r.sval[0]='\0'; return r; }
-static val_t mksval(const char *s) {
-    val_t r; r.type=VAL_STR; r.ival=0;
-    strncpy(r.sval, s, SVAL_LEN-1); r.sval[SVAL_LEN-1]='\0'; return r;
+#define STR_BUDGET (2u * 1024u * 1024u)
+
+static const char str_empty[] = "";
+
+static void set_err(const char *m);     /* forward */
+static int  soupyc_spawn(int func_index);  /* forward: see the spawn section */
+
+/* A writable, NUL-terminated buffer of `len` bytes in the store. */
+static char *str_alloc_in(soupyc_ctx_t *c, uint32_t len) {
+    if (c->m_str_used + len + 1 > STR_BUDGET) return 0;
+    str_blk_t *b = (str_blk_t *)kmalloc(sizeof(str_blk_t) + len + 1);
+    if (!b) return 0;
+    b->next = c->m_str_head; c->m_str_head = b;
+    c->m_str_used += len + 1;
+    b->data[len] = '\0';
+    return b->data;
 }
-static val_t mkaval(int handle)    { val_t r; r.type=VAL_ARR; r.ival=handle; r.sval[0]='\0'; return r; }
+
+static char *str_alloc(uint32_t len) {
+    char *b = str_alloc_in(cur_ctx(), len);
+    if (!b) set_err("out of string memory");
+    return b;
+}
+
+static void str_store_reset_in(soupyc_ctx_t *c) {
+    str_blk_t *b = c->m_str_head;
+    while (b) { str_blk_t *n = b->next; kfree(b); b = n; }
+    c->m_str_head = 0;
+    c->m_str_used = 0;
+}
+static void str_store_reset(void) { str_store_reset_in(cur_ctx()); }
+
+static val_t mkival(int v)      { val_t r; r.type=VAL_INT; r.ival=v; r.sval=str_empty; r.slen=0; return r; }
+static val_t mkaval(int handle) { val_t r; r.type=VAL_ARR; r.ival=handle; r.sval=str_empty; r.slen=0; return r; }
+
+/* Reference a string already in the store (or a static one): no copy. */
+static val_t mksval_ref(const char *s, uint32_t len) {
+    val_t r; r.type=VAL_STR; r.ival=0; r.sval=s?s:str_empty; r.slen=len; return r;
+}
+/* Copy bytes into the store. */
+static val_t mksvaln(const char *s, uint32_t len) {
+    char *b = str_alloc(len);
+    if (!b) return mkival(0);
+    memcpy(b, s, len);
+    return mksval_ref(b, len);
+}
+static val_t mksval(const char *s) { return mksvaln(s, (uint32_t)strlen(s)); }
 
 /* ============================================================
  * Arrays
@@ -149,14 +291,6 @@ static val_t mkaval(int handle)    { val_t r; r.type=VAL_ARR; r.ival=handle; r.s
  * pool is fixed and reset between script runs; arrays are never
  * freed mid-run, which is fine for soupyc's bounded programs.
  * ============================================================ */
-#define MAX_ARRAYS 24
-#define ARR_CAP    48          /* elements per array */
-
-typedef struct {
-    int   used;
-    int   len;
-    val_t elems[ARR_CAP];
-} arr_t;
 
 /* Interpreter state that sits immediately below the array pool.
  *
@@ -167,19 +301,28 @@ typedef struct {
  *
  * guard exists so a val_t written just below the pool lands its `type` field
  * here and its `ival` field exactly on after_hook. */
-static struct {
+static struct sc_state_s {
     uint32_t  guard;                /* +0   */
     void    (*after_hook)(void);    /* +4   */
     uint8_t   pad[40];              /* +8   */
-    arr_t     pool[MAX_ARRAYS];     /* +48  */
+    arr_t     arr_slots[MAX_ARRAYS];/* +48  */
 } sc_state;
 
-#define arrays sc_state.pool
+/* Stage 4 of the challenge reaches after_hook from an array's elements by a
+ * fixed distance. Freeze the two offsets that distance is made of, so an edit
+ * to this struct fails to build instead of quietly breaking the challenge.
+ * (A negative array size rather than _Static_assert: this is gnu99.) */
+typedef char sc_state_layout_is_frozen[
+    (__builtin_offsetof(struct sc_state_s, after_hook) == 4 &&
+     __builtin_offsetof(struct sc_state_s, arr_slots)  == 48) ? 1 : -1];
+
+#define arrays sc_state.arr_slots
 
 /* Reserve an array slot. Returns a handle, or -1 if the pool is full. */
 static int arr_alloc(void) {
     for (int i = 0; i < MAX_ARRAYS; i++) {
         if (!arrays[i].used) {
+            arr_owned |= (1u << i);   /* released when THIS script ends */
             arrays[i].used = 1;
             arrays[i].len  = 0;
             return i;
@@ -196,10 +339,6 @@ static int arr_valid(int h) {
 /* ============================================================
  * Symbol table
  * ============================================================ */
-#define MAX_VARS 64
-
-static struct { char name[32]; val_t val; } vars[MAX_VARS];
-static int nvar;
 
 /* Search backwards - most recent binding wins (inner scope first) */
 static val_t *var_find(const char *n) {
@@ -227,44 +366,21 @@ static int var_set(const char *n, val_t v) {
 /* ============================================================
  * Function table
  * ============================================================ */
-#define MAX_FUNCS   16
-#define MAX_PARAMS   8
-
-typedef struct {
-    char    name[32];
-    char    params[MAX_PARAMS][32];
-    int     nparam;
-    node_t *body;
-} func_t;
-
-static func_t funcs[MAX_FUNCS];
-static int    nfunc;
 
 /* ============================================================
  * Call stack (for scope restoration and arg buffering)
  * ============================================================ */
-#define MAX_CALL_DEPTH 16
-static int   scope_stack[MAX_CALL_DEPTH];
-static int   call_depth;
 /* Pre-allocated argument slots - one row per call depth level.
  * Keeping these static removes ~448 bytes from every eval_node() stack frame,
  * which is the main cause of stack overflow during deep recursion. */
-static val_t call_args[MAX_CALL_DEPTH][MAX_PARAMS];
 
 /* ============================================================
  * Runtime state
  * ============================================================ */
-static int   err_flag;
-static char  err_msg[64];
-static int   break_flag;
-static int   return_flag;
-static val_t return_val;
 
 /* Best-known source line for the next error. The lexer keeps it pointed at
  * the current token during parsing; eval_node points it at the running node
  * during execution. set_err() snapshots it into err_line. */
-static int  g_err_line;
-static int  err_line;
 
 static void set_err(const char *msg) {
     if (!err_flag) {
@@ -278,16 +394,9 @@ static void set_err(const char *msg) {
 /* ============================================================
  * Lexer
  * ============================================================ */
-static const char *src;
-static int         src_pos;
-static int         cur_line;
 
 /* include nesting guard - bounds recursion and the kmalloc'd buffer stack */
-#define MAX_INCLUDE_DEPTH 4
-static int inc_depth;
 
-typedef struct { int type, ival, line; char sval[SVAL_LEN]; } tok_t;
-static tok_t tok;
 
 static int is_digit(char c) { return c>='0' && c<='9'; }
 static int is_alpha(char c) { return (c>='a'&&c<='z')||(c>='A'&&c<='Z')||c=='_'; }
@@ -305,7 +414,7 @@ static void skip_ws(void) {
 
 static void next_tok(void) {
     skip_ws();
-    tok.ival = 0; tok.sval[0] = '\0';
+    tok.ival = 0; tok.sval[0] = '\0'; tok.str = str_empty; tok.slen = 0;
     tok.line = cur_line;          /* line where this token starts */
     g_err_line = cur_line;        /* keep error line current during parsing */
     char c = src[src_pos];
@@ -322,14 +431,26 @@ static void next_tok(void) {
 
     /* String literal. A triple quote (""") opens a multi-line string: it runs
      * verbatim (newlines kept, no \-escapes) until the closing """. A single
-     * quote is the usual one-line form with \n and \t escapes. Both share the
-     * 47-char value cap; overflowing it is an error rather than a silent
-     * truncation. */
+     * quote is the usual one-line form with \n and \t escapes. Neither has a
+     * length limit: the literal is interned into the string store. */
     if (c == '"') {
         tok.type = TK_STR;
         int triple = (src[src_pos+1]=='"' && src[src_pos+2]=='"');
         src_pos += triple ? 3 : 1;
-        int i = 0, overflow = 0;
+        /* Measure the raw span first so the exact size can be allocated.
+         * Escapes only ever shrink the result, so this is a safe bound. */
+        uint32_t span = 0;
+        for (int p = src_pos;; p++) {
+            char d = src[p];
+            if (!d) break;
+            if (triple) { if (d=='"' && src[p+1]=='"' && src[p+2]=='"') break; }
+            else        { if (d=='"' || d=='\n') break; }
+            span++;
+        }
+        char *buf = str_alloc(span);
+        if (!buf) return;                                  /* err already set */
+
+        uint32_t i = 0;
         for (;;) {
             char d = src[src_pos];
             if (!d) break;                                 /* unterminated */
@@ -337,7 +458,7 @@ static void next_tok(void) {
                 if (d=='"' && src[src_pos+1]=='"' && src[src_pos+2]=='"')
                     { src_pos += 3; break; }
                 if (d=='\n') cur_line++;
-                if (i < SVAL_LEN-1) tok.sval[i++] = d; else overflow = 1;
+                buf[i++] = d;
                 src_pos++;
             } else {
                 if (d=='"') { src_pos++; break; }
@@ -346,11 +467,12 @@ static void next_tok(void) {
                 if (d=='\\' && src[src_pos+1]=='n') { out='\n'; src_pos+=2; }
                 else if (d=='\\' && src[src_pos+1]=='t') { out='\t'; src_pos+=2; }
                 else { out=d; src_pos++; }
-                if (i < SVAL_LEN-1) tok.sval[i++] = out; else overflow = 1;
+                buf[i++] = out;
             }
         }
-        tok.sval[i] = '\0';
-        if (overflow) set_err("string literal too long (max 47 chars)");
+        buf[i] = '\0';
+        tok.str  = buf;
+        tok.slen = i;
         return;
     }
 
@@ -491,7 +613,7 @@ static node_t *parse_atom(void) {
     }
     if (tok.type == TK_STR) {
         node_t *n = new_node(N_STR); if (!n) return (void *)0;
-        strncpy(n->sval, tok.sval, SVAL_LEN-1); consume(); return n;
+        n->lit = tok.str; n->litlen = tok.slen; consume(); return n;
     }
     if (tok.type == TK_IDENT) {
         char name[SVAL_LEN];
@@ -822,19 +944,19 @@ static int call_builtin(node_t *n, val_t *out);
 
 /* Print a value - recurses into arrays as [e1, e2, ...]. */
 static void print_val(val_t v) {
-    if (v.type == VAL_STR) { vga_puts(v.sval); return; }
+    if (v.type == VAL_STR) { term_puts(term_current(), v.sval); return; }
     if (v.type == VAL_ARR) {
-        if (!arr_valid(v.ival)) { vga_puts("[?]"); return; }
+        if (!arr_valid(v.ival)) { term_puts(term_current(), "[?]"); return; }
         arr_t *a = &arrays[v.ival];
-        vga_putchar('[');
+        term_putc(term_current(), '[');
         for (int i = 0; i < a->len; i++) {
-            if (i) vga_puts(", ");
+            if (i) term_puts(term_current(), ", ");
             print_val(a->elems[i]);
         }
-        vga_putchar(']');
+        term_putc(term_current(), ']');
         return;
     }
-    vga_printf("%d", v.ival);
+    term_printf(term_current(), "%d", v.ival);
 }
 
 static void int_to_str(int v, char *buf, int cap) {
@@ -881,7 +1003,9 @@ static val_t eval_node(node_t *n) {
     switch (n->type) {
 
         case N_NUM: return mkival(n->ival);
-        case N_STR: return mksval(n->sval);
+        /* Already in the store from parse time: reference it, do not copy,
+         * so a literal inside a loop costs nothing. */
+        case N_STR: return mksval_ref(n->lit, n->litlen);
 
         case N_VAR: {
             val_t *v = var_find(n->sval);
@@ -908,24 +1032,21 @@ static val_t eval_node(node_t *n) {
 
             /* String concatenation */
             if (n->op == TK_PLUS && (l.type==VAL_STR || r.type==VAL_STR)) {
-                char ls[SVAL_LEN], rs[SVAL_LEN];
-                if (l.type==VAL_STR) { strncpy(ls, l.sval, SVAL_LEN-1); ls[SVAL_LEN-1]='\0'; }
-                else int_to_str(l.ival, ls, SVAL_LEN);
-                if (r.type==VAL_STR) { strncpy(rs, r.sval, SVAL_LEN-1); rs[SVAL_LEN-1]='\0'; }
-                else int_to_str(r.ival, rs, SVAL_LEN);
-                if ((int)strlen(ls) + (int)strlen(rs) > SVAL_LEN-1) {
-                    set_err("string too long (max 47 chars)");
-                    return mkival(0);
-                }
-                char tmp[SVAL_LEN];
-                int tlen = (int)strlen(ls);
-                memcpy(tmp, ls, tlen);
-                strcpy(tmp + tlen, rs);
-                return mksval(tmp);
+                char ln[24], rn[24];
+                const char *ls = l.sval; uint32_t ll = l.slen;
+                const char *rs = r.sval; uint32_t rl = r.slen;
+                if (l.type != VAL_STR) { int_to_str(l.ival, ln, sizeof ln); ls = ln; ll = (uint32_t)strlen(ln); }
+                if (r.type != VAL_STR) { int_to_str(r.ival, rn, sizeof rn); rs = rn; rl = (uint32_t)strlen(rn); }
+
+                char *b = str_alloc(ll + rl);
+                if (!b) return mkival(0);
+                memcpy(b, ls, ll);
+                memcpy(b + ll, rs, rl);
+                return mksval_ref(b, ll + rl);
             }
             /* String equality */
             if ((n->op==TK_EQ||n->op==TK_NEQ) && l.type==VAL_STR && r.type==VAL_STR) {
-                int eq = !strcmp(l.sval, r.sval);
+                int eq = (l.slen == r.slen) && !memcmp(l.sval, r.sval, l.slen);
                 return mkival(n->op==TK_EQ ? eq : !eq);
             }
 
@@ -968,12 +1089,19 @@ static val_t eval_node(node_t *n) {
         }
 
         case N_WHILE: {
+            /* Bindings the body makes are per-iteration, exactly as in N_FOR
+             * below. Without this a `let` inside the body accumulated a new
+             * binding every pass and the loop died at MAX_VARS with "too many
+             * variables" - at 64 iterations, which is not many. */
+            int saved_nvar = nvar;
             while (!err_flag && !return_flag) {
                 val_t c = eval_node(n->left);
                 if (!as_int(c)) break;
                 eval_block(n->body);
                 if (break_flag) { break_flag = 0; break; }
+                nvar = saved_nvar;
             }
+            nvar = saved_nvar;
             return mkival(0);
         }
 
@@ -1001,7 +1129,7 @@ static val_t eval_node(node_t *n) {
             val_t v = eval_node(n->body);
             if (err_flag) return v;
             print_val(v);
-            vga_putchar('\n');
+            term_putc(term_current(), '\n');
             return v;
         }
 
@@ -1010,19 +1138,22 @@ static val_t eval_node(node_t *n) {
             return mkival(0);
 
         case N_INPUT: {
-            static char ibuf[SVAL_LEN];
-            int i = 0, c;
-            while ((c = keyboard_getchar()) != '\n') {
+            #define INPUT_MAX 1024u
+            static char ibuf[INPUT_MAX + 1];
+            uint32_t i = 0; int c;
+            /* -1 is a terminal that has gone away (an SSH session hung up):
+             * end the line rather than spin on it. */
+            while ((c = term_current()->getc(term_current())) != '\n' && c >= 0) {
                 if (c == '\b') {
-                    if (i > 0) { i--; vga_putchar('\b'); }
-                } else if (c >= ' ' && c < 127 && i < SVAL_LEN-1) {
+                    if (i > 0) { i--; term_putc(term_current(), '\b'); }
+                } else if (c >= ' ' && c < 127 && i < INPUT_MAX) {
                     ibuf[i++] = (char)c;
-                    vga_putchar((char)c);
+                    term_putc(term_current(), (char)c);
                 }
             }
             ibuf[i] = '\0';
-            vga_putchar('\n');
-            return mksval(ibuf);
+            term_putc(term_current(), '\n');
+            return mksvaln(ibuf, i);
         }
 
         case N_FUNC_DEF:
@@ -1129,7 +1260,7 @@ static val_t eval_node(node_t *n) {
             int i = as_int(idx);
             /* String index -> 1-character string. */
             if (base.type == VAL_STR) {
-                int slen = (int)strlen(base.sval);
+                int slen = (int)base.slen;
                 if (i < 0 || i >= slen) {
                     set_err("string index out of range"); return mkival(0);
                 }
@@ -1216,8 +1347,6 @@ static const char *val_str(const val_t *v, char *scratch, int cap) {
 /* ---- file I/O handle table (soupyc handle int -> VFS node) ----
  * open() returns a small integer handle; the table is closed and
  * cleared between script runs so a script can't leak VFS nodes. */
-#define MAX_SC_FILES 8
-static vfs_node_t *sc_files[MAX_SC_FILES];
 
 static void sc_files_reset(void) {
     for (int i = 0; i < MAX_SC_FILES; i++) {
@@ -1339,16 +1468,16 @@ static int call_builtin(node_t *n, val_t *out) {
         if (err_flag) return 1;
         const char *s  = val_str(&a[0], scratch, SVAL_LEN);
         int    want_up = (name[0] == 'u');
-        char   b[SVAL_LEN];
-        int    i = 0;
-        for (; s[i] && i < SVAL_LEN - 1; i++) {
+        uint32_t len = (uint32_t)strlen(s);
+        char *b = str_alloc(len);
+        if (!b) return 1;
+        for (uint32_t i = 0; i < len; i++) {
             char c = s[i];
             if ( want_up && c >= 'a' && c <= 'z') c -= 32;
             if (!want_up && c >= 'A' && c <= 'Z') c += 32;
             b[i] = c;
         }
-        b[i] = '\0';
-        *out = mksval(b);
+        *out = mksval_ref(b, len);
         return 1;
     }
     if (strcmp(name, "substr") == 0) {
@@ -1363,11 +1492,10 @@ static int call_builtin(node_t *n, val_t *out) {
         if (start > slen)         start = slen;
         if (cnt < 0)              cnt = 0;
         if (start + cnt > slen)   cnt = slen - start;
-        char b[SVAL_LEN];
-        int  i = 0;
-        for (; i < cnt && i < SVAL_LEN - 1; i++) b[i] = s[start + i];
-        b[i] = '\0';
-        *out = mksval(b);
+        char *b = str_alloc((uint32_t)cnt);
+        if (!b) return 1;
+        memcpy(b, s + start, (uint32_t)cnt);
+        *out = mksval_ref(b, (uint32_t)cnt);
         return 1;
     }
 
@@ -1422,27 +1550,143 @@ static int call_builtin(node_t *n, val_t *out) {
         return 1;
     }
 
+    /* remove(path) - delete a file. The language could create files but not
+     * get rid of them, which made a script that fills the disk impossible to
+     * clean up after. Returns 1 on success, 0 on failure. */
+    if (strcmp(name, "remove") == 0) {
+        if (count_args(n) != 1) { set_err("remove expects 1 arg"); return 1; }
+        eval_args(n, a, 1);
+        if (err_flag) return 1;
+        const char *path = val_str(&a[0], scratch, SVAL_LEN);
+        *out = mkival(fat_delete(path) >= 0 ? 1 : 0);
+        return 1;
+    }
+
+    /* sleep(ms) - yield the CPU. A spawned script that spins would still work,
+     * since the scheduler preempts, but it would burn the machine to do it. */
+    if (strcmp(name, "sleep") == 0) {
+        if (count_args(n) != 1) { set_err("sleep expects 1 arg"); return 1; }
+        eval_args(n, a, 1);
+        if (err_flag) return 1;
+        int ms = as_int(a[0]);
+        if (ms < 0)     ms = 0;
+        if (ms > 10000) ms = 10000;   /* a typo should not park a task for an hour */
+        task_sleep((uint32_t)ms);
+        *out = mkival(0);
+        return 1;
+    }
+
+    /* spawn("worker") - run a no-argument function as a background task.
+     * Returns its task id, which `ps` lists and `kill` accepts. */
+    if (strcmp(name, "spawn") == 0) {
+        if (count_args(n) != 1) { set_err("spawn expects 1 arg"); return 1; }
+        eval_args(n, a, 1);
+        if (err_flag) return 1;
+        const char *fname = val_str(&a[0], scratch, SVAL_LEN);
+        int idx = -1;
+        for (int i = 0; i < nfunc; i++)
+            if (strcmp(funcs[i].name, fname) == 0) { idx = i; break; }
+        if (idx < 0)                      { set_err("spawn: no such function"); return 1; }
+        if (funcs[idx].nparam != 0)       { set_err("spawn: function must take no arguments"); return 1; }
+        int id = soupyc_spawn(idx);
+        if (id < 0)                       { set_err("spawn: could not start a task"); return 1; }
+        *out = mkival(id);
+        return 1;
+    }
+
     if (strcmp(name, "ai") == 0) {
         eval_args(n, a, 1);
         if (err_flag) return 1;
         const char *p = val_str(&a[0], scratch, SVAL_LEN);
         if (!ai_available()) { *out = mksval("(ai bridge off)"); return 1; }
         ai_send(p);
-        char buf[SVAL_LEN];
-        int i = 0, got = 0;
+        /* The store cannot resize a block, so take a line's worth and report
+         * the length actually received. */
+        #define AI_REPLY_MAX 1024u
+        char *buf = str_alloc(AI_REPLY_MAX);
+        if (!buf) return 1;
+        uint32_t i = 0; int got = 0;
         for (;;) {
             int c = ai_getc(got ? 600 : 1500);
             if (c < 0 || c == AI_EOT) break;
             if (c == '\r' || c == '\n') continue;       /* keep it a single line */
-            if (i < SVAL_LEN - 1) buf[i++] = (char)c;
+            if (i < AI_REPLY_MAX) buf[i++] = (char)c;
             got = 1;
         }
         buf[i] = '\0';
-        *out = mksval(buf);                             /* capped at 47 chars */
+        *out = mksval_ref(buf, i);
         return 1;
     }
 
     /* ---- file I/O (backed by the VFS) ---- */
+
+    /* lines(path) - the file as an array of strings, one per line, without
+     * the newlines (a trailing \r goes too, so a file written on a PC reads
+     * the same). A missing file is an empty array. More lines than an array
+     * holds is an error rather than a silent cut. */
+    if (strcmp(name, "lines") == 0) {
+        if (count_args(n) != 1) { set_err("lines expects 1 arg"); return 1; }
+        eval_args(n, a, 1);
+        if (err_flag) return 1;
+        const char *path = val_str(&a[0], scratch, SVAL_LEN);
+        int h = arr_alloc();
+        if (h < 0) { set_err("lines: no free array"); return 1; }
+        vfs_node_t *nd = vfs_open(path, VFS_RDONLY);
+        if (!nd) { *out = mkaval(h); return 1; }
+        uint32_t size = vfs_size(nd);
+        char *buf = str_alloc(size);
+        if (!buf) { vfs_close(nd); return 1; }
+        uint32_t got = 0;
+        while (got < size) {
+            int r = vfs_read(nd, buf + got, size - got);
+            if (r <= 0) break;
+            got += (uint32_t)r;
+        }
+        vfs_close(nd);
+        arr_t *arr = &arrays[h];
+        uint32_t i = 0;
+        while (i < got) {
+            uint32_t j = i;
+            while (j < got && buf[j] != '\n') j++;
+            uint32_t len = j - i;
+            if (len && buf[i + len - 1] == '\r') len--;
+            if (arr->len >= ARR_CAP) { set_err("lines: file has more lines than an array holds"); return 1; }
+            char *line = str_alloc(len);
+            if (!line) return 1;
+            memcpy(line, buf + i, len);
+            line[len] = '\0';
+            arr->elems[arr->len++] = mksval_ref(line, len);
+            i = j + 1;
+        }
+        *out = mkaval(h);
+        return 1;
+    }
+
+    /* write_lines(path, array) - the array as a file, a newline after every
+     * element, replacing whatever was there. Returns the number of lines
+     * written, or -1 if the file could not be opened. */
+    if (strcmp(name, "write_lines") == 0) {
+        if (count_args(n) != 2) { set_err("write_lines expects 2 args"); return 1; }
+        eval_args(n, a, 2);
+        if (err_flag) return 1;
+        const char *path = val_str(&a[0], scratch, SVAL_LEN);
+        if (a[1].type != VAL_ARR || !arr_valid(a[1].ival)) { set_err("write_lines: second arg is not an array"); return 1; }
+        vfs_node_t *nd = vfs_open(path, VFS_WRONLY | VFS_CREATE);
+        if (!nd) { *out = mkival(-1); return 1; }
+        arr_t *arr = &arrays[a[1].ival];
+        int written = 0;
+        for (int k = 0; k < arr->len; k++) {
+            const char *line = val_str(&arr->elems[k], scratch, SVAL_LEN);
+            uint32_t len = (uint32_t)strlen(line);
+            if (len && vfs_write(nd, line, len) != (int)len) break;
+            if (vfs_write(nd, "\n", 1) != 1) break;
+            written++;
+        }
+        vfs_close(nd);
+        *out = mkival(written);
+        return 1;
+    }
+
     if (strcmp(name, "open") == 0) {
         int nargs = count_args(n);
         if (nargs < 1 || nargs > 2) { set_err("open expects 1 or 2 args"); return 1; }
@@ -1470,13 +1714,13 @@ static int call_builtin(node_t *n, val_t *out) {
         vfs_node_t *nd = sc_file_get(a[0]);
         if (!nd) { set_err("read: bad file handle"); return 1; }
         int want = as_int(a[1]);
-        if (want < 0)            want = 0;
-        if (want > SVAL_LEN - 1) want = SVAL_LEN - 1;  /* string cap */
-        char buf[SVAL_LEN];
+        if (want < 0) want = 0;
+        char *buf = str_alloc((uint32_t)want);
+        if (!buf) return 1;
         int got = vfs_read(nd, buf, (uint32_t)want);
         if (got < 0) got = 0;
         buf[got] = '\0';
-        *out = mksval(buf);
+        *out = mksval_ref(buf, (uint32_t)got);
         return 1;
     }
     if (strcmp(name, "write") == 0) {
@@ -1519,7 +1763,7 @@ static int call_builtin(node_t *n, val_t *out) {
  * Public API
  * ============================================================ */
 
-int soupyc_run(const char *source) {
+static int soupyc_exec(const char *source) {
     /* Reset all state */
     pool_used   = 0;
     nvar        = 0;
@@ -1532,9 +1776,16 @@ int soupyc_run(const char *source) {
     err_msg[0]  = '\0';
     err_line    = 0;
     g_err_line  = 0;
+    /* Drop the previous run's strings before anything can reference them.
+     * Every val_t still sitting in vars[], arrays[] or return_val points into
+     * that storage, which is why this happens here, with all of them reset in
+     * the same breath. */
+    str_store_reset();
     return_val  = mkival(0);
-    for (int i = 0; i < MAX_ARRAYS; i++) arrays[i].used = 0;
-    sc_files_reset();   /* close any files a previous run leaked */
+    /* No blanket clear of the array pool here. The pool is shared (its layout
+     * is fixed for the challenge), so wiping it would pull the rug from under
+     * a script running on another task. Each script releases its own slots
+     * when it finishes - see soupyc_run below. */
 
     src      = source;
     src_pos  = 0;
@@ -1554,9 +1805,9 @@ int soupyc_run(const char *source) {
     }
 
     if (err_flag) {
-        vga_set_color(VGA_LIGHT_RED, VGA_BLACK);
-        vga_printf("soupyc: parse error (line %d): %s\n", err_line, err_msg);
-        vga_set_color(VGA_LIGHT_GREY, VGA_BLACK);
+        term_color(term_current(), VGA_LIGHT_RED, VGA_BLACK);
+        term_printf(term_current(), "soupyc: parse error (line %d): %s\n", err_line, err_msg);
+        term_color(term_current(), VGA_LIGHT_GREY, VGA_BLACK);
         return -1;
     }
 
@@ -1564,9 +1815,9 @@ int soupyc_run(const char *source) {
     eval_block(head.next);
 
     if (err_flag) {
-        vga_set_color(VGA_LIGHT_RED, VGA_BLACK);
-        vga_printf("soupyc: runtime error (line %d): %s\n", err_line, err_msg);
-        vga_set_color(VGA_LIGHT_GREY, VGA_BLACK);
+        term_color(term_current(), VGA_LIGHT_RED, VGA_BLACK);
+        term_printf(term_current(), "soupyc: runtime error (line %d): %s\n", err_line, err_msg);
+        term_color(term_current(), VGA_LIGHT_GREY, VGA_BLACK);
         return -1;
     }
 
@@ -1576,4 +1827,133 @@ int soupyc_run(const char *source) {
 #endif
 
     return 0;
+}
+
+/* ============================================================
+ * spawn: a script function as a background task
+ * ------------------------------------------------------------
+ * The child gets a context of its own, and - this is the whole design - an
+ * INDEPENDENT COPY of the code it needs. Borrowing the parent's node pool
+ * would have been cheaper, but then the child could not outlive the `soup`
+ * command that spawned it: soupyc_run frees the parent context on the way
+ * out, and the child would be walking freed nodes. Copying means the shell
+ * gets its prompt back while the child keeps running, which is the point.
+ *
+ * Node pointers all point inside the pool, which is one contiguous array, so
+ * copying the pool and adding a fixed delta to every link relocates the whole
+ * tree. String literals are the exception - they live in the string store, not
+ * the pool - so each one is re-interned into the child's own store.
+ * ============================================================ */
+static void clone_code(soupyc_ctx_t *dst, soupyc_ctx_t *src_ctx) {
+    int used = src_ctx->m_pool_used;
+    memcpy(dst->m_pool, src_ctx->m_pool, (uint32_t)used * sizeof(node_t));
+    dst->m_pool_used = used;
+
+    long delta = (char *)dst->m_pool - (char *)src_ctx->m_pool;
+    for (int i = 0; i < used; i++) {
+        node_t *nd = &dst->m_pool[i];
+        if (nd->next)  nd->next  = (node_t *)((char *)nd->next  + delta);
+        if (nd->left)  nd->left  = (node_t *)((char *)nd->left  + delta);
+        if (nd->right) nd->right = (node_t *)((char *)nd->right + delta);
+        if (nd->body)  nd->body  = (node_t *)((char *)nd->body  + delta);
+        if (nd->else_) nd->else_ = (node_t *)((char *)nd->else_ + delta);
+        if (nd->lit) {
+            char *b = str_alloc_in(dst, nd->litlen);
+            if (b) { memcpy(b, nd->lit, nd->litlen); nd->lit = b; }
+            else   { nd->lit = str_empty; nd->litlen = 0; }
+        }
+    }
+
+    memcpy(dst->m_funcs, src_ctx->m_funcs, sizeof dst->m_funcs);
+    dst->m_nfunc = src_ctx->m_nfunc;
+    for (int i = 0; i < dst->m_nfunc; i++)
+        if (dst->m_funcs[i].body)
+            dst->m_funcs[i].body = (node_t *)((char *)dst->m_funcs[i].body + delta);
+}
+
+static void release_ctx(soupyc_ctx_t *c) {
+    str_store_reset_in(c);
+    for (int i = 0; i < MAX_SC_FILES; i++)
+        if (c->m_sc_files[i]) { vfs_close(c->m_sc_files[i]); c->m_sc_files[i] = 0; }
+    for (int i = 0; i < MAX_ARRAYS; i++)
+        if (c->m_arr_owned & (1u << i)) arrays[i].used = 0;
+}
+
+static void soupyc_child(void *arg) {
+    soupyc_ctx_t *ctx = (soupyc_ctx_t *)arg;
+    task_current()->soupyc = ctx;
+
+    eval_block(funcs[ctx->m_entry_func].body);
+
+    if (err_flag) {
+        term_color(term_current(), VGA_LIGHT_RED, VGA_BLACK);
+        term_printf(term_current(), "\nsoupyc: spawned %s failed (line %d): %s\n",
+                   funcs[ctx->m_entry_func].name, err_line, err_msg);
+        term_color(term_current(), VGA_LIGHT_GREY, VGA_BLACK);
+    }
+
+    release_ctx(ctx);
+    task_current()->soupyc = 0;
+    kfree(ctx);
+    task_exit();
+}
+
+/* Returns the new task id, or -1. */
+static int soupyc_spawn(int func_index) {
+    soupyc_ctx_t *parent = cur_ctx();
+    soupyc_ctx_t *child  = (soupyc_ctx_t *)kmalloc(sizeof *child);
+    if (!child) return -1;
+    memset(child, 0, sizeof *child);
+
+    clone_code(child, parent);
+    child->m_entry_func = func_index;
+
+    char tname[16];
+    tname[0] = 's'; tname[1] = 'o'; tname[2] = 'u'; tname[3] = 'p'; tname[4] = ':';
+    int k = 5;
+    const char *fn = parent->m_funcs[func_index].name;
+    for (int i = 0; fn[i] && k < 15; i++) tname[k++] = fn[i];
+    tname[k] = '\0';
+
+    task_t *t = task_spawn(tname, soupyc_child, child);
+    if (!t) { release_ctx(child); kfree(child); return -1; }
+    return (int)t->id;
+}
+
+/* ============================================================
+ * Entry point
+ * ------------------------------------------------------------
+ * One context per running script, allocated here and hung off the task that
+ * is interpreting, which is what lets two scripts run at once. The previous
+ * value is saved and restored so a nested call (a script run from inside
+ * another, should that ever exist) does not lose its parent's state.
+ * ============================================================ */
+int soupyc_run(const char *source) {
+    task_t *t = task_current();
+    soupyc_ctx_t *prev = (soupyc_ctx_t *)t->soupyc;
+
+    soupyc_ctx_t *ctx = (soupyc_ctx_t *)kmalloc(sizeof *ctx);
+    if (!ctx) {
+        term_color(term_current(), VGA_LIGHT_RED, VGA_BLACK);
+        term_puts(term_current(), "soupyc: not enough memory for an interpreter context\n");
+        term_color(term_current(), VGA_LIGHT_GREY, VGA_BLACK);
+        return -1;
+    }
+    memset(ctx, 0, sizeof *ctx);
+    t->soupyc = ctx;
+
+    int rc = soupyc_exec(source);
+
+    /* Everything this script owns goes back now: its strings, its open files,
+     * and only the array slots it allocated itself. */
+    str_store_reset();
+    sc_files_reset();
+    /* Through the accessor, not ctx->, because the names below are macros
+     * that resolve through the current task - which is still this context. */
+    for (int i = 0; i < MAX_ARRAYS; i++)
+        if (arr_owned & (1u << i)) arrays[i].used = 0;
+
+    t->soupyc = prev;
+    kfree(ctx);
+    return rc;
 }

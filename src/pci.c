@@ -101,3 +101,50 @@ const char *pci_class_str(uint8_t c) {
         default:   return "Unknown";
     }
 }
+
+/* ── Device lookup and configuration space ─────────────────────────────── */
+
+static void pci_write32(uint8_t bus, uint8_t dev, uint8_t fn,
+                        uint8_t off, uint32_t val) {
+    uint32_t addr = (1u << 31) | ((uint32_t)bus << 16) | ((uint32_t)dev << 11) |
+                    ((uint32_t)fn << 8) | (off & 0xFC);
+    outl(0xCF8, addr);
+    outl(0xCFC, val);
+}
+
+int pci_find(uint16_t vendor, uint16_t device, pci_dev_t *out) {
+    pci_dev_t devs[PCI_MAX_DEVS];
+    int n = pci_scan(devs, PCI_MAX_DEVS);
+    for (int i = 0; i < n; i++) {
+        if (devs[i].vendor_id == vendor && devs[i].device_id == device) {
+            if (out) *out = devs[i];
+            return 0;
+        }
+    }
+    return -1;
+}
+
+uint32_t pci_cfg_read32(const pci_dev_t *d, uint8_t off) {
+    return pci_read32(d->bus, d->dev, d->fn, off);
+}
+
+void pci_cfg_write32(const pci_dev_t *d, uint8_t off, uint32_t val) {
+    pci_write32(d->bus, d->dev, d->fn, off, val);
+}
+
+uint32_t pci_bar(const pci_dev_t *d, int n) {
+    uint32_t v = pci_cfg_read32(d, (uint8_t)(0x10 + 4 * n));
+    /* Bit 0 selects the space: 1 = I/O (low 2 bits are flags), 0 = memory
+     * (low 4 bits are flags). */
+    return (v & 1u) ? (v & ~0x3u) : (v & ~0xFu);
+}
+
+uint8_t pci_irq_line(const pci_dev_t *d) {
+    return (uint8_t)(pci_cfg_read32(d, 0x3C) & 0xFF);
+}
+
+void pci_enable_bus_master(const pci_dev_t *d) {
+    uint32_t cmd = pci_cfg_read32(d, 0x04);
+    cmd |= (1u << 2) | (1u << 0);   /* bus master + I/O space */
+    pci_cfg_write32(d, 0x04, cmd);
+}

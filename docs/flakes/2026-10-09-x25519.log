@@ -1,0 +1,10 @@
+2026-10-09, during the v0.60.83 full check (scripts/check.sh, everything in parallel):
+  FAIL  x25519-test  rounds took '1790' ticks   (limit 1000, "under ten seconds")
+The same build, alone right after: 149 ticks, all three checks ok; the full check
+run again: CHECK PASSED. Host load, not a regression. Watch for a repeat: if it
+comes back, the limit wants to count from the test's start under load, as the
+gate's jobs check was reworked in v0.60.20.
+
+Again in the v0.60.97 full check: 1146 ticks (alone: 149). The ticks are the
+guest's wall time, which a loaded host stretches. Fixed in v0.60.97: over the
+limit, the test boots and measures once more; a real slowdown fails both.

@@ -11,10 +11,10 @@
 /* ── Flags ────────────────────────────────────────────────────────────────
  * Kept together so there is one place to audit before an event. Each is under
  * soupyc's 47-character string cap, because stage 1 is read with a script.  */
-#define FLAG1 "cdctf{REDACTED_STAGE_1_________________}"
-#define FLAG2 "cdctf{REDACTED_STAGE_2________________}"
-#define FLAG3 "cdctf{REDACTED_STAGE_3________________}"
-#define FLAG4 "cdctf{REDACTED_STAGE_4__________________}"
+#define FLAG1 "cdctf{mise_en_place_two_paths_one_check}"
+#define FLAG2 "cdctf{salt_to_taste_any_preimage_works}"
+#define FLAG3 "cdctf{bad_recipe_the_loader_reads_wide}"
+#define FLAG4 "cdctf{too_many_cooks_ring0_from_a_script}"
 
 /* ── Stage 3 target ───────────────────────────────────────────────────────
  * Pinned in the kernel heap at boot. The ELF loader validates where it writes

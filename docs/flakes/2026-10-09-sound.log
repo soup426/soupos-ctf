@@ -1,0 +1,5 @@
+2026-10-09, during the v0.60.106 full check: sound-test "the Doom sound effect
+lasts 212 ms, expected about 513" and "hush 50 gave 32767 -> 21999". Alone: 553 ms
+and an exact half. The keystrokes for the next command were timed from the last
+ones (flat WAITs), and under load they arrived while the pistol still played.
+Fixed in v0.60.106: each sound command waits for its prompt, then for its sound.

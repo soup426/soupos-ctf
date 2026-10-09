@@ -1,0 +1,101 @@
+# soupOS CI
+#
+# Runs on the atlas-runner (LXC 108) under the `soupos` label, which maps to a
+# node:20-bookworm container. node is needed because actions/checkout is a JS
+# action; the C toolchain is apt-installed on top.
+#
+# This exists because a whole class of breakage in this project was only ever
+# caught by hand: a credential change that silently broke every ring-3 check,
+# stale objects linked across a config switch, and three separate occasions
+# where a kernel size change moved the CTF stage-3 heap offset. All of it is
+# mechanical to detect and worth never rediscovering.
+name: soupOS CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  build-and-test:
+    runs-on: soupos
+    timeout-minutes: 30
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+
+      - name: Install toolchain
+        run: |
+          set -eux
+          apt-get update -qq
+          apt-get install -y --no-install-recommends \
+              build-essential gcc-multilib nasm mtools dosfstools xorriso \
+              grub-pc-bin grub-common qemu-system-x86 python3 psmisc
+          # sed -n 1p, not head -1: head closes the pipe after one line, the
+          # producer takes SIGPIPE (141), and `set -o pipefail` turns that into
+          # a step failure even though everything installed correctly. sed
+          # reads to EOF, so the producer never gets signalled.
+          gcc --version | sed -n 1p
+          qemu-system-i386 --version | sed -n 1p
+          nasm -v
+          make --version | sed -n 1p
+
+      - name: Diagnose the workspace
+        run: |
+          set -eux
+          pwd
+          ls -la src/*.asm || echo "NO ASM FILES IN WORKSPACE"
+          echo "tracked asm:"; git ls-files 'src/*.asm'
+          echo "make would do:"; make -n kernel.elf 2>&1 | tail -5 || true
+
+      # Both configurations must build. The .build-config stamp means switching
+      # between them here also exercises the rebuild-on-config-change fix.
+      - name: Build default (normal soupOS)
+        run: make
+
+      - name: Build challenge image
+        run: make CHALLENGE=1
+
+      - name: Assert the default build carries no challenge content
+        run: |
+          set -eux
+          make
+          test "$(nm kernel.elf | grep -c serve_the_special || true)" = "0"
+          test "$(strings kernel.elf | grep -c 'cdctf{' || true)" = "0"
+
+      - name: Assert the challenge build does
+        run: |
+          set -eux
+          make CHALLENGE=1
+          test "$(nm kernel.elf | grep -c serve_the_special || true)" = "1"
+          test "$(strings kernel.elf | grep -c 'cdctf{' || true)" = "4"
+
+      # Gates run against the normal build. Between them they cover boot, ring 3,
+      # preemption, FAT concurrency, address-space isolation and VGA output.
+      - name: Build disk image
+        run: |
+          set -eux
+          make
+          make disk
+
+      - name: Smoke test
+        run: ./scripts/smoke-test.sh
+
+      - name: Console test
+        run: ./scripts/console-test.sh
+
+      - name: Handout does not leak flags or the headchef secret
+        run: |
+          set -eux
+          ./scripts/mk-handout.sh
+          tmp=$(mktemp -d)
+          tar xzf handout/soupos-handout.tar.gz -C "$tmp"
+          # Read both the flags and the headchef secret out of the sources
+          # rather than naming them here: this file ships to players in the
+          # handout, so a literal would be the very leak it is checking for.
+          for f in $(grep -ho 'cdctf{[^"]*}' src/challenge.c); do
+              ! grep -rqaF "$f" "$tmp"
+          done
+          secret=$(sed -n 's/.*hash_secret("\([^"]*\)").*/\1/p' src/users.c | sed -n 1p)
+          test -n "$secret"
+          ! grep -rqaF "$secret" "$tmp"
+          grep -q serve_the_special "$tmp/symbols.txt"

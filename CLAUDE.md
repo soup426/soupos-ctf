@@ -3,7 +3,7 @@
 ## What this is
 
 soupOS is a 32-bit x86 hobby OS written in C and NASM assembly (currently
-**v0.7.6**). It boots via GRUB and runs in protected mode with paging, a
+**v0.60.154**; ROADMAP.txt is the authority on the version). It boots via GRUB and runs in protected mode with paging, a
 physical/heap allocator, and a cooperative scheduler. On top of that:
 
 - **Filesystem**: FAT16 read/write with subdirectories ("bowls") and a VFS shim
@@ -14,11 +14,15 @@ physical/heap allocator, and a cooperative scheduler. On top of that:
   `soupyc` scripting language (functions, arrays, file I/O, `include`, builtins,
   triple-quoted multi-line strings, line-numbered errors; strings cap at 47 ch).
 - **`ai <prompt>`**: a COM2 serial bridge to a host-side LLM (`make run-ai`).
-- **Ring-3 user mode (v0.7.0)**: `cook <prog.elf>` loads and runs ELF32 programs
-  in ring 3 over an `int 0x80` syscall interface, with real (U/S-bit) memory
-  protection. See the "User mode" section below.
+- **Ring-3 processes (v0.7.0, concurrent since v0.8.0)**: `cook <prog.elf>`
+  loads and runs ELF32 programs in ring 3 over an `int 0x80` syscall interface,
+  with real (U/S-bit) memory protection and a private address space each.
+  Several run at once: `cook prog &` backgrounds, `orders` lists them, `kill` and
+  Ctrl-C end them. See "User mode" and "Processes" below.
 
 Theming note: commands are kitchen-flavoured (`pour`/`stir`/`serve`/`cook`/…).
+**Keep it up when adding commands.** Networking is `faucet`/`plumbing`/`table`/
+`sip`/`sniff`, jobs are `orders`/`plate`/`steep`, the clipboard is `scraps`.
 
 > **Doom port: re-enabled 2026-08-26 (v0.7.5).** `doom.c/doom.h/wad.c/wad.h`
 > live in `src/` again and the `doom` shell command is back. It **refuses to
@@ -44,7 +48,7 @@ make run
 # Run with the AI bridge attached on COM2 (see "AI serial bridge")
 make run-ai            # AI_FAKE=1 make run-ai  for offline canned replies
 
-# Build a ring-3 user program (user/hello.c -> user/hello.elf)
+# Build a ring-3 user program (user/hello.c -> user/greet.elf)
 make user
 
 # Rebuild FAT disk image (wipes disk.img; includes the .SC demos + HELLO.ELF)
@@ -55,9 +59,23 @@ make wad
 ```
 
 **Headless smoke test** (the oracle — use this as the gate after any change):
+
+**Run the full check on the test container, not the laptop** (2026-10-09, at
+the user's request: ~200 QEMUs at once made the laptop unusable).
+`scripts/remote-check.sh` copies the tree to CT 123 `soupos-test` on atlas
+(Arch, 16 cores, 8 GB, /dev/kvm) through `ssh atlas pct exec 123` and runs
+check.sh there (~6 min); the laptop only copies. check.sh itself now runs at
+most CHECK_JOBS pieces at once (default twice the cores). Single test
+scripts while working on something are fine here.
 ```bash
-./scripts/smoke-test.sh          # boots, drives the shell, greps serial markers
-KEEP=1 ./scripts/smoke-test.sh   # keep the serial log for inspection
+./scripts/remote-check.sh        # THE pre-commit check, on CT 123 (pct start 123 if down)
+./scripts/check.sh               # the same, here: five configs + gate + every
+                                 # test script, all in parallel (~the slowest piece)
+./scripts/check.sh quick         # configs + gate only
+./scripts/smoke-test.sh          # the gate alone: eight segments under scripts/gate/,
+                                 # each its own headless boot, all at once (~100 s)
+./scripts/gate/jobs.sh           # one segment by itself while working on it
+KEEP=1 ./scripts/smoke-test.sh   # keep every segment's serial log for inspection
 ```
 It boots with `-display none`, types into the guest through the QEMU monitor
 (`scripts/qemu_keys.py`), and checks boot, preemption arming, all four ring-3
@@ -125,7 +143,12 @@ src/
   task.c / task.h   Scheduler (task_init, spawn, yield, exit, preemption)
   task_switch.asm   Context switch primitive (callee-saved reg + esp swap)
 scripts/
-  smoke-test.sh     Headless boot + shell-driver test (the gate)
+  check.sh          Everything before a commit, in parallel: configs in tree
+                    copies, the gate and the side scripts each on their own QEMU
+  smoke-test.sh     The gate: hands over to gate.sh
+  gate.sh           Runs every segment under gate/ in parallel, one verdict
+  gate/lib.sh       Boot, drive, check and verdict shared by the segments
+  gate/<seg>.sh     boot, jobs, fat, vga, desk, net, soupyc, audio
   qemu_keys.py      Types into a running guest via the QEMU monitor
 ```
 
@@ -380,55 +403,862 @@ EBP as a scratch register and the stack walk finds nothing.
 soupOS runs real ring-3 user programs with hardware memory protection.
 
 - **GDT/TSS** (`gdt.c`): user code/data selectors `SEL_UCODE 0x1B` / `SEL_UDATA
-  0x23`, and a TSS (`SEL_TSS 0x28`) holding `ss0`/`esp0` — the dedicated 16 KB
-  kernel stack the CPU switches to on a ring3→ring0 trap. `ltr` at boot.
+  0x23`, and a TSS (`SEL_TSS 0x28`) holding `ss0`/`esp0` — the kernel stack the
+  CPU switches to on a ring3→ring0 trap. `ltr` at boot.
+  **`esp0` is per-task state (v0.8.0)**: it is `task_t.user_resume_esp`, the
+  kernel esp `user_mode_enter` captured after its own pushes, and `task_yield`
+  moves it with `current` on every switch. With two ring-3 programs alive a
+  single `esp0` is a corruption bug: the second program to trap pushes its
+  frame onto the stack where the first one's suspended frame still lives. It is
+  the resume esp rather than the stack top because `user_mode_enter` leaves
+  four callee-saved registers on that stack for as long as ring 3 runs.
+  `tss_boot_esp0()` is the fallback for a task that has never entered ring 3.
 - **Paging** (`paging.c`): `map_page` ORs the user bit into the PDE when a user
   PTE is added; kernel PTEs stay `U=0` so kernel memory is unreachable from
   ring 3 (privilege is AND-ed PDE&PTE). `paging_unmap` frees a mapping.
+- **Stubs own the data segments (v0.8.3)**: every ISR/IRQ/syscall stub saves
+  the interrupted context's `ds`, loads `SEL_KDATA` for the handler, and
+  restores it before `iret`; `registers_t.ds` is that saved value. Do not
+  "simplify" this away. Segment registers are global state that `task_switch`
+  does not save, so without it a task that blocks inside a syscall can resume
+  after another task left `ds` set to the kernel selector, `iret` to ring 3
+  holding a DPL-0 data segment, and have the CPU null every data segment.
+  The program then faults, the fault handler faults identically because `ds`
+  is null, and the machine dies with interrupts off and nothing logged.
 - **Syscalls**: `int 0x80`, DPL-3 gate → `isr128` stub → `syscall_dispatch`
   (`usermode.c`). eax=number, ebx/ecx/edx=args, eax=return. Numbers in
   `syscall_nr.h` (9 calls):
   `SYS_EXIT/WRITE/READ/YIELD/OPEN/CLOSE/SBRK/ARGS/TICKS`.
   - `write` fd 1=screen, 2=serial, fd≥3 → VFS; `read` fd 0=keyboard,
     fd≥3 → VFS.
-  - `open(path, mode)` (0=read, 1=write+create) returns an fd from a
-    per-run 16-slot table (`g_ufds`, fd≥3); `close(fd)` frees it.
-  - `sbrk(incr)` grows/shrinks the user heap break (`g_user_brk`, base
+  - `read` fd 0 only reaches the keyboard for the **foreground** process; any
+    other process gets 0 bytes (EOF) rather than stealing the user's keys. The
+    wait is interruptible, so a killed program sitting in `read` notices, and
+    it enables interrupts first (the gate is an interrupt gate, so waiting
+    with IF clear would wait forever for the IRQ that fills the buffer).
+  - `open(path, mode)` (0=read, 1=write+create) returns an fd from the
+    process's own 16-slot table (`proc_t.ufds`, fd≥3); `close(fd)` frees it.
+  - `sbrk(incr)` grows/shrinks that process's heap break (`proc_t.brk`, base
     `USER_HEAP 0xC4000000`), mapping fresh user pages up to the stack;
     returns the old break (−1 on failure).
-  - `args(buf, max)` copies the `cook` command-line tail (`g_user_args`,
+  - `args(buf, max)` copies the `cook` command-line tail (`proc_t.args`,
     128 B) into the program.
   - `yield` (v0.7.2) re-enables interrupts and calls `task_yield()`, so a
-    ring-3 program can cooperate with background kernel tasks. Safe because
-    only one user program runs at a time, so the frame left on the TSS
-    (esp0) stack can't be clobbered by another ring3→ring0 trap while
-    switched away; iret restores the user's IF from its saved EFLAGS. Demo:
-    shell `yieldbg` + `cook spin.elf` show interleaved serial markers.
+    ring-3 program can cooperate with other tasks. This used to be safe only
+    because one user program ran at a time (nothing else could clobber the
+    frame left on the shared esp0 stack); since v0.8.0 it is safe by
+    construction, because `esp0` follows `current` and every task traps onto
+    its own kernel stack. iret restores the user's IF from its saved EFLAGS.
+    Demo: shell `yieldbg` + `cook whisk.elf` show interleaved serial markers.
   - `ticks` (v0.7.2) returns `timer_get_ticks()` (100 Hz uptime) — lets a
     user program pace itself in wall-clock time (see `user/spin.c`).
   - Every user pointer is bounds-checked via `user_ok()` so a buggy or
-    hostile program can't make the kernel touch non-user memory.
-- **Transitions** (`usermode_asm.asm`): `user_mode_enter(entry, ustack)` builds
-  an `iret` frame into ring 3; the exit syscall calls `user_mode_exit`, which
-  restores the saved kernel stack and returns out of `exec_elf` (one-shot
-  coroutine swap — no per-process kernel thread yet).
-- **ELF loader** (`exec_elf`): ELF32 ET_EXEC i386 only. Maps each PT_LOAD into
+    hostile program can't make the kernel touch non-user memory. Since
+    v0.60.149 it also checks every page: mapped, or the heap below the
+    break, or the stack above its guard. A range check alone let the
+    kernel's own copy fault on a page the program never had, and isr.c
+    panics on that; prod.elf and prod-test.sh keep it closed.
+- **Transitions** (`usermode_asm.asm`): `user_mode_enter(entry, ustack)` records
+  the resume esp on the current task (`usermode_arm_resume`, which also loads
+  `tss.esp0`) and builds an `iret` frame into ring 3. `user_mode_exit` reads
+  that task's resume esp back and returns out of `usermode_run`. It is reached
+  three ways: the exit syscall, the fault handler, and the kill unwind.
+- **ELF loader** (`usermode_run`, was `exec_elf`): ELF32 ET_EXEC i386 only.
+  Takes the `proc_t`, runs on that process's own task. Maps each PT_LOAD into
   fresh user pages at/above `USER_BASE 0xC0000000` (above the identity map, so
   no aliasing), copies the image, zeroes .bss, sets a 16 KB user stack at
   `USTACK_TOP 0xC8000000`, runs, tears the pages down on exit.
-- **Single address space for now**: one user program at a time, mapped into the
-  kernel page directory. Concurrency needs per-process page directories.
+- **Private address space per process**: `paging_new_dir()` per program,
+  recorded on the task so the scheduler restores CR3 when the process is
+  resumed, freed by `paging_free_dir` on exit. Page dedup asks
+  `paging_is_mapped()` rather than a side table; `proc_t.upages` is only the
+  per-process budget (`PROC_PAGE_CAP`, 4 MB).
 - Shell `cook <prog.elf> [args]`. User programs live in `user/` (freestanding,
   talk to the kernel only via `int 0x80`). They link the **user runtime**
   `user/ulib.{c,h}` — `_start` (calls `main`, exits with its return value),
   thin wrappers over every syscall, and conveniences (`print`/`eprint`/
   `print_int`, `strlen_`, a bump `malloc` over `sbrk`). A program is just
-  `int main(void)`. `make user` builds five ELFs: `hello` (prints +
+  `int main(void)`. `make user` builds nine ELFs: `hello` (prints +
   exits), `echo` (prints args), `cat` (open+read+write a file), `systest`
   (exercises args/open/read/sbrk, emits `TESTOUT` markers to serial for
   headless verification), `spin` (loops on `ticks`+`yield` for ~3s to
-  demonstrate cooperative scheduling from ring 3). Link them at `USER_BASE`
-  with `user/user.ld`; the disk recipe mcopies HELLO/CAT/ECHO/SYSTEST/SPIN.ELF.
+  demonstrate cooperative scheduling from ring 3), `crash` (faults on purpose),
+  `unhex` (hex stdin to a file), `marker` (tags every step with its argument so two
+  copies prove concurrency) and `hog` (loops forever making NO syscalls, so
+  only the IRQ kill path can end it). Link them at `USER_BASE` with
+  `user/user.ld`; the disk recipe mcopies each one.
+
+## Windows for programs (v0.60.146)
+
+`SYS_WIN_OPEN/PUT/EVENT/CLOSE` (16-19, `syscall_nr.h`, `uwinev_t`) give a
+ring-3 program a window on countertop; `user/frost.elf` (paint) is the
+first user, `user/swirl.elf` (Mandelbrot, 16.16 fixed point, checked pixel
+for pixel against Python by swirl-test.sh) the second. The calls run on the program's task and only touch a slot in
+countertop.c's `app[]` under `app_mtx`; the desktop loop is the only
+drawer (it shows new slots, repaints dirty ones, closes the windows of
+programs that closed them or ended). PUT copies the program's whole body
+into a kernel buffer (640x480 at most), so nothing is drawn from user
+memory. The close box only sends `WEV_CLOSE`: the program decides. With
+the desktop down every call gives -1 (but CLOSE, which frees the slot);
+a second CLOSE of one window gives -1. prodwin-test.sh attacks all of
+it through `prod.elf limits`/`victim`. A program in a terminal window
+writes its stderr there, not to serial, so frost-test reads frost's
+`[frost]` lines from the terminal's cells.
+
+## Networking (`src/rtl8139.c`, `src/net.c`, v0.9.0)
+
+`sip 10.0.2.2` works. QEMU's user-mode network is the target, so addressing is
+compiled in (10.0.2.15, gateway 10.0.2.2) rather than discovered by DHCP.
+
+- **Driver**: RTL8139, all I/O ports plus two DMA areas. The buffers are static
+  arrays because the kernel is identity-mapped, so their addresses are already
+  physical. Transmit tracks completion with TOK/TUN/TABT, **not** the OWN bit,
+  whose polarity is documented inconsistently and which silently wedged every
+  descriptor when it was read the other way round.
+- **`irq_unmask()`**: `idt_init` opens only IRQ0 and IRQ1, so any driver that
+  wants interrupts must ask. A slave line (8-15) also needs the cascade, IRQ2,
+  open on the master. Forgetting that looks exactly like a broken driver:
+  transmits work, nothing is ever received.
+- **Stack**: Ethernet, ARP (8-entry cache), IPv4 with checksums, ICMP echo in
+  both directions. Host byte order above the wire, converted only in the header
+  builders and parsers. Receive runs in the IRQ handler.
+- **Verify with the packet capture, not with printf**: `make run NET_DUMP=1`
+  writes every frame to `net.pcap`. Both bugs above were found that way, one of
+  them (nothing transmitted) being invisible from inside the OS.
+- **UDP and DNS (v0.9.1)**: UDP carries the pseudo-header checksum, and the
+  stack keeps one outstanding request rather than a socket table. The resolver
+  does A records only and passes a dotted quad straight through, so `sip` takes
+  a name or an address by the same path. `ip_send` requires its next hop to be
+  in the ARP cache and now logs when it drops a packet for want of one, which
+  is how a silently-vanishing DNS query cost an hour.
+- **DHCP (v0.9.2, `src/dhcp.c`)**: address, mask, gateway and resolver come
+  from the lease; the compiled-in values are the fallback when nothing answers,
+  and boot/`faucet` say which was used. **Arm the receiver before you send**:
+  `net_udp_listen(port)` then send then `net_udp_wait`. SLIRP answers from
+  inside the same process, so a reply can reach the interrupt handler before
+  the send call returns, and anything arriving before the port is armed is
+  dropped - which looks exactly like the server ignoring you.
+- **TCP (v0.9.3, `src/tcp.c`)**: stage one only, the three-way handshake. One
+  connection at a time. **A SYN occupies one sequence number** - `snd_nxt` is
+  `iss + 1` after sending ours, `rcv_nxt` is their seq + 1 - and everything
+  later depends on that being right. A duplicate SYN/ACK is re-acked, because
+  the peer retransmits when our ACK is late. `tcp_close()` sends RST; the
+  graceful FIN close is stage 2c.
+- **Data (v0.9.4)** is stop-and-wait: one segment in flight, acked before the
+  next. Sequence comparisons use `(int32_t)(a - b) > 0`, never a plain `>`,
+  because the sequence space wraps. The receive buffer is written by the
+  interrupt handler and drained with interrupts off.
+- **Close (v0.9.5)**: full FIN state machine, active and passive. `tcp_input`
+  must **not** early-return on anything but CLOSED/SYN_SENT - acknowledgements
+  keep arriving after a FIN, and going deaf there made us retransmit data the
+  peer had already answered. A close that times out waiting for the peer's FIN
+  sends RST rather than silently forgetting the connection, which would leave
+  it half-open at the other end. TIME_WAIT is 200 ms, not 2*MSL, on purpose.
+- **QEMU quirk**: three connections to the same SLIRP port leave the third
+  unanswered. Each works alone, the frames are identical; it is QEMU-side state
+  outliving our close. The gate uses a separate listener port per check.
+- Shell: `faucet`, `plumbing [ip|dhcp]`, `table`, `sip <host> [count]`,
+  `sniff <host>`, `reserve <host> <port>`.
+
+## Do not use memmove on the frame buffer (v0.10.3)
+
+`str.c`'s `memmove` is a **byte** loop, so using it for a block move of 16-bit
+VGA cells doubles the work. `vga.c`'s `scroll()` copies 32-bit words (two cells
+per store) and is about twice as fast as the original cell-at-a-time loop;
+`memmove` measured 47% slower than that original. `sample` guards the row
+movement. The same caution applies anywhere a wide copy looks tempting.
+
+## Volume, and the mixer's latency (v0.19.0)
+
+`hush [0-100]` is the master level, applied to the **sum** before saturation,
+so turning down removes clipping and keeps the music/effects balance.
+
+**A voice added while playback is under way is first heard up to 63 ms later**
+(the mixer's three-chunk lead on the card's read position). Whether two sounds
+started in one command align exactly is a race against the second lump's WAD
+read. `mixer-test.sh` searches offsets rather than assuming zero latency - if
+it ever fails, check the reported offset before suspecting the mixer.
+
+## Warnings are errors (v0.18.2)
+
+Builds with `-Werror` plus `-Wshadow -Wpointer-arith -Wstrict-prototypes
+-Wold-style-definition` on top of `-Wall -Wextra`. **`WERROR=0` turns it off**
+for bisecting or a newer GCC. If a warning appears, fix it rather than
+silencing it: the one tolerated warning in this tree trained the eye to skip
+compiler output for a whole session.
+
+## CPU accounting (v0.18.1)
+
+`ps` shows a CPU% column: the timer charges each tick to the running task, and
+the 100-tick window makes the figure a percentage directly. **It measures who
+held the CPU, not who did work** - a task halted at a prompt still counts, so
+the shell reads 100% when idle. Use it to ask whether a background service is
+costing too much, which is what `sample` asserts (no service above 50%).
+Measured idle: fbcon 0%.
+
+## The boot logo (v0.18.0)
+
+`assets/logo.txt` is the source of truth; `scripts/gen-logo.py` generates
+`src/logo.h` (committed, so Python is not needed to build). **Never put UTF-8
+in a C string meant for the screen** - VGA prints one glyph per byte, so each
+block becomes three garbage characters. The screen gets CP437 via
+`vga_puts_screen_only` (no serial mirror); the log gets UTF-8 via `klog`.
+
+## The framebuffer console is 128x48 (v0.18.0)
+
+Set in `fb_early` from the framebuffer size, **before the first character is
+printed**: the cell store's row stride is the column count, so resizing later
+re-interprets text already written. A text boot stays 80x25, where the boot log
+scrolls the logo off - that is known and accepted, not a bug to fix by making
+the logo smaller.
+
+**Tests that place the mouse must not assume a screen size.** The pointer
+starts at the console's centre. Drive it into a corner, where it clamps, then
+move a known amount.
+
+## Music (`src/music.c`, v0.17.0)
+
+`hum <LUMP>` plays a MUS tune; a Doom level plays its own. **Music is not a
+mixer voice** - sixteen channels do not fit in four, and it must not be stolen
+by an effect - so the mixer asks for one sample per frame and adds it. Square
+waves only; instruments, pitch bend and percussion (channel 15) are ignored on
+purpose. Needs the WAD, so it is in the `DOOM=0` filter and the mixer stubs it
+out under `NO_DOOM`.
+
+## Audio timing has to be measured in isolation (v0.17.0)
+
+QEMU's wav backend writes **only while the card is active**, so several sounds
+played in one session land contiguously with no silence between them, and any
+span-based measurement sweeps in whatever played next (a 513 ms effect read as
+4251 ms). Fine-grained timing lives in `scripts/sound-test.sh`, which plays
+exactly two things. The main gate checks only what the serial log can answer.
+
+## Long filenames, write side (v0.20.0)
+
+`fat_write` generates an 8.3 alias (spaces and dots dropped, `~N` checked
+against a real lookup) and writes the LFN chain into a **run of consecutive
+slots** reserved by `dir_alloc_run`; without a long enough run it falls back to
+an 8.3-only name rather than failing. `scripts/fat-longname-test.sh` has
+**mtools** read the image, which is the only evidence that is not
+self-referential.
+
+**soupOS's permission byte collides with VFAT's case flags.** Byte 12 holds
+"base/extension is lower case" (0x08/0x10) in VFAT and `FAT_PERM_OX`/`OW` in
+soupOS, so other tools show our aliases lower case. Cosmetic; the long name is
+authoritative.
+
+## Long filenames (v0.16.0, read side)
+
+`fat_entry_t` carries both `name` (8.3) and `lfn`; use `fat_display_name()` to
+show one. Either name opens a file. **The LFN checksum is validated against the
+8.3 name** - do not skip it, or an orphaned chain attaches to the wrong entry.
+
+**A path component can be a long name**, so its buffer is `FAT_LFN_MAX`, not
+`FAT_NAME_MAX`. That cap bit twice: `next_component` (fat.c) and
+`normalize_path` (shell.c). **If a file lists but will not open, the name is
+being truncated on the way in** - look for a 13-byte component buffer before
+suspecting the directory parser.
+
+Writing long names is not implemented: a new file still gets a mangled 8.3 name.
+
+## The vault: SSH transport (v0.29.0)
+
+`ssh.c` is the server; `vault <port>` opens it. One session, static buffers,
+4 KB packet cap. The chacha20-poly1305@openssh.com framing (two keys, length
+encrypted separately, seq as nonce) lives in `write_packet`/`read_packet`; the
+host key seed is `/HOSTKEY.ED`. Verify with `scripts/ssh-test.sh`, which runs
+the real `ssh -vvv` and compares fingerprints. Password userauth against the roster, then one session channel bridged to the console through a 4 KB output ring (`ssh_sink` -> `flush_output`); `scripts/ssh-login.py` drives a real login with pexpect. TCP has a table of four listeners (`tcp_accept(port, ticks)`), so `pass`, `vault` and `hatch` coexist; `pass` and `hatch` build without Doom.
+
+## Kill wakes a blocked task (v0.27.0)
+
+`proc_kill` calls `task_unblock` on a target parked on a wait queue
+(`task_t.blocked_on`), so a process blocked in a pipe read dies instead of
+sitting there as the "newest process" forever. Every block site loops and
+re-checks, so early wakes are safe; keep it that way. The Makefile now tracks
+header dependencies (`-MMD`); before that, a header edit left stale objects and
+produced a kernel that hung on the first ring-3 trap.
+
+## Crypto primitives (v0.23.0 onward)
+
+Each primitive lands with published test vectors in `selftest.c` (expected
+values from an independent implementation, never from the kernel's own). SHA-256
+and HMAC are in `sha256.c`; `random.c` is the entropy pool (RDRAND + IRQ timing + RTC, folded through SHA-256), checked across boots by `scripts/random-test.sh`; `chacha.c` is ChaCha20, Poly1305 and the RFC 8439 AEAD; `sha512.c` exists for Ed25519; `fe25519.h` shares the field between `curve25519.c` (X25519) and `ed25519.c` (RFC 8032 signatures); X25519 is in 16-bit limbs (the 1000-round RFC chain is `sample slow` / `scripts/x25519-test.sh`, not the gate). None of it is constant-time; say so wherever it is
+advertised.
+
+## The pass: a shell over TCP (v0.22.0)
+
+`pass <port>` runs `remote.c` as a task that feeds socket bytes into
+`console_rx_byte` and mirrors output through `console_set_sink`. The remote
+user shares the one local shell, as a serial user does. **Clear text, no
+authentication on the wire** - it is the step before SSH, which is the next
+queue item. A test driving it must hold the `nc` session open between
+commands, or EOF closes it before the accept poll runs.
+
+## Several connections at once (v0.21.0)
+
+`tcp.c` holds a table of four connections; **the listener owns none of them**,
+so a SYN takes a free slot and the listener keeps listening. `tcp_accept`
+returns a handle and `tcp_send_on`/`tcp_recv_on`/`tcp_close_on` act on it; the
+plain `tcp_send`/`tcp_recv`/`tcp_close` forward to the slot `tcp_connect` took,
+for the outbound commands.
+
+**In a test script, never use a bare `wait`** - it waits for the QEMU process
+too, which never exits. Collect the PIDs you care about and wait on those.
+
+## Serving: the listening socket (v0.15.0)
+
+`hatch [port]` answers HTTP GETs for files on the FAT volume;
+`scripts/hatch-test.sh` fetches from the host through QEMU's hostfwd. TCP has
+`tcp_listen`/`tcp_accept` with `TCP_LISTEN` and `TCP_SYN_RCVD`.
+
+**The listener IS the connection** - one block of state - so a server must
+listen again after each client, and a SYN mid-request is refused. A backlog
+needs a connection table.
+
+**To answer an unsolicited peer you must know its MAC without resolving**,
+because replies are built in interrupt context where `ip_send` will not ARP.
+`net_rx` therefore learns the sender's hardware address from every IP frame.
+Do not remove that: a peer need not ARP us first (SLIRP learns our MAC from
+DHCP), and without it every inbound handshake dies on "no arp entry".
+
+## Profiling Doom (v0.14.1)
+
+`scripts/doom-profile.sh` prints cycles per frame for both display modes. Two
+things that make this hard to do by hand, both in the script's header: the
+profiler reports every **50 frames** and only the in-level loop counts, so you
+must drive **three returns** (main menu, episode, skill) to reach it; and `fps`
+reads 50 in both modes because `FRAME_TICKS` caps it. Uncapped it measured
+**1666 fps**, so there is roughly 33x headroom and the framebuffer scaler's
+extra 35% per frame costs nothing.
+
+## The framebuffer is the default (v0.14.0)
+
+`make` builds the framebuffer kernel (FB=1); `make iso-text` builds the FB=0
+text-mode one, which is the only way to get real mode 13h. Both consoles come
+from the same cell store, so the serial mirror - and therefore the gate - is
+identical either way.
+
+**Mode 13h on a framebuffer boot**: `vga13h`'s pixel store is a pointer, like
+vga.c's cell store. Use `vga13h_pixels()`, never `0xA0000`. Drawing goes to a
+RAM shadow and `vga13h_present()` scales it 3x through a software palette copy;
+call present where a frame ends. `vga13h_enter/exit` pause and resume `fbcon`,
+because the console would otherwise paint over the picture.
+
+**A program wanting the machine to itself** must ask `task_count_users()`, not
+`task_count_alive()`: the console renderer and the mixer are permanent
+services (`task_set_service()`) and would otherwise always look like rivals.
+
+**Palette widening is `(v<<2)|(v>>4)`**, not `<<2`, or bright colours sit a
+shade dark. Do not try to match QEMU bit-for-bit here; it has its own quirk,
+and `scripts/doom-fb-test.sh` tolerates 4 levels and explains why.
+
+## The sound mixer (`src/mixer.c`, v0.13.0)
+
+Four voices summed with saturation into a cyclic AC97 ring (32 chunks of
+~21 ms), topped up by a task holding a three-chunk lead - no interrupt, because
+the 100 Hz scheduler tick is five times faster than a chunk empties. Lumps stay
+raw and resample on the way out. `whistle` and `sizzle` are both voices now, so
+there is one audio path; `sizzle` takes several lumps.
+
+**Testing overlap: duration proves nothing.** A dropped voice and a queued
+voice both leave the longer sound's length on the clock. Render both sources on
+the host, sum them with the same saturation, and correlate envelopes - the mix
+matches the sum (1.0000) over the louder source alone (0.87). That is what
+`scripts/mixer-test.sh` does. Also: **the keystroke driver takes ~2 s per
+command**, longer than most effects, so two typed commands never overlap - put
+both sounds in one command.
+
+## Every test script boots a copy of disk.img (v0.13.0)
+
+An interactive QEMU window write-locks the image, so a test sharing it fails
+with "Failed to get write lock". The copy also keeps runs hermetic.
+
+**Never pipe into `grep -q` in a test (v0.60.20).** Every test runs under
+pipefail; grep -q exits at its first match, the writer dies of SIGPIPE, and
+the pipeline fails though it matched (a negated one passes when it should
+fail). Pipe into `grep ... >/dev/null`. scripts/lint-test.sh enforces it.
+
+## The framebuffer console (`src/fbcon.c`, v0.12.1)
+
+A task diffs the 80x25 cell store against a shadow ~30x/s and repaints changed
+glyphs (embedded 8x16 font, `src/font8x16.h`). **The cell store is a pointer**:
+`vga_cells()` / `vga_set_backing()` in vga.c. On a framebuffer boot the legacy
+0xB8000 window is DEAD (writes discarded, reads all-ones), so `fb_early()`
+switches the store to a RAM array before the first character prints. Anything
+poking cells directly must use `vga_cells()`, never a 0xB8000 literal. Mode 13h
+commands decline on FB boots via `no_mode13h()`.
+
+## The framebuffer (`src/fb.c`, v0.12.0)
+
+`make FB=1` requests a linear framebuffer in the multiboot header; `make
+iso-fb` builds that image, and `scripts/framebuffer-test.sh` verifies it by
+screendump. **The header's video request OVERRIDES grub.cfg's gfxpayload** -
+the opposite of the obvious assumption - so the request must never be in the
+default build or the text console (which the gate drives) comes up in graphics
+mode with nowhere to draw. Pitch is bytes per scanline, not width*4: a row
+starts at `y * pitch`. The framebuffer lives at ~0xFD000000 and must be
+`paging_map`ped before the first write.
+
+## Adding a file that needs the WAD (v0.11.2)
+
+`DOOM=0` filters `doom.c`, `wad.c` and `doomsnd.c` out of `SRC_C`, so anything
+calling the WAD reader must be in that filter AND its shell command must sit
+behind `#ifndef NO_DOOM` - the command body, the dispatch line, the name in the
+completion list, and the help text. Five configurations have to build: default,
+`FB=0`, `DOOM=0`, `CHALLENGE=1 DOOM=0`, `PROFILE=1`; `scripts/check.sh` builds
+them all in parallel. **Make that check gate the
+commit** rather than just precede it; a `;` instead of `&&` once let a broken
+`DOOM=0` through.
+
+## Doom sound effects (`src/doomsnd.c`, v0.11.1)
+
+DS* lumps are DMX format: 8-byte header, then **unsigned** 8-bit samples
+centred on 128, at 11025 Hz. `doomsnd_play("DSPISTOL")` recentres, widens and
+resamples to the card's rate, non-blocking. `sizzle <LUMP>` plays any effect
+from the shell, which is how to test without driving the game. One sound at a
+time: the hardware has a single PCM-out channel and nothing mixes yet.
+
+**Port numbers are 16-bit.** `outb_((uint8_t)port, ...)` compiles happily and
+sends the byte to a completely different port; it cost an hour here, because the
+first sound after boot worked and only later ones were silent. When a device
+looks half-alive, read its registers back before theorising.
+
+## AC97 sound (`src/ac97.c`, v0.11.0)
+
+`whistle <hz> <ms>` plays a tone; `beep` is still the PC speaker. The card
+walks a **buffer descriptor list** itself, unlike the RTL8139's one-buffer-per-
+packet. Three things to keep in mind:
+
+- **A descriptor's length is a count of SAMPLES**, not bytes and not frames.
+  Wrong here plays the right sound at the wrong speed.
+- **Volume is attenuation**: 0 is loudest, 0x8000 is mute.
+- The BDL and sample buffers are read by the card, so they need physical
+  addresses. Static storage works because the kernel is identity-mapped, the
+  same reason the RTL8139 driver uses static buffers.
+
+**Verify audio from the captured samples, never by ear.** The gate runs QEMU
+with `-audiodev wav` and measures the tone's frequency on the host. A phase-step
+error of 256x produced a 1.7 Hz wave at full amplitude, which is inaudible and
+would have passed any listening test.
+
+## soupyc loop scoping (fixed v0.10.5)
+
+Both `N_FOR` and `N_WHILE` drop the bindings their body made, once per
+iteration, so a `let` inside a loop no longer accumulates toward `MAX_VARS`
+(64). `N_WHILE` was missing this and died at 64 passes with "too many
+variables". If you add another looping construct, do the same: record `nvar`
+before the loop and restore it after each pass.
+
+## Verifying the FAT cluster leak (v0.10.3, proven v0.10.4)
+
+`scripts/fullness-test.sh` builds a nearly-full image and copies a file that
+cannot fit. It is not in the main gate because it needs its own disk. With the
+leak it reports 22 KB free then 0 KB; with the fix, 22 KB both times. If you
+touch `fat_write`'s failure paths, run it.
+
+## FAT free space (v0.10.3)
+
+`fat_space()` reports free/total clusters; `larder` is the command. Before this
+there was no way to see free space from inside soupOS, which is how a cluster
+leak sat unnoticed in `fat_write`: its failure paths returned with clusters
+allocated and no directory entry referencing them. **If you add a failure path
+to `fat_write`, send it to `fail:`**, which gives the chain back, except after
+the directory entry is written, where freeing would leave a dangling entry.
+
+## soupyc spawn (v0.10.2)
+
+`spawn("fn")` runs a no-argument function on its own task and returns the task
+id (`ps` lists it, `kill` takes it). The child gets an **independent copy** of
+the code, because `soupyc_run` frees the parent context on the way out and the
+child is meant to outlive the `soup` command. `clone_code` relocates node links
+by a fixed delta (one contiguous pool) and re-interns literals into the child's
+store. `sleep(ms)` exists too, bounded at 10 s.
+
+## soupyc is reentrant (v0.10.1)
+
+State lives in `soupyc_ctx_t`, one per running script, allocated in
+`soupyc_run` and hung off `task_current()->soupyc`. **The state names are
+accessor macros** (`pool`, `tok`, `src`, ...), each resolving through the
+current task, which is why the interpreter body reads as plain names.
+
+Consequences when editing `soupyc.c`:
+
+- A new piece of interpreter state goes in the context plus a macro beside the
+  others, never a new file-scope static. **Members carry an `m_` prefix** so
+  that code holding a context pointer can say `ctx->m_x`; without it the bare
+  name expands into the member position.
+- **A macro name must not collide with any struct member name**, or it expands
+  into the member position and the error points at the `#define`. That is why
+  `sc_state`'s array member is called `arr_slots`.
+- Inside `soupyc_run`, reach state through the macro, not `ctx->member`.
+- `sc_state` stays global because the challenge's stage 4 depends on its
+  layout; a compile-time assertion freezes the two offsets. Each context
+  releases only the array slots it allocated, and there is deliberately no
+  blanket clear at startup.
+
+## soupyc strings are heap-backed (v0.10.0)
+
+`val_t` is a pointer and a length. Strings live in a **per-run arena**
+(`str_alloc`), released in full by `str_store_reset()` when a script ends, with
+a 2 MB budget that turns a runaway loop into a clean error rather than starving
+the heap Doom needs.
+
+**Nothing is freed individually, on purpose.** `val_t` is copied by value
+everywhere, so a string can be referenced from several places with no record of
+how many, and the temporaries live in C locals where no collector can see them.
+If you add a builtin, allocate with `str_alloc` and return `mksval_ref`; never
+`kfree` a string. `SVAL_LEN` is now only the identifier length.
+
+## Permissions are one rule (v0.48.0)
+
+Processes too (v0.51.0): `proc_t.owner` is set at spawn; `may_signal()` in shell.c
+gates kill/plate/steep; kernel tasks are the headchef's to kill.
+
+`users_may(path, need)` in users.c is THE check, used by the shell's `may()` and
+by the open/unlink/mkdir syscalls. A new syscall that touches a file asks it
+too, the way the matching shell command does. The open check is
+`#ifdef NO_CHALLENGE`: the challenge build's unchecked open is deliberate. Copy
+any user path with `copy_user_path`, never read it in place. In tests, check
+the key-typer's exit status: an untypeable character ends the sequence silently.
+
+## Do not edit while check.sh runs (v0.52.1)
+
+check.sh builds once at its start but reads each test script when that test
+starts: editing scripts mid-run tests new scripts against the old binary.
+
+## qemu_keys waits for the login banner (2026-10-08)
+
+scripts/qemu_keys.py finds the QEMU process on the other end of the monitor
+socket (SO_PEERCRED), reads its `-serial file:` argument, and waits for "clock
+in to start your shift" in that log before typing. `info chardev` does NOT
+show a file chardev's path. QEMU_KEYS_NOWAIT=1 opts out. Proof: freeze QEMU
+for 6 s at 0.3 s into the boot; the old driver garbled the login 3 of 3.
+
+## Kitchen names (v0.60.6)
+
+Every new command gets a kitchen name: shell builtins AND ring-3 programs
+(sift.elf, not grep.elf; spoon.elf, not cat.elf). Tests compare behaviour with the host tool under
+its real name; only the soupOS side is kitchen-named. sh syntax keywords
+(for, if, while, ...) stay as sh has them.
+
+## Homes (v0.52.2)
+
+Ordinary cooks start in /home/<cook> (`ensure_home` in shell.c); the headchef in /.
+Tests that log in as a cook must use absolute paths for files, or expect home.
+`cook` falls back to the root for programs.
+
+## Boot (v0.47.0)
+
+The kernel leases an address at boot (kernel.c); tests do not need `plumbing dhcp`.
+`/etc/rc` lines run as headchef before the login prompt (`run_rc` in shell.c).
+
+## Secrets (v0.46.0)
+
+users.c has two kinds: SOUP32 (the CHALLENGE build's, challenge stage 2, never
+change it there) and PBKDF2 (the ordinary build's, `name:uid:$p$iters$salt$key`).
+`MAKE_PBKDF2` follows `NO_CHALLENGE`. An old entry upgrades at its first good
+login. scripts/users-test.sh judges from /etc/kitchen via mtools. When a test
+drives a command that prompts (hire asks for the secret twice), answer every
+prompt, or the following commands are swallowed as input and silently skipped.
+
+## FAT metadata, and keeping disk.img pristine (v0.41.0)
+
+Owner and mode are in directory-entry bytes 13 (200 + uid) and 14 (mode), via
+`meta_get`/`meta_put` in fat.c; byte 12 is FAT's case flags and must stay 0.
+Never write soupOS data into a FAT field another tool interprets; check with
+`fsck.fat -n` (scripts/fsck-test.sh). Every script boots a COPY of disk.img;
+check.sh fails if disk.img changes during a run.
+
+## `fat_read` reports the file's size, not the bytes it stored (v0.39.1)
+
+`*out_size` can exceed `bufsize`. Clamp it before using it as a byte count,
+or refuse the file. Five callers did not: hatch leaked kernel memory over the
+network with it, and three wrote a NUL past their buffers. For anything that
+may be large, stream with `vfs_open`/`vfs_read` instead, as hatch now does.
+
+## The vault is per connection (v0.42.0)
+
+Failed passwords pause the connection and count against the address
+(`fail_table`, 10 in 5 minutes locks it; v0.50.0). Every SSH test connects from
+10.0.2.2, so a test that fails passwords on purpose must boot its own soupOS.
+
+`conn_slots[SSH_MAX_CONN]` (4), a worker task each; `S` is `*cur_ssh()`, the
+slot of the calling task. Code that runs on a SESSION task (the terminal's
+`stream_write`) must use its ctx pointer, never `S`. Any new buffer in ssh.c
+goes in `ssh_t`, not in a static. TCP has 8 connection slots so a refusal
+always has one to land on.
+
+## SSH keys, exec, busy (v0.34.0)
+
+`/AUTHKEYS` lines are `cook ssh-ed25519 <b64>` (a bare `.pub` line = headchef only,
+v0.49.0); `key_authorized(user, ...)` in `ssh.c` matches the client's blob for that cook and `ed25519_verify` checks the request
+signature. `exec` runs through the shared shell and ends when the prompt is
+seen in the output (`watch_for_prompt`); change the prompt format and update
+that matcher. A second client gets a plain DISCONNECT(12) from
+`refuse_others()`, which runs at the packet-wait point. Rekeying (v0.38.0):
+a KEXINIT in `connection_loop` goes to `rekey()`; `maybe_start_rekey()` sends
+ours after an hour or `vault rekey N` packets; `session_id` is set once.
+
+## Sessions: a terminal and a shell per task (v0.36.0)
+
+`task_t.term` and `task_t.shell` are inherited by every spawned task (and
+cleared by `task_set_service`). Print on a task's behalf with
+`term_current()`, never `vga_*`, unless it is about the physical screen; read
+with `term_current()->getc` and treat -1 as "hung up". `cur_shell()` is the
+asking task's shell_t; users.c/fat.c resolve the current uid through it. A
+process remembers its terminal in `proc_t.term` (NULL = console); job lookups
+are per terminal (`proc_most_recent_on`, `proc_report_finished_on`), and
+`term_t.fg` is the terminal's foreground program. `shell_session_start` is the
+API the vault uses; anything new that runs a shell elsewhere should use it too.
+Commands that draw on the physical screen start with `needs_console("name")`.
+
+## The shell writes to a terminal (v0.35.2)
+
+In shell.c, use `t_puts`/`t_printf`/`t_color`/`t_cursor`/`t_getc`/... (they go
+to `cur_shell()->term`), never `vga_*`/`keyboard_*` directly, unless the code is
+about the physical screen (cells, the serial mirror). `term_vga` in `term.c` is
+the console. All printf-style formatting is `kvformat` in str.c; do not grow a
+second formatter. Other modules (soupyc, selftest, ring-3 stdout) still print
+via vga_* and must be routed before a shell runs on a non-console terminal.
+
+## Per-shell state is `shell_t` (v0.35.1)
+
+`cwd`, history, `prompt_row`/`prompt_len` and the pager rows live in
+`shell_t`, reached by `cur_shell()` (one instance today). New per-shell state
+goes in the struct, not in a file-scope static; the logged-in user and the
+foreground job are still global and move when the SSH session gets its own
+shell (queue item 2c).
+
+## Swap lives past the FAT volume (v0.35.0)
+
+`swap.c` addresses the sectors between `fat_volume_sectors()` and
+`ata_total_sectors()` by page slot; the Makefile's 48 MB image leaves 16 MB
+there (an old 32 MB disk.img has no swap: `rm disk.img && make disk`).
+`usermode_demand_page` tries `swap_in` first, then evicts with
+`swap_out_one` at `PROC_PAGE_CAP`. Eviction is approximate LRU (v0.43.0): accessed
+bits sampled every 32 evictions into `pr->last_ref`, oldest stamp goes; `pr->fifo`
+is now an unordered resident set. Before changing the policy, model it on the
+host against fridge.elf - the model matched the kernel to the page; only
+heap pages are ever swapped. `swap_release` runs at process exit. Since v0.39.0 the ATA driver uses bus-master DMA
+(PIIX BAR4, bounce buffer `dma_buf`, PIO fallback): under KVM, PIO cost one VM
+exit per 16-bit word, which was 85% of swap's time.
+
+## The heap is demand-paged (v0.33.0)
+
+Since v0.37.0 the user stack is too: `USTACK_MAX` (1 MB) with four pages
+mapped at exec, the rest on demand, and `USTACK_GUARD` never mapped.
+
+`SYS_SBRK` only moves `pr->brk`. `usermode_demand_page()` (called first thing
+in `isr_handler` for vector 14, **before** the ring-3 kill and the ring-0
+panic) maps a zeroed page for a not-present fault inside `[USER_HEAP, brk)`,
+up to `PROC_PAGE_CAP`, and the instruction retries. Two consequences to keep
+in mind: the kernel may fault while copying into user memory (that is handled,
+and `proof.elf read` proves it), and a program is killed at first touch past
+the cap, not at sbrk. The user stack and the ELF image are still mapped
+eagerly at exec. `pr->demand_pages` is reported on the exit line.
+
+## soupyc file I/O, and the disk image is not a build product of `make` (v0.32.0)
+
+`lines(path)` and `write_lines(path, array)` live with the other file builtins
+in `soupyc.c`; `scripts/lines-test.sh` compares the written bytes with the host.
+The scripts and seed files on the disk are `printf | mcopy` recipes in the
+Makefile's `$(DISK)` rule, and **`make clean` leaves disk.img alone**: after
+changing an embedded file, `rm disk.img && make disk`, or the gate boots the old
+image and fails on a "missing" file.
+
+## Idle is counted, klog lines are whole, the FAT knows its free count (v0.31.0)
+
+- Every wait loop halts through `cpu_halt()`, never a bare `hlt`: the timer
+  charges a halted tick to idle (`task_idle_last()`), which is what makes
+  `ps`/`kitchen` CPU% true. A new `hlt` anywhere else makes its caller look busy.
+- **Interrupt handlers do not klog** (audited and soaked 2026-10-07: none do, and the
+  queue-item-5 note says why that is what keeps serial lines whole). Log from the task
+  the IRQ wakes instead.
+- `klog()`/`klog_puts()` hold preempt_disable for the whole line. That is what
+  fixed the "flaky" job-control check: it was the kernel's "continued" line
+  torn by the resumed process's output. An IRQ handler's klog can still tear a
+  task's line; nothing asserts on that today.
+- `fat_space()` returns a count maintained in `fat_set_entry`; the first call
+  after a mount scans. Anything that writes the FAT must go through
+  `fat_set_entry` or the count drifts (the `sample` balance check would catch it).
+- The hardware cursor is written once per string (`flush_cursor` in the public
+  vga wrappers) and never on a RAM-backed cell store. `vga_set_mirror(0)` turns
+  the serial mirror off for a frame drawn in place; always turn it back on.
+- `scripts/jobcontrol-soak.sh` run six at a time is how to reproduce
+  switch-timing bugs; the serial-load that parallel QEMUs put on the host
+  surfaces them, the single-boot gate never did.
+
+## The gate is segments (v0.30.2)
+
+`scripts/gate/*.sh` each boot their own QEMU and run at once; `gate.sh` is
+the runner. The split follows one rule: **a check that counts lines (two IRQ
+kills, three `killed`, the last two greet.elf exits) lives in the segment
+whose drive sequence produces every line it counts.** Add a drive step and its
+checks to the same segment; a new subsystem gets a new segment, which is cheap
+(it adds nothing to the wall time until it is the slowest). The serial logs
+are `/tmp/soupos-gate-<segment>.*.log` under `KEEP=1`.
+
+## Two things about the gate that cost me time (v0.10.0)
+
+- **It deletes its serial log unless `KEEP=1`.** `ls -t /tmp/soupos-gate-*.log`
+  will cheerfully hand you one from hours ago, and a stale log can show symptoms
+  of problems that were fixed long since. Check the timestamp.
+- **When adding drive commands, confirm you added rather than replaced.** A
+  dropped drive line fails as "no match for ..." on a completely unrelated
+  check, which reads exactly like a kernel regression in that subsystem.
+
+## Drag-select in jot (v0.9.9)
+
+The editor waits on the keyboard **or** the mouse (it used to block in
+`keyboard_getchar`, which cannot see a mouse). Press sets `emark`, dragging
+moves `ecur`, and since that is the pair the keyboard selection already uses,
+^C/^X/^V need no new code. `cell_to_offset` clamps past a line's end to its end
+and past EOF to the end of the buffer.
+
+**If a selection test comes back empty, check the pointer's row before the
+code.** A press past the last line puts mark and cursor at the same clamped
+offset, which is an empty selection and looks exactly like a broken driver.
+
+**The gate's TCP listeners take their accept timeout as a budget for the whole
+drive sequence** (now 900s against a ~320s run). Adding checks ahead of the TCP
+ones eats into it, and when it expires the listeners exit and the TCP checks
+fail looking like a kernel regression.
+
+## PS/2 mouse (`src/mouse.c`, v0.9.8)
+
+The i8042's auxiliary device on IRQ 12. Positions are text cells so they line
+up with the screen; four raw counts per cell. Three gotchas, all commented in
+the file: IRQ 12 needs `irq_unmask` (slave line, so the cascade too), commands
+go through a `0xD4` prefix and must wait for the `0xFA` acknowledgement, and
+the three-byte packets have no framing - bit 3 of the first byte is always set,
+and resynchronising on it is the only thing keeping a dropped byte from
+misaligning the stream permanently. `skewer` shows the state.
+
+## `sample`: in-kernel self-tests (v0.9.7)
+
+`src/selftest.c`, run by the `sample` command: allocator patterns (including a
+reverse free, which is the case a one-directional coalescer fails), the VFS
+handle table at exhaustion, the pipe ring across its wrap checked by content,
+a known-answer checksum, a FAT round trip and the hand-written string routines.
+Self-contained, so it is safe on a live machine. It ends with
+`[sample] N tests, M failed`, which the gate greps; add tests freely, the gate
+pattern does not care about the count.
+
+## What is reachable from two tasks (v0.9.6)
+
+`docs/preemption-audit.md` answers this per file. The short version: the pipe
+ring and the network transmit staging buffers were genuinely racy and are now
+guarded; `soupyc`, `users.c` and `shell.c` are reached only from the shell task
+and are safe **until `spawn()` exists**; `klog`'s ring is shared with interrupt
+handlers but can only interleave lines, never escape the buffer, and is left
+alone deliberately. Add to that document when adding state, and check
+reachability by call graph rather than by looking for missing locks.
+
+## Allocator locking (v0.8.5)
+
+Since processes became concurrent, anything that allocates is reachable from
+several tasks at once. `pmm_alloc_page`/`pmm_free_page` take `irq_save` around
+the bitmap claim (a timer preemption between `is_used()` and `set_used()` hands
+one frame to two processes), `heap.c` already did the same for its free list,
+and `vfs.c`'s `alloc_node` uses `preempt_disable` for the handle table. None of
+these critical sections yield, which is why interrupts-off is sufficient and a
+mutex would be overkill. `user/memtest.c` plus three pipeline stages is the
+regression test.
+
+## Clipboard (`src/clip.c`, v0.8.4)
+
+One 4 KB fixed buffer shared by everything that edits text. There is no mouse
+driver, so selection is keyboard-driven.
+
+- **jot**: Ctrl+B anchors a mark (either side of the cursor; `sel_span()`
+  orders them), the span renders in inverse video, Ctrl+C copies, Ctrl+X cuts,
+  Ctrl+V pastes. `[MARK]` shows in the status bar while a mark is set.
+- **Shell line editor**: Ctrl+U and Ctrl+W copy what they kill, so Ctrl+V puts
+  it back. A pasted newline or tab becomes a space, since the prompt is one
+  line.
+- Both talk to `clip.c` rather than to each other, which is why a cut in the
+  editor pastes at the prompt.
+- `scraps` prints the contents and mirrors them to the kernel log, which is how
+  the headless gate checks a copy by its text.
+
+## Processes (`src/proc.c`, v0.8.0)
+
+A process **is** a kernel task plus a `proc_t`, and the pid **is** the task id,
+so `ps` shows one kind of thing and the scheduler, wait queues, mutexes and
+reaper are reused unchanged.
+
+- `proc_spawn(path, args, background, &pid)` claims one of `PROC_MAX` (8)
+  static slots and spawns a task on `proc_entry`, which calls `usermode_run`
+  and then `proc_exit`. Slot claim and task linking happen under
+  `preempt_disable` so two shells cannot take one slot.
+- **The slot outlives the task deliberately.** `task.c`'s reaper frees a DEAD
+  `task_t` and its 16 KB stack, so an exit code kept on the task would vanish
+  before the parent read it. A finished process stays `PROC_ZOMBIE` until
+  `proc_wait` collects it (foreground) or `proc_report_finished` announces it
+  at the next prompt (background).
+- **Foreground** means the shell calls `proc_set_foreground` then blocks in
+  `proc_wait`, which re-checks the child's state inside a `preempt_disable`
+  region before blocking (the same lost-wakeup guard `mutex_lock` uses).
+- **Killing** sets a flag only (`proc_kill` / `proc_flag_kill`). Marking the
+  task DEAD would leak the whole address space, because the loader would never
+  return to free it. The flag is acted on where the kernel holds no locks:
+  - top and bottom of `syscall_dispatch`;
+  - an IRQ that interrupted **ring-3 code**, tested as `(regs->cs & 3) == 3`
+    in `irq_handler`. This is the only way to kill a program that makes no
+    syscalls at all.
+  A timer IRQ that landed in the kernel half of a syscall must **not** unwind:
+  that code may hold the FAT mutex, and abandoning its frame would leave the
+  filesystem locked forever. Teardown then runs through the same unwind as a
+  fault, so fds, address space and task come down normally.
+- **Ctrl-C** is raised in the keyboard IRQ, not the shell: while a foreground
+  program runs the shell is blocked in `proc_wait` and reads no keys, so `0x03`
+  flags the foreground process and is swallowed. With no foreground process it
+  reaches the shell and cancels the input line as before.
+- **Stopping** (v0.8.2): `PROC_STOPPED` is a live process parked on
+  `cont_wq` at one of the same three safe points. `proc_take_stop` enables
+  interrupts to park (the safe points are interrupt gates and `task_block_on`
+  ends in `hlt`) and restores the caller's IF after. Ctrl-Z (`0x1A`) raises it
+  from the keyboard IRQ, like Ctrl-C. `proc_kill` continues a stopped process
+  as well as flagging it, otherwise the kill would never be noticed.
+- `proc_wait(pid, &code)` returns 1 for exited (slot collected), 0 for stopped
+  (slot kept), -1 for no such process.
+- **Pipes and redirection (v0.8.3)**: `vfs_pipe()` returns two ordinary
+  `vfs_node_t` handles over one 4 KB ring. A reader blocks while empty with a
+  writer alive and reads 0 (EOF) once the last writer closes; a writer blocks
+  while full with a reader alive and fails once every reader closes. Both
+  abandon the wait when the process has a kill pending, which is what keeps a
+  program parked on a dead pipe killable.
+- **fds 0-2 are bindable**: `proc_t.ufds[fd]` wins over the console default, so
+  `proc_spawn` can hand a process its stdin/stdout. `usermode_run` clears the
+  table from fd 3 up, deliberately: clearing from 0 would undo redirection.
+  The process owns what it was given and closes it on exit, which is what
+  sends EOF down a pipe.
+- Shell surface: `cook a.elf | b.elf | c.elf` (4 stages max), `< in`, `> out`,
+  `cook prog &`, `orders`, `plate [pid]`, `steep [pid]`, `kill <pid>`, `kill %` (newest
+  job), `ps` marks which tasks are processes, and a finished background job is
+  announced before the next prompt.
+
+## Doom Port — performance notes (v0.8.1)
+
+Measure before changing anything here: `make PROFILE=1` builds the port with
+per-phase `rdtsc` counters that klog fps and kilocycles per phase (flats, bsp,
+thinkers, sprites, status bar, vblank, VRAM copy) every 50 frames, readable
+from the serial log headless.
+
+- **`draw_flats` is the hot path**, and was 89% of the frame when it called
+  `find_sector_at()` per pixel (a BSP descent plus four dependent lookups,
+  53,760 times a frame). `flat_row_runs()` now samples the row every 16 pixels
+  and bisects where samples disagree, because the floor along a screen row is a
+  straight line in world space and changes sector only at boundaries. Still the
+  largest single item, now split between descents and actual texturing.
+- **Run it with KVM.** `make run` probes `/dev/kvm`; TCG costs ~6x. The smoke
+  test stays on TCG with the stock qemu32 CPU on purpose (no SSE2, which is
+  what catches auto-vectorisation regressions).
+- **Innocent until measured:** the vblank spin on port 0x3DA is ~15k cycles
+  (QEMU's default retrace emulation toggles the bit rather than timing it) and
+  the whole 64,000-byte VRAM copy is ~33k. Neither is worth optimising.
+- **Angles are `ANG_N` (128) steps**, not a bare 32. Use `ANG_MASK`, `ANG_90`,
+  `ANG_270`, `ANG_PER_DIR` (8-way sprite rotations) and `ANG_SKY_U`.
 
 ## Doom Port — Architecture
 

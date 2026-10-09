@@ -21,6 +21,7 @@
  */
 
 #include "console.h"
+#include <stdint.h>
 #include "serial.h"
 #include "keyboard.h"
 #include "timer.h"
@@ -37,16 +38,9 @@ static int      in_enabled  = 1;
 static int      out_enabled = 1;
 static int      ready       = 0;   /* set once serial_init() has run */
 
-static int      state       = S_NORMAL;
-static uint32_t esc_tick    = 0;
-static int      csi_num     = 0;
-static int      last_was_cr = 0;
 
 void console_init(void) {
-    state       = S_NORMAL;
-    csi_num     = 0;
-    last_was_cr = 0;
-    ready       = 1;
+    ready = 1;          /* the translator starts zeroed: S_NORMAL, no pending CR */
 }
 
 void console_set_input(int on)     { in_enabled  = on ? 1 : 0; }
@@ -56,7 +50,19 @@ int  console_output_enabled(void)  { return out_enabled; }
 
 /* ── output mirror ─────────────────────────────────────────────────────── */
 
+/* A second place for output to go, so a network session sees the same stream
+ * a serial one does. One sink is enough: soupOS has one shell, and two remote
+ * viewers of one shell is a different feature. */
+static void (*extra_sink)(char c);
+
+void console_set_sink(void (*sink)(char c)) { extra_sink = sink; }
+
 void console_out_char(char c) {
+    /* The sink gets the raw character and does its own CR/backspace handling,
+     * because a socket and a UART want the same expansion but the code below
+     * is tangled with `ready`, which is about the UART only. */
+    if (extra_sink) extra_sink(c);
+
     if (!ready || !out_enabled) return;
 
     if (c == '\n') {
@@ -102,73 +108,75 @@ static int csi_num_to_key(int n) {
     }
 }
 
+#define KEYOUT(k) x->out((k), x->ctx)
+
 /* Translate one byte in the NORMAL state and inject it. */
-static void emit_normal(int c) {
+static void emit_normal(keyxlate_t *x, int c) {
     if (c == '\r') {
-        last_was_cr = 1;
-        keyboard_inject('\n');
+        x->last_was_cr = 1;
+        KEYOUT('\n');
         return;
     }
     if (c == '\n') {
         /* Swallow the LF of a CRLF pair - one keypress, one newline. */
-        if (last_was_cr) { last_was_cr = 0; return; }
-        keyboard_inject('\n');
+        if (x->last_was_cr) { x->last_was_cr = 0; return; }
+        KEYOUT('\n');
         return;
     }
-    last_was_cr = 0;
+    x->last_was_cr = 0;
 
-    if (c == 0x7F) { keyboard_inject('\b'); return; }   /* DEL -> backspace */
-    keyboard_inject(c);
+    if (c == 0x7F) { KEYOUT('\b'); return; }   /* DEL -> backspace */
+    KEYOUT(c);
 }
 
-void console_rx_poll(void) {
-    if (!ready || !in_enabled) return;
-
-    int c;
-    while ((c = serial_getc_nb()) >= 0) {
-        switch (state) {
+/* One received byte, through the terminal-convention state machine. Split out
+ * from the serial poll so a network session can feed it the same way: the
+ * translation - CR, DEL, ANSI arrows - is identical whatever carried the byte. */
+void keyxlate_byte(keyxlate_t *x, int c) {
+    {
+        switch (x->state) {
         case S_NORMAL:
-            if (c == 0x1B) { state = S_ESC; esc_tick = timer_get_ticks(); }
-            else            emit_normal(c);
+            if (c == 0x1B) { x->state = S_ESC; x->esc_tick = timer_get_ticks(); }
+            else            emit_normal(x, c);
             break;
 
         case S_ESC:
             if (c == '[') {
-                state   = S_CSI;
-                csi_num = 0;
+                x->state   = S_CSI;
+                x->csi_num = 0;
             } else {
                 /* Not a sequence after all: the ESC was a real keypress and
                  * this byte is the next one. */
-                keyboard_inject(27);
-                state = S_NORMAL;
-                if (c == 0x1B) { state = S_ESC; esc_tick = timer_get_ticks(); }
-                else            emit_normal(c);
+                KEYOUT(27);
+                x->state = S_NORMAL;
+                if (c == 0x1B) { x->state = S_ESC; x->esc_tick = timer_get_ticks(); }
+                else            emit_normal(x, c);
             }
             break;
 
         case S_CSI:
             if (c >= '0' && c <= '9') {
-                csi_num = c - '0';
-                state   = S_CSI_NUM;
+                x->csi_num = c - '0';
+                x->state   = S_CSI_NUM;
             } else {
                 int k = csi_letter_to_key(c);
-                if (k >= 0) keyboard_inject(k);
+                if (k >= 0) KEYOUT(k);
                 /* Unknown sequences are dropped rather than injected as
                  * garbage into the line editor. */
-                state = S_NORMAL;
+                x->state = S_NORMAL;
             }
             break;
 
         case S_CSI_NUM:
             if (c >= '0' && c <= '9') {
-                csi_num = csi_num * 10 + (c - '0');
-                if (csi_num > 9999) csi_num = 9999;   /* don't overflow */
+                x->csi_num = x->csi_num * 10 + (c - '0');
+                if (x->csi_num > 9999) x->csi_num = 9999;   /* don't overflow */
             } else {
                 if (c == '~') {
-                    int k = csi_num_to_key(csi_num);
-                    if (k >= 0) keyboard_inject(k);
+                    int k = csi_num_to_key(x->csi_num);
+                    if (k >= 0) KEYOUT(k);
                 }
-                state = S_NORMAL;
+                x->state = S_NORMAL;
             }
             break;
         }
@@ -176,9 +184,22 @@ void console_rx_poll(void) {
 
     /* No more bytes. If an ESC has been pending long enough that a sequence
      * would have completed by now, treat it as the Escape key. */
-    if (state == S_ESC &&
-        (uint32_t)(timer_get_ticks() - esc_tick) >= ESC_TIMEOUT_TICKS) {
-        keyboard_inject(27);
-        state = S_NORMAL;
+    if (x->state == S_ESC &&
+        (uint32_t)(timer_get_ticks() - x->esc_tick) >= ESC_TIMEOUT_TICKS) {
+        KEYOUT(27);
+        x->state = S_NORMAL;
     }
 }
+
+/* The serial console's own translator: keys go to the keyboard queue. */
+static void console_key(int key, void *ctx) { (void)ctx; keyboard_inject(key); }
+static keyxlate_t console_x = { 0, 0, 0, 0, console_key, 0 };
+
+void console_rx_byte(int c) { keyxlate_byte(&console_x, c); }
+
+void console_rx_poll(void) {
+    if (!ready || !in_enabled) return;
+    int c;
+    while ((c = serial_getc_nb()) >= 0) console_rx_byte(c);
+}
+
