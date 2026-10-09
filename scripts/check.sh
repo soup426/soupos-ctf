@@ -12,6 +12,8 @@
 # Usage: scripts/check.sh            full set
 #        scripts/check.sh quick      configs + gate only (no side scripts)
 #        KEEP=1 scripts/check.sh     keep the logs under /tmp/soupos-check.*
+#        CHECK_JOBS=8 scripts/check.sh   at most 8 pieces at a time
+#        scripts/remote-check.sh     all of it on the test container, not here
 #
 # Exit status is non-zero if anything failed; each failure's own output is
 # printed below the summary so the reason is in front of you.
@@ -39,9 +41,25 @@ DISK_SUM=$(sha256sum disk.img | cut -d' ' -f1)
 
 # ── 1. everything else, at once ──────────────────────────────────────────────
 # A job writes its exit status to $WORK/<name>.status when done.
+#
+# At most CHECK_JOBS at a time (2026-10-09; default twice the cores). All
+# ~200 at once is ~200 QEMUs of 128 MB each, which is what made the laptop
+# unusable and would overrun the 8 GB of the test container on atlas
+# (scripts/remote-check.sh). A job's time in its .status is its own, from
+# when it started, not from when it was queued.
+JOBS=${CHECK_JOBS:-$(( $(nproc) * 2 ))}
+PIDS=()
 run() {                                   # run <name> <command...>
     local name=$1; shift
+    while :; do
+        local live=() p
+        for p in "${PIDS[@]}"; do kill -0 "$p" 2>/dev/null && live+=("$p"); done
+        PIDS=("${live[@]}")
+        [ "${#PIDS[@]}" -lt "$JOBS" ] && break
+        wait -n 2>/dev/null || sleep 0.2
+    done
     ( s=$(date +%s); "$@" >"$WORK/$name.log" 2>&1; echo "$? $(( $(date +%s) - s ))" >"$WORK/$name.status" ) &
+    PIDS+=($!)
 }
 
 # A copy of the tree for anything that rebuilds it. rsync skips objects and

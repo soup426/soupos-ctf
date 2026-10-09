@@ -13,8 +13,11 @@ as the loop it runs in asks; the user has not seen it.
 
 1. **One item, one commit**, and split when an item splits naturally.
 2. **`scripts/check.sh` must pass before every commit** (five configurations
-   in parallel copies, the gate's eight segments, every test script; about
-   two minutes). Commit with explicit paths when other work is in the tree.
+   in parallel copies, the gate's eight segments, every test script), run
+   on the test container with `scripts/remote-check.sh` (about six
+   minutes), never on the laptop: the user asked (2026-10-09). Soaks and
+   single tests may run here; keep soaks six wide at most. Commit with
+   explicit paths when other work is in the tree.
 3. **Measure before building, and measure the fix.** An item whose premise
    measures false is closed with the numbers, not built anyway.
 4. **Prove a bug before fixing it**, with the smallest reproduction that

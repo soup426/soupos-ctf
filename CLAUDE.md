@@ -59,8 +59,17 @@ make wad
 ```
 
 **Headless smoke test** (the oracle — use this as the gate after any change):
+
+**Run the full check on the test container, not the laptop** (2026-10-09, at
+the user's request: ~200 QEMUs at once made the laptop unusable).
+`scripts/remote-check.sh` copies the tree to CT 123 `soupos-test` on atlas
+(Arch, 16 cores, 8 GB, /dev/kvm) through `ssh atlas pct exec 123` and runs
+check.sh there (~6 min); the laptop only copies. check.sh itself now runs at
+most CHECK_JOBS pieces at once (default twice the cores). Single test
+scripts while working on something are fine here.
 ```bash
-./scripts/check.sh               # THE pre-commit check: five configs + gate + every
+./scripts/remote-check.sh        # THE pre-commit check, on CT 123 (pct start 123 if down)
+./scripts/check.sh               # the same, here: five configs + gate + every
                                  # test script, all in parallel (~the slowest piece)
 ./scripts/check.sh quick         # configs + gate only
 ./scripts/smoke-test.sh          # the gate alone: eight segments under scripts/gate/,
