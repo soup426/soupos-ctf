@@ -1620,6 +1620,8 @@ static void loopfeed_task(void *arg) {
 
 static void build_env(char *out, int max);   /* with hand (v0.60.26) */
 static vfs_node_t *pending_in;   /* stdin for the next cook's first stage (v0.60.27, pipe_into) */
+static char *pending_here;        /* a here-document's body for the next cook (v0.60.52) */
+static int pending_here_len;
 static void (*pending_feed)(void);   /* run once the pipeline is up (v0.60.33, pipe_into) */
 static vfs_node_t *pending_out;        /* stdout for the next cook's last stage (v0.60.34) */
 static int pending_nowait;             /* ... and do not wait: leave the pids here */
@@ -1752,14 +1754,16 @@ static void cmd_cook(const char *args) {
     /* Redirections. The process that receives one owns it and closes it on
      * exit, so nothing here is closed on the success path. */
     vfs_node_t *fin = 0, *fout = 0;
-    if (have_here) {
+    int use_doc = !have_here && !infile[0] && pending_here;     /* <<WORD in a script (v0.60.52) */
+    if (have_here || use_doc) {
         vfs_node_t *rd = 0, *wr = 0;
         loopfeed_t *f = kmalloc(sizeof(loopfeed_t));
-        int hl = (int)strlen(herestr);
+        int hl = use_doc ? pending_here_len : (int)strlen(herestr);
         char *b = kmalloc((uint32_t)hl + 2);
         if (!f || !b || vfs_pipe(&rd, &wr) < 0) { if (f) kfree(f); if (b) kfree(b); cook_err("Out of pipes."); return; }
-        memcpy(b, herestr, (uint32_t)hl); b[hl] = '\n';
-        f->wr = wr; f->buf = b; f->len = hl + 1;
+        if (use_doc) { memcpy(b, pending_here, (uint32_t)hl); kfree(pending_here); pending_here = 0; }
+        else { memcpy(b, herestr, (uint32_t)hl); b[hl++] = '\n'; }
+        f->wr = wr; f->buf = b; f->len = hl;
         if (!task_spawn("herestr", loopfeed_task, f)) { vfs_close(wr); vfs_close(rd); kfree(b); kfree(f); cook_err("Out of memory."); return; }
         fin = rd;
     }
@@ -6482,6 +6486,62 @@ static void shell_loop(char *input, char *saved, int *pos_p, int *len_p, int *hb
  * the file. A script may run another, eight deep at most, so one that runs
  * itself stops rather than running the kernel stack out. */
 static void run_line(const char *line);
+/* <<WORD in a script line (not <<<, outside quotes): blanks it out of the
+ * line, puts WORD in word, and says whether it was quoted. 0 if none. */
+static char *heredoc_mark(char *line, char *word, int max, int *quoted) {
+    char q = 0;
+    for (char *s = line; *s; s++) {
+        if (q) { if (*s == q) q = 0; continue; }
+        if (*s == '\'' || *s == '"') { q = *s; continue; }
+        if (s[0] == '<' && s[1] == '<' && s[2] != '<' && (s == line || s[-1] != '<')) {
+            char *r = s + 2, *start = s;
+            while (*r == ' ') r++;
+            *quoted = 0;
+            char wq = 0;
+            if (*r == '\'' || *r == '"') { wq = *r++; *quoted = 1; }
+            int n = 0;
+            while (*r && (wq ? *r != wq : (*r != ' ' && *r != ';' && *r != '|')) && n < max - 1) word[n++] = *r++;
+            word[n] = '\0';
+            if (wq && *r == wq) r++;
+            if (!n) return 0;
+            while (start < r) *start++ = ' ';
+            return s;
+        }
+    }
+    return 0;
+}
+
+/* A here-document line: $NAME, ${NAME}, $1..$9 and $? as their values,
+ * everything else (quotes too) as written. */
+static void heredoc_expand(const char *in, char *out, int max) {
+    shell_t *me = cur_shell();
+    int k = 0;
+    for (int i = 0; in[i] && k < max - 1; i++) {
+        const char *val = 0; char num[12];
+        if (in[i] == '$' && in[i + 1] == '?') {
+            int v = me->last_status, nd = 0; char d[12];
+            do { d[nd++] = (char)('0' + v % 10); v /= 10; } while (v);
+            int m = 0; while (nd) num[m++] = d[--nd]; num[m] = '\0';
+            val = num; i++;
+        } else if (in[i] == '$' && in[i + 1] >= '1' && in[i + 1] <= '9') {
+            val = (in[i + 1] - '1' < me->npargs) ? me->parg[in[i + 1] - '1'] : "";
+            i++;
+        } else if (in[i] == '$' && (in[i + 1] == '{' || in[i + 1] == '_' || (in[i + 1] >= 'A' && in[i + 1] <= 'Z') || (in[i + 1] >= 'a' && in[i + 1] <= 'z'))) {
+            int j = i + 1, br = in[j] == '{', n = 0; char name[16];
+            if (br) j++;
+            while ((in[j] == '_' || (in[j] >= 'A' && in[j] <= 'Z') || (in[j] >= 'a' && in[j] <= 'z') || (in[j] >= '0' && in[j] <= '9')) && n < 15) name[n++] = in[j++];
+            name[n] = '\0';
+            if (br) { if (in[j] != '}') { out[k++] = in[i]; continue; } j++; }
+            val = "";
+            for (int v = 0; v < me->nvars; v++) if (str_eq(me->vname[v], name)) { val = me->vval[v]; break; }
+            i = j - 1;
+        }
+        if (val) { while (*val && k < max - 1) out[k++] = *val++; }
+        else out[k++] = in[i];
+    }
+    out[k] = '\0';
+}
+
 static void cmd_run(const char *args) {
     static int depth;
     /* run FILE [ARGS...] (v0.60.2): the words after the file are the
@@ -6526,9 +6586,45 @@ static void cmd_run(const char *args) {
         memcpy(line, text + i, n); line[n] = '\0';
         const char *l = line;
         while (*l == ' ') l++;
-        if (*l && *l != '#') run_line(l);
+        uint32_t next = e + 1;
+        if (*l && *l != '#') {
+            /* <<WORD (v0.60.52): the lines up to one that is WORD are the
+             * stdin of the cook on this line, $NAME, ${NAME}, $1.. and $?
+             * expanded in them unless WORD was quoted (<<'WORD'). */
+            char word[32]; int quoted = 0;
+            char *mark = heredoc_mark(line, word, sizeof(word), &quoted);
+            if (mark) {
+                char *body = kmalloc(8193);
+                int bl = 0;
+                uint32_t j = e;
+                if (j < size && text[j] == '\r') j++;
+                if (j < size && text[j] == '\n') j++;
+                while (j < size) {
+                    uint32_t k = j;
+                    while (k < size && text[k] != '\n' && text[k] != '\r') k++;
+                    char bline[INPUT_MAX];
+                    uint32_t m = k - j < INPUT_MAX - 1 ? k - j : INPUT_MAX - 1;
+                    memcpy(bline, text + j, m); bline[m] = '\0';
+                    j = k;
+                    if (j < size && text[j] == '\r') j++;
+                    if (j < size && text[j] == '\n') j++;
+                    if (str_eq(bline, word)) break;
+                    if (body) {
+                        char ex[INPUT_MAX];
+                        if (quoted) strcpy(ex, bline); else heredoc_expand(bline, ex, sizeof(ex));
+                        for (const char *c = ex; *c && bl < 8190; c++) body[bl++] = *c;
+                        if (bl < 8191) body[bl++] = '\n';
+                    }
+                }
+                next = j;
+                if (pending_here) kfree(pending_here);
+                pending_here = body; pending_here_len = bl;
+            }
+            run_line(l);
+            if (pending_here) { kfree(pending_here); pending_here = 0; }   /* not a cook line: unused */
+        }
         if (interrupted()) { cur_shell()->last_status = 130; break; }   /* Ctrl-C ends a script (v0.60.1) */
-        i = e + 1;
+        i = next;
     }
     depth--;
     me->scripts--;

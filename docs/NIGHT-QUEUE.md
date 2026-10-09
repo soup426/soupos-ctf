@@ -62,7 +62,7 @@ The arithmetic command: status 0 when the expression is not zero, 1 when
 it is, with the $(( )) evaluator; `n=$((n+1))` gets `(( n = n + 1 ))`
 and `(( n++ ))`, `(( n += 2 ))` too. Compare with bash.
 
-## 5. Here-documents in scripts
+## 5. Here-documents in scripts — DONE v0.60.52
 
 In a `follow` script, `cook prog <<WORD` takes the lines up to WORD as
 the first stage's stdin, $NAME expanded in them (not with <<'WORD').

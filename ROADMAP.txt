@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.51
+Current version: v0.60.52
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,16 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.52 (2026-10-08)  — HERE-DOCUMENTS IN SCRIPTS
+  - In a follow script, `cook prog <<WORD` takes the lines up to one that
+    is exactly WORD as the first stage's stdin (a < on the line wins), with
+    $NAME, ${NAME}, $1..$9 and $? expanded in them as plain text, and
+    nothing expanded with <<'WORD'. The body is fed through the pipe
+    here-strings use. At the prompt there is no next line to take, so it is
+    a script's (sh would prompt for the lines).
+  - scripts/heredoc-test.sh runs a script with four here-documents and
+    compares the five files it writes with bash's.
 
 v0.60.51 (2026-10-08)  — MUSIC-TEST COUNTS FROM THE MUSIC
   - Two full checks failed music-test with "the effects never showed",
