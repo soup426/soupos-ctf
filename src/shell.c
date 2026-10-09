@@ -907,7 +907,7 @@ static void cmd_menu(void) {
         {0, "    fresh              - status 0 (sh's true)"},
         {0, "    spoiled            - status 1 (sh's false)"},
         {0, "    discard NAME       - remove a variable"},
-        {0, "    take [-r] [-a A] [-p P] [-n N] [-t S] NAME... - a line into variables (sh's read)"},
+        {0, "    take [-r] [-a A] [-d D] [-p P] [-n N] [-t S] NAME... - a line into variables (sh's read)"},
         {0, "    stock [-t] [NAME]  - every line of the input into an array (sh's mapfile)"},
         {0, "    hand NAME[=value]  - hand a variable to programs (their getenv)"},
         {0, "    break [N]          - leave a for, while or until loop"},
@@ -5705,6 +5705,7 @@ static void set_var(const char *name, const char *value) {
  * backslash as it is. */
 /* limit: stop after so many characters (-n), 0 none; deadline: the tick
  * to give up at (-t), 0 never. 1 at the end of input, 2 run out of time. */
+static int take_delim = '\n';       /* take -d (v0.60.137): what ends the line; 0 the end of input */
 static int take_line(shell_t *me, char *line, int *lenp, int max, int limit, uint32_t deadline) {
     int len = *lenp, eof = 0, start = len;
     if (me->in_pipe) {
@@ -5717,8 +5718,8 @@ static int take_line(shell_t *me, char *line, int *lenp, int max, int limit, uin
                 me->in_pos = 0; me->in_len = n;
             }
             char c = me->in_buf[me->in_pos++];
-            if (c == '\n') break;
-            if (c != '\r' && len < max - 1) line[len++] = c;
+            if (c == take_delim && take_delim) break;
+            if ((c != '\r' || take_delim != '\n') && len < max - 1) line[len++] = c;
             if (limit && len - start >= limit) break;
         }
     } else
@@ -5730,7 +5731,8 @@ static int take_line(shell_t *me, char *line, int *lenp, int max, int limit, uin
         }
         int c = t_getc();
         if (c < 0) { eof = 1; break; }
-        if (c == '\n') { t_putc('\n'); break; }
+        if (c == take_delim && take_delim) { t_putc('\n'); break; }
+        if (c == '\n') { t_putc('\n'); if (len < max - 1) line[len++] = '\n'; continue; }   /* -d: a newline is data */
         if (c == '\b') { if (len > *lenp) { len--; t_putc('\b'); } continue; }
         if (((c >= ' ' && c < 127) || c == '\t') && len < max - 1) { line[len++] = (char)c; t_putc((char)c); }
     }
@@ -5758,6 +5760,7 @@ static void set_array(const char *name, const char *joined, int count) {
 static void cmd_read(const char *args) {
     char names[8][16]; int nn = 0, raw = 0, limit = 0;
     char arr[16] = "";                               /* -a NAME (v0.60.121) */
+    int delim = '\n';                                /* -d DELIM (v0.60.137) */
     char prompt[INPUT_MAX] = "";
     uint32_t wait_ticks = 0; int timed = 0;
     const char *a = args;
@@ -5765,13 +5768,14 @@ static void cmd_read(const char *args) {
     while (*a && nn < 8) {
         char w[INPUT_MAX];
         const char *after = first_word(a, w, sizeof(w));
-        if (!nn && w[0] == '-' && w[1] && !w[2] && (w[1] == 'r' || w[1] == 'p' || w[1] == 'n' || w[1] == 't' || w[1] == 'a')) {
+        if (!nn && w[0] == '-' && w[1] && !w[2] && (w[1] == 'r' || w[1] == 'p' || w[1] == 'n' || w[1] == 't' || w[1] == 'a' || w[1] == 'd')) {
             char opt = w[1];
             a = after;
             if (opt == 'r') { raw = 1; continue; }
             char v[INPUT_MAX];
             a = first_word(a, v, sizeof(v));
             if (opt == 'a') { strncpy(arr, v, 15); arr[15] = '\0'; continue; }
+            if (opt == 'd') { unquote(v); delim = (unsigned char)v[0]; continue; }   /* '' : to the end */
             if (opt == 'p') strcpy(prompt, v);
             else if (opt == 'n') { limit = 0; for (const char *c = v; *c >= '0' && *c <= '9'; c++) limit = limit * 10 + (*c - '0'); }
             else {
@@ -5791,14 +5795,16 @@ static void cmd_read(const char *args) {
     int len = 0, eof = 0;
     if (prompt[0] && !me->in_pipe) t_puts(prompt);
     uint32_t deadline = timed ? timer_get_ticks() + wait_ticks + (wait_ticks ? 0 : 1) : 0;
+    take_delim = delim;
     for (;;) {
         eof = take_line(me, line, &len, INPUT_MAX, limit, me->in_pipe ? 0 : deadline);
         if (eof == 2) break;
         int bs = 0;                                  /* backslashes ending it */
         while (bs < len && line[len - 1 - bs] == '\\') bs++;
-        if (raw || eof || limit || !(bs & 1)) break;
+        if (raw || eof || limit || !(bs & 1) || delim != '\n') break;
         len--;                                       /* \ newline: the next line joins on */
     }
+    take_delim = '\n';
     int timed_out = eof == 2;
     if (timed_out) eof = 0;
     /* what each byte is, after the backslashes: lit marks one that was
@@ -5812,7 +5818,7 @@ static void cmd_read(const char *args) {
         ch[n] = line[i]; lit[n++] = 0;
     }
     int r = 0, set_bad = 0;
-    #define TAKE_SEP(x) (!lit[x] && (ch[x] == ' ' || ch[x] == '\t'))
+    #define TAKE_SEP(x) (!lit[x] && (ch[x] == ' ' || ch[x] == '\t' || ch[x] == '\n'))   /* \n: IFS's, with -d */
     if (arr[0]) {                                    /* -a: every word an element */
         char joined[VAL_MAX]; int jl = 0, cnt = 0;
         for (;;) {

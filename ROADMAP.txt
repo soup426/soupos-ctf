@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.136
+Current version: v0.60.137
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,16 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.137 (2026-10-09)  — TAKE -D DELIM (READ -D)
+  - take -d DELIM reads up to DELIM's first character instead of a
+    newline (-d '' to the end of the input); a newline then is data, and
+    parts words as IFS's does; the end of input before DELIM sets the
+    names and gives status 1, as bash's. With -r -a -n -p, from a pipe,
+    <<< and < FILE. take_line's delimiter is set for that one read, so
+    stock, runner and select still read lines.
+  - scripts/taked-test.sh compares nine lines with bash's read -d, and a
+    pipe.
 
 v0.60.136 (2026-10-09)  — FOR (( INIT ; COND ; STEP ))
   - bash's arithmetic for loop: INIT once, COND before each turn (empty is

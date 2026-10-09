@@ -48,7 +48,7 @@ COND before each pass (empty is true), STEP after; break, continue and N
 of each; nested; over several lines and in a recipe; its status the
 last command's (0 if none ran). Test against bash.
 
-## 2. take -d DELIM (read -d)
+## 2. take -d DELIM (read -d) — DONE v0.60.137
 
 Read up to DELIM instead of a newline (its first character; -d '' to the
 end of input, as bash reads to a NUL), with -r -a -n -p and from a pipe,
