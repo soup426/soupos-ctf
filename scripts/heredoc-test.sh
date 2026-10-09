@@ -33,6 +33,9 @@ two
 three
 EOT
 cook call.elf after > /O5.TXT
+n=7 ; cook raise.elf > /O6.TXT <<EOT
+n is $n, twice $((n * 2)), $((n > 5 ? 1 : 0))
+EOT
 EOF
 mcopy -i "$WORK/disk.img" "$WORK/H1.SH" ::/H1.SH
 sed -e 's#cook raise.elf#tr a-z A-Z#; s#cook rack.elf#sort#; s#cook swap.elf#tr#; s#cook weigh.elf -l#wc -l#; s#cook call.elf#echo#; s# > /# > #' \
@@ -46,12 +49,12 @@ python3 scripts/qemu_keys.py "$WORK/mon.sock" "headchef" "rosemary" "WAIT:1" "fo
 kill "$PID" 2>/dev/null; wait "$PID" 2>/dev/null; PID=""
 ( cd "$WORK/host" && LC_ALL=C bash H1.SH arg1 ) >/dev/null 2>&1
 bad=0
-for f in O1 O2 O3 O4 O5; do
+for f in O1 O2 O3 O4 O5 O6; do
     mcopy -n -i "$WORK/disk.img" "::/$f.TXT" "$WORK/got.$f" 2>/dev/null || { echo "        $f.TXT was not written"; bad=1; continue; }
     if [ "$f" = O4 ]; then [ "$(tr -d ' ' < "$WORK/got.$f")" = "$(tr -d ' ' < "$WORK/host/$f.TXT")" ] && continue
     else cmp -s "$WORK/got.$f" "$WORK/host/$f.TXT" && continue; fi
     echo "        $f.TXT: got '$(tr '\n' '|' < "$WORK/got.$f")', bash '$(tr '\n' '|' < "$WORK/host/$f.TXT")'"; bad=1
 done
-[ "$bad" = 0 ] && echo "  ok    a script's four here-documents give what bash's give (\$NAME and \${NAME} expanded, <<'END' left alone, \$1 and \$?, and the line after still runs)" \
+[ "$bad" = 0 ] && echo "  ok    a script's five here-documents give what bash's give (\$NAME and \${NAME} expanded, <<'END' left alone, \$1 and \$?, the line after still runs, a variable set on the same line, \$(( )))" \
     || { echo "  FAIL  here-documents differ from bash"; fail=1; }
 exit $fail

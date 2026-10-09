@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.67
+Current version: v0.60.68
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,21 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.68 (2026-10-08)  — HERE-DOCUMENTS AT THE PROMPT
+  - A typed line with <<WORD asks for the document a line at a time with
+    a > prompt, up to a line that is WORD, then runs with it as the cook's
+    stdin, as sh. Ctrl-C drops the lot (status 130); Ctrl-D on an empty
+    line or the terminal going ends the document there, with bash's
+    warning.
+  - Found on the way: a document was expanded when it was read, before the
+    line it belongs to ran, so `v=1 ; cook x.elf <<EOF` saw no v, in
+    scripts too. It is kept as typed now and expanded as the cook starts.
+    $(( )) is expanded in documents too ($( ) is not, written down).
+    And heredoc_mark took the << of $(( 1 << 4 )) for a document (which
+    the prompt then waited on); it skips $( ), $(( )) and (( )) now.
+  - scripts/promptdoc-test.sh types four documents; heredoc-test.sh gains
+    the same-line variable and $(( )).
 
 v0.60.67 (2026-10-08)  — TAKE READS AS READ DOES, AND TAKE -R
   - The queue had it backwards: take did nothing with backslashes, which

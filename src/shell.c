@@ -1673,6 +1673,8 @@ static void build_env(char *out, int max);   /* with hand (v0.60.26) */
 static vfs_node_t *pending_in;   /* stdin for the next cook's first stage (v0.60.27, pipe_into) */
 static char *pending_here;        /* a here-document's body for the next cook (v0.60.52) */
 static int pending_here_len;
+static int pending_here_expand;   /* not quoted: expand it as the cook starts (v0.60.68) */
+static void heredoc_expand(const char *in, char *out, int max);
 static void (*pending_feed)(void);   /* run once the pipeline is up (v0.60.33, pipe_into) */
 static vfs_node_t *pending_out;        /* stdout for the next cook's last stage (v0.60.34) */
 static int pending_nowait;             /* ... and do not wait: leave the pids here */
@@ -1816,7 +1818,26 @@ static void cmd_cook(const char *args) {
         int hl = use_doc ? pending_here_len : (int)strlen(herestr);
         char *b = kmalloc((uint32_t)hl + 2);
         if (!f || !b || vfs_pipe(&rd, &wr) < 0) { if (f) kfree(f); if (b) kfree(b); cook_err("Out of pipes."); return; }
-        if (use_doc) { memcpy(b, pending_here, (uint32_t)hl); kfree(pending_here); pending_here = 0; }
+        if (use_doc && pending_here_expand) {
+            /* expanded now, as the line runs, not as it was read: so
+             * `v=1 ; cook x.elf <<EOF` sees v (v0.60.68) */
+            kfree(b);
+            b = kmalloc(8193 + 2);
+            if (!b) { kfree(f); vfs_close(rd); vfs_close(wr); cook_err("Out of memory."); return; }
+            int o = 0;
+            for (int i = 0; i < pending_here_len; ) {
+                char bline[INPUT_MAX], ex[INPUT_MAX]; int m = 0;
+                while (i < pending_here_len && pending_here[i] != '\n') { if (m < INPUT_MAX - 1) bline[m++] = pending_here[i]; i++; }
+                bline[m] = '\0';
+                if (i < pending_here_len) i++;
+                heredoc_expand(bline, ex, sizeof(ex));
+                for (const char *c = ex; *c && o < 8190; c++) b[o++] = *c;
+                if (o < 8191) b[o++] = '\n';
+            }
+            hl = o;
+            kfree(pending_here); pending_here = 0;
+        }
+        else if (use_doc) { memcpy(b, pending_here, (uint32_t)hl); kfree(pending_here); pending_here = 0; }
         else { memcpy(b, herestr, (uint32_t)hl); b[hl++] = '\n'; }
         f->wr = wr; f->buf = b; f->len = hl;
         if (!task_spawn("herestr", loopfeed_task, f)) { vfs_close(wr); vfs_close(rd); kfree(b); kfree(f); cook_err("Out of memory."); return; }
@@ -7003,10 +7024,16 @@ static void run_line(const char *line);
 /* <<WORD in a script line (not <<<, outside quotes): blanks it out of the
  * line, puts WORD in word, and says whether it was quoted. 0 if none. */
 static char *heredoc_mark(char *line, char *word, int max, int *quoted) {
-    char q = 0;
+    char q = 0; int dep = 0;
     for (char *s = line; *s; s++) {
         if (q) { if (*s == q) q = 0; continue; }
         if (*s == '\'' || *s == '"') { q = *s; continue; }
+        /* not inside $( ), $(( )) or (( )): 1 << 4 is a shift (v0.60.68) */
+        if (s[0] == '$' && s[1] == '(') { dep++; s++; continue; }
+        if (s[0] == '(' && s[1] == '(') { dep += 2; s++; continue; }
+        if (dep && *s == '(') { dep++; continue; }
+        if (dep && *s == ')') { dep--; continue; }
+        if (dep) continue;
         if (s[0] == '<' && s[1] == '<' && s[2] != '<' && (s == line || s[-1] != '<')) {
             char *r = s + 2, *start = s;
             while (*r == ' ') r++;
@@ -7025,14 +7052,35 @@ static char *heredoc_mark(char *line, char *word, int max, int *quoted) {
     return 0;
 }
 
-/* A here-document line: $NAME, ${NAME}, $1..$9 and $? as their values,
- * everything else (quotes too) as written. */
+/* A here-document line: $NAME, ${NAME}, $1..$9, $? and $(( )) (v0.60.68)
+ * as their values, everything else (quotes too) as written. */
 static void heredoc_expand(const char *in, char *out, int max) {
     shell_t *me = cur_shell();
     int k = 0;
     for (int i = 0; in[i] && k < max - 1; i++) {
-        const char *val = 0; char num[12];
-        if (in[i] == '$' && in[i + 1] == '?') {
+        const char *val = 0; char num[24];
+        if (in[i] == '$' && in[i + 1] == '(' && in[i + 2] == '(') {
+            int j = i + 3, dep = 0;
+            while (in[j] && !(dep == 0 && in[j] == ')' && in[j + 1] == ')')) { if (in[j] == '(') dep++; else if (in[j] == ')') dep--; j++; }
+            if (in[j]) {
+                char inner[INPUT_MAX], iex[INPUT_MAX];
+                int il = j - (i + 3) < INPUT_MAX - 1 ? j - (i + 3) : INPUT_MAX - 1;
+                memcpy(inner, in + i + 3, (uint32_t)il); inner[il] = '\0';
+                heredoc_expand(inner, iex, sizeof(iex));
+                arith_err = 0;
+                long v = arith(iex);
+                if (!arith_err) {
+                    char d[24]; int nd = 0, m = 0;
+                    unsigned long u = v < 0 ? (unsigned long)(-v) : (unsigned long)v;
+                    do { d[nd++] = (char)('0' + u % 10); u /= 10; } while (u);
+                    if (v < 0) num[m++] = '-';
+                    while (nd) num[m++] = d[--nd];
+                    num[m] = '\0';
+                    val = num; i = j + 1;
+                }
+                arith_err = 0;
+            }
+        } else if (in[i] == '$' && in[i + 1] == '?') {
             int v = me->last_status, nd = 0; char d[12];
             do { d[nd++] = (char)('0' + v % 10); v /= 10; } while (v);
             int m = 0; while (nd) num[m++] = d[--nd]; num[m] = '\0';
@@ -7127,16 +7175,14 @@ static void cmd_run(const char *args) {
                     if (j < size && text[j] == '\r') j++;
                     if (j < size && text[j] == '\n') j++;
                     if (str_eq(bline, word)) break;
-                    if (body) {
-                        char ex[INPUT_MAX];
-                        if (quoted) strcpy(ex, bline); else heredoc_expand(bline, ex, sizeof(ex));
-                        for (const char *c = ex; *c && bl < 8190; c++) body[bl++] = *c;
+                    if (body) {                         /* expanded when the cook starts */
+                        for (const char *c = bline; *c && bl < 8190; c++) body[bl++] = *c;
                         if (bl < 8191) body[bl++] = '\n';
                     }
                 }
                 next = j;
                 if (pending_here) kfree(pending_here);
-                pending_here = body; pending_here_len = bl;
+                pending_here = body; pending_here_len = bl; pending_here_expand = !quoted;
             }
             run_line(l);
             if (pending_here) { kfree(pending_here); pending_here = 0; }   /* not a cook line: unused */
@@ -7213,6 +7259,51 @@ void shell_run(void) {
 /* The read-edit-dispatch loop, on cur_shell(). Returns when the terminal
  * hangs up (getc gives -1) or the shell clocks out of a session; the
  * console's never does either. */
+/* A typed line with <<WORD (v0.60.68): sh asks for the document's lines
+ * with a > prompt until one is WORD, then runs the line with them as the
+ * cook's stdin, expanded unless WORD was quoted, as in a follow script.
+ * Ctrl-C drops the lot (status 130); Ctrl-D on an empty line, or the
+ * terminal going, ends the document where it is, as bash does, saying so. */
+static void run_typed(const char *input) {
+    char cmd[INPUT_MAX], word[32];
+    int quoted = 0;
+    strncpy(cmd, input, sizeof(cmd) - 1); cmd[sizeof(cmd) - 1] = '\0';
+    if (!heredoc_mark(cmd, word, sizeof(word), &quoted)) { run_line(input); return; }
+    char *body = kmalloc(8193);
+    int bl = 0, ended = 0;
+    while (!ended) {
+        char bline[INPUT_MAX]; int n = 0, eof = 0;
+        t_puts("> ");
+        for (;;) {
+            int c = t_getc();
+            if (c < 0 || (c == 4 && n == 0)) { eof = 1; t_putc('\n'); break; }
+            if (c == 3) {                                   /* Ctrl-C */
+                t_puts("^C\n");
+                if (body) kfree(body);
+                cur_shell()->last_status = 130;
+                return;
+            }
+            if (c == '\n') { t_putc('\n'); break; }
+            if (c == '\b') { if (n > 0) { n--; t_putc('\b'); } continue; }
+            if (((c >= ' ' && c < 127) || c == '\t') && n < INPUT_MAX - 1) { bline[n++] = (char)c; t_putc((char)c); }
+        }
+        bline[n] = '\0';
+        if (eof) {
+            t_printf("  warning: here-document delimited by end-of-file (wanted `%s')\n", word);
+            break;
+        }
+        if (str_eq(bline, word)) break;
+        if (body) {                                   /* expanded when the cook starts */
+            for (const char *c = bline; *c && bl < 8190; c++) body[bl++] = *c;
+            if (bl < 8191) body[bl++] = '\n';
+        }
+    }
+    if (pending_here) kfree(pending_here);
+    pending_here = body; pending_here_len = bl; pending_here_expand = !quoted;
+    run_line(cmd);
+    if (pending_here) { kfree(pending_here); pending_here = 0; }   /* not a cook line: unused */
+}
+
 static void shell_loop(char *input, char *saved, int *pos_p, int *len_p, int *hb_p) {
     #define pos (*pos_p)
     #define len (*len_p)
@@ -7242,7 +7333,7 @@ static void shell_loop(char *input, char *saved, int *pos_p, int *len_p, int *hb
             t_putc('\n');
             input[len] = '\0';
             hist_push(input);
-            run_line(input);
+            run_typed(input);
             if (cur_shell()->exiting) break;
             pos = len = hist_browse = 0;
             input[0] = saved[0] = '\0';

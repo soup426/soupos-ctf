@@ -56,7 +56,7 @@ bash.
 take turns \x into x today, as read does; -r keeps backslashes, as
 read -r. Compare with bash.
 
-## 5. Here-documents at the prompt
+## 5. Here-documents at the prompt — DONE v0.60.68
 
 `cook x.elf <<EOF` typed at the prompt asks for lines (a > prompt) until
 EOF, as sh does; today only follow scripts have them. Test by typing.
