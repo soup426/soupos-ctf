@@ -5733,7 +5733,7 @@ static char *compound_bar(char *t) {
     for (const char *b = pipe_bar(t); b; b = pipe_bar(b + 1)) {
         const char *r = b + 1;
         while (*r == ' ') r++;
-        if (is_kw(r, "while") || is_kw(r, "for") || is_kw(r, "if") || is_kw(r, "case")) return (char *)b;
+        if (is_kw(r, "while") || is_kw(r, "until") || is_kw(r, "for") || is_kw(r, "if") || is_kw(r, "case")) return (char *)b;
     }
     return 0;
 }
@@ -5780,11 +5780,11 @@ static int split_segs(char *buf, lseg_t *sg, int max) {
          * repeatedly, since X may start with a keyword too (`do if ...`,
          * `then for ...`, `else if ...`). */
         {
-            static const char *const kws[] = { "do", "then", "else", "if", "while" };
+            static const char *const kws[] = { "do", "then", "else", "if", "while", "until" };
             int more = 1;
             while (more && n < max - 1) {
                 more = 0;
-                for (int k = 0; k < 5; k++) {
+                for (int k = 0; k < 6; k++) {
                     int kl = (int)strlen(kws[k]);
                     if (strncmp(t, kws[k], (uint32_t)kl) == 0 && t[kl] == ' ') {
                         t[kl] = '\0';
@@ -5894,7 +5894,7 @@ static int interrupted(void) {
 static int match_done(lseg_t *sg, int from, int to) {      /* for and while share done */
     int depth = 0;
     for (int i = from; i < to; i++) {
-        if (is_kw(sg[i].text, "for") || is_kw(sg[i].text, "while")) depth++;
+        if (is_kw(sg[i].text, "for") || is_kw(sg[i].text, "while") || is_kw(sg[i].text, "until")) depth++;
         else if (is_kw(sg[i].text, "done") && --depth == 0) return i;
     }
     return -1;
@@ -5928,7 +5928,7 @@ static void exec_range(lseg_t *sg, int from, int to, int depth) {
              * the whole compound runs feeding it, as `builtin | prog` does.
              * Not again for the compound the feed itself is running. */
             const char *c = sg[i].text;
-            int loopish = is_kw(c, "for") || is_kw(c, "while");
+            int loopish = is_kw(c, "for") || is_kw(c, "while") || is_kw(c, "until");
             if (run && &sg[i] != feeding_seg && (loopish || is_kw(c, "if") || is_kw(c, "case"))) {
                 int e = loopish ? match_done(sg, i, to)
                       : is_kw(c, "if") ? match_end(sg, i, to, "if", "fi")
@@ -5952,7 +5952,7 @@ static void exec_range(lseg_t *sg, int from, int to, int depth) {
             /* X | while/for/if/case ... (v0.60.34): the compound after this
              * segment reads X's output through take. Find where it ends. */
             const char *c = sg[i + 1].text;
-            int e = (is_kw(c, "while") || is_kw(c, "for")) ? match_done(sg, i + 1, to)
+            int e = (is_kw(c, "while") || is_kw(c, "until") || is_kw(c, "for")) ? match_done(sg, i + 1, to)
                   : is_kw(c, "if") ? match_end(sg, i + 1, to, "if", "fi")
                   : match_end(sg, i + 1, to, "case", "esac");
             if (e < 0) { t_puts("  |: the loop after it never ends (no done, fi or esac).\n"); cur_shell()->last_status = 2; return; }
@@ -6017,23 +6017,25 @@ static void exec_range(lseg_t *sg, int from, int to, int depth) {
             i = d + 1;
             continue;
         }
-        if (is_kw(sg[i].text, "while")) {
+        if (is_kw(sg[i].text, "while") || is_kw(sg[i].text, "until")) {
             /* while COMMANDS ; do COMMANDS ; done (v0.60.1): the condition is
              * the commands between while and do; the status is the body's
-             * last, or 0 if the body never ran, as sh does. */
+             * last, or 0 if the body never ran, as sh does. until (v0.60.43)
+             * is the same loop, running while the condition fails. */
+            int until = is_kw(sg[i].text, "until");
             int d = match_done(sg, i, to), dd = -1, dep = 0;
             for (int j = i; d >= 0 && j < d; j++) {
-                if (is_kw(sg[j].text, "for") || is_kw(sg[j].text, "while")) dep++;
+                if (is_kw(sg[j].text, "for") || is_kw(sg[j].text, "while") || is_kw(sg[j].text, "until")) dep++;
                 else if (is_kw(sg[j].text, "done")) dep--;
                 else if (dep == 1 && is_kw(sg[j].text, "do")) { dd = j; break; }
             }
-            if (d < 0 || dd < 0) { t_puts("  while: expected `while ... ; do ... ; done`.\n"); cur_shell()->last_status = 2; return; }
+            if (d < 0 || dd < 0) { t_printf("  %s: expected `%s ... ; do ... ; done`.\n", until ? "until" : "while", until ? "until" : "while"); cur_shell()->last_status = 2; return; }
             if (run) {
                 int body_status = 0;
                 for (;;) {
                     if (interrupted() || cur_shell()->exiting) break;
                     exec_range(sg, i + 1, dd, depth + 1);
-                    if (interrupted() || cur_shell()->last_status != 0) break;
+                    if (interrupted() || (cur_shell()->last_status != 0) != until) break;
                     exec_range(sg, dd + 1, d, depth + 1);
                     body_status = cur_shell()->last_status;
                 }

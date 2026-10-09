@@ -55,7 +55,7 @@ with bash's `NAME=value env | grep NAME` and the shell's value after.
 The default when unset or empty, the default that also sets it, and the
 length. Compare with bash.
 
-## 4. until loops
+## 4. until loops — DONE v0.60.43
 
 `until COMMANDS ; do ... ; done`, while's opposite. Compare with bash.
 
@@ -68,6 +68,16 @@ with bash.
 
 `cook rack.elf <<< "c b a"`: the word, with a newline, as the first
 stage's stdin. Compare with bash.
+
+## 8. A loop, a program, then a loop: done | prog | while ...
+
+Found with item 4: `until ... ; done | stack.elf | while take x ; do ... ;
+done` hangs the shell (the same with while). split_segs looks for the |
+before a compound first, so "done | stack.elf" becomes a segment that
+pipes into the second loop, and the first loop's done never gets its out.
+sh runs the three as one pipeline. Make that work (the middle is a cook
+line between two shell sides), or at least refuse it with a message
+rather than hang; compare with bash.
 
 ## 7. Doom at the framebuffer's own resolution — DEFERRED
 
