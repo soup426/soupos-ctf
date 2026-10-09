@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.153
+Current version: v0.60.154
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,26 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.154 (2026-10-09)  — jot IN A TERMINAL WINDOW
+  - Measured first: in a desktop terminal jot said it needed the
+    kitchen's own screen. It wrote VGA cells and read the PS/2 keyboard
+    directly, and the shell refused it anywhere but the console.
+  - term_t has an optional put_cell (a cell at row,col, the cursor not
+    moved, nothing scrolled): a desktop terminal has it, a stream (SSH)
+    does not. jot now draws, places its cursor, reads keys and clears on
+    the terminal it was started on when that is not the console; the
+    console path is as it was (and the mouse stays a console thing).
+    Over SSH it is still refused.
+  - One jot at a time (its buffer is static): a second says so. A window
+    closed under a jot hangs it up (getc gives -1) and frees it.
+  - The files window opens .txt .md .sc .sh files in jot, the rest in
+    pour.
+  - scripts/ctjot-test.sh: a new file typed and saved in a window (the
+    status bar read back, the file on the disk after), the second jot
+    refused, a closed window freeing jot, GREET.ELF to pour. ctfiles-test
+    now expects jot for HELLO.TXT and the long .txt name. Six-wide soak
+    6 of 6.
 
 v0.60.153 (2026-10-09)  — swirl.elf: THE MANDELBROT SET
   - A second program on the window calls: 320x240, 16.16 fixed point

@@ -12,4 +12,4 @@
  * Keys: arrows/Home/End move, Backspace/Del erase, Enter splits a line,
  * Ctrl+S saves, Esc or Ctrl+Q quits (with a discard prompt if modified).
  */
-void editor_run(const char *path);
+int editor_run(const char *path);   /* 0; -1 another jot is open; -2 not on a terminal with cells (v0.60.154) */

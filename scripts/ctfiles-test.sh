@@ -2,9 +2,10 @@
 # ctfiles-test.sh - countertop's files window (v0.60.145), from screendumps
 # and the log. The bar's Files button lists / (bowls first, files with
 # their sizes); a double click on etc/ enters it, on .. comes back; a
-# double click on HELLO.TXT opens a terminal pouring it; the arrows scroll
-# the list down to "A Long Recipe Name.txt" and Enter pours that too (the
-# path quoted, spaces and all). The window's rows and the terminals' cells
+# double click on HELLO.TXT opens a terminal with it in jot (v0.60.154: a
+# text file goes to the editor, the rest to pour), Esc leaves it; the
+# arrows scroll the list down to "A Long Recipe Name.txt" and Enter opens
+# that in jot too (the path quoted, spaces and all). The window's rows and the terminals' cells
 # are read back against font8x16. The Files click and the .. double click
 # are pressed and released inside one monitor write, shorter than the
 # desktop loop's nap: before v0.60.145 such a click was lost.
@@ -28,7 +29,7 @@ keys=("headchef" "rosemary" "WAIT:1" "countertop" "WAIT:2"
       "$L" "$L" "$L" "$L" "$L" "MON:mouse_move 350 12" "WAIT:1" "$QUICK" "WAIT:2" "MON:screendump $WORK/s1.ppm" "WAIT:1"
       "MON:mouse_move 350 108" "WAIT:1" "${TWICE[@]}" "MON:screendump $WORK/s2.ppm" "WAIT:1"
       "$QUICK2" "WAIT:2" "MON:screendump $WORK/s3.ppm" "WAIT:1"
-      "MON:mouse_move 0 18" "WAIT:1" "${TWICE[@]}" "WAIT:2" "MON:screendump $WORK/s4.ppm" "WAIT:1"
+      "MON:mouse_move 0 18" "WAIT:1" "${TWICE[@]}" "WAIT:2" "MON:screendump $WORK/s4.ppm" "WAIT:1" "KEY:esc" "WAIT:1"
       "MON:mouse_move 200 -48" "WAIT:1" "${CLICK[@]}" "${DOWN[@]}" "WAIT:1" "MON:screendump $WORK/s5.ppm" "WAIT:1"
       "KEY:ret" "WAIT:3" "MON:screendump $WORK/s6.ppm" "WAIT:1"
       "MON:mouse_move -600 -78" "WAIT:1" "${CLICK[@]}" "WAIT:2" "hash FBHELLO" "UNTIL:@soupOS:")
@@ -85,22 +86,22 @@ want(word(s2, *PATH), '/etc', 's2 path (etc/ double clicked)'); want(word(s2, *R
 s3 = ppm('s3')
 want(word(s3, *PATH), '/', 's3 path (.. double clicked)'); want(word(s3, *ROW(0)), 'etc/', 's3 row 0')
 t1 = term(ppm('s4'), 61, 83)
-for t in ("> pour '/HELLO.TXT'", 'Hello from soupOS!', 'A warm bowl of kernel soup.'):
-    if not any(t in r for r in t1): bad.append(f'Terminal 1: no "{t}" in ' + ' | '.join(r for r in t1 if r)[:300])
+if t1[:2] != ['Hello from soupOS!', 'A warm bowl of kernel soup.']:              # jot's first two rows
+    bad.append('Terminal 1: jot does not show HELLO.TXT: ' + ' | '.join(t1[:3]))
 s5 = ppm('s5')                                   # 22 rows shown: row 23 scrolled to the bottom
 want(word(s5, *ROW(21)), 'A Long Recipe Name.txt', 's5 last row (scrolled)'); want(s5(800, 112 + 18 * 21 + 8), FOC, 's5 last row selected')
 want(word(s5, *ROW(0)), 'README.TXT', 's5 first row (scrolled by two)')
 t2 = term(ppm('s6'), 89, 111)
-for t in ("> pour '/A Long Recipe Name.txt'", 'A file whose name does not fit in 8.3 at all.'):
-    if not any(t in r for r in t2): bad.append(f'Terminal 2: no "{t}" in ' + ' | '.join(r for r in t2 if r)[:300])
+if t2[0] != 'A file whose name does not fit in 8.3 at all.':
+    bad.append('Terminal 2: jot does not show the long name: ' + ' | '.join(t2[:2]))
 for b in bad: print('        ' + b)
 sys.exit(1 if bad else 0)
 PY
 tr -d '\r' < "$WORK/serial.log" > "$WORK/log"
-grep -E '^\[countertop\] (open Files|files in|pour)' "$WORK/log" | sed 's/, [0-9]* entries//' > "$WORK/events"
-printf '[countertop] open Files at /\n[countertop] files in /etc\n[countertop] files in /\n[countertop] pour /HELLO.TXT\n[countertop] pour /A Long Recipe Name.txt\n' | cmp -s - "$WORK/events" \
+grep -E '^\[countertop\] (open Files|files in|pour|jot)' "$WORK/log" | sed 's/, [0-9]* entries//' > "$WORK/events"
+printf '[countertop] open Files at /\n[countertop] files in /etc\n[countertop] files in /\n[countertop] jot /HELLO.TXT\n[countertop] jot /A Long Recipe Name.txt\n' | cmp -s - "$WORK/events" \
     || { echo "        the events: $(tr '\n' ';' < "$WORK/events")"; fail=1; }
 grep -x '\[countertop\] down' "$WORK/log" >/dev/null || { echo "        Leave did not give the console back"; fail=1; }
-[ "$fail" = 0 ] && echo "  ok    the files window: / with bowls first and sizes, a double click enters etc/ and .. comes back, HELLO.TXT pours in a terminal, the arrows scroll and Enter pours a name with spaces" \
+[ "$fail" = 0 ] && echo "  ok    the files window: / with bowls first and sizes, a double click enters etc/ and .. comes back, HELLO.TXT opens in jot in a terminal, the arrows scroll and Enter opens a name with spaces in jot" \
     || echo "  FAIL  countertop's files window"
 exit $fail

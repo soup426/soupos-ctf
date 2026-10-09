@@ -45,8 +45,9 @@
  * Files (v0.60.145, step 6). A window listing a bowl: its path, then ..,
  * its bowls and its files (with their sizes). A click selects, a double
  * click (or Enter, with the arrows to move) opens: a bowl in the same
- * window, a file in a new terminal with `pour PATH` typed into it, so what
- * may be read is the shell's to decide, as it always is.
+ * window, a file in a new terminal with `pour PATH` typed into it (`jot
+ * PATH` for a text file, v0.60.154), so what may be read is the shell's to
+ * decide, as it always is.
  *
  * The wheel (v0.60.151) scrolls the files window under the pointer.
  *
@@ -255,6 +256,12 @@ static int wt_getc(term_t *t) {
     return k;
 }
 static void wt_flush(term_t *t) { wterm_t *w = WT(t); w->tail = w->head; }
+static void wt_cell(term_t *t, int r, int c, char ch, int attr) {   /* (v0.60.154) for jot */
+    wterm_t *w = WT(t);
+    if (r < 0 || r >= TROWS || c < 0 || c >= TCOLS) return;
+    w->cell[r * TCOLS + c] = (uint16_t)((unsigned char)ch | (attr & 0x7F) << 8);
+    w->changed = 1;
+}
 /* A key for the window: Ctrl-C and Ctrl-Z to its foreground program, as
  * the keyboard IRQ does for the console and the stream terminal for SSH. */
 static void wt_key(wterm_t *w, int key) {
@@ -275,7 +282,7 @@ static wterm_t *wt_new(void) {
     w->t.name = "countertop";
     w->t.puts = wt_puts; w->t.putc = wt_putc; w->t.set_color = wt_color; w->t.set_cursor = wt_cursor;
     w->t.row = wt_row; w->t.col = wt_col; w->t.cols = wt_cols; w->t.rows = wt_rows; w->t.clear = wt_clear;
-    w->t.getc = wt_getc; w->t.available = wt_avail; w->t.flush_in = wt_flush;
+    w->t.getc = wt_getc; w->t.available = wt_avail; w->t.flush_in = wt_flush; w->t.put_cell = wt_cell;
     w->t.ctx = w;
     w->attr = 0x07;
     wt_clear(&w->t);
@@ -582,8 +589,22 @@ static int open_files(const char *path) {
     repaint_win(k);
     return k;
 }
+/* A text file, by its name: .txt .md .sc .sh, any case (v0.60.154). */
+static int is_text(const char *p) {
+    const char *dot = 0;
+    for (const char *c = p; *c; c++) if (*c == '.') dot = c; else if (*c == '/') dot = 0;
+    if (!dot) return 0;
+    static const char *const ext[] = { "txt", "md", "sc", "sh" };
+    for (unsigned i = 0; i < sizeof(ext) / sizeof(ext[0]); i++) {
+        const char *a = dot + 1, *b = ext[i];
+        while (*a && *b && (*a | 0x20) == *b) { a++; b++; }
+        if (!*a && !*b) return 1;
+    }
+    return 0;
+}
 /* Open what row r of files window k names: a bowl here, a file in a new
- * terminal with `pour PATH` typed into it. */
+ * terminal with `jot 'PATH'` typed into it for text, `pour 'PATH'` for the
+ * rest. */
 static void files_open(int k, int r) {
     struct files *f = win[k].files;
     if (r < 0 || r >= f->n) return;
@@ -609,7 +630,10 @@ static void files_open(int k, int r) {
     }
     int t = open_terminal();
     if (t < 0) return;
-    const char *c = "pour '";                          /* quoted: names have spaces */
+    const char *verb = is_text(p) ? "jot" : "pour";   /* text to the editor (v0.60.154) */
+    const char *c = verb;
+    while (*c) wt_key(win[t].term, *c++);
+    c = " '";                                          /* quoted: names have spaces */
     while (*c) wt_key(win[t].term, *c++);
     for (c = p; *c; c++) {
         if (*c == '\'') { wt_key(win[t].term, '\''); wt_key(win[t].term, '\\'); wt_key(win[t].term, '\''); }
@@ -617,7 +641,7 @@ static void files_open(int k, int r) {
     }
     wt_key(win[t].term, '\'');
     wt_key(win[t].term, '\n');
-    klog("[countertop] pour %s\n", p);
+    klog("[countertop] %s %s\n", verb, p);
 }
 
 static void raise_window(int k) {

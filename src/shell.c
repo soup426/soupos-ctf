@@ -1607,7 +1607,7 @@ static void cmd_relabel(const char *args) {
  * Editing implies the right to save, so an existing file needs read+write;
  * a new file needs write on its parent bowl. */
 static void cmd_jot(const char *args) {
-    if (needs_console("jot")) return;
+    if (!on_console() && !T->put_cell) { needs_console("jot"); return; }   /* a desktop window will do (v0.60.154) */
     while (*args == ' ') args++;
     if (!*args) { t_puts("Usage: jot <file>\n"); return; }
     char path[FAT_PATH_MAX];
@@ -1625,7 +1625,11 @@ static void cmd_jot(const char *args) {
         parent_of(path, par);
         if (!may(par, 'w')) { deny(par); return; }
     }
-    editor_run(path);
+    if (editor_run(path) == -1) {
+        t_puts("  jot is already open somewhere else; one at a time.\n");
+        cur_shell()->last_status = 1;
+        return;
+    }
 }
 
 /* ai <prompt> - ask the host-side LLM over the COM2 serial bridge. Streams

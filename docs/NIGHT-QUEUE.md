@@ -101,7 +101,7 @@ a click zooms in on that point, - zooms out, q quits. Test: the host
 computes the same fixed-point image in Python and the screendump matches
 it pixel for pixel; a click's zoom matches the host's too.
 
-## 6. jot in a terminal window
+## 6. jot in a terminal window — DONE v0.60.154
 
 Does the editor work in a wterm (cursor moves, full-screen redraw, its
 keys)? Measure by running it there. If it does, the files window opens

@@ -6,14 +6,21 @@
 #include "clip.h"
 #include "mouse.h"
 #include "task.h"
+#include "term.h"
 
 /* ── Screen geometry ─────────────────────────────────────────────────────
  * 80×25 text mode. Rows 0..23 show text; row 24 is the status bar. We write
  * cells straight into the VGA buffer so a full redraw never scrolls. */
 /* Ask, do not assume: the framebuffer console is larger than the hardware
  * text mode, and the editor has to fill whatever it is given. */
-#define VGA_W      (vga_cols())
-#define VGA_H      (vga_rows())
+/* (v0.60.154) jot also runs in a terminal window on the desktop: ET is the
+ * terminal it was started on, and every cell, the cursor, the keys and the
+ * clear go to it when it is not the console. The console path is the one
+ * it always had (cells straight into the screen, the PS/2 mouse). */
+static term_t *ET;
+static int     on_con;
+#define VGA_W      (on_con ? vga_cols() : ET->cols(ET))
+#define VGA_H      (on_con ? vga_rows() : ET->rows(ET))
 #define TEXT_ROWS  24
 #define STATUS_ROW 24
 #define VGA_MEM    (vga_cells())   /* never 0xB8000: dead on FB boots */
@@ -22,8 +29,11 @@
 
 static void put_cell(int row, int col, char c, uint8_t attr) {
     if (row < 0 || row >= VGA_H || col < 0 || col >= VGA_W) return;
+    if (!on_con) { ET->put_cell(ET, row, col, c, attr); return; }
     VGA_MEM[row * VGA_W + col] = ((uint16_t)attr << 8) | (uint8_t)(unsigned char)c;
 }
+static int  e_getc(void)  { return on_con ? keyboard_getchar() : ET->getc(ET); }
+static int  e_avail(void) { return on_con ? keyboard_available() : ET->available(ET); }
 
 static void put_str(int row, int col, const char *s, uint8_t attr) {
     for (; *s && col < VGA_W; s++, col++) put_cell(row, col, *s, attr);
@@ -189,7 +199,7 @@ static void render(void) {
 
     /* The pointer, drawn by inverting whatever is under it rather than by
      * owning a glyph, so it never hides a character. */
-    if (mouse_present()) {
+    if (on_con && mouse_present()) {
         int mx, my, mb;
         mouse_get(&mx, &my, &mb);
         if (my >= 0 && my < TEXT_ROWS && mx >= 0 && mx < VGA_W) {
@@ -242,7 +252,8 @@ static void render(void) {
     /* Hardware cursor on the editable cell. */
     int cy = line - etop;
     int cx = col < VGA_W ? col : VGA_W - 1;
-    vga_set_cursor(cy, cx);
+    if (on_con) vga_set_cursor(cy, cx);
+    else ET->set_cursor(ET, cy, cx);
 }
 
 static void do_save(void) {
@@ -262,12 +273,20 @@ static int confirm_discard(void) {
     strncpy(emsg, "Discard changes? (y/N)", sizeof(emsg) - 1);
     emsg[sizeof(emsg) - 1] = '\0';
     render();
-    int c = keyboard_getchar();
+    int c = e_getc();
     emsg[0] = '\0';
     return (c == 'y' || c == 'Y');
 }
 
-void editor_run(const char *path) {
+static volatile int busy;                        /* one buffer: one jot at a time */
+
+int editor_run(const char *path) {
+    term_t *t = term_current();
+    if (t != &term_vga && !t->put_cell) return -2;  /* a stream: no cells to draw */
+    if (busy) return -1;
+    busy = 1;
+    ET = t;
+    on_con = t == &term_vga;
     strncpy(epath, path, FAT_PATH_MAX - 1);
     epath[FAT_PATH_MAX - 1] = '\0';
 
@@ -278,7 +297,8 @@ void editor_run(const char *path) {
         elen = 0;                                  /* new file */
     ecur = 0; etop = 0; edirty = 0; emsg[0] = '\0'; emark = -1;
 
-    keyboard_flush();   /* drop the Enter that launched us */
+    if (on_con) keyboard_flush();   /* drop the Enter that launched us */
+    else ET->flush_in(ET);
 
     uint32_t last_moves = 0;
     int      last_btn   = 0;
@@ -291,7 +311,8 @@ void editor_run(const char *path) {
          * keyboard_getchar, which cannot see the mouse at all. */
         int c = -1;
         for (;;) {
-            if (keyboard_available()) { c = keyboard_getchar(); break; }
+            if (e_avail()) { c = e_getc(); break; }
+            if (!on_con) { task_sleep(10); continue; }
 
             if (mouse_present()) {
                 uint32_t moves;
@@ -317,6 +338,7 @@ void editor_run(const char *path) {
             }
             task_yield();
         }
+        if (c < 0 && !on_con) break;        /* the window closed under it: a hangup */
         if (c < 0) continue;                /* it was the mouse; go redraw */
 
         emsg[0] = '\0';                            /* clear transient msg */
@@ -380,6 +402,8 @@ void editor_run(const char *path) {
         }
     }
 
-    vga_clear();
-    vga_set_cursor(0, 0);
+    if (on_con) { vga_clear(); vga_set_cursor(0, 0); }
+    else ET->clear(ET);
+    busy = 0;
+    return 0;
 }

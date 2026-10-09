@@ -29,6 +29,10 @@ struct term {
     int  (*getc)      (term_t *t);                  /* blocks */
     int  (*available) (term_t *t);
     void (*flush_in)  (term_t *t);
+    /* One cell at row,col (a VGA attribute byte), the cursor not moved and
+     * nothing scrolled, for a full-screen program; 0 on a terminal that
+     * cannot (a stream). jot runs on a terminal that has it (v0.60.154). */
+    void (*put_cell)  (term_t *t, int row, int col, char ch, int attr);
     void *ctx;
     struct proc *fg;      /* the program that owns this terminal's input, if any:
                            * where Ctrl-C and Ctrl-Z go, and who stdin belongs

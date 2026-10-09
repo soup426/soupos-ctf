@@ -24,7 +24,9 @@ static void v_flush(term_t *t)                           { (void)t; keyboard_flu
 
 term_t term_vga = {
     "console", v_puts, v_putc, v_color, v_cursor, v_row, v_col, v_cols, v_rows,
-    v_clear, v_getc, v_avail, v_flush, 0, 0, 0
+    v_clear, v_getc, v_avail, v_flush,
+    0,                                   /* put_cell: jot draws the console itself */
+    0, 0, 0
 };
 
 term_t *term_current(void) {
