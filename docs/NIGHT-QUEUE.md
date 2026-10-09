@@ -76,7 +76,7 @@ Several FILEs: each line prefixed NAME: when more than one (-H always,
 lines; with -E, -c (NAME:N), -n (NAME:N:line), -v -i -o. Compare with
 GNU grep (by its path, not the ugrep wrapper).
 
-## 6. weigh over several files, and -L (wc)
+## 6. weigh over several files, and -L (wc) — DONE v0.60.135
 
 Several FILEs, a line each and a `total` line, widths as GNU wc's; -L
 the longest line. Compare with GNU wc.

@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.134
+Current version: v0.60.135
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,16 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.135 (2026-10-09)  — WEIGH OVER SEVERAL FILES, AND -L
+  - weigh.elf FILE...: a line each and a `total` line, every count padded
+    to the digits of the total bytes (with one count or several), as GNU
+    wc; -L the longest line (tabs to the next multiple of 8), its total
+    the longest of all. A file that will not open is said, the rest
+    counted, status 1. One file prints as before; the WCOUT marker the
+    gate reads is the total's.
+  - scripts/weighfiles-test.sh compares 12 cases and stdin, statuses
+    included, with GNU wc; every earlier test using weigh still passes.
 
 v0.60.134 (2026-10-09)  — SIFT OVER SEVERAL FILES, -L -H -H -W -X
   - sift.elf PATTERN FILE...: each line, -o match and -c count after
