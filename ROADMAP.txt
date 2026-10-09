@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.61
+Current version: v0.60.62
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,16 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.62 (2026-10-08)  — & BETWEEN COMMANDS
+  - A lone & ends a command as ; does: `cook a.elf & rest $!`, `a&b`, and
+    `& ;` as before. A cook (or chef cook) goes into the background with
+    $! set; a builtin or a function runs at once, the & not printed, there
+    being no second shell to run it in (bash would fork one: `x=1 & ...`
+    sets x here, not in bash). 2>&1, >&2 and &> are left alone.
+  - scripts/amp-test.sh compares ten lines with bash, all ones where bash
+    prints in a fixed order. Its bash side had to write \& for & in a
+    ${b//pat/rep}: since bash 5.2 a bare & there is the matched text.
 
 v0.60.61 (2026-10-08)  — DONE > FILE, DONE < FILE
   - `done > F` and `done >> F` (and fi, esac) send a whole loop's, if's

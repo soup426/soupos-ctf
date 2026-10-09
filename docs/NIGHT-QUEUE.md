@@ -52,7 +52,7 @@ follow -e does not stop on it, as bash -e does not. Compare with bash.
 A loop's or an if's whole output to a file (>, >>, and 2> with them),
 which the shell refuses today. Compare the file with bash's.
 
-## 4. & between commands
+## 4. & between commands — DONE v0.60.62
 
 `a & b` runs a in the background and b at once, as `a & ; b` does today.
 $! is a's. Compare with bash.

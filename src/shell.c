@@ -6025,7 +6025,7 @@ static void run_one(const char *seg) {
  * loop in turn. `case W in P) ... ;; esac` (v0.60.19) splits further: the
  * header, each arm's pattern and a ;; are segments of their own. */
 #define LSEG_MAX 64
-typedef struct { const char *text; int op; int into; const char *out; int junk; const char *redir; char rkind; } lseg_t;
+typedef struct { const char *text; int op; int into; const char *out; int junk; const char *redir; char rkind; char bg; } lseg_t;
 /* op: ';' 'A' 'O'; into: | the next (v0.60.34); out: `done | PROG`, PROG (v0.60.37) */
 
 static int is_kw(const char *t, const char *kw) {
@@ -6133,6 +6133,7 @@ static int split_segs(char *buf, lseg_t *sg, int max) {
     while (n < max) {
         char *start = s, inq = 0;
         int next_op = 0, pdepth = 0, dsemi = 0;   /* inside $( ... ): no splitting (v0.60.4) */
+        int amp = 0, n_was = n;                   /* ended by a lone & (v0.60.62) */
         char *defend = fndef_end(start);          /* NAME() { ... }: one segment (v0.60.22) */
         if (defend) s = defend;
         while (*s) {
@@ -6152,6 +6153,11 @@ static int split_segs(char *buf, lseg_t *sg, int max) {
             if (s[0] == ';')                { next_op = ';'; *s = '\0'; s += 1; break; }
             if (s[0] == '&' && s[1] == '&') { next_op = 'A'; *s = '\0'; s += 2; break; }
             if (s[0] == '|' && s[1] == '|') { next_op = 'O'; *s = '\0'; s += 2; break; }
+            /* a & b (v0.60.62): a lone & ends a command as ; does, and puts
+             * it in the background. Not in 2>&1, >&2 or &>. */
+            if (s[0] == '&' && s[1] != '>' && (s == start || (s[-1] != '>' && s[-1] != '<'))) {
+                next_op = ';'; amp = 1; *s = '\0'; s += 1; break;
+            }
             s++;
         }
         char *t = start;
@@ -6227,6 +6233,7 @@ static int split_segs(char *buf, lseg_t *sg, int max) {
             split_closer(&sg[n], t);
             n++;
         }
+        if (amp && n > n_was) sg[n - 1].bg = 1;
         if (dsemi && n < max) { sg[n].text = DSEMI; sg[n].op = ';'; n++; arm_next = 1; }
         if (!next_op) break;
         op = next_op;
@@ -6720,6 +6727,20 @@ static void exec_range(lseg_t *sg, int from, int to, int depth) {
                 else                               cur_shell()->last_status = 0;
             }
             i = f + 1;
+            continue;
+        }
+        if (run && sg[i].bg) {
+            /* cmd & (v0.60.62): a cook goes into the background; a builtin or
+             * a function runs now, there being no second shell to run it. */
+            const char *t = sg[i].text; while (*t == ' ') t++;
+            const char *c2 = t + 4; while (*c2 == ' ') c2++;
+            if (is_kw(t, "cook") || (is_kw(t, "chef") && is_kw(c2, "cook"))) {
+                char line[INPUT_MAX]; int n = 0;
+                for (; *t && n < INPUT_MAX - 3; t++) line[n++] = *t;
+                line[n++] = ' '; line[n++] = '&'; line[n] = '\0';
+                run_one(line);
+            } else run_one(sg[i].text);
+            i++;
             continue;
         }
         if (run) {
