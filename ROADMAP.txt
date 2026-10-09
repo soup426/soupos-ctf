@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.83
+Current version: v0.60.84
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,16 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.84 (2026-10-09)  — SLURP -N, -E AND -E
+  - slurp takes echo's options as bash's echo does: leading words made of
+    n, e and E only (-ne too, "-n" quoted too) are options, any other
+    word is printed (-x, --, -, -nx). -n leaves off the newline; -e turns
+    \n \t \\ \a \b \e \f \r \v \0nnn \xHH into what they name, keeps an
+    unknown \q as it is, and stops everything at \c; -E (the default)
+    leaves them.
+  - scripts/slurpopt-test.sh compares eight files with bash's echo's,
+    byte for byte.
 
 v0.60.83 (2026-10-09)  — HERE-DOCUMENTS IN A SCRIPT'S BLOCKS
   - A <<WORD inside an if, a loop, a { } or a function written over lines

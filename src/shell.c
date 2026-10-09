@@ -790,7 +790,7 @@ static void cmd_menu(void) {
         {1, "  Today's Menu:"},
         {0, "    menu               - show this message"},
         {0, "    wash               - clear the screen"},
-        {0, "    slurp <text>       - print text"},
+        {0, "    slurp [-neE] <text> - print text (-n no newline, -e \\n \\t ...)"},
         {0, "    season <fg> <bg>   - set colors (0-15)"},
         {0, "    simmer             - time since boot"},
         {0, "    broth              - physical memory stats"},
@@ -951,22 +951,68 @@ static const char *uq_args(const char *raw) {
  * b` and `slurp $v` (v holding "x   y") print "a b" and "x y", as echo does;
  * quoted stretches keep their spaces, and '' is a word of its own. It
  * printed the rest of the line as typed before. */
+/* -n, -e and -E (v0.60.84), as bash's echo: leading words made only of
+ * those letters (-ne too, quoted or not) are options, anything else is
+ * printed; -n leaves off the newline, -e turns \n \t \\ \a \b \e \f \r
+ * \v \0nnn \xHH into what they name and stops everything at \c, -E (the
+ * default) leaves them. */
 static void cmd_slurp(const char *args) {
-    int words = 0;
+    int words = 0, nl = 1, esc = 0;
     const char *r = args;
+    for (;;) {                                   /* the options */
+        char w[16];
+        while (*r == ' ' || *r == '\t') r++;
+        const char *after = first_word(r, w, sizeof(w));
+        int opt = w[0] == '-' && w[1];
+        for (const char *c = w + 1; opt && *c; c++) if (*c != 'n' && *c != 'e' && *c != 'E') opt = 0;
+        if (!opt) break;
+        for (const char *c = w + 1; *c; c++) { if (*c == 'n') nl = 0; else if (*c == 'e') esc = 1; else esc = 0; }
+        r = after;
+    }
+    char out[INPUT_MAX + 8]; int o = 0;
     for (;;) {
         while (*r == ' ' || *r == '\t') r++;
         if (!*r) break;
-        if (words++) t_putc(' ');
+        if (words++ && o < INPUT_MAX) out[o++] = ' ';
         char q = 0;
         while (*r && (q || (*r != ' ' && *r != '\t'))) {
-            if (q) { if (*r == q) q = 0; else t_putc(*r); }
+            if (q) { if (*r == q) q = 0; else if (o < INPUT_MAX) out[o++] = *r; }
             else if (*r == '\'' || *r == '"') q = *r;
-            else t_putc(*r);
+            else if (o < INPUT_MAX) out[o++] = *r;
             r++;
         }
     }
-    t_putc('\n');
+    for (int i = 0; i < o; i++) {
+        char c = out[i];
+        if (!esc || c != '\\' || i + 1 >= o) { t_putc(c); continue; }
+        char e = out[++i];
+        switch (e) {
+        case '\\': t_putc('\\'); break;
+        case 'a': t_putc('\a'); break;
+        case 'b': t_putc('\b'); break;
+        case 'c': return;                        /* nothing more, not even the newline */
+        case 'e': case 'E': t_putc(27); break;
+        case 'f': t_putc('\f'); break;
+        case 'n': t_putc('\n'); break;
+        case 'r': t_putc('\r'); break;
+        case 't': t_putc('\t'); break;
+        case 'v': t_putc('\v'); break;
+        case '0': { int v = 0, k = 0; while (k < 3 && i + 1 < o && out[i + 1] >= '0' && out[i + 1] <= '7') { v = v * 8 + (out[++i] - '0'); k++; } t_putc((char)v); break; }
+        case 'x': {
+            int v = 0, k = 0;
+            while (k < 2 && i + 1 < o) {
+                char h = out[i + 1];
+                int d = h >= '0' && h <= '9' ? h - '0' : h >= 'a' && h <= 'f' ? h - 'a' + 10 : h >= 'A' && h <= 'F' ? h - 'A' + 10 : -1;
+                if (d < 0) break;
+                v = v * 16 + d; i++; k++;
+            }
+            if (k) t_putc((char)v); else { t_putc('\\'); t_putc('x'); }
+            break;
+        }
+        default: t_putc('\\'); t_putc(e); break;
+        }
+    }
+    if (nl) t_putc('\n');
 }
 
 static void cmd_season(const char *args) {

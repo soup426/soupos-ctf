@@ -34,7 +34,7 @@ and indirection, $(< FILE), a timer for commands, and arrays.
 
 ---
 
-## 1. slurp -n and -e
+## 1. slurp -n and -e — DONE v0.60.84
 
 echo's -n (no newline at the end) and -e (\n \t \\ and the rest), and -E,
 in bash's way (options only first, -ne together, a word like -x printed).
