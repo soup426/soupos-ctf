@@ -567,7 +567,7 @@ const char *fat_label(void)     { return vol_label;   }
 
 /* ---- Public: fat_ls ---- */
 
-static int fat_ls_impl(const char *path, fat_entry_t *out, int max) {
+static int fat_ls_impl(const char *path, fat_entry_t *out, int max, int skip) {
     if (!initialized) return -1;
 
     uint32_t dir_cl;
@@ -593,6 +593,7 @@ static int fat_ls_impl(const char *path, fat_entry_t *out, int max) {
             if (!is_valid(&dir[i]))    { lfn_reset(&acc); continue; }
             if (dir[i].name[0] == '.') { lfn_reset(&acc); continue; }
 
+            if (skip > 0) { skip--; lfn_reset(&acc); continue; }   /* fat_ls_from (v0.60.125) */
             fill_entry(&dir[i], &out[count]);
             const char *lng = lfn_name(&acc, &dir[i]);
             if (lng) strncpy(out[count].lfn, lng, FAT_LFN_MAX - 1);
@@ -1540,8 +1541,12 @@ int fat_feof(int fd) {
  * wrappers take the FAT lock around it. Wrapping rather than editing every
  * return path keeps the lock impossible to leak on an error exit. */
 int fat_ls(const char *path, fat_entry_t *out, int max) {
+    return fat_ls_from(path, out, max, 0);
+}
+
+int fat_ls_from(const char *path, fat_entry_t *out, int max, int skip) {
     mutex_lock(&fat_mtx);
-    int _r = fat_ls_impl(path, out, max);
+    int _r = fat_ls_impl(path, out, max, skip);
     mutex_unlock(&fat_mtx);
     return _r;
 }

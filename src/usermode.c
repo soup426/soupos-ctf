@@ -631,13 +631,16 @@ void syscall_dispatch(registers_t *r) {
                 r->eax = (uint32_t)-1; break;
             }
 #endif
-            fat_entry_t *list = kmalloc(FAT_LS_MAX * sizeof(fat_entry_t));
+            /* entry idx alone (v0.60.125): it was the first FAT_LS_MAX
+             * listed and indexed, so a bowl of more ended at 128 */
+            fat_entry_t *list = kmalloc(sizeof(fat_entry_t));
             if (!list) { r->eax = (uint32_t)-1; break; }
-            int n = fat_ls(path[0] ? path : "/", list, FAT_LS_MAX);
             uint32_t idx = r->ecx;
+            int n = idx > 0x7fffffff ? 0 : fat_ls_from(path[0] ? path : "/", list, 1, (int)idx);
             if (n < 0)                 r->eax = (uint32_t)-1;
-            else if (idx >= (uint32_t)n) r->eax = 0;
+            else if (n == 0)           r->eax = 0;
             else {
+                idx = 0;
                 udirent_t *out = (udirent_t *)r->edx;
                 const char *nm = fat_display_name(&list[idx]);
                 uint32_t k = 0;

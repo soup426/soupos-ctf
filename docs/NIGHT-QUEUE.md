@@ -54,7 +54,7 @@ last listing per process (the path, and a generation the FAT bumps on any
 change, so a stale one is never handed out), and measure again. ls-test
 and the rest must agree with mtools as before.
 
-## 2. Past 128 entries
+## 2. Past 128 entries — DONE v0.60.125
 
 fat_ls fills arrays of FAT_LS_MAX (128). Measure what a directory of 200
 files does to peek.elf, serve, forage.elf, globs and Tab: if entries are
@@ -90,4 +90,7 @@ Skipped at the user's request: OS work only.
 
 ## Notes left by unattended runs
 
-(none yet)
+- v0.60.125: `slurp /big/*` over 302 names prints `/big/*` as typed: the
+  glob's words do not fit the 256-byte line, and a builtin's argument glob
+  falls back to the pattern instead of saying the line is too long (bash
+  prints them all). A for loop's glob has its own 32 KB and is fine.

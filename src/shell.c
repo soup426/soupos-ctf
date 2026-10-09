@@ -1168,12 +1168,19 @@ static void cmd_serve(void) {
         t_puts("  No filesystem mounted. (need FAT16/32 disk on primary master)\n");
         return;
     }
+    int total = n;                                   /* past FAT_LS_MAX: counted, listed in pieces (v0.60.125) */
+    if (n == FAT_LS_MAX) {
+        int k;
+        while ((k = fat_ls_from(cur_shell()->cwd, entries, FAT_LS_MAX, total)) > 0) { total += k; if (k < FAT_LS_MAX) break; }
+        n = fat_ls(cur_shell()->cwd, entries, FAT_LS_MAX);
+    }
     t_color(VGA_YELLOW, VGA_BLACK);
     t_printf("  Serving %s  -  %d item%s  [FAT%d  %s]:\n",
-               cur_shell()->cwd, n, n == 1 ? "" : "s", fat_get_type(), fat_label());
+               cur_shell()->cwd, total, total == 1 ? "" : "s", fat_get_type(), fat_label());
     t_color(VGA_DARK_GREY, VGA_BLACK);
     t_puts("  PERMS   OWNER     NAME             SIZE\n");
     t_puts("  ------------------------------------------------\n");
+    for (int done = 0; n > 0; done += n, n = done < total ? fat_ls_from(cur_shell()->cwd, entries, FAT_LS_MAX, done) : 0)   /* each piece */
     for (int i = 0; i < n; i++) {
         char full[FAT_PATH_MAX];
         resolve_path(entries[i].name, full);
@@ -1725,14 +1732,21 @@ static void glob_expand(const char *tok, void (*emit)(void *, const char *), voi
     char dir[FAT_PATH_MAX];
     if (dirpart[0]) resolve_path(dirpart, dir); else strcpy(dir, cur_shell()->cwd);
     if (!fat_is_dir(dir) || !may(dir, 'r')) { emit(ctx, tok); return; }
+    /* the matches copied out, a piece of the bowl at a time, so a bowl
+     * of more than FAT_LS_MAX is matched whole (v0.60.125) */
+    #define GLOB_HITS 1024
     fat_entry_t *e = kmalloc(sizeof(fat_entry_t) * FAT_LS_MAX);
-    if (!e) { emit(ctx, tok); return; }
-    int n = fat_ls(dir, e, FAT_LS_MAX);
-    const char *hit[FAT_LS_MAX]; int nh = 0;
-    for (int i = 0; i < n; i++) {
-        const char *nm = fat_display_name(&e[i]);
-        if (nm[0] == '.' && pat[0] != '.') continue;
-        if (glob_match(pat, nm)) hit[nh++] = nm;
+    char (*names)[FAT_LFN_MAX] = kmalloc(sizeof(char[FAT_LFN_MAX]) * GLOB_HITS);
+    const char **hit = kmalloc(sizeof(char *) * GLOB_HITS);
+    if (!e || !names || !hit) { if (e) kfree(e); if (names) kfree(names); if (hit) kfree((void *)hit); emit(ctx, tok); return; }
+    int nh = 0;
+    for (int skip = 0, n; nh < GLOB_HITS && (n = fat_ls_from(dir, e, FAT_LS_MAX, skip)) > 0; skip += n) {
+        for (int i = 0; i < n && nh < GLOB_HITS; i++) {
+            const char *nm = fat_display_name(&e[i]);
+            if (nm[0] == '.' && pat[0] != '.') continue;
+            if (glob_match(pat, nm)) { strncpy(names[nh], nm, FAT_LFN_MAX - 1); names[nh][FAT_LFN_MAX - 1] = '\0'; hit[nh] = names[nh]; nh++; }
+        }
+        if (n < FAT_LS_MAX) break;
     }
     for (int i = 1; i < nh; i++)                         /* insertion sort, by byte */
         for (int j = i; j > 0 && byte_cmp(hit[j - 1], hit[j]) > 0; j--) { const char *t = hit[j]; hit[j] = hit[j - 1]; hit[j - 1] = t; }
@@ -1744,7 +1758,7 @@ static void glob_expand(const char *tok, void (*emit)(void *, const char *), voi
         strcpy(w, dirpart); strcpy(w + dl, hit[i]);
         emit(ctx, w);
     }
-    kfree(e);
+    kfree(e); kfree(names); kfree((void *)hit);
 }
 
 typedef struct { stage_t *st; int failed; } stage_ctx_t;
@@ -3028,7 +3042,7 @@ static void du_walk(const char *dir, du_t *acc, int depth) {
     if (!may(dir, 'r')) { acc->hidden++; return; }
     fat_entry_t *e = kmalloc(sizeof(fat_entry_t) * FAT_LS_MAX);
     if (!e) return;
-    int n = fat_ls(dir, e, FAT_LS_MAX);
+    for (int skip = 0, n; (n = fat_ls_from(dir, e, FAT_LS_MAX, skip)) > 0; skip += n)   /* in pieces (v0.60.125) */
     for (int i = 0; i < n; i++) {
         acc->clusters += fat_chain_clusters(e[i].cluster);
         if (e[i].attr & FAT_ATTR_DIR) {
@@ -3053,12 +3067,12 @@ static void cmd_du(const char *args) {
     if (!may(dir, 'r')) { deny(dir); return; }
     fat_entry_t *e = kmalloc(sizeof(fat_entry_t) * FAT_LS_MAX);
     if (!e) return;
-    int n = fat_ls(dir, e, FAT_LS_MAX);
     uint32_t cb = fat_cluster_bytes();
     t_color(VGA_YELLOW, VGA_BLACK);
     t_printf("  CLUSTERS        BYTES  NAME            (a cluster is %u bytes)\n", cb);
     t_color(VGA_LIGHT_GREY, VGA_BLACK);
     du_t total = {0, 0, 0};
+    for (int skip = 0, n; (n = fat_ls_from(dir, e, FAT_LS_MAX, skip)) > 0; skip += n)   /* in pieces (v0.60.125) */
     for (int i = 0; i < n; i++) {
         du_t one = {fat_chain_clusters(e[i].cluster), 0, 0};
         const char *nm = fat_display_name(&e[i]);
@@ -3676,7 +3690,8 @@ static int hand_over(const char *dir, uint8_t uid, int depth) {
     if (depth > 16) return 0;
     fat_entry_t *e = kmalloc(sizeof(fat_entry_t) * FAT_LS_MAX);
     if (!e) return 0;
-    int n = fat_ls(dir, e, FAT_LS_MAX), moved = 0;
+    int moved = 0;
+    for (int skip = 0, n; (n = fat_ls_from(dir, e, FAT_LS_MAX, skip)) > 0; skip += n)   /* in pieces (v0.60.125) */
     for (int i = 0; i < n; i++) {
         char path[FAT_PATH_MAX];
         const char *nm = fat_display_name(&e[i]);
@@ -5102,7 +5117,7 @@ static void tab_add(tab_fits_t *t, const char *name, int is_dir) {
  * .ELF files when `programs`. */
 static void tab_from_bowl(tab_fits_t *t, const char *dir, const char *leaf, int leaf_len, int programs) {
     if (!may(dir, 'r')) return;
-    int n = fat_ls(dir, t->ents, FAT_LS_MAX);
+    for (int skip = 0, n; (n = fat_ls_from(dir, t->ents, FAT_LS_MAX, skip)) > 0; skip += n)   /* in pieces (v0.60.125) */
     for (int i = 0; i < n; i++) {
         const char *nm = fat_display_name(&t->ents[i]);
         int dirent = (t->ents[i].attr & FAT_ATTR_DIR) != 0;

@@ -47,6 +47,9 @@ const char *fat_label(void);      /* volume label, trimmed */
 /* List a directory. Returns entry count written (up to max). -1 on error.
    `.` and `..` are omitted. path "/" lists the root. */
 int fat_ls(const char *path, fat_entry_t *out, int max);
+/* The same, past the first `skip` entries (v0.60.125): a directory of more
+ * than FAT_LS_MAX is listed a piece at a time. */
+int  fat_ls_from(const char *path, fat_entry_t *out, int max, int skip);
 
 /* Read a file into buf (up to bufsize bytes). *out_size = actual file size,
    WHICH MAY BE LARGER THAN bufsize: clamp before using it as a byte count.

@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.124
+Current version: v0.60.125
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,19 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.125 (2026-10-09)  — BOWLS PAST 128 ENTRIES
+  - Measured: every listing read the first FAT_LS_MAX (128) entries and
+    stopped, saying nothing. In a bowl of 200 files peek.elf and a glob saw
+    128, forage.elf 128 and serve 128.
+  - fat_ls_from(path, out, max, skip) lists past the first skip entries.
+    SYS_READDIR asks for its one entry (and no longer fills 128 to hand
+    back one); serve counts and lists in pieces; a glob copies its matches
+    out piece by piece (1024 at most) and sorts them all; portions, its
+    walk, hand_over (fire) and Tab read in pieces.
+  - scripts/bigdir-test.sh: a bowl of 302 (one long name, the last two
+    made far past 128) is reached whole by peek.elf, a for loop's glob (in
+    bash's order), serve, forage.elf, portions and Tab.
 
 v0.60.124 (2026-10-09)  — RECKON.ELF (EXPR)
   - reckon.elf is expr under a kitchen name, with GNU's precedence and
