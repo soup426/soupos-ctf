@@ -5741,11 +5741,45 @@ static void cap_flush(term_t *t) { (void)t; }
 
 static void run_line(const char *line);
 static int subst_cut;     /* the last $(...) did not fit (v0.60.30) */
+static int expand_into(const char *seg, char *ex, int max);
 static int subst_keep_nl; /* a here-document's $(...) keeps its newlines (v0.60.70) */
 static int subst_raw;     /* dish -v: every byte as written, the last newlines too (v0.60.73) */
 static int command_subst(const char *cmd, char *out, int max) {
     int keep_nl = subst_keep_nl, raw = subst_raw;
     subst_keep_nl = subst_raw = 0;             /* not for the ones inside it */
+    {
+        /* $(< FILE) (v0.60.86): the file, read here, no program started,
+         * as bash; the same newlines rules as any $( ). Not there, or not
+         * the cook's to read: a word, empty, status 1. */
+        const char *c = cmd; while (*c == ' ') c++;
+        if (c[0] == '<' && c[1] != '<') {
+            char fx[INPUT_MAX], fname[FAT_PATH_MAX], path[FAT_PATH_MAX];
+            expand_into(c + 1, fx, INPUT_MAX);
+            first_word(fx, fname, sizeof(fname));
+            resolve_path(fname, path);
+            shell_t *me = cur_shell();
+            subst_cut = 0;
+            if (!fname[0] || !fat_exists(path) || fat_is_dir(path)) { t_printf("  %s: no such file\n", fname); me->last_status = 1; return 0; }
+            if (!may(path, 'r')) { deny(path); return 0; }
+            int fd = fat_fopen(path);
+            if (fd < 0) { me->last_status = 1; return 0; }
+            int n = 0, got;
+            char buf[256];
+            while ((got = fat_fread(fd, buf, sizeof(buf))) > 0) {
+                for (int i = 0; i < got; i++) {
+                    if (n >= max) { subst_cut = 1; break; }
+                    if (buf[i] == '\r') continue;
+                    out[n++] = buf[i];
+                }
+                if (subst_cut) break;
+            }
+            fat_fclose(fd);
+            if (!raw) while (n > 0 && out[n - 1] == '\n') n--;
+            if (!keep_nl && !raw) for (int i = 0; i < n; i++) if (out[i] == '\n') out[i] = ' ';
+            me->last_status = 0;
+            return n;
+        }
+    }
     if (subst_depth >= 2) return 0;
     capterm_t cap;
     cap.t.name = "subst"; cap.t.puts = cap_puts; cap.t.putc = cap_putc; cap.t.set_color = cap_color;

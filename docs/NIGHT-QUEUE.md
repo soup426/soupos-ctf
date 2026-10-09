@@ -45,7 +45,7 @@ Compare with bash's echo.
 Upper and lower case, the first letter or all of them, and indirection
 (the variable whose name NAME holds). Compare with bash.
 
-## 3. $(< FILE)
+## 3. $(< FILE) — DONE v0.60.86
 
 The file's contents, as $(spoon.elf FILE) gives them but without starting
 a program, as bash. Compare with bash.
