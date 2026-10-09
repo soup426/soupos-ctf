@@ -54,7 +54,7 @@ The same matcher in the shell: status 0/1/2 as bash's, the whole match in
 BASH_REMATCH[0] and each ( ) group in [1].. (an array), an unquoted right
 side a regex and a quoted one literal text. Test against bash.
 
-## 3. take -a NAME and stock NAME (read -a, mapfile)
+## 3. take -a NAME and stock NAME (read -a, mapfile) — DONE v0.60.121
 
 `take -a NAME` reads a line's words into the array NAME. `stock [-t]
 NAME` (mapfile under a kitchen name) reads every line of its input into

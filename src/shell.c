@@ -907,7 +907,8 @@ static void cmd_menu(void) {
         {0, "    fresh              - status 0 (sh's true)"},
         {0, "    spoiled            - status 1 (sh's false)"},
         {0, "    discard NAME       - remove a variable"},
-        {0, "    take [-r] [-p P] [-n N] [-t S] NAME... - a line into variables (sh's read)"},
+        {0, "    take [-r] [-a A] [-p P] [-n N] [-t S] NAME... - a line into variables (sh's read)"},
+        {0, "    stock [-t] [NAME]  - every line of the input into an array (sh's mapfile)"},
         {0, "    hand NAME[=value]  - hand a variable to programs (their getenv)"},
         {0, "    break [N]          - leave a for, while or until loop"},
         {0, "    continue [N]       - go round it again"},
@@ -3454,6 +3455,7 @@ static void cmd_plain(const char *args);                  /* v0.60.100 */
 static void cmd_brew(const char *args);                   /* v0.60.110 */
 static void cmd_temper(const char *args);                 /* v0.60.115 */
 static void cmd_rail(const char *args);                   /* v0.60.116 */
+static void cmd_stock(const char *args);                  /* v0.60.121 */
 static void cmd_runner(const char *args);                 /* v0.60.117 */
 static int fn_name_len(const char *t);
 static void run_file(const char *args, int dot);          /* . FILE (v0.60.91) */
@@ -5043,7 +5045,7 @@ static const char *const cmd_names[] = {
     "takeout", "bgclock", "yieldbg", "spinbg", "sleeptest", "vfstest",
     "dmesg", "pwd", "cd", "mkbowl", "rmbowl", "bowltest",
     "whoami", "roster", "clockout", "hire", "fire", "perms", "secret",
-    "break", "continue", "return", "exit", "inspect", "seal", "pluck", "taste", "[", "smoke", "eggtimer", "nickname", "forget", ".", "shelve", "unshelve", "shelf", "plain", "brew", "temper", "rail", "runner", ":", "fresh", "spoiled",
+    "break", "continue", "return", "exit", "inspect", "seal", "pluck", "taste", "[", "smoke", "eggtimer", "nickname", "forget", ".", "shelve", "unshelve", "shelf", "plain", "brew", "temper", "rail", "runner", "stock", ":", "fresh", "spoiled",
     "preempttest", "vmtest", "vgastress", "fatstress",
 };
 #define CMD_COUNT  (int)(sizeof(cmd_names) / sizeof(cmd_names[0]))
@@ -5317,6 +5319,7 @@ static void dispatch(const char *buf) {
     else if (str_eq(p, "brew") || str_startswith(p, "brew ")) cmd_brew(p + 4);
     else if (str_eq(p, "temper") || str_startswith(p, "temper ")) cmd_temper(p + 6);
     else if (str_eq(p, "rail") || str_startswith(p, "rail ")) cmd_rail(p + 4);
+    else if (str_eq(p, "stock") || str_startswith(p, "stock ")) cmd_stock(p + 5);
     else if (str_eq(p, "runner") || str_startswith(p, "runner ")) cmd_runner(p + 6);
     /* : (POSIX's special builtin, its name kept), fresh and spoiled (true and
      * false) (v0.60.104): nothing, then 0, 0 and 1. Their words are already
@@ -5603,12 +5606,27 @@ static int take_line(shell_t *me, char *line, int *lenp, int max, int limit, uin
     *lenp = len;
     return eof;
 }
+/* NAME made the array holding joined's elements (\x1f between), or the
+ * empty array when there are none (v0.60.121, for take -a, stock and
+ * BASH_REMATCH). The status is set_var's: 1 for a sealed NAME. */
+static void cmd_unset(const char *args);
+static void set_array(const char *name, const char *joined, int count) {
+    shell_t *me = cur_shell();
+    me->last_status = 0;
+    for (int v = 0; v < me->nvars; v++)
+        if (str_eq(me->vname[v], name) && me->vseal[v]) { t_printf("  %s: sealed (readonly)\n", name); me->last_status = 1; return; }
+    cmd_unset(name);
+    arr_whole = 1; set_var(name, joined); arr_whole = 0;
+    if (!count) for (int v = 0; v < me->nvars; v++) if (str_eq(me->vname[v], name)) me->varr[v] = 2;   /* () */
+}
+
 /* take's options (v0.60.96), as read's: -r, -p PROMPT (shown when the
  * input is the terminal), -n N (N characters and no more, no Enter
  * needed), -t SECS (to the tenth: run out, status 142 as bash's, the
  * names get what was typed so far). Before the names, any order. */
 static void cmd_read(const char *args) {
     char names[8][16]; int nn = 0, raw = 0, limit = 0;
+    char arr[16] = "";                               /* -a NAME (v0.60.121) */
     char prompt[INPUT_MAX] = "";
     uint32_t wait_ticks = 0; int timed = 0;
     const char *a = args;
@@ -5616,12 +5634,13 @@ static void cmd_read(const char *args) {
     while (*a && nn < 8) {
         char w[INPUT_MAX];
         const char *after = first_word(a, w, sizeof(w));
-        if (!nn && w[0] == '-' && w[1] && !w[2] && (w[1] == 'r' || w[1] == 'p' || w[1] == 'n' || w[1] == 't')) {
+        if (!nn && w[0] == '-' && w[1] && !w[2] && (w[1] == 'r' || w[1] == 'p' || w[1] == 'n' || w[1] == 't' || w[1] == 'a')) {
             char opt = w[1];
             a = after;
             if (opt == 'r') { raw = 1; continue; }
             char v[INPUT_MAX];
             a = first_word(a, v, sizeof(v));
+            if (opt == 'a') { strncpy(arr, v, 15); arr[15] = '\0'; continue; }
             if (opt == 'p') strcpy(prompt, v);
             else if (opt == 'n') { limit = 0; for (const char *c = v; *c >= '0' && *c <= '9'; c++) limit = limit * 10 + (*c - '0'); }
             else {
@@ -5636,7 +5655,7 @@ static void cmd_read(const char *args) {
         a = first_word(a, names[nn], 16);
         if (names[nn][0]) nn++;
     }
-    if (!nn) { t_puts("Usage: take [-r] [-p PROMPT] [-n N] [-t SECS] NAME...\n"); me->last_status = 2; return; }
+    if (!nn && !arr[0]) { t_puts("Usage: take [-r] [-a ARRAY] [-p PROMPT] [-n N] [-t SECS] NAME...\n"); me->last_status = 2; return; }
     char line[INPUT_MAX];
     int len = 0, eof = 0;
     if (prompt[0] && !me->in_pipe) t_puts(prompt);
@@ -5663,6 +5682,18 @@ static void cmd_read(const char *args) {
     }
     int r = 0, set_bad = 0;
     #define TAKE_SEP(x) (!lit[x] && (ch[x] == ' ' || ch[x] == '\t'))
+    if (arr[0]) {                                    /* -a: every word an element */
+        char joined[VAL_MAX]; int jl = 0, cnt = 0;
+        for (;;) {
+            while (r < n && TAKE_SEP(r)) r++;
+            if (r >= n) break;
+            if (cnt++ && jl < VAL_MAX - 1) joined[jl++] = '\x1f';
+            while (r < n && !TAKE_SEP(r)) { if (jl < VAL_MAX - 1) joined[jl++] = ch[r]; r++; }
+        }
+        joined[jl] = '\0';
+        set_array(arr, joined, cnt);
+        if (me->last_status) set_bad = 1;
+    }
     for (int i = 0; i < nn; i++) {
         char word[INPUT_MAX]; int w = 0;
         while (r < n && TAKE_SEP(r)) r++;
@@ -5679,6 +5710,42 @@ static void cmd_read(const char *args) {
     }
     #undef TAKE_SEP
     cur_shell()->last_status = timed_out ? 142 : set_bad ? 1 : me->in_pipe ? (eof ? 1 : 0) : ((eof && len == 0) ? 1 : 0);
+}
+
+/* stock [-t] [NAME] (v0.60.121): bash's mapfile under a kitchen name. Every
+ * line of its input (a pipe, < FILE, <<< or <<WORD, else the terminal to
+ * the end of input) an element of the array NAME (MAPFILE when not
+ * given), its newline kept unless -t. An array is one value of VAL_MAX
+ * bytes in all: what does not fit is left off, and the status is 1. */
+static void cmd_stock(const char *args) {
+    shell_t *me = cur_shell();
+    int trim = 0;
+    char name[16] = "MAPFILE", w[INPUT_MAX];
+    const char *a = args;
+    for (;;) {
+        while (*a == ' ') a++;
+        if (!*a) break;
+        a = first_word(a, w, sizeof(w));
+        if (str_eq(w, "-t")) trim = 1;
+        else if (w[0] == '-') { t_printf("  stock: %s: not an option (-t)\n", w); me->last_status = 2; return; }
+        else { strncpy(name, w, 15); name[15] = '\0'; }
+    }
+    char joined[VAL_MAX], line[INPUT_MAX];
+    int jl = 0, cnt = 0, cut = 0;
+    for (;;) {
+        int len = 0;
+        int eof = take_line(me, line, &len, INPUT_MAX, 0, 0);
+        if (eof && !len) break;
+        int need = len + (trim || eof ? 0 : 1) + (cnt ? 1 : 0);
+        if (jl + need > VAL_MAX - 1) { cut = 1; if (eof) break; continue; }
+        if (cnt++) joined[jl++] = '\x1f';
+        for (int i = 0; i < len; i++) joined[jl++] = line[i];
+        if (!trim && !eof) joined[jl++] = '\n';
+        if (eof) break;
+    }
+    joined[jl] = '\0';
+    set_array(name, joined, cnt);
+    if (!me->last_status && cut) me->last_status = 1;
 }
 
 /* unset NAME (v0.58.0). */
@@ -7912,7 +7979,7 @@ static char *compound_bar(char *t) {
         const char *r = b + 1;
         while (*r == ' ') r++;
         if (is_kw(r, "while") || is_kw(r, "until") || is_kw(r, "for") || is_kw(r, "select") || is_kw(r, "if") || is_kw(r, "case") || is_kw(r, "{")) return (char *)b;
-        if (is_kw(r, "runner")) return (char *)b;     /* X | runner CMD reads X as a loop would (v0.60.117) */
+        if (is_kw(r, "runner") || is_kw(r, "stock") || is_kw(r, "take")) return (char *)b;   /* X | runner/stock/take read X as a loop would (v0.60.117, v0.60.121) */
     }
     return 0;
 }
@@ -8085,7 +8152,7 @@ static int match_end(lseg_t *sg, int from, int to, const char *open, const char 
 static int match_done(lseg_t *sg, int from, int to);
 static int compound_end(lseg_t *sg, int from, int to) {
     const char *c = sg[from].text;
-    if (is_kw(c, "runner")) return from;           /* one command, its input the pipe (v0.60.117) */
+    if (is_kw(c, "runner") || is_kw(c, "stock") || is_kw(c, "take")) return from;   /* one command, its input the pipe (v0.60.117) */
     if (is_kw(c, "for") || is_kw(c, "while") || is_kw(c, "until") || is_kw(c, "select")) return match_done(sg, from, to);
     if (is_kw(c, "if")) return match_end(sg, from, to, "if", "fi");
     if (is_kw(c, "case")) return match_end(sg, from, to, "case", "esac");
@@ -8454,10 +8521,8 @@ static __attribute__((noinline)) int db_regex_match(const char *s, const char *r
     kfree(rx);
     if (m < 0) return -1;
     int st = me->last_status;
-    cmd_unset("BASH_REMATCH");
+    set_array("BASH_REMATCH", joined, m);
     me->last_status = st;
-    arr_whole = 1; set_var("BASH_REMATCH", joined); arr_whole = 0;
-    if (m == 0) for (int v = 0; v < me->nvars; v++) if (str_eq(me->vname[v], "BASH_REMATCH")) me->varr[v] = 2;   /* () */
     return m;
 }
 static int db_or(dbr_t *d, int skip);
