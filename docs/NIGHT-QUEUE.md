@@ -1,10 +1,9 @@
 # Night queue
 
-Thirty-sixth queue. The first thirty-five are in `docs/queue-archive-2026-10-0*.md`.
+Thirty-seventh queue. The first thirty-six are in `docs/queue-archive-2026-10-0*.md`.
 Items wait on a person in three archives (the seventh, the thirteenth and
-the twenty-fourth). A test that needs no program, builtins that read
-here-strings, a prompt that waits for the rest of an if, smoke (trap),
-and here-documents inside a script's multi-line blocks.
+the twenty-fourth). slurp learns echo's -n and -e, variables learn case
+and indirection, $(< FILE), a timer for commands, and arrays.
 
 ## Standing rules
 
@@ -35,36 +34,33 @@ and here-documents inside a script's multi-line blocks.
 
 ---
 
-## 1. taste and [ ... ] as builtins — DONE v0.60.79
+## 1. slurp -n and -e
 
-Conditions start a program today (`cook taste.elf`). taste (test) as a
-builtin, the same operators as taste.elf, and `[ EXPR ]` the same with a
-closing ] required, as sh. Compare with bash's test and [.
+echo's -n (no newline at the end) and -e (\n \t \\ and the rest), and -E,
+in bash's way (options only first, -ne together, a word like -x printed).
+Compare with bash's echo.
 
-## 2. Builtins read <<< and <<WORD — DONE v0.60.80
+## 2. ${NAME^} ${NAME^^} ${NAME,} ${NAME,,} and ${!NAME}
 
-`take a <<< x` reads the terminal (v0.60.76 noted it). A here-string or a
-here-document on a builtin's line, take above all, is its input. Compare
-with bash.
+Upper and lower case, the first letter or all of them, and indirection
+(the variable whose name NAME holds). Compare with bash.
 
-## 3. The prompt waits for the rest — DONE v0.60.81
+## 3. $(< FILE)
 
-`for x in a b` and Enter runs nothing useful today. An unfinished if,
-for, while, until, case or { asks for more lines with a > prompt until it
-closes, as sh, then runs the whole; Ctrl-C drops it. Test by typing.
+The file's contents, as $(spoon.elf FILE) gives them but without starting
+a program, as bash. Compare with bash.
 
-## 4. smoke 'CMD' SIGNAL... (trap) — DONE v0.60.82
+## 4. eggtimer CMD (time)
 
-sh's trap under a kitchen name (the smoke alarm): EXIT runs CMD when a
-script (or a clockout) ends, INT when Ctrl-C stops a script; `smoke ''
-SIG` ignores, `smoke - SIG` resets, bare `smoke` lists. Compare with
-bash where bash can be driven the same way.
+Runs CMD and says how long it took, real time in seconds to the
+hundredth, as bash's time says real (no user and sys here). A kitchen
+name. Test that CMD's output and status are untouched and the time is
+there and sane.
 
-## 5. Here-documents inside a script's multi-line blocks — DONE v0.60.83
+## 5. Arrays
 
-follow joins a compound's lines (v0.60.74) but skips <<WORD inside one.
-Read the document's lines where they are, inside the block. Compare
-with bash.
+`a=(x y z)`, ${a[i]} (i arithmetic), ${a[@]} and "${a[@]}" (a word each),
+${#a[@]}, a[i]=v, and for over them. Compare with bash.
 
 ## 6. Doom at the framebuffer's own resolution — DEFERRED
 
