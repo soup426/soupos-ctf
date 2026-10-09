@@ -58,7 +58,7 @@ Says what each NAME is: a keyword, a builtin, a function (with its body),
 or a program (with its path), or not found (status 1). A kitchen name,
 the health inspector's. Compare the kinds with bash's type -t.
 
-## 5. dish -v NAME
+## 5. dish -v NAME — DONE v0.60.73
 
 dish (printf) into a variable instead of the terminal, as bash's
 printf -v. Compare with bash.

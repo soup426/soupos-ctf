@@ -5559,9 +5559,10 @@ static void cap_flush(term_t *t) { (void)t; }
 static void run_line(const char *line);
 static int subst_cut;     /* the last $(...) did not fit (v0.60.30) */
 static int subst_keep_nl; /* a here-document's $(...) keeps its newlines (v0.60.70) */
+static int subst_raw;     /* dish -v: every byte as written, the last newlines too (v0.60.73) */
 static int command_subst(const char *cmd, char *out, int max) {
-    int keep_nl = subst_keep_nl;
-    subst_keep_nl = 0;                         /* not for the ones inside it */
+    int keep_nl = subst_keep_nl, raw = subst_raw;
+    subst_keep_nl = subst_raw = 0;             /* not for the ones inside it */
     if (subst_depth >= 2) return 0;
     capterm_t cap;
     cap.t.name = "subst"; cap.t.puts = cap_puts; cap.t.putc = cap_putc; cap.t.set_color = cap_color;
@@ -5581,13 +5582,13 @@ static int command_subst(const char *cmd, char *out, int max) {
     run_line(cmd);
     subst_depth--;
     me->term = was_sh; tk->term = was_tk;
-    while (cap.len > 0 && (cap.buf[cap.len - 1] == '\n' || cap.buf[cap.len - 1] == '\r')) cap.len--;
+    if (!raw) while (cap.len > 0 && (cap.buf[cap.len - 1] == '\n' || cap.buf[cap.len - 1] == '\r')) cap.len--;
     subst_cut = (cap.len > max || cap.len >= cap.limit - 1);
     int n = 0;
     for (int i = 0; i < cap.len && n < max; i++) {
         char c = cap.buf[i];
         if (c == '\r') continue;
-        out[n++] = (c == '\n' && !keep_nl) ? ' ' : c;
+        out[n++] = (c == '\n' && !keep_nl && !raw) ? ' ' : c;
     }
     kfree(cap.buf);
     return n;
@@ -6256,9 +6257,47 @@ static int prefix_assigns(const char *ex) {
 }
 
 /* Run one command: expand it, then it is an assignment or a dispatch. */
+/* cook dish.elf -v NAME FORMAT [ARGS] (v0.60.73): bash's printf -v. A
+ * program cannot set the shell's variables, so the shell runs dish with
+ * the rest and puts what it wrote, every byte, into NAME (96 bytes at
+ * most, as every value). The status is dish's. Seen on the line as typed,
+ * so nothing in it is expanded twice. 1 if it was one. */
+static int dish_into(const char *q) {
+    char w1[16], w2[FAT_PATH_MAX], w3[8], name[32];
+    const char *r = first_word(q, w1, sizeof(w1));
+    if (!str_eq(w1, "cook")) return 0;
+    r = first_word(r, w2, sizeof(w2));
+    if (!str_eq(w2, "dish.elf") && !str_eq(w2, "/dish.elf")) return 0;
+    const char *r3 = first_word(r, w3, sizeof(w3));
+    if (!str_eq(w3, "-v")) return 0;
+    const char *rest = first_word(r3, name, sizeof(name));
+    shell_t *me = cur_shell();
+    int ok = name[0] && strlen(name) <= 15 && (name[0] == '_' || (name[0] >= 'A' && name[0] <= 'Z') || (name[0] >= 'a' && name[0] <= 'z'));
+    for (const char *c = name; ok && *c; c++)
+        if (!(*c == '_' || (*c >= 'A' && *c <= 'Z') || (*c >= 'a' && *c <= 'z') || (*c >= '0' && *c <= '9'))) ok = 0;
+    if (!ok) { t_printf("  dish: -v: `%s' is not a name\n", name); me->last_status = 2; return 1; }
+    char cmd[INPUT_MAX]; int n = 0;
+    const char *pre = "cook dish.elf ";
+    while (*pre && n < INPUT_MAX - 1) cmd[n++] = *pre++;
+    while (*rest && n < INPUT_MAX - 1) cmd[n++] = *rest++;
+    cmd[n] = '\0';
+    char *out = kmalloc(INPUT_MAX);
+    if (!out) { me->last_status = 1; return 1; }
+    subst_raw = 1;
+    int got = command_subst(cmd, out, INPUT_MAX - 1);
+    subst_raw = 0;
+    out[got] = '\0';
+    int st = me->last_status;
+    set_var(name, out);
+    me->last_status = st;
+    kfree(out);
+    return 1;
+}
+
 static void run_one(const char *seg) {
     const char *q = seg; while (*q == ' ') q++;
     if (!*q) return;
+    if (dish_into(q)) return;
     /* ! COMMAND (v0.60.60): the status turned round, 0 to 1 and anything
      * else to 0; of the whole pipeline, so before the | is looked for. A
      * bare ! is 1, as the empty command it turns round is 0. */

@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.72
+Current version: v0.60.73
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,15 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.73 (2026-10-08)  — DISH -V
+  - `cook dish.elf -v NAME FORMAT [ARGS]` is bash's printf -v: dish runs
+    with the rest, and what it wrote, every byte and the last newlines
+    too, is NAME's value (96 bytes at most, as every value), not the
+    terminal's. A program cannot set the shell's variables, so the shell
+    sees it on the line as typed (nothing expanded twice) and runs dish
+    with its output captured. A NAME that is not a name is status 2.
+  - scripts/dishv-test.sh compares eight lines with bash's printf -v.
 
 v0.60.72 (2026-10-08)  — INSPECT (TYPE)
   - `inspect NAME...` is sh's type under the health inspector's name: a
