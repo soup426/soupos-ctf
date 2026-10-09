@@ -58,7 +58,7 @@ above 128 when it runs out, as bash). Test by typing and by not typing.
 ;& runs the next arm's commands too, without testing it; ;;& goes on
 testing the arms after. Compare with bash.
 
-## 5. ${!a[@]} and ${!prefix*}
+## 5. ${!a[@]} and ${!prefix*} — DONE v0.60.98
 
 An array's indexes, and the names of the variables starting with prefix.
 Compare with bash.

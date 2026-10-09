@@ -6214,6 +6214,45 @@ static int expand_into(const char *seg, char *ex, int max) {
             else while ((seg[j] == '_' || (seg[j] >= 'A' && seg[j] <= 'Z') || (seg[j] >= 'a' && seg[j] <= 'z') ||
                          (nn && seg[j] >= '0' && seg[j] <= '9')) && nn < 15) name[nn++] = seg[j++];
             name[nn] = '\0';
+            /* ${!a[@]} an array's indexes, ${!p*} ${!p@} the names starting p
+             * (v0.60.98): a word each for @ in "...", one word for * */
+            if (indirect && nn && ((seg[j] == '[' && (seg[j + 1] == '@' || seg[j + 1] == '*') && seg[j + 2] == ']' && seg[j + 3] == '}') ||
+                                   ((seg[j] == '@' || seg[j] == '*') && seg[j + 1] == '}'))) {
+                shell_t *me = cur_shell();
+                int keys = seg[j] == '[';
+                char how = keys ? seg[j + 1] : seg[j];
+                int each = how == '@' && sq == '"';
+                char words[VARS_MAX][16]; int nw = 0;
+                if (keys) {
+                    for (int v = 0; v < me->nvars; v++) if (str_eq(me->vname[v], name)) {
+                        int ne = 0;
+                        if (me->varr[v] != 2) { ne = 1; for (const char *c = me->vval[v]; *c; c++) if (*c == '\x1f') ne++; }
+                        for (int x = 0; x < ne && nw < VARS_MAX; x++) {
+                            char d[16]; int nd = 0, m = 0, u = x;
+                            do { d[nd++] = (char)('0' + u % 10); u /= 10; } while (u);
+                            while (nd) words[nw][m++] = d[--nd];
+                            words[nw++][m] = '\0';
+                        }
+                    }
+                } else {
+                    int ln = (int)strlen(name);
+                    for (int v = 0; v < me->nvars; v++)
+                        if (strncmp(me->vname[v], name, (uint32_t)ln) == 0 && nw < VARS_MAX) strcpy(words[nw++], me->vname[v]);
+                    for (int a = 1; a < nw; a++)          /* by name, as bash */
+                        for (int b = a; b > 0 && byte_cmp(words[b - 1], words[b]) > 0; b--) {
+                            char t[16]; strcpy(t, words[b]); strcpy(words[b], words[b - 1]); strcpy(words[b - 1], t);
+                        }
+                }
+                for (int a = 0; a < nw; a++) {
+                    if (a) {
+                        if (each) { if (k < max - 3) { ex[k++] = '"'; ex[k++] = ' '; ex[k++] = '"'; } }
+                        else if (k < max - 1) ex[k++] = ' ';
+                    }
+                    for (const char *c = words[a]; *c && k < max - 1; c++) ex[k++] = *c;
+                }
+                i = keys ? j + 3 : j + 1;
+                continue;
+            }
             /* ${a[i]}, ${a[@]}, ${a[*]}, ${#a[@]}, ${#a[i]} (v0.60.88) */
             char sub[INPUT_MAX]; int has_sub = 0;
             if (nn && !indirect && seg[j] == '[') {
