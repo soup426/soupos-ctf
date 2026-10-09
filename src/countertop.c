@@ -187,6 +187,7 @@ typedef struct {
     struct files *files;                /* a files window's listing, or 0 */
     int app;                            /* a program's window: its app[] slot, or -1 */
     int maxed, rx, ry, rw, rh;          /* (v0.60.161) maximised, and where to put it back */
+    int snapped, rcols, rrows;          /* (v0.60.167) 1 left half, 2 right; a terminal's own size */
 } win_t;
 static win_t win[MAX_WIN];
 static int order[MAX_WIN], nwin;                 /* z-order, bottom first */
@@ -592,7 +593,7 @@ static void draw_window(int k) {
     fill(bx - 4 - CLOSE_SZ + 4, by + CLOSE_SZ - 5, CLOSE_SZ - 8, 2, TEXT_RGB);
     int top = w->y + BORDER + TITLE_H, bx0, by0;
     body_origin(w, &bx0, &by0);
-    if ((w->term || w->app >= 0) && w->maxed)          /* the frame around a fixed body */
+    if ((w->term || w->app >= 0) && (w->maxed || w->snapped))   /* the frame around a fixed body */
         fill(w->x + BORDER, top, w->w - 2 * BORDER, w->h - 2 * BORDER - TITLE_H, w->term ? 0x00000000u : 0x00303438u);
     if (w->term) { draw_cells(w->term, bx0, by0, focused); return; }
     if (w->files) { draw_files(w, focused); return; }
@@ -647,7 +648,7 @@ static void repaint_win(int k) { repaint(win[k].x, win[k].y, win[k].w, win[k].h)
 static int open_window(int x, int y, int w, int h, const char *title, uint32_t body, const char *const *lines) {
     for (int k = 0; k < MAX_WIN; k++) if (!win[k].used) {
         win_t *v = &win[k];
-        v->used = 1; v->x = x; v->y = y; v->w = w; v->h = h; v->body = body; v->term = 0; v->sess = 0; v->min = 0; v->files = 0; v->app = -1; v->maxed = 0;
+        v->used = 1; v->x = x; v->y = y; v->w = w; v->h = h; v->body = body; v->term = 0; v->sess = 0; v->min = 0; v->files = 0; v->app = -1; v->maxed = 0; v->snapped = 0;
         scopy(v->title, title, sizeof(v->title));
         for (int i = 0; i < 8; i++) v->lines[i] = lines && lines[i] ? lines[i] : 0;
         int was = topmost();
@@ -973,6 +974,37 @@ static void maximise_window(int k) {
     klog("[countertop] %s %s\n", w->maxed ? "maximise" : "restore", w->title);
 }
 
+/* Snap to halves (v0.60.167): dragged by its title bar to the left or right
+ * edge, a window fills that half between the bars; dragged off again it is
+ * its own size. A terminal's cells follow (80 columns do not fit 512
+ * pixels) and come back after. side 0 unsnaps. */
+static void snap_window(int k, int side) {
+    win_t *w = &win[k];
+    int ox = w->x, oy = w->y, ow = w->w, oh = w->h;
+    if (side && !w->snapped) {
+        w->rx = w->x; w->ry = w->y; w->rw = w->w; w->rh = w->h;
+        if (w->term) { w->rcols = w->term->cols; w->rrows = w->term->rows; }
+    }
+    if (side) {
+        w->x = side == 1 ? 0 : W / 2; w->y = BAR_H; w->w = W / 2; w->h = H - BAR_H - TASK_H;
+        if (w->term) {
+            int c = (w->w - 2 * BORDER) / 8, r = (w->h - 2 * BORDER - TITLE_H) / 16;
+            wt_resize(w->term, c > WMAXC ? WMAXC : c, r > WMAXR ? WMAXR : r);
+        }
+    } else {
+        w->x = w->rx; w->y = w->ry; w->w = w->rw; w->h = w->rh;
+        if (w->term) wt_resize(w->term, w->rcols, w->rrows);
+    }
+    w->snapped = side;
+    if (w->files) {
+        int rows = files_rows(w);
+        if (w->files->sel >= w->files->top + rows) w->files->top = w->files->sel - rows + 1;
+    }
+    repaint(ox, oy, ow, oh);
+    repaint_win(k);
+    klog("[countertop] %s %s\n", side == 1 ? "snap left" : side == 2 ? "snap right" : "unsnap", w->title);
+}
+
 /* Copy and paste in terminal windows (v0.60.160). A left drag over a
  * terminal's cells selects them in reading order; letting go copies them
  * (each line's trailing blanks dropped, lines joined by newlines) to the
@@ -1178,6 +1210,18 @@ static void pointer_buttons(int px, int py, int btn, int np) {
     }
     if (left && drag >= 0) {
         win_t *w = &win[drag];
+        int edge = px <= 0 ? 1 : px >= W - 1 ? 2 : 0;
+        if (edge && w->snapped != edge) { snap_window(drag, edge); return; }
+        if (w->snapped && (edge || px < 20 || px > W - 21)) return;   /* held at the edge */
+        if (w->snapped) {                                  /* off the edge again: its own size, under the pointer */
+            snap_window(drag, 0);
+            int ox = w->x, oy = w->y;
+            w->x = px - w->w / 2; w->y = py - TITLE_H / 2;
+            if (w->y < BAR_H) w->y = BAR_H;
+            drag_dx = px - w->x; drag_dy = py - w->y;
+            repaint(ox, oy, w->w, w->h);                   /* where snap_window just put it back */
+            repaint_win(drag);
+        }
         int nx = px - drag_dx, ny = py - drag_dy;
         if (ny < BAR_H) ny = BAR_H;                       /* not under the bar */
         if (ny > H - TASK_H - TITLE_H) ny = H - TASK_H - TITLE_H;   /* a title bar left to grab, above the taskbar */

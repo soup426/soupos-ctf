@@ -55,7 +55,7 @@ new output, puts it back at the bottom. Test: fill a terminal past its
 height, wheel up, read the earlier lines back against the font, type a
 key, the bottom again.
 
-## 2. Snap to halves
+## 2. Snap to halves — DONE v0.60.167
 
 A window dragged by its title bar until the pointer reaches the left or
 right edge of the screen fills that half (between the bars), as maximise

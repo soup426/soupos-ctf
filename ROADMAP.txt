@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.166
+Current version: v0.60.167
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,21 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.167 (2026-10-09)  — SNAP TO HALVES
+  - A window dragged by its title bar until the pointer reaches the left
+    or right edge of the screen fills that half between the bars; held
+    there it stays, and dragged 20 pixels off the edge it is its own
+    size again, under the pointer. A terminal's cells follow the half
+    (80 columns do not fit 512 pixels: 63x43) and come back after.
+  - Fixed before it went in: the window put back under the pointer was
+    drawn where snap_window had put it a moment before, leaving a stale
+    copy (and a stray line) on the screen; both places are repainted.
+  - scripts/ctsnap-test.sh: Welcome snapped left, right (moves go in
+    steps of 300: a 1100-pixel mouse_move did not arrive whole) and
+    back; a terminal snapped to 63x43 takes a command and comes back to
+    80x25 with it. Screendumps against the font and the log. Six-wide
+    soak 6 of 6.
 
 v0.60.166 (2026-10-09)  — SCROLLBACK IN TERMINAL WINDOWS
   - A terminal window keeps the last 300 lines that scroll off its top
