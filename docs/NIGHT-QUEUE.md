@@ -1,10 +1,10 @@
 # Night queue
 
-Thirty-third queue. The first thirty-two are in `docs/queue-archive-2026-10-0*.md`.
+Thirty-fourth queue. The first thirty-three are in `docs/queue-archive-2026-10-0*.md`.
 Items wait on a person in three archives (the seventh, the thirteenth and
-the twenty-fourth). Variables learn to trim and replace, arithmetic gets
-its bit operators and powers, take learns -r, and here-documents come to
-the prompt.
+the twenty-fourth). The gaps the last queues wrote down: quoted pattern
+characters, $( ) in here-documents and 64-bit arithmetic; and two new
+builtins, inspect (type) and dish -v.
 
 ## Standing rules
 
@@ -35,31 +35,33 @@ the prompt.
 
 ---
 
-## 1. ${NAME#pat} ${NAME##pat} ${NAME%pat} ${NAME%%pat} — DONE v0.60.64
+## 1. A quoted glob character is itself, in patterns
 
-Strip the shortest or longest match of a glob pattern from the front or
-the back of a value, as sh. The pattern is a glob ([abc] included) and
-may hold $X. Compare with bash.
+${NAME#"*"}, ${NAME/"?"/x} and case patterns ("*") take a quoted * ? [
+as glob syntax today (v0.60.64 wrote it down); sh takes it as the
+character. Compare with bash.
 
-## 2. ${NAME/pat/rep}, ${NAME//pat/rep}, ${NAME:off:len} — DONE v0.60.65
+## 2. $( ) in here-documents
 
-The first or every match replaced (# and % anchors too), and a slice.
-Compare with bash.
+heredoc_expand knows $NAME, ${NAME}, $1, $? and $(( )), not $( ).
+Compare with bash, in a script and at the prompt.
 
-## 3. & | ^ ~ << >> and ** in arithmetic — DONE v0.60.66
+## 3. 64-bit arithmetic
 
-With their op= forms where sh has them, at sh's precedence. Compare with
-bash.
+$(( )) is 32 bits (a long on i386); bash's is 64. Make it 64, which needs
+64-bit division and remainder in the kernel (libgcc's __divdi3 and
+friends, or our own). Compare with bash past 2**31.
 
-## 4. take -r — DONE v0.60.67 (take was the -r one; plain take is read now)
+## 4. inspect NAME (sh's type)
 
-take turns \x into x today, as read does; -r keeps backslashes, as
-read -r. Compare with bash.
+Says what each NAME is: a keyword, a builtin, a function (with its body),
+or a program (with its path), or not found (status 1). A kitchen name,
+the health inspector's. Compare the kinds with bash's type -t.
 
-## 5. Here-documents at the prompt — DONE v0.60.68
+## 5. dish -v NAME
 
-`cook x.elf <<EOF` typed at the prompt asks for lines (a > prompt) until
-EOF, as sh does; today only follow scripts have them. Test by typing.
+dish (printf) into a variable instead of the terminal, as bash's
+printf -v. Compare with bash.
 
 ## 6. Doom at the framebuffer's own resolution — DEFERRED
 
