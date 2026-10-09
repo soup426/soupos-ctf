@@ -1,10 +1,10 @@
 # Night queue
 
-Thirtieth queue. The first twenty-nine are in `docs/queue-archive-2026-10-0*.md`.
+Thirty-first queue. The first thirty are in `docs/queue-archive-2026-10-0*.md`.
 Items wait on a person in three archives (the seventh, the thirteenth and
-the twenty-fourth). Scripts get the rest of what they lean on: leaving a
-function or a script early, background jobs to wait for, printf, (( )),
-and here-documents.
+the twenty-fourth). The menu catches up with the shell, globs learn
+brackets, functions get their own variables, scripts can stop at the
+first failure, and $RANDOM.
 
 ## Standing rules
 
@@ -35,59 +35,36 @@ and here-documents.
 
 ---
 
-## 1. return and exit — DONE v0.60.47
+## 1. The menu matches the shell
 
-`return [N]` leaves a function with status N (the last command's if no
-N); `exit [N]` ends a `follow` script with status N (at the prompt it is
-clockout's business, so say so and do nothing there). sh's keywords keep
-their names. Compare with bash.
+`menu` still lists names from before the kitchen renames (jobs, clip, and
+perhaps more) and may miss builtins added since. Every command it names
+must run (no "No soup for you"), and every builtin the dispatcher has
+must be listed. Test it: take the names from menu's own output and try
+each.
 
-## 2. $! and rest (wait) — DONE v0.60.48
+## 2. [abc] and [a-z] in globs and case patterns
 
-`$!` is the id of the last program started in the background; `rest`
-(wait, under a kitchen name) waits for all of this cook's background
-jobs, or for the one given, and its status is that job's. Compare the
-statuses with bash.
+glob_match knows * and ? only. Add bracket expressions, ranges and [!x],
+for file globs and case patterns alike. Compare with bash.
 
-## 3. dish.elf (printf) — DONE v0.60.49
+## 3. stash (local)
 
-`printf FORMAT ARGS...` under a kitchen name: %s %d %i %x %o %c %%, widths,
-`-` and `0` flags, precision for %s, \n \t \\ escapes, and the format
-reused while arguments remain. Compare with the host's printf byte for
-byte.
+`stash NAME[=value]` inside a function: the variable is the function's
+own, the caller's (or its absence) back when it returns, as sh's local.
+A kitchen name, since local is a builtin, not a keyword. Compare with
+bash, nested calls and a recursive function included.
 
-## 4. (( expr )) — DONE v0.60.50
+## 4. follow -e
 
-The arithmetic command: status 0 when the expression is not zero, 1 when
-it is, with the $(( )) evaluator; `n=$((n+1))` gets `(( n = n + 1 ))`
-and `(( n++ ))`, `(( n += 2 ))` too. Compare with bash.
+`follow -e FILE` stops the script at the first command that fails (not
+counting a condition of if/while/until, or a command before && or ||),
+with that command's status, as `bash -e` does. Compare with bash -e.
 
-## 5. Here-documents in scripts — DONE v0.60.52
+## 5. $RANDOM
 
-In a `follow` script, `cook prog <<WORD` takes the lines up to WORD as
-the first stage's stdin, $NAME expanded in them (not with <<'WORD').
-Compare with bash running the same script.
-
-## 7. music-test: "the effects never showed" — DONE v0.60.51 (likely cause; reopen if it recurs)
-
-2026-10-08, the first full check for v0.60.48: "the effects never showed
-in the capture (music 2466, 10.2 s captured)"; the rerun passed. The
-music alone measured 2466, about twice the usual 1291, and the capture
-was 10.2 s. v0.60.28 finds the effects as the first quarter second half
-again as loud as the loudest music quarter second; a louder baseline
-(the capture starting late, so 1.0-3.5 s holds the louder part of the
-score) puts the bar above the effects. Again on v0.60.50's first check:
-music 2987, 8.2 s captured. Measure where the capture starts
-relative to `hum` (the serial log has both) and anchor the windows there.
-
-## 8. Backslash in the shell — DONE v0.60.53
-
-Found with item 3: sh treats \ as an escape: outside quotes it makes the
-next character plain (\; \| \$ \  a space), inside "..." it does so for
-\ " $ and ` (so "a\\c" is a\c), inside '...' it is just a character.
-soupOS gives \ no meaning anywhere. Teach the quote handling (split_segs,
-expand_seg, uargv's caller, unquote, slurp) the same, and compare with
-bash; a program's arguments are where it shows (dish, sift).
+A number from 0 to 32767, new at each expansion, from the entropy pool.
+Test that it stays in range and does not repeat in a run of a hundred.
 
 ## 6. Doom at the framebuffer's own resolution — DEFERRED
 
