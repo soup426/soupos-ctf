@@ -94,7 +94,7 @@ given one ("10.0.2.15"), refreshed every few seconds, from what plumbing
 already knows. Test: with QEMU's user network, the address read off the
 bar after `plumbing dhcp`; without a network card, "no network".
 
-## 5. A picture for the background
+## 5. A picture for the background — DONE v0.60.182
 
 A BMP (24-bit, any size up to the screen) named in the cook's
 `countertop` settings ("picture /home/saucier/sky.bmp") drawn centred on

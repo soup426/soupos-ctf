@@ -168,12 +168,25 @@ static const struct { const char *name; uint32_t top, bot; } bgs[] = {
 };
 #define NBG (int)(sizeof(bgs) / sizeof(bgs[0]))
 static int bg_choice;
+/* A picture for the background (v0.60.182): a 24-bit BMP named by a
+ * "picture <path>" line in the cook's settings, up to the screen's size,
+ * centred between the bars over the gradient. Its rows are pages, as the
+ * back buffer's are (1024 pixels of 4 bytes is one page). */
+static uint32_t *pic_row[MAX_H];
+static int pic_w, pic_h;
+static char pic_path[FAT_PATH_MAX];
 static void background(void) {                  /* within the clip */
     int span = H - BAR_H - 1 > 0 ? H - BAR_H - 1 : 1;
     int ya = cy0 > BAR_H ? cy0 : BAR_H;
+    int px0 = (W - pic_w) / 2, py0 = BAR_H + (H - BAR_H - TASK_H - pic_h) / 2;
+    if (py0 < BAR_H) py0 = BAR_H;
     for (int y = ya; y < cy1; y++) {
         uint32_t c = blend(bgs[bg_choice].top, bgs[bg_choice].bot, y - BAR_H, span);
-        for (int x = cx0; x < cx1; x++) row[y][x] = c;
+        if (pic_h && y >= py0 && y < py0 + pic_h) {
+            const uint32_t *src = pic_row[y - py0] - px0;
+            for (int x = cx0; x < cx1; x++) row[y][x] = x >= px0 && x < px0 + pic_w ? src[x] : c;
+        } else
+            for (int x = cx0; x < cx1; x++) row[y][x] = c;
     }
     dirty(cx0, ya, cx1 - cx0, cy1 - ya);
 }
@@ -889,11 +902,71 @@ static void settings_path(char *p) {               /* the cook's `countertop` fi
     strcat(p, "/countertop");
 }
 static uint32_t idle_s = 600;                      /* (v0.60.176) the cloche after this long; 0 never */
+static void pic_free(void) {
+    for (int y = 0; y < pic_h; y++) { if (pic_row[y]) pmm_free_page(pic_row[y]); pic_row[y] = 0; }
+    pic_w = pic_h = 0;
+}
+static int read_all(int fd, uint8_t *b, uint32_t n) {
+    for (uint32_t got = 0; got < n; ) {
+        int r = fat_fread(fd, b + got, n - got);
+        if (r <= 0) return -1;
+        got += (uint32_t)r;
+    }
+    return 0;
+}
+static uint32_t le32(const uint8_t *b) { return (uint32_t)b[0] | (uint32_t)b[1] << 8 | (uint32_t)b[2] << 16 | (uint32_t)b[3] << 24; }
+static void pic_load(void) {                       /* pic_path, read as the cook may */
+    static uint8_t buf[1024 * 3 + 4];
+    pic_free();
+    if (!pic_path[0]) return;
+    uint32_t t0 = timer_get_ticks();
+    const char *why = 0;
+    int fd = -1, w = 0, h = 0, up = 1;
+    uint8_t hd[54];
+    if (!users_may(pic_path, 'r')) why = "not yours to read";
+    else if ((fd = fat_fopen(pic_path)) < 0) why = "not there";
+    else if (read_all(fd, hd, 54) < 0) why = "not a 24-bit BMP";
+    else {
+        uint32_t off = le32(hd + 10);
+        w = (int)le32(hd + 18); h = (int)le32(hd + 22);
+        if (h < 0) { h = -h; up = 0; }                 /* top-down rows */
+        if (hd[0] != 'B' || hd[1] != 'M' || hd[28] != 24 || hd[29] || le32(hd + 30) || off < 54) why = "not a 24-bit BMP";
+        else if (w <= 0 || h <= 0 || w > W || h > H) why = "bigger than the screen";
+        for (uint32_t skip = off - 54; !why && skip; ) {   /* a longer header: past it */
+            uint32_t k = skip > sizeof(buf) ? sizeof(buf) : skip;
+            if (read_all(fd, buf, k) < 0) why = "not a 24-bit BMP";
+            skip -= k;
+        }
+    }
+    uint32_t stride = ((uint32_t)w * 3 + 3) & ~3u;
+    for (int i = 0; !why && i < h; i++) {
+        if (read_all(fd, buf, stride) < 0) { why = "cut short"; break; }
+        int y = up ? h - 1 - i : i;
+        if (!(pic_row[y] = (uint32_t *)pmm_alloc_page())) { why = "no memory for it"; break; }
+        for (int x = 0; x < w; x++) pic_row[y][x] = (uint32_t)buf[x * 3 + 2] << 16 | (uint32_t)buf[x * 3 + 1] << 8 | buf[x * 3];
+        pic_h = i + 1 > pic_h ? i + 1 : pic_h;         /* so pic_free finds what there is */
+    }
+    if (fd >= 0) fat_fclose(fd);
+    if (why) {
+        for (int y = 0; y < h && y < MAX_H; y++) if (pic_row[y]) { pmm_free_page(pic_row[y]); pic_row[y] = 0; }
+        pic_w = pic_h = 0;
+        klog("[countertop] picture %s: %s, the gradient instead\n", pic_path, why);
+        return;
+    }
+    pic_w = w; pic_h = h;
+    uint32_t t1 = timer_get_ticks();
+    clip_all();                                        /* what drawing it costs: 20 whole backgrounds */
+    for (int i = 0; i < 20; i++) background();
+    uint32_t t2 = timer_get_ticks();
+    klog("[countertop] picture %s: %dx%d, read in %u ms, drawn in %u.%u ms\n", pic_path, w, h,
+         (t1 - t0) * 10, (t2 - t1) * 10 / 20, (t2 - t1) * 10 % 20 * 10 / 20);
+}
 static void load_settings(void) {
-    char p[FAT_PATH_MAX], buf[128];
+    char p[FAT_PATH_MAX], buf[384];
     uint32_t n = 0;
     settings_path(p);
-    bg_choice = 0; idle_s = 600;
+    bg_choice = 0; idle_s = 600; pic_path[0] = '\0';
+    pic_free();
     if (fat_read(p, (uint8_t *)buf, sizeof(buf) - 1, &n) < 0) return;
     buf[n < sizeof(buf) - 1 ? n : sizeof(buf) - 1] = '\0';
     int idle_set = 0;
@@ -904,16 +977,22 @@ static void load_settings(void) {
             for (char *d = l + 5; *d >= '0' && *d <= '9'; d++) v = v * 10 + (uint32_t)(*d - '0');
             idle_s = v; idle_set = 1;
         }
+        if (!strncmp(l, "picture ", 8)) {              /* the rest of the line, spaces and all */
+            int k = 0;
+            for (char *d = l + 8; *d && *d != '\n' && *d != '\r' && k < FAT_PATH_MAX - 1; d++) pic_path[k++] = *d;
+            pic_path[k] = '\0';
+        }
         while (*l && *l != '\n') l++;
         if (*l) l++;
     }
     klog("[countertop] settings from %s: background %s\n", p, bgs[bg_choice].name);
     if (idle_set) klog("[countertop] settings: the cloche after %u s idle\n", idle_s);
+    pic_load();
 }
 static void next_background(void) {
     bg_choice = (bg_choice + 1) % NBG;
     repaint(0, BAR_H, W, H - BAR_H - TASK_H);
-    char p[FAT_PATH_MAX], line[40] = "background 0\n";
+    char p[FAT_PATH_MAX], line[40 + FAT_PATH_MAX] = "background 0\n";
     line[11] = (char)('0' + bg_choice);
     if (idle_s != 600) {                               /* the other setting kept (v0.60.176) */
         strcat(line, "idle ");
@@ -923,6 +1002,7 @@ static void next_background(void) {
         while (k) line[l++] = d[--k];
         line[l++] = '\n'; line[l] = '\0';
     }
+    if (pic_path[0]) { strcat(line, "picture "); strcat(line, pic_path); strcat(line, "\n"); }   /* kept (v0.60.182) */
     settings_path(p);
     int ok = users_may(p, 'w') && fat_write(p, (const uint8_t *)line, (uint32_t)strlen(line)) >= 0;
     klog("[countertop] background %s, %s %s\n", bgs[bg_choice].name, ok ? "kept in" : "not kept in", p);
@@ -1997,6 +2077,7 @@ int countertop_run(int (*avail)(void), int (*getch)(void), int uid) {
         task_sleep(10);
     }
     release(H);
+    pic_free();
     fb_clear(0x00101828);                 /* the console's border, as vga13h leaves it */
     fbcon_resume();
     klog("[countertop] down\n");

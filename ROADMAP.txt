@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.181
+Current version: v0.60.182
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,22 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.182 (2026-10-09)  — A PICTURE FOR THE BACKGROUND
+  - A "picture <path>" line in the cook's `countertop` settings names a
+    24-bit uncompressed BMP (bottom-up or top-down, any header length,
+    rows padded to 4 bytes), up to the screen's size, read as the cook
+    may read it. It is drawn centred between the bars over the gradient.
+    Its rows are pages from the page allocator, as the back buffer's are,
+    freed when the desktop ends or the settings are read again. Anything
+    else (not a BMP, too big, not the cook's to read, cut short) is
+    logged and the gradient stays. Saving the background keeps the line.
+  - Measured first: a 1024x768 picture (2.3 MB) reads in 330 ms; a whole
+    background with it draws in about 0.5 ms (20 in one 10 ms tick).
+  - scripts/ctpicture-test.sh: BMPs made on the host, 37x23 bottom-up
+    and 20x10 top-down compared pixel for pixel at the centre, the
+    gradient beside them, 1024x768 sampled, HELLO.TXT refused with the
+    gradient. Six-wide soak 6 of 6.
 
 v0.60.181 (2026-10-09)  — THE NETWORK ON THE BAR
   - Right-aligned against the clock, 16 characters: "no network" with
