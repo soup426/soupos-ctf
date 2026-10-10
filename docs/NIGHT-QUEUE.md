@@ -48,7 +48,7 @@ loop it runs in asks; the user has not seen it.
 
 ---
 
-## 1. The clock in the cook's own time
+## 1. The clock in the cook's own time — DONE v0.60.187
 
 The RTC is UTC (QEMU's default), so the bar says 02:00 at 9 pm in
 Alabama. Two settings in the cook's `countertop`: "zone -5" (hours from

@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.186
+Current version: v0.60.187
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,20 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.187 (2026-10-09)  — THE CLOCK IN THE COOK'S OWN TIME
+  - The RTC is UTC (QEMU's default). "zone N" in the cook's settings
+    (hours from UTC, -12 to +14) shifts the bar's clock and the calendar
+    under it, the date with it (through days since 1970: Hinnant's
+    civil/day conversions). "clock 12" shows " 9:05 pm" (no seconds, so
+    the same 8 places, the network and notes where they were). Both are
+    kept when the background is saved.
+  - The shift checked against Python's datetime on the host: 20432
+    dates, zones and hours (month, year and leap-day edges among them),
+    none different.
+  - scripts/ctzone-test.sh: zone -5 on a 12-hour clock read off the bar
+    against the host's UTC less five hours, the calendar's today that
+    day; zone 14 on 24 hours. Six-wide soak 6 of 6.
 
 v0.60.186 (2026-10-09)  — PICTURES FROM THE FILES WINDOW
   - A .bmp double-clicked in a files window opens in a platter: a window

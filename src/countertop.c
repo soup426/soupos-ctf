@@ -741,6 +741,34 @@ static int icon_at(int px, int py) {               /* the icon (its square or it
 }
 
 static int ct_uid;                                 /* whose desktop (v0.60.143) */
+/* The cook's own time (v0.60.187): the RTC is UTC (QEMU's default), so
+ * "zone N" in the settings (hours from UTC, -12 to +14) shifts it, the
+ * day, month and year with it (through days since 1970), and "clock 12"
+ * shows the bar's clock as " 9:05 pm" (no seconds: the same 8 places). */
+static int zone_h, clock12;
+static int32_t days_from_civil(int y, int m, int d) {   /* Hinnant's */
+    y -= m <= 2;
+    int era = (y >= 0 ? y : y - 399) / 400, yoe = y - era * 400;
+    int doy = (153 * (m + (m > 2 ? -3 : 9)) + 2) / 5 + d - 1, doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
+    return era * 146097 + doe - 719468;
+}
+static void civil_from_days(int32_t z, int *y, int *m, int *d) {
+    z += 719468;
+    int era = (z >= 0 ? z : z - 146096) / 146097, doe = z - era * 146097;
+    int yoe = (doe - doe / 1460 + doe / 36524 - doe / 146096) / 365, doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    int mp = (5 * doy + 2) / 153;
+    *d = doy - (153 * mp + 2) / 5 + 1; *m = mp + (mp < 10 ? 3 : -9); *y = yoe + era * 400 + (*m <= 2);
+}
+static void local_now(rtc_time_t *t) {
+    rtc_read(t);
+    if (!zone_h) return;
+    int32_t h = days_from_civil(t->year, t->month, t->day) * 24 + t->hour + zone_h;
+    int32_t days = h >= 0 ? h / 24 : (h - 23) / 24;
+    int y, m, d;
+    civil_from_days(days, &y, &m, &d);
+    t->year = (uint16_t)y; t->month = (uint8_t)m; t->day = (uint8_t)d; t->hour = (uint8_t)(h - days * 24);
+}
+static int clock_sec;                            /* (with the bar, below) */
 /* A calendar under the clock (v0.60.175): this month from the RTC, today
  * on blue; a click on the clock drops it and puts it up again, a click
  * anywhere else puts it up. */
@@ -897,7 +925,7 @@ static void cloche_key(int c) {
 static void cal_set(int open) {
     if (cal_open == open) return;
     cal_open = open;
-    if (open) rtc_read(&cal_t);
+    if (open) local_now(&cal_t);
     repaint(CAL_X, CAL_Y, CAL_W, CAL_H);
     if (open) klog("[countertop] calendar %u-%u, today %u\n", cal_t.year, cal_t.month, cal_t.day);
 }
@@ -998,7 +1026,7 @@ static void load_settings(void) {
     char p[FAT_PATH_MAX], buf[384];
     uint32_t n = 0;
     settings_path(p);
-    bg_choice = 0; idle_s = 600; pic_path[0] = '\0';
+    bg_choice = 0; idle_s = 600; pic_path[0] = '\0'; zone_h = 0; clock12 = 0;
     pic_free();
     if (fat_read(p, (uint8_t *)buf, sizeof(buf) - 1, &n) < 0) return;
     buf[n < sizeof(buf) - 1 ? n : sizeof(buf) - 1] = '\0';
@@ -1010,6 +1038,13 @@ static void load_settings(void) {
             for (char *d = l + 5; *d >= '0' && *d <= '9'; d++) v = v * 10 + (uint32_t)(*d - '0');
             idle_s = v; idle_set = 1;
         }
+        if (!strncmp(l, "zone ", 5)) {                 /* (v0.60.187) */
+            int neg = l[5] == '-', v = 0;
+            for (char *d = l + 5 + (neg || l[5] == '+'); *d >= '0' && *d <= '9'; d++) v = v * 10 + (*d - '0');
+            if (neg) v = -v;
+            if (v >= -12 && v <= 14) zone_h = v;
+        }
+        if (!strncmp(l, "clock 12", 8)) clock12 = 1;
         if (!strncmp(l, "picture ", 8)) {              /* the rest of the line, spaces and all */
             int k = 0;
             for (char *d = l + 8; *d && *d != '\n' && *d != '\r' && k < FAT_PATH_MAX - 1; d++) pic_path[k++] = *d;
@@ -1020,6 +1055,8 @@ static void load_settings(void) {
     }
     klog("[countertop] settings from %s: background %s\n", p, bgs[bg_choice].name);
     if (idle_set) klog("[countertop] settings: the cloche after %u s idle\n", idle_s);
+    if (zone_h || clock12) klog("[countertop] settings: zone %d, %d-hour clock\n", zone_h, clock12 ? 12 : 24);
+    clock_sec = -1;                                    /* the clock again, in this cook's time */
     pic_load();
 }
 static int save_settings(char *p);
@@ -1042,6 +1079,13 @@ static int save_settings(char *p) {                /* the cook's settings file, 
         line[l++] = '\n'; line[l] = '\0';
     }
     if (pic_path[0]) { strcat(line, "picture "); strcat(line, pic_path); strcat(line, "\n"); }   /* kept (v0.60.182) */
+    if (zone_h) {                                      /* (v0.60.187) */
+        int v = zone_h < 0 ? -zone_h : zone_h, l = (int)strlen(line);
+        strcpy(line + l, zone_h < 0 ? "zone -" : "zone "); l = (int)strlen(line);
+        if (v >= 10) line[l++] = (char)('0' + v / 10);
+        line[l++] = (char)('0' + v % 10); line[l++] = '\n'; line[l] = '\0';
+    }
+    if (clock12) strcat(line, "clock 12\n");
     settings_path(p);
     return users_may(p, 'w') && fat_write(p, (const uint8_t *)line, (uint32_t)strlen(line)) >= 0;
 }
@@ -1975,11 +2019,17 @@ static void pointer_buttons(int px, int py, int btn, int np) {
 static int clock_sec = -1;
 static void bar_clock(void) {
     rtc_time_t t;
-    rtc_read(&t);
+    local_now(&t);
     if ((int)t.second == clock_sec) return;
     clock_sec = (int)t.second;
     char s[9] = { (char)('0' + t.hour / 10), (char)('0' + t.hour % 10), ':', (char)('0' + t.minute / 10),
                   (char)('0' + t.minute % 10), ':', (char)('0' + t.second / 10), (char)('0' + t.second % 10), 0 };
+    if (clock12) {
+        int h = t.hour % 12 ? t.hour % 12 : 12;
+        s[0] = h >= 10 ? '1' : ' '; s[1] = (char)('0' + h % 10); s[2] = ':';
+        s[3] = (char)('0' + t.minute / 10); s[4] = (char)('0' + t.minute % 10);
+        s[5] = ' '; s[6] = t.hour < 12 ? 'a' : 'p'; s[7] = 'm';
+    }
     fill(W - 8 * 8 - 12, 0, 8 * 8 + 12, BAR_H, BAR_RGB);
     text(W - 8 * 8 - 8, (BAR_H - 16) / 2, s, TEXT_RGB);
 }
