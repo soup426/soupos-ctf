@@ -120,6 +120,7 @@ static void keyboard_irq_handler(registers_t *regs) {
             case 0x4F: kb_push(KEY_END);   return;
             case 0x49: kb_push(KEY_PGUP);  return;
             case 0x51: kb_push(KEY_PGDN);  return;
+            case 0x37: kb_push(KEY_PRINT); return;   /* Print Screen's second half (E0 2A E0 37) */
             default:   return;
         }
     }

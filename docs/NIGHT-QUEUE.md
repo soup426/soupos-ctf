@@ -70,7 +70,7 @@ submenu or the menu itself), backdrop, cloche. A click away or Esc puts
 it up. Test: the menu read back at the click, each entry doing what its
 button does, a right-click on a window not opening it.
 
-## 3. A picture of the screen
+## 3. A picture of the screen — DONE v0.60.185
 
 Print Screen saves the whole screen as a 24-bit BMP in the cook's home,
 "plate1.bmp", "plate2.bmp" and on (the first name not taken), said on

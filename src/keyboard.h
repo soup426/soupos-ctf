@@ -19,6 +19,7 @@
 #define KEY_ALT_TAB     277
 #define KEY_ALT_F4      278
 #define KEY_CTRL_ALT_T  279
+#define KEY_PRINT       280   /* Print Screen, E0 37 (v0.60.185) */
 
 /* Set-1 scancode constants for keyboard_key_pressed().
  * Extended (0xE0-prefix) keys are stored with bit 7 set (sc | 0x80). */

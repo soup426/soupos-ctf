@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.184
+Current version: v0.60.185
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,19 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.185 (2026-10-09)  — A PICTURE OF THE SCREEN
+  - Print Screen (E0 37, KEY_PRINT) on the desktop writes the back buffer
+    as a 24-bit bottom-up BMP into the cook's home, plateN.bmp, the first
+    N not taken, streamed through fat_write_from with no copy of the
+    screen; the bar says where. The pointer is not in it (it is put on
+    only on the way to the framebuffer). 2.36 MB a plate at 1024x768, on
+    a 32 MB disk: a dozen fill it. 0.4 s to write alone, 0.6 s six wide.
+  - scripts/ctplate-test.sh: /plate1.bmp's header, and its pixels against
+    QEMU's screendump of the same moment below the bar (the only
+    difference allowed one arrow, where the pointer is); a second press
+    is plate2.bmp; plate1.bmp named as the picture draws back. Six-wide
+    soak 6 of 6.
 
 v0.60.184 (2026-10-09)  — A MENU ON THE BACKGROUND
   - A right click where there is no window, icon or bar drops a menu

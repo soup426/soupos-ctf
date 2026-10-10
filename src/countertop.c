@@ -1963,6 +1963,62 @@ static void flush(void) {
     any_dirty = 0;
 }
 
+/* A picture of the screen (v0.60.185): Print Screen writes the back buffer
+ * as a 24-bit BMP, bottom-up, into the cook's home as plateN.bmp (the first
+ * N not taken), streamed through fat_write_from. The pointer is not in it:
+ * it is put on only on the way to the framebuffer. Nothing draws into the
+ * back buffer while this runs, since only this loop does. */
+static int plate_pull(void *ctx, uint32_t off, uint8_t *dst, uint32_t n) {
+    (void)ctx;
+    uint32_t stride = ((uint32_t)W * 3 + 3) & ~3u;
+    for (uint32_t i = 0; i < n; i++, off++) {
+        if (off < 54) {
+            static uint8_t hd[54];
+            if (off == 0) {
+                uint32_t img = stride * (uint32_t)H, v[13] = { 54 + img, 0, 54, 40, (uint32_t)W, (uint32_t)H, 0, 0, img, 2835, 2835, 0, 0 };
+                memset(hd, 0, sizeof(hd));
+                hd[0] = 'B'; hd[1] = 'M';
+                for (int k = 0; k < 3; k++) for (int b = 0; b < 4; b++) hd[2 + k * 4 + b] = (uint8_t)(v[k] >> (8 * b));
+                for (int k = 3; k < 6; k++) for (int b = 0; b < 4; b++) hd[14 + (k - 3) * 4 + b] = (uint8_t)(v[k] >> (8 * b));
+                hd[26] = 1; hd[28] = 24;                   /* planes, bits */
+                for (int k = 8; k < 13; k++) for (int b = 0; b < 4; b++) hd[34 + (k - 8) * 4 + b] = (uint8_t)(v[k] >> (8 * b));
+            }
+            dst[i] = hd[off];
+            continue;
+        }
+        uint32_t p = off - 54, r = p / stride, b = p % stride;
+        if (b >= (uint32_t)W * 3) { dst[i] = 0; continue; }   /* row padding */
+        uint32_t px = row[H - 1 - (int)r][b / 3];
+        dst[i] = (uint8_t)(px >> (8 * (b % 3)));          /* blue, green, red */
+    }
+    return 0;
+}
+static void plate(void) {
+    char home[FAT_PATH_MAX], path[FAT_PATH_MAX];
+    if (ct_uid == 0) strcpy(home, "/");
+    else { strcpy(home, "/home/"); strcat(home, users_name_of((uint8_t)ct_uid)); }   /* names are 16 at most */
+    if (!users_may(home, 'w')) { klog("[countertop] plate: may not write %s\n", home); bar_note("plate: your home is not yours to write"); note_showing = 1; note_at = timer_get_ticks(); return; }
+    int n = 1;
+    for (; n < 1000; n++) {
+        strcpy(path, home);
+        if (strcmp(home, "/")) strcat(path, "/");
+        strcat(path, "plate");
+        char d[5]; int k = 0, v = n;
+        do { d[k++] = (char)('0' + v % 10); v /= 10; } while (v);
+        int l = (int)strlen(path);
+        while (k) path[l++] = d[--k];
+        path[l] = '\0';
+        strcat(path, ".bmp");
+        if (!fat_exists(path)) break;
+    }
+    uint32_t t0 = timer_get_ticks(), size = 54 + (((uint32_t)W * 3 + 3) & ~3u) * (uint32_t)H;
+    int ok = n < 1000 && fat_write_from(path, size, plate_pull, 0) == 0;
+    klog("[countertop] plate %s %s, %u bytes in %u ms\n", ok ? "saved" : "not saved:", path, size, (timer_get_ticks() - t0) * 10);
+    char m[48] = "plate: not saved";
+    if (ok) { strcpy(m, "saved "); scopy(m + 6, path, (int)sizeof(m) - 6); }
+    bar_note(m); note_showing = 1; note_at = timer_get_ticks();
+}
+
 static void release(int pages) {
     for (int i = 0; i < pages; i++) { pmm_free_page(row[i]); row[i] = 0; }
 }
@@ -2089,6 +2145,7 @@ int countertop_run(int (*avail)(void), int (*getch)(void), int uid) {
             last_input = timer_get_ticks();
             if (locked) { cloche_key(c); continue; }   /* under the cloche: keys are for it alone */
             if (c == 27 && desk_open) { desk_set(0, 0, 0); continue; }   /* Esc puts the background's menu up first */
+            if (c == KEY_PRINT) { plate(); continue; }       /* a picture of the screen (v0.60.185) */
             if (c == KEY_CTRL_ALT_T) {                         /* Ctrl+Alt+T: a terminal (v0.60.171) */
                 klog("[countertop] ctrl-alt-t\n");
                 open_terminal(0);
