@@ -70,6 +70,8 @@
 #include "klog.h"
 #include "font8x16.h"
 #include "term.h"
+#include "net.h"
+#include "rtl8139.h"
 #include "shell.h"
 #include "heap.h"
 #include "proc.h"
@@ -1339,6 +1341,7 @@ static int leave_asked;
  * or Esc) says how many on the bar and arms it; a second within 5 s
  * leaves. With none open it leaves at once. */
 #define NOTE_X (BTN_KITCHEN_X + BTN_KITCHEN_W + 16)
+#define NET_X (W - 8 * 8 - 12 - 12 - 16 * 8)       /* the network's 16 characters, before the clock */
 static int leave_armed;
 static uint32_t leave_armed_at;
 static int apps_open(void) {
@@ -1349,8 +1352,12 @@ static int apps_open(void) {
     return n;
 }
 static void bar_note(const char *msg) {          /* msg 0 clears it */
-    fill(NOTE_X, 0, W - 8 * 8 - 12 - NOTE_X, BAR_H, BAR_RGB);
-    if (msg) text(NOTE_X, (BAR_H - 16) / 2, msg, 0x00F0B040u);
+    fill(NOTE_X, 0, NET_X - 8 - NOTE_X, BAR_H, BAR_RGB);   /* up to the network (v0.60.181) */
+    if (msg) {
+        char m[48];                                    /* no further than the network */
+        scopy(m, msg, (NET_X - 8 - NOTE_X) / 8 + 1 < (int)sizeof(m) ? (NET_X - 8 - NOTE_X) / 8 + 1 : (int)sizeof(m));
+        text(NOTE_X, (BAR_H - 16) / 2, m, 0x00F0B040u);
+    }
 }
 /* Notes from programs (v0.60.170): queued here by SYS_NOTE (on the
  * program's task, under app_mtx), shown on the bar a few seconds each by
@@ -1723,6 +1730,36 @@ static void button(int x, int w, const char *label) {
     fill(x, 3, w, BAR_H - 6, BTN_RGB);
     text(x + 8, (BAR_H - 16) / 2, label, TEXT_RGB);
 }
+/* The network on the bar (v0.60.181), right-aligned against the clock:
+ * "no network" with no card; the address with one, dim while it is the
+ * compiled-in one and white once DHCP has leased it. Looked at every 3 s;
+ * drawn when it changes. Notes and Leave's question end before it. */
+static char net_shown[20];
+static int net_lit;
+static void bar_net(int force) {
+    char s[20];
+    int lit = 0;
+    if (!rtl8139_present()) scopy(s, "no network", (int)sizeof(s));
+    else {
+        uint32_t ip = net_ip();
+        int l = 0;
+        for (int sh = 24; sh >= 0; sh -= 8) {
+            unsigned v = (ip >> sh) & 0xFF;
+            if (v >= 100) s[l++] = (char)('0' + v / 100);
+            if (v >= 10) s[l++] = (char)('0' + v / 10 % 10);
+            s[l++] = (char)('0' + v % 10);
+            if (sh) s[l++] = '.';
+        }
+        s[l] = '\0';
+        lit = net_leased();
+    }
+    if (!force && lit == net_lit && !strcmp(s, net_shown)) return;
+    int changed = lit != net_lit || strcmp(s, net_shown);
+    scopy(net_shown, s, (int)sizeof(net_shown)); net_lit = lit;
+    fill(NET_X, 0, 16 * 8, BAR_H, BAR_RGB);
+    text(NET_X + 16 * 8 - 8 * (int)strlen(s), (BAR_H - 16) / 2, s, lit ? TEXT_RGB : DIM_RGB);
+    if (changed) klog("[countertop] network: %s%s\n", s, rtl8139_present() && !lit ? " (not leased)" : "");
+}
 static void bar(void) {
     fill(0, 0, W, BAR_H, BAR_RGB);
     text(10, (BAR_H - 16) / 2, "soupOS", TEXT_RGB);
@@ -1731,6 +1768,7 @@ static void bar(void) {
     button(BTN_LEAVE_X, BTN_LEAVE_W, "Leave");
     button(BTN_FILES_X, BTN_FILES_W, "Files");
     button(BTN_KITCHEN_X, BTN_KITCHEN_W, "Kitchen");
+    bar_net(1);
     clock_sec = -1;
     bar_clock();
 }
@@ -1792,6 +1830,7 @@ int countertop_run(int (*avail)(void), int (*getch)(void), int uid) {
     else { bg_choice = 0; idle_s = 600; }            /* nobody's yet: clocking in first (v0.60.179) */
     background();
     draw_icons();
+    net_shown[0] = '\0'; net_lit = -1;              /* said again for each desktop */
     bar();
     nwin = 0; drag = -1; last_btn = 0; leave_asked = 0; leave_armed = 0; note_h = note_t = note_showing = 0; menu_open = 0; rs_win = -1; sel_win = -1; fd_win = -1; ctx_win = -1; cal_open = 0; locked = 0; lock_wait = 0;
     last_input = timer_get_ticks(); ct_uid = uid; nterm = 0; task_sig = 0xFFFFFFFFu;
@@ -1869,6 +1908,8 @@ int countertop_run(int (*avail)(void), int (*getch)(void), int uid) {
             }
         }
         if (!locked) bar_clock();
+        static uint32_t net_seen;
+        if (!locked && timer_get_ticks() - net_seen >= 300) { net_seen = timer_get_ticks(); bar_net(0); }
         if (!locked && idle_s && ct_uid >= 0 && timer_get_ticks() - last_input >= idle_s * 100u) cloche_lock("idle");
         for (int i = 0; i < nwin; i++) {             /* terminals: drawn again, or gone */
             int k = order[i];

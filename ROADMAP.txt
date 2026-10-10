@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.180
+Current version: v0.60.181
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,19 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.181 (2026-10-09)  — THE NETWORK ON THE BAR
+  - Right-aligned against the clock, 16 characters: "no network" with
+    no RTL8139; with one, the address (net_ip), dim while it is the
+    compiled-in one or set by plumbing, white once DHCP has leased it.
+    Looked at every 3 s, drawn and logged when it changes, said again
+    for each desktop. There is no link state to show: the driver does
+    not read the card's media status. Notes and Leave's question now end
+    before it (cut at 40 characters, the length of the longest).
+  - scripts/ctnet-test.sh, three boots: no card, "no network"; a card on
+    a QEMU hub port (the boot's DHCP unanswered), 10.0.2.15 dim, then
+    10.0.2.77 after `plumbing 10.0.2.77` in a desktop terminal; QEMU's
+    user network, 10.0.2.15 leased at boot, white. Six-wide soak 6 of 6.
 
 v0.60.180 (2026-10-09)  — CPU USE IN EXPO
   - SYS_PROCS gives each process's CPU (uproc_t.cpu, appended): its

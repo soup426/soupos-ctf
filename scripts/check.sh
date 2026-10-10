@@ -118,7 +118,7 @@ if [ "$MODE" = "full" ]; then
            bglob-test expiry-test swapclass-test rackfb-test siftfiles-test weighfiles-test
            cfor-test taked-test nlopts-test cmpls-test pxmouse-test countertop-test ctwin-test
            ctterm-test ctbar-test ctfiles-test frost-test prod-test prodwin-test ctwheel-test
-           sear-test swirl-test ctjot-test ctalttab-test ctkitchen-test ctcopy-test ctmax-test ctresize-test ctdrop-test ctoven-test ctleave-test ctscroll-test ctsnap-test ctexpo-test ctsettings-test ctnote-test ctkeys-test ctfilesmenu-test ctscale-test cticons-test ctcal-test ctcloche-test ctfilecopy-test ctclockin-test ctexpocpu-test
+           sear-test swirl-test ctjot-test ctalttab-test ctkitchen-test ctcopy-test ctmax-test ctresize-test ctdrop-test ctoven-test ctleave-test ctscroll-test ctsnap-test ctexpo-test ctsettings-test ctnote-test ctkeys-test ctfilesmenu-test ctscale-test cticons-test ctcal-test ctcloche-test ctfilecopy-test ctclockin-test ctexpocpu-test ctnet-test
     )
     for t in $(for t in "${TESTS[@]}"; do
                    s=$(awk -v n="$t" '$1 == n { print $2 }' "$TIMES" 2>/dev/null)

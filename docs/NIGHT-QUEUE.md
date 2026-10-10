@@ -87,7 +87,7 @@ The scheduler counts each task's ticks a second (cpu_last). SYS_PROCS
 passes it on and expo shows a CPU column, with c sorting by it. Test:
 glutton.elf near 100, an idle process near 0, the sort order.
 
-## 4. The network on the bar
+## 4. The network on the bar — DONE v0.60.181
 
 Next to the clock: the link (up or down) and the address once DHCP has
 given one ("10.0.2.15"), refreshed every few seconds, from what plumbing
