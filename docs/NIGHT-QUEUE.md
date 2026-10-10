@@ -1,12 +1,15 @@
 # Night queue
 
-Fifty-fourth queue. The first fifty-three are in `docs/queue-archive-2026-10-0*.md`;
-queue 53 (`-09s`) added Ctrl+Alt+T and Alt+F4 (Alt decided in the IRQ),
-new bowls and removing files from the files window, scale.elf, icons on
-the background and a calendar under the clock. This one: locking the
-desktop, copying files by dragging, CPU use in expo, the network on the
-bar, and a picture for the background. Written by an unattended run when
-queue 53 ran out, as the loop it runs in asks; the user has not seen it.
+Fifty-fifth queue. The first fifty-four are in `docs/queue-archive-2026-10-0*.md`;
+queue 54 (`-09t`) added the cloche (locking the desktop), copying files by
+dragging, the user's two requests (programs without a terminal, booting
+straight to the desktop's clock-in screen), CPU use in expo, the network
+on the bar and a picture for the background. Since the desktop is now
+where the machine starts, this one makes it able to stand on its own:
+putting the machine away from it, a menu on the background, a picture of
+the screen, and pictures from the files window. Written by an unattended
+run when queue 54 ran out, as the loop it runs in asks; the user has not
+seen it.
 
 ## Standing rules
 
@@ -47,62 +50,44 @@ queue 53 ran out, as the loop it runs in asks; the user has not seen it.
 
 ---
 
-## U1. Programs open without a terminal — DONE v0.60.178
+## 1. Closing the kitchen from the desktop
 
-Asked for by the user (2026-10-09): pressing a program in the Kitchen
-menu or an icon should open only the program, no terminal alongside it.
+Booted straight to the desktop there is no prompt to type `freeze` or
+`reheat` at. The clock-in screen and the Kitchen menu offer "close the
+kitchen" (power off: ACPI's PM1a control port on QEMU's PIIX4, so QEMU
+exits, falling back to freeze's halt) and "reheat" (reboot), the
+headchef's only, as at the prompt: anyone else is told so. Leftovers
+saved first, as freeze does. Measure first how QEMU's i440fx machine
+takes the ACPI write. Test: as the headchef from the menu, QEMU's process
+exits by itself; as saucier refused (logged); reheat reboots (the boot
+banner twice in the serial log).
 
-## U2. Boot straight to the desktop — DONE v0.60.179
+## 2. A menu on the background
 
-Asked for by the user (2026-10-09): the desktop instead of the terminal
-at boot. A graphical login (the cloche's screen asking for cook and
-secret), then the desktop; Leave clocks out back to it. Switched on for
-`make run` (a QEMU fw_cfg flag), so the tests, which type at the text
-login, keep booting as they do. Test: with the flag, the login screen
-read back, a wrong secret refused, the right one opening the desktop,
-Leave returning to the login screen.
+A right-click on the background (not a window, icon or bar) drops a menu
+where it was clicked: Terminal, Files, Kitchen (the programs as a
+submenu or the menu itself), backdrop, cloche. A click away or Esc puts
+it up. Test: the menu read back at the click, each entry doing what its
+button does, a right-click on a window not opening it.
 
-## 1. cloche: locking the desktop — DONE v0.60.176
+## 3. A picture of the screen
 
-The Kitchen menu's "cloche" (the dome over a plate), and ten minutes with
-no key or mouse, cover the screen with a lock showing the cook's name;
-their secret, typed there and checked by users_check, lifts it. Programs
-go on running under it. Wrong secrets are logged, and after three the
-lock waits a few seconds before the next try. Test: lock from the menu,
-a wrong secret refused (logged), the right one unlocks; the idle lock
-with the timeout shortened for the test (a build switch; built as an
-"idle N" line in the cook's settings instead, which the test writes).
+Print Screen saves the whole screen as a 24-bit BMP in the cook's home,
+"plate1.bmp", "plate2.bmp" and on (the first name not taken), said on
+the bar. Read back by the picture code, it can be the background. Test:
+the file's pixels against the screendump QEMU takes at the same moment
+(nothing moving), and named as the background, drawn back the same.
 
-## 2. Copy a file by dragging between files windows — DONE v0.60.177
+## 4. Pictures from the files window
 
-A file row dragged from one files window onto another copies it into the
-bowl that one shows: read permission on the file, write on the bowl (the
-shell's rules); a name taken there gets "copy" put in front. Test: as
-saucier, a file copied from / into the home (the bytes on the disk the
-same), and refused into /.
+A double click on a .bmp opens it in a window of its own (a platter:
+the picture at its size, scrolled with the wheel if bigger than the
+window); the files menu's right-click gains "use as background", which
+writes the picture line into the cook's settings and redraws. Test: a
+host-made BMP opened (pixels compared), then set as the background
+(settings file and the screen).
 
-## 3. CPU use in expo — DONE v0.60.180
-
-The scheduler counts each task's ticks a second (cpu_last). SYS_PROCS
-passes it on and expo shows a CPU column, with c sorting by it. Test:
-glutton.elf near 100, an idle process near 0, the sort order.
-
-## 4. The network on the bar — DONE v0.60.181
-
-Next to the clock: the link (up or down) and the address once DHCP has
-given one ("10.0.2.15"), refreshed every few seconds, from what plumbing
-already knows. Test: with QEMU's user network, the address read off the
-bar after `plumbing dhcp`; without a network card, "no network".
-
-## 5. A picture for the background — DONE v0.60.182
-
-A BMP (24-bit, any size up to the screen) named in the cook's
-`countertop` settings ("picture /home/saucier/sky.bmp") drawn centred on
-the background instead of the gradient. Measure first how long a full
-1024x768 picture takes to read and draw. Test: a small BMP made on the
-host, its pixels on the screendump where expected.
-
-## 6. Doom at the framebuffer's own resolution — DEFERRED
+## 5. Doom at the framebuffer's own resolution — DEFERRED
 
 Skipped at the user's request (queue 48): OS work only.
 
