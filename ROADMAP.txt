@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.176
+Current version: v0.60.177
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,19 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.177 (2026-10-09)  — COPY A FILE BY DRAGGING
+  - A file row dragged from one files window and let go over another is
+    copied into the bowl that one shows: read on the file, write on the
+    bowl (users_may, the shell's rules); a name taken there gets "copy "
+    in front (twice at most). Bowls are not copied. The copy streams
+    from an open fd through fat_write_from, so no whole-file buffer and
+    no size limit but the disk's (decant's is 64 KB).
+  - Each new files window opens a step down and left of the last, so a
+    second one no longer lands exactly on the first.
+  - scripts/ctfilecopy-test.sh: as saucier, HELLO.TXT dragged from / into
+    the home (the bytes on the disk compared), again as "copy HELLO.TXT",
+    and a file from the home refused into /. Six-wide soak 6 of 6.
 
 v0.60.176 (2026-10-09)  — THE CLOCHE: LOCKING THE DESKTOP
   - The Kitchen menu's cloche (the dome over a plate), or ten minutes

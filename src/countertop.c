@@ -925,7 +925,9 @@ static int open_files(const char *path) {
     strncpy(f->path, path, FAT_PATH_MAX - 1);
     files_load(f);
     static const char *const none[] = { 0 };
-    int k = open_window(W - 420, 60, 380, 460, "Files", 0, none);
+    int n = 0;                                         /* each new one a step down and left (v0.60.177) */
+    for (int i = 0; i < MAX_WIN; i++) if (win[i].used && win[i].files) n++;
+    int k = open_window(W - 420 - 28 * n, 60 + 28 * n, 380, 460, "Files", 0, none);
     if (k < 0) { kfree(f); return -1; }
     win[k].files = f;
     klog("[countertop] open Files at %s\n", f->path);
@@ -1028,6 +1030,49 @@ static int ctx_click(int px, int py) {
     return 1;
 }
 
+/* A copy between files windows (v0.60.177), streamed through fat_write_from
+ * from an open fd: no whole-file buffer, so no size limit but the disk's. */
+struct copy_src { int fd; uint32_t pos; };
+static int copy_pull(void *ctx, uint32_t off, uint8_t *dst, uint32_t n) {
+    struct copy_src *c = ctx;
+    if (off != c->pos) return -1;                      /* fat_write_from pulls in order */
+    uint32_t got = 0;
+    while (got < n) {
+        int r = fat_fread(c->fd, dst + got, n - got);
+        if (r <= 0) return -1;
+        got += (uint32_t)r;
+    }
+    c->pos += n;
+    return 0;
+}
+static void files_copy(int from, int r, int to) {
+    struct files *f = win[from].files, *t = win[to].files;
+    char src[FAT_PATH_MAX], dst[FAT_PATH_MAX];
+    if (r < 0 || r >= f->n || files_path(f, r, src) < 0) return;
+    if (f->dir[r]) { klog("[countertop] only files are copied, not %s\n", src); return; }
+    int l = (int)strlen(t->path);
+    const char *prefix = "";
+    for (int tries = 0; tries < 3; tries++) {          /* a name taken there: "copy " in front */
+        if (l + 1 + (int)strlen(prefix) + (int)strlen(f->name[r]) >= FAT_PATH_MAX) return;
+        strcpy(dst, t->path);
+        if (l > 1) strcat(dst, "/");
+        strcat(dst, prefix);
+        strcat(dst, f->name[r]);
+        if (!fat_exists(dst)) break;
+        prefix = tries == 0 ? "copy " : "copy copy ";
+    }
+    if (fat_exists(dst)) { klog("[countertop] %s is taken there\n", f->name[r]); return; }
+    if (!users_may(src, 'r') || !users_may(t->path, 'w')) { klog("[countertop] may not copy %s to %s\n", src, dst); return; }
+    struct copy_src c;
+    c.fd = fat_fopen(src); c.pos = 0;
+    if (c.fd < 0) { klog("[countertop] could not open %s\n", src); return; }
+    uint32_t size = fat_fsize(c.fd);
+    int ok = fat_write_from(dst, size, copy_pull, &c) == 0;
+    fat_fclose(c.fd);
+    klog("[countertop] %s %s to %s (%u bytes)\n", ok ? "copied" : "could not copy", src, dst, size);
+    files_load(t);
+    repaint_win(to);
+}
 static void files_open(int k, int r) {
     struct files *f = win[k].files;
     if (r < 0 || r >= f->n) return;
@@ -1343,8 +1388,9 @@ static void snap_window(int k, int side) {
 static int sel_win = -1;
 static uint32_t last_input;                      /* (v0.60.176) for the idle cloche */
 /* A row of a files window dragged (v0.60.163): let go over a terminal, its
- * path is typed there, quoted, with no Enter; let go anywhere else, or
- * hardly moved, nothing happens. */
+ * path is typed there, quoted, with no Enter; over another files window
+ * (v0.60.177), the file is copied into the bowl that one shows; let go
+ * anywhere else, or hardly moved, nothing happens. */
 static int fd_win = -1, fd_row, fd_x, fd_y;
 static int rs_win = -1, rs_dx, rs_dy;            /* a terminal being resized from its corner (v0.60.162) */
 #define GRIP 12
@@ -1388,7 +1434,8 @@ static void pointer_buttons(int px, int py, int btn, int np) {
         int k = window_at(px, py), from = fd_win;
         fd_win = -1;
         int moved = (px - fd_x) * (px - fd_x) + (py - fd_y) * (py - fd_y) > 64;
-        if (moved && k >= 0 && k != from && win[k].term && win[from].files) {
+        if (moved && k >= 0 && k != from && win[k].files && win[from].files) files_copy(from, fd_row, k);
+        else if (moved && k >= 0 && k != from && win[k].term && win[from].files) {
             char p[FAT_PATH_MAX];
             if (files_path(win[from].files, fd_row, p) == 0) {
                 raise_window(k);

@@ -58,7 +58,7 @@ a wrong secret refused (logged), the right one unlocks; the idle lock
 with the timeout shortened for the test (a build switch; built as an
 "idle N" line in the cook's settings instead, which the test writes).
 
-## 2. Copy a file by dragging between files windows
+## 2. Copy a file by dragging between files windows — DONE v0.60.177
 
 A file row dragged from one files window onto another copies it into the
 bowl that one shows: read permission on the file, write on the bowl (the
