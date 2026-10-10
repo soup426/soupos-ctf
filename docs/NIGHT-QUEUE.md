@@ -62,7 +62,7 @@ takes the ACPI write. Test: as the headchef from the menu, QEMU's process
 exits by itself; as saucier refused (logged); reheat reboots (the boot
 banner twice in the serial log).
 
-## 2. A menu on the background
+## 2. A menu on the background — DONE v0.60.184
 
 A right-click on the background (not a window, icon or bar) drops a menu
 where it was clicked: Terminal, Files, Kitchen (the programs as a

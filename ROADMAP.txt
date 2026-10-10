@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.183
+Current version: v0.60.184
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,17 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.184 (2026-10-09)  — A MENU ON THE BACKGROUND
+  - A right click where there is no window, icon or bar drops a menu
+    there (kept on the screen): Terminal, Files, Kitchen (the Kitchen
+    menu itself), backdrop, cloche, each doing what its button or menu
+    entry does. A click anywhere else, or Esc (before any window gets
+    it), puts it up. A right click on a window does what it did.
+  - scripts/ctdeskmenu-test.sh: the menu read back at 800,600; each of
+    the five entries picked in turn and what it did logged; Esc and a
+    click away put it up; right clicks on a window and on an icon open
+    nothing. Six-wide soak 6 of 6.
 
 v0.60.183 (2026-10-09)  — CLOSING THE KITCHEN FROM THE DESKTOP
   - The Kitchen menu gains "close up" (power off) and "reheat" (restart),

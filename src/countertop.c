@@ -659,6 +659,20 @@ static int menu_open;
  * for a file; a bowl that is not empty is not removed. */
 #define CTX_W  260
 #define CTX_IH 22
+/* A menu on the background (v0.60.184): a right click where there is no
+ * window, icon or bar drops it there. A click on an entry does what its
+ * button does; a click anywhere else, or Esc, puts it up. */
+static const char *const desk_item[] = { "Terminal", "Files", "Kitchen", "backdrop", "cloche" };
+#define DESK_N 5
+#define DESK_W 150
+#define DESK_IH 24
+static int desk_open, desk_x, desk_y;
+static void draw_desk(void) {                      /* within the clip */
+    int h = DESK_N * DESK_IH + 4;
+    fill(desk_x, desk_y, DESK_W, h, EDGE_RGB);
+    fill(desk_x + 1, desk_y + 1, DESK_W - 2, h - 2, 0x00F4F1EAu);
+    for (int i = 0; i < DESK_N; i++) text(desk_x + 10, desk_y + 2 + i * DESK_IH + (DESK_IH - 16) / 2, desk_item[i], 0x00202020u);
+}
 static int ctx_win = -1, ctx_row = -1, ctx_x, ctx_y, ctx_armed;
 static int ctx_items(void) { return ctx_row >= 0 ? 2 : 1; }
 static void draw_ctx(void) {                       /* within the clip */
@@ -892,6 +906,7 @@ static void repaint(int x, int y, int w, int h) {
         for (int i = 0; i < nwin; i++) if (!win[order[i]].min) draw_window(order[i]);
         if (menu_open) draw_menu();
         if (ctx_win >= 0) draw_ctx();
+        if (desk_open) draw_desk();
         if (cal_open) draw_cal();
         if (locked) draw_lock();                       /* the cloche over everything (v0.60.176) */
     }
@@ -1131,6 +1146,15 @@ static void type_path(wterm_t *t, const char *p) {
         wt_key(t, *c);
     }
     wt_key(t, '\'');
+}
+static void desk_set(int open, int x, int y) {
+    if (desk_open) { desk_open = 0; repaint(desk_x, desk_y, DESK_W, DESK_N * DESK_IH + 4); }
+    if (!open) return;
+    desk_x = x + DESK_W > W ? W - DESK_W : x;
+    desk_y = y + DESK_N * DESK_IH + 4 > H - TASK_H ? H - TASK_H - DESK_N * DESK_IH - 4 : y;
+    desk_open = 1;
+    repaint(desk_x, desk_y, DESK_W, DESK_N * DESK_IH + 4);
+    klog("[countertop] background menu at %d,%d\n", desk_x, desk_y);
 }
 static void ctx_close(void) {
     if (ctx_win < 0) return;
@@ -1675,6 +1699,11 @@ static void pointer_buttons(int px, int py, int btn, int np) {
     }
     if ((btn & 6) && !(was & 6)) {                     /* right or middle: paste into a terminal */
         int k = window_at(px, py);
+        if ((btn & 2) && k < 0 && py >= BAR_H && py < H - TASK_H && icon_at(px, py) < 0) {   /* the background: its menu */
+            menu_set(0);
+            desk_set(1, px, py);
+            return;
+        }
         if (k >= 0 && win[k].files && py >= win[k].y + BORDER + TITLE_H) {   /* a files window's menu (v0.60.172) */
             struct files *f = win[k].files;
             int y0 = win[k].y + BORDER + TITLE_H + 28, r = -1;
@@ -1703,6 +1732,20 @@ static void pointer_buttons(int px, int py, int btn, int np) {
         if (!np) return;
     }
     if (np && ctx_win >= 0 && ctx_click(px, py)) return;   /* the files menu (v0.60.172) */
+    if (np && desk_open) {                             /* the background's menu (v0.60.184) */
+        int in = px >= desk_x && px < desk_x + DESK_W && py >= desk_y + 2 && py < desk_y + 2 + DESK_N * DESK_IH;
+        int i = (py - desk_y - 2) / DESK_IH;
+        desk_set(0, 0, 0);
+        if (in) {
+            klog("[countertop] background menu: %s\n", desk_item[i]);
+            if (i == 0) open_terminal(0);
+            else if (i == 1) open_files("/");
+            else if (i == 2) menu_set(1);
+            else if (i == 3) next_background();
+            else cloche_lock("the background menu");
+            return;
+        }
+    }
     if (np && py < BAR_H && px >= W - 8 * 8 - 12) { cal_set(!cal_open); return; }   /* the clock: the calendar */
     if (np && cal_open) cal_set(0);                    /* a click anywhere else puts it up, and goes on */
     if (np && menu_open) {                             /* a click with the menu down: an item, or away */
@@ -1949,7 +1992,7 @@ int countertop_run(int (*avail)(void), int (*getch)(void), int uid) {
     draw_icons();
     net_shown[0] = '\0'; net_lit = -1;              /* said again for each desktop */
     bar();
-    nwin = 0; drag = -1; last_btn = 0; leave_asked = 0; leave_armed = 0; note_h = note_t = note_showing = 0; menu_open = 0; rs_win = -1; sel_win = -1; fd_win = -1; ctx_win = -1; cal_open = 0; locked = 0; lock_wait = 0;
+    nwin = 0; drag = -1; last_btn = 0; leave_asked = 0; leave_armed = 0; note_h = note_t = note_showing = 0; menu_open = 0; rs_win = -1; sel_win = -1; fd_win = -1; ctx_win = -1; cal_open = 0; locked = 0; lock_wait = 0; desk_open = 0;
     last_input = timer_get_ticks(); ct_uid = uid; nterm = 0; task_sig = 0xFFFFFFFFu;
     for (int k = 0; k < MAX_WIN; k++) win[k].used = 0;
     app_drag = -1;
@@ -2045,6 +2088,7 @@ int countertop_run(int (*avail)(void), int (*getch)(void), int uid) {
             int c = getch(), k = topmost();
             last_input = timer_get_ticks();
             if (locked) { cloche_key(c); continue; }   /* under the cloche: keys are for it alone */
+            if (c == 27 && desk_open) { desk_set(0, 0, 0); continue; }   /* Esc puts the background's menu up first */
             if (c == KEY_CTRL_ALT_T) {                         /* Ctrl+Alt+T: a terminal (v0.60.171) */
                 klog("[countertop] ctrl-alt-t\n");
                 open_terminal(0);
