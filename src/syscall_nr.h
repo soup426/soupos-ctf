@@ -82,6 +82,7 @@ typedef struct {
     char     owner_name[16];
     unsigned state;             /* 'R' running, 'T' stopped */
     unsigned pages;             /* user pages mapped */
+    unsigned cpu;               /* (v0.60.180) percent of the last second it ran */
 } uproc_t;
 
 /* Reserved file descriptors. fd >= 3 are returned by open(). */

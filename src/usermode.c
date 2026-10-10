@@ -740,6 +740,7 @@ void syscall_dispatch(registers_t *r) {
                 strncpy(u.owner_name, users_name_of(p->owner), sizeof(u.owner_name) - 1);
                 u.state = p->state == PROC_STOPPED ? 'T' : 'R';
                 u.pages = p->upages;
+                if (p->task) u.cpu = p->task->cpu_last > 100 ? 100 : p->task->cpu_last;   /* ticks of a 100-tick second */
                 memcpy(&out[n++], &u, sizeof(u));
             }
             r->eax = n;

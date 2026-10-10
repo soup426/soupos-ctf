@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.179
+Current version: v0.60.180
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,17 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.180 (2026-10-09)  — CPU USE IN EXPO
+  - SYS_PROCS gives each process's CPU (uproc_t.cpu, appended): its
+    task's cpu_last, the ticks it held of the last 100-tick second, so a
+    percent, capped at 100. expo shows it right-aligned in a CPU column;
+    c sorts by it, busiest first (ties by pid), c again by pid, and the
+    chosen row goes with its process when the order changes.
+  - scripts/ctexpocpu-test.sh: expo, then glutton.elf, from a desktop
+    terminal; the heading, glutton >= 50% and expo <= 10% (read 100% and
+    0%), the order by pid, by CPU, by pid again. ctexpo-test's rows have
+    the column. Six-wide soak 6 of 6.
 
 v0.60.179 (2026-10-09)  — STRAIGHT TO THE DESKTOP
   - Asked for by the user: booted with QEMU's

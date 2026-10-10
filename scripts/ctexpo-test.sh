@@ -54,7 +54,7 @@ rows = lambda at: [re.sub(r'\s+', ' ', line(at, 29 + i * 18)) for i in range(4)]
 foot = lambda at: line(at, 280)
 bad = []
 r1 = rows(ppm('s1'))
-if not re.fullmatch(r'\d+ glutton\.elf headchef R \d+', r1[0]) or not r1[1].split(' ')[1:3] == ['expo.elf', 'headchef']:
+if not re.fullmatch(r'\d+ glutton\.elf headchef R \d+ \d+%', r1[0]) or not r1[1].split(' ')[1:3] == ['expo.elf', 'headchef']:
     bad.append('s1: ' + ' | '.join(r1[:2]))
 s2 = ppm('s2')
 if not re.fullmatch(r'ended \d+', foot(s2)): bad.append(f's2: the foot says "{foot(s2)}"')
@@ -62,7 +62,7 @@ if any('glutton' in r for r in rows(s2)): bad.append('s2: glutton still listed')
 s3 = ppm('s3')
 if not re.fullmatch(r'\d+ is not yours to end', foot(s3)): bad.append(f's3: the foot says "{foot(s3)}"')
 r3 = rows(s3)
-if not re.fullmatch(r'\d+ glutton\.elf headchef R \d+', r3[0]) or 'saucier' not in r3[1]: bad.append('s3: ' + ' | '.join(r3[:2]))
+if not re.fullmatch(r'\d+ glutton\.elf headchef R \d+ \d+%', r3[0]) or 'saucier' not in r3[1]: bad.append('s3: ' + ' | '.join(r3[:2]))
 for b in bad: print('        ' + b)
 sys.exit(1 if bad else 0)
 PY

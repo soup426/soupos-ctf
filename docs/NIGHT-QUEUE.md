@@ -81,7 +81,7 @@ shell's rules); a name taken there gets "copy" put in front. Test: as
 saucier, a file copied from / into the home (the bytes on the disk the
 same), and refused into /.
 
-## 3. CPU use in expo
+## 3. CPU use in expo — DONE v0.60.180
 
 The scheduler counts each task's ticks a second (cpu_last). SYS_PROCS
 passes it on and expo shows a CPU column, with c sorting by it. Test:
