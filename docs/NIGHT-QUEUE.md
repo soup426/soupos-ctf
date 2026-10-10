@@ -78,7 +78,7 @@ the bar. Read back by the picture code, it can be the background. Test:
 the file's pixels against the screendump QEMU takes at the same moment
 (nothing moving), and named as the background, drawn back the same.
 
-## 4. Pictures from the files window
+## 4. Pictures from the files window — DONE v0.60.186
 
 A double click on a .bmp opens it in a window of its own (a platter:
 the picture at its size, scrolled with the wheel if bigger than the

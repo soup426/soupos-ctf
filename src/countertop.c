@@ -216,6 +216,7 @@ typedef struct {
     int maxed, rx, ry, rw, rh;          /* (v0.60.161) maximised, and where to put it back */
     int snapped, rcols, rrows;          /* (v0.60.167) 1 left half, 2 right; a terminal's own size */
     int hidden;                         /* (v0.60.178) a Kitchen terminal: never shown */
+    struct platter *plat;               /* (v0.60.186) a picture's window */
 } win_t;
 static win_t win[MAX_WIN];
 static int order[MAX_WIN], nwin;                 /* z-order, bottom first */
@@ -605,6 +606,7 @@ static void body_origin(const win_t *w, int *bx, int *by) {
     if (eh > 0) *by += eh / 2;
 }
 
+static void draw_platter(const win_t *w);
 static void draw_window(int k) {
     win_t *w = &win[k];
     int focused = k == topmost();
@@ -625,6 +627,7 @@ static void draw_window(int k) {
         fill(w->x + BORDER, top, w->w - 2 * BORDER, w->h - 2 * BORDER - TITLE_H, w->term ? 0x00000000u : 0x00303438u);
     if (w->term) { draw_cells(w->term, bx0, by0, focused); return; }
     if (w->files) { draw_files(w, focused); return; }
+    if (w->plat) { draw_platter(w); return; }
     if (w->app >= 0) { draw_app(w); return; }
     fill(w->x + BORDER, top, w->w - 2 * BORDER, w->h - 2 * BORDER - TITLE_H, w->body);
     for (int i = 0; i < 8 && w->lines[i]; i++) text(w->x + BORDER + 10, top + 8 + i * 18, w->lines[i], 0x00202020u);
@@ -674,7 +677,8 @@ static void draw_desk(void) {                      /* within the clip */
     for (int i = 0; i < DESK_N; i++) text(desk_x + 10, desk_y + 2 + i * DESK_IH + (DESK_IH - 16) / 2, desk_item[i], 0x00202020u);
 }
 static int ctx_win = -1, ctx_row = -1, ctx_x, ctx_y, ctx_armed;
-static int ctx_items(void) { return ctx_row >= 0 ? 2 : 1; }
+static int ctx_bmp(void);
+static int ctx_items(void) { return ctx_row < 0 ? 1 : ctx_bmp() ? 3 : 2; }
 static void draw_ctx(void) {                       /* within the clip */
     int h = ctx_items() * CTX_IH + 4;
     fill(ctx_x, ctx_y, CTX_W, h, EDGE_RGB);
@@ -687,6 +691,7 @@ static void draw_ctx(void) {                       /* within the clip */
         scopy(line + l, win[ctx_win].files->name[ctx_row], (int)sizeof(line) - l - 2);
         if (ctx_armed) strcat(line, "?");
         text(ctx_x + 10, ctx_y + 2 + CTX_IH + (CTX_IH - 16) / 2, line, ctx_armed ? 0x00C0504Du : 0x00202020u);
+        if (ctx_items() == 3) text(ctx_x + 10, ctx_y + 2 + 2 * CTX_IH + (CTX_IH - 16) / 2, "use as background", 0x00202020u);
     }
 }
 static void draw_menu(void) {                     /* within the clip */
@@ -933,16 +938,16 @@ static int read_all(int fd, uint8_t *b, uint32_t n) {
     return 0;
 }
 static uint32_t le32(const uint8_t *b) { return (uint32_t)b[0] | (uint32_t)b[1] << 8 | (uint32_t)b[2] << 16 | (uint32_t)b[3] << 24; }
-static void pic_load(void) {                       /* pic_path, read as the cook may */
+/* A 24-bit uncompressed BMP into pages, a row a page (v0.60.182; shared
+ * with the platter, v0.60.186): 0, or why not. rows[] has MAX_H entries;
+ * on failure none of them is left allocated. */
+static const char *bmp_read(const char *path, uint32_t **rows, int *pw, int *ph) {
     static uint8_t buf[1024 * 3 + 4];
-    pic_free();
-    if (!pic_path[0]) return;
-    uint32_t t0 = timer_get_ticks();
     const char *why = 0;
     int fd = -1, w = 0, h = 0, up = 1;
     uint8_t hd[54];
-    if (!users_may(pic_path, 'r')) why = "not yours to read";
-    else if ((fd = fat_fopen(pic_path)) < 0) why = "not there";
+    if (!users_may(path, 'r')) why = "not yours to read";
+    else if ((fd = fat_fopen(path)) < 0) why = "not there";
     else if (read_all(fd, hd, 54) < 0) why = "not a 24-bit BMP";
     else {
         uint32_t off = le32(hd + 10);
@@ -960,14 +965,24 @@ static void pic_load(void) {                       /* pic_path, read as the cook
     for (int i = 0; !why && i < h; i++) {
         if (read_all(fd, buf, stride) < 0) { why = "cut short"; break; }
         int y = up ? h - 1 - i : i;
-        if (!(pic_row[y] = (uint32_t *)pmm_alloc_page())) { why = "no memory for it"; break; }
-        for (int x = 0; x < w; x++) pic_row[y][x] = (uint32_t)buf[x * 3 + 2] << 16 | (uint32_t)buf[x * 3 + 1] << 8 | buf[x * 3];
-        pic_h = i + 1 > pic_h ? i + 1 : pic_h;         /* so pic_free finds what there is */
+        if (!(rows[y] = (uint32_t *)pmm_alloc_page())) { why = "no memory for it"; break; }
+        for (int x = 0; x < w; x++) rows[y][x] = (uint32_t)buf[x * 3 + 2] << 16 | (uint32_t)buf[x * 3 + 1] << 8 | buf[x * 3];
     }
     if (fd >= 0) fat_fclose(fd);
     if (why) {
-        for (int y = 0; y < h && y < MAX_H; y++) if (pic_row[y]) { pmm_free_page(pic_row[y]); pic_row[y] = 0; }
-        pic_w = pic_h = 0;
+        for (int y = 0; y < h && y < MAX_H; y++) if (rows[y]) { pmm_free_page(rows[y]); rows[y] = 0; }
+        return why;
+    }
+    *pw = w; *ph = h;
+    return 0;
+}
+static void pic_load(void) {                       /* pic_path, read as the cook may */
+    pic_free();
+    if (!pic_path[0]) return;
+    uint32_t t0 = timer_get_ticks();
+    int w, h;
+    const char *why = bmp_read(pic_path, pic_row, &w, &h);
+    if (why) {
         klog("[countertop] picture %s: %s, the gradient instead\n", pic_path, why);
         return;
     }
@@ -1007,10 +1022,16 @@ static void load_settings(void) {
     if (idle_set) klog("[countertop] settings: the cloche after %u s idle\n", idle_s);
     pic_load();
 }
+static int save_settings(char *p);
 static void next_background(void) {
     bg_choice = (bg_choice + 1) % NBG;
     repaint(0, BAR_H, W, H - BAR_H - TASK_H);
-    char p[FAT_PATH_MAX], line[40 + FAT_PATH_MAX] = "background 0\n";
+    char p[FAT_PATH_MAX];
+    int ok = save_settings(p);
+    klog("[countertop] background %s, %s %s\n", bgs[bg_choice].name, ok ? "kept in" : "not kept in", p);
+}
+static int save_settings(char *p) {                /* the cook's settings file, all of them (v0.60.186) */
+    char line[40 + FAT_PATH_MAX] = "background 0\n";
     line[11] = (char)('0' + bg_choice);
     if (idle_s != 600) {                               /* the other setting kept (v0.60.176) */
         strcat(line, "idle ");
@@ -1022,8 +1043,16 @@ static void next_background(void) {
     }
     if (pic_path[0]) { strcat(line, "picture "); strcat(line, pic_path); strcat(line, "\n"); }   /* kept (v0.60.182) */
     settings_path(p);
-    int ok = users_may(p, 'w') && fat_write(p, (const uint8_t *)line, (uint32_t)strlen(line)) >= 0;
-    klog("[countertop] background %s, %s %s\n", bgs[bg_choice].name, ok ? "kept in" : "not kept in", p);
+    return users_may(p, 'w') && fat_write(p, (const uint8_t *)line, (uint32_t)strlen(line)) >= 0;
+}
+static void set_picture(const char *path) {       /* the files menu's "use as background" (v0.60.186) */
+    scopy(pic_path, path, (int)sizeof(pic_path));
+    pic_load();
+    repaint(0, BAR_H, W, H - BAR_H - TASK_H);
+    char p[FAT_PATH_MAX];
+    int ok = pic_h && save_settings(p);
+    if (!pic_h) pic_path[0] = '\0';
+    klog("[countertop] picture %s %s %s\n", path, ok ? "kept in" : "not kept in", ok ? p : "the settings");
 }
 static int open_terminal(int hidden);
 /* A program from the Kitchen menu or an icon: a hidden terminal (v0.60.178:
@@ -1051,7 +1080,7 @@ static int open_window(int x, int y, int w, int h, const char *title, uint32_t b
     for (int k = 0; k < MAX_WIN; k++) if (!win[k].used) {
         win_t *v = &win[k];
         v->used = 1; v->x = x; v->y = y; v->w = w; v->h = h; v->body = body; v->term = 0; v->sess = 0; v->min = 0; v->files = 0; v->app = -1; v->maxed = 0; v->snapped = 0;
-        v->hidden = v->min = open_hidden;              /* hidden: minimised for good, and off the taskbar */
+        v->hidden = v->min = open_hidden; v->plat = 0;              /* hidden: minimised for good, and off the taskbar */
         scopy(v->title, title, sizeof(v->title));
         for (int i = 0; i < 8; i++) v->lines[i] = lines && lines[i] ? lines[i] : 0;
         int was = topmost();
@@ -1166,7 +1195,7 @@ static void ctx_open(int k, int r, int x, int y) {
     ctx_close();
     ctx_win = k; ctx_row = r; ctx_armed = 0;
     ctx_x = x + CTX_W > W ? W - CTX_W : x;
-    ctx_y = y + 2 * CTX_IH + 4 > H - TASK_H ? H - TASK_H - 2 * CTX_IH - 4 : y;
+    ctx_y = y + ctx_items() * CTX_IH + 4 > H - TASK_H ? H - TASK_H - ctx_items() * CTX_IH - 4 : y;
     repaint(ctx_x, ctx_y, CTX_W, ctx_items() * CTX_IH + 4);
 }
 static void ctx_new_bowl(struct files *f) {
@@ -1204,6 +1233,10 @@ static int ctx_click(int px, int py) {
     }
     if (i == 0) ctx_new_bowl(f);
     else if (i == 1 && ctx_row >= 0) ctx_remove(f, ctx_row);
+    else if (i == 2 && ctx_bmp()) {                    /* (v0.60.186) */
+        char path[FAT_PATH_MAX];
+        if (files_path(f, ctx_row, path) == 0) set_picture(path);
+    }
     ctx_close();
     files_load(f);
     repaint_win(k);
@@ -1253,6 +1286,69 @@ static void files_copy(int from, int r, int to) {
     files_load(t);
     repaint_win(to);
 }
+/* A platter (v0.60.186): a .bmp double-clicked in a files window, in a
+ * window of its own at its own size up to most of the screen; the wheel
+ * scrolls a taller one. Its rows are pages, freed with the window. */
+struct platter { uint32_t *row[MAX_H]; int w, h, top; };
+static void bar_note(const char *msg);
+static int note_showing;                         /* with the notes, below */
+static uint32_t note_at;
+static int is_bmp(const char *p) {
+    int l = (int)strlen(p);
+    return l > 4 && p[l - 4] == '.' && (p[l - 3] | 0x20) == 'b' && (p[l - 2] | 0x20) == 'm' && (p[l - 1] | 0x20) == 'p';
+}
+static int ctx_bmp(void) {                         /* the files menu's row is a picture */
+    return ctx_win >= 0 && ctx_row >= 0 && win[ctx_win].files && !win[ctx_win].files->dir[ctx_row] && is_bmp(win[ctx_win].files->name[ctx_row]);
+}
+static int plat_view_h(const win_t *w) { return w->h - 2 * BORDER - TITLE_H; }
+static void draw_platter(const win_t *w) {        /* within the clip */
+    struct platter *p = w->plat;
+    int x0 = w->x + BORDER, y0 = w->y + BORDER + TITLE_H, bw = w->w - 2 * BORDER, bh = plat_view_h(w);
+    fill(x0, y0, bw, bh, 0x00202428u);                 /* past the picture */
+    int xa = x0 < cx0 ? cx0 : x0, xb = x0 + (p->w < bw ? p->w : bw);
+    if (xb > cx1) xb = cx1;
+    int ya = y0 < cy0 ? cy0 : y0, yb = y0 + (p->h - p->top < bh ? p->h - p->top : bh);
+    if (yb > cy1) yb = cy1;
+    for (int j = ya; j < yb; j++) {
+        const uint32_t *src = p->row[p->top + j - y0] - x0;
+        for (int i = xa; i < xb; i++) row[j][i] = src[i];
+    }
+}
+static void plat_free(win_t *w) {
+    if (!w->plat) return;
+    for (int y = 0; y < w->plat->h; y++) if (w->plat->row[y]) pmm_free_page(w->plat->row[y]);
+    kfree(w->plat); w->plat = 0;
+}
+static void open_platter(const char *path) {
+    struct platter *p = kmalloc(sizeof(struct platter));
+    if (!p) return;
+    memset(p, 0, sizeof(*p));
+    const char *why = bmp_read(path, p->row, &p->w, &p->h);
+    if (why) {
+        kfree(p);
+        klog("[countertop] platter %s: %s\n", path, why);
+        char m[48] = "platter: "; scopy(m + 9, why, (int)sizeof(m) - 9);
+        bar_note(m); note_showing = 1; note_at = timer_get_ticks();
+        return;
+    }
+    const char *name = path;
+    for (const char *c = path; *c; c++) if (*c == '/') name = c + 1;
+    int bw = p->w < W - 80 ? p->w : W - 80, bh = p->h < H - BAR_H - TASK_H - 80 ? p->h : H - BAR_H - TASK_H - 80;
+    if (bw < 160) bw = 160;                            /* room for the title and its boxes */
+    int n = 0;
+    for (int i = 0; i < MAX_WIN; i++) if (win[i].used && win[i].plat) n++;
+    static const char *const none[] = { 0 };
+    open_hidden = 1;                                   /* drawn once it is a platter */
+    int k = open_window(40 + 28 * n, BAR_H + 16 + 28 * n, bw + 2 * BORDER, bh + 2 * BORDER + TITLE_H, name, 0, none);
+    open_hidden = 0;
+    if (k < 0) { for (int y = 0; y < p->h; y++) pmm_free_page(p->row[y]); kfree(p); return; }
+    win[k].plat = p; win[k].hidden = win[k].min = 0;
+    int was = -1;
+    for (int i = nwin - 2; i >= 0; i--) if (!win[order[i]].min) { was = order[i]; break; }
+    if (was >= 0) repaint_win(was);
+    repaint_win(k);
+    klog("[countertop] platter %s: %dx%d\n", path, p->w, p->h);
+}
 static void files_open(int k, int r) {
     struct files *f = win[k].files;
     if (r < 0 || r >= f->n) return;
@@ -1265,6 +1361,7 @@ static void files_open(int k, int r) {
         repaint_win(k);
         return;
     }
+    if (is_bmp(p)) { open_platter(p); return; }       /* a picture to a platter (v0.60.186) */
     int t = open_terminal(0);
     if (t < 0) return;
     const char *verb = is_text(p) ? "jot" : "pour";   /* text to the editor (v0.60.154) */
@@ -1348,6 +1445,7 @@ static void kitchen_close(int reboot) {
 static void close_window(int k) {
     if (ctx_win == k) ctx_close();
     if (win[k].files) { kfree(win[k].files); win[k].files = 0; }
+    plat_free(&win[k]);
     if (win[k].app >= 0) {                             /* its program ended, or closed it */
         mutex_lock(&app_mtx);
         app_free(&app[win[k].app]);
@@ -2114,6 +2212,12 @@ int countertop_run(int (*avail)(void), int (*getch)(void), int uid) {
                     repaint_win(k);
                     klog("[countertop] %s scrolled back %d\n", win[k].title, back);
                 }
+            } else if (k >= 0 && win[k].plat) {           /* a platter: down the picture (v0.60.186) */
+                struct platter *pl = win[k].plat;
+                int most = pl->h - plat_view_h(&win[k]), top = pl->top + 48 * dw;
+                if (top > most) top = most;
+                if (top < 0) top = 0;
+                if (top != pl->top) { pl->top = top; repaint_win(k); klog("[countertop] %s scrolled to %d\n", win[k].title, top); }
             } else if (k >= 0 && win[k].files) {
                 struct files *f = win[k].files;
                 int rows = files_rows(&win[k]), most = f->n > rows ? f->n - rows : 0;
