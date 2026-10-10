@@ -47,6 +47,21 @@ queue 53 ran out, as the loop it runs in asks; the user has not seen it.
 
 ---
 
+## U1. Programs open without a terminal — DONE v0.60.178
+
+Asked for by the user (2026-10-09): pressing a program in the Kitchen
+menu or an icon should open only the program, no terminal alongside it.
+
+## U2. Boot straight to the desktop
+
+Asked for by the user (2026-10-09): the desktop instead of the terminal
+at boot. A graphical login (the cloche's screen asking for cook and
+secret), then the desktop; Leave clocks out back to it. Switched on for
+`make run` (a QEMU fw_cfg flag), so the tests, which type at the text
+login, keep booting as they do. Test: with the flag, the login screen
+read back, a wrong secret refused, the right one opening the desktop,
+Leave returning to the login screen.
+
 ## 1. cloche: locking the desktop — DONE v0.60.176
 
 The Kitchen menu's "cloche" (the dome over a plate), and ten minutes with

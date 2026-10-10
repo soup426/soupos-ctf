@@ -199,6 +199,7 @@ typedef struct {
     int app;                            /* a program's window: its app[] slot, or -1 */
     int maxed, rx, ry, rw, rh;          /* (v0.60.161) maximised, and where to put it back */
     int snapped, rcols, rrows;          /* (v0.60.167) 1 left half, 2 right; a terminal's own size */
+    int hidden;                         /* (v0.60.178) a Kitchen terminal: never shown */
 } win_t;
 static win_t win[MAX_WIN];
 static int order[MAX_WIN], nwin;                 /* z-order, bottom first */
@@ -864,14 +865,17 @@ static void next_background(void) {
     int ok = users_may(p, 'w') && fat_write(p, (const uint8_t *)line, (uint32_t)strlen(line)) >= 0;
     klog("[countertop] background %s, %s %s\n", bgs[bg_choice].name, ok ? "kept in" : "not kept in", p);
 }
-static int open_terminal(void);
-static void kitchen_launch(int i) {                /* a terminal that cooks menu_item i */
-    int t = open_terminal();
+static int open_terminal(int hidden);
+/* A program from the Kitchen menu or an icon: a hidden terminal (v0.60.178:
+ * never drawn, not on the taskbar) cooks it and then clocks out, so only the
+ * program's own window shows, and the terminal goes when the program does. */
+static void kitchen_launch(int i) {
+    int t = open_terminal(1);
     if (t < 0) return;
-    char line[40] = "cook ";
-    scopy(line + 5, menu_item[i][2], (int)sizeof(line) - 6);
+    char line[48] = "cook ";
+    scopy(line + 5, menu_item[i][2], (int)sizeof(line) - 16);   /* room for the clockout */
+    strcat(line, "\nclockout\n");
     for (const char *c = line; *c; c++) wt_key(win[t].term, *c);
-    wt_key(win[t].term, '\n');
     klog("[countertop] kitchen: %s\n", menu_item[i][0]);
 }
 static void menu_set(int open) {
@@ -882,15 +886,17 @@ static void menu_set(int open) {
 }
 static void repaint_win(int k) { repaint(win[k].x, win[k].y, win[k].w, win[k].h); }
 
+static int open_hidden;                          /* the next window opens hidden (v0.60.178) */
 static int open_window(int x, int y, int w, int h, const char *title, uint32_t body, const char *const *lines) {
     for (int k = 0; k < MAX_WIN; k++) if (!win[k].used) {
         win_t *v = &win[k];
         v->used = 1; v->x = x; v->y = y; v->w = w; v->h = h; v->body = body; v->term = 0; v->sess = 0; v->min = 0; v->files = 0; v->app = -1; v->maxed = 0; v->snapped = 0;
+        v->hidden = v->min = open_hidden;              /* hidden: minimised for good, and off the taskbar */
         scopy(v->title, title, sizeof(v->title));
         for (int i = 0; i < 8; i++) v->lines[i] = lines && lines[i] ? lines[i] : 0;
         int was = topmost();
         order[nwin++] = k;
-        if (was >= 0) repaint_win(was);           /* its title bar goes grey */
+        if (was >= 0 && !open_hidden) repaint_win(was);   /* its title bar goes grey */
         repaint_win(k);
         return k;
     }
@@ -898,17 +904,22 @@ static int open_window(int x, int y, int w, int h, const char *title, uint32_t b
 }
 static void close_window(int k);
 static int nterm;
-static int open_terminal(void) {
+static int open_terminal(int hidden) {
     wterm_t *t = wt_new();
     if (!t) return -1;
     static const char *const none[] = { 0 };
     int ww = TCOLS * 8 + 2 * BORDER, wh = TROWS * 16 + 2 * BORDER + TITLE_H;
     int off = (nterm % 6) * 28;
-    char title[32] = "Terminal ";
-    int n = ++nterm, l = 9;
-    if (n >= 10) title[l++] = (char)('0' + n / 10 % 10);
-    title[l++] = (char)('0' + n % 10); title[l] = '\0';
+    char title[32] = "kitchen";                        /* a hidden one is not counted */
+    if (!hidden) {
+        strcpy(title, "Terminal ");
+        int n = ++nterm, l = 9;
+        if (n >= 10) title[l++] = (char)('0' + n / 10 % 10);
+        title[l++] = (char)('0' + n % 10); title[l] = '\0';
+    }
+    open_hidden = hidden;
     int k = open_window(60 + off, 60 + off, ww, wh, title, 0, none);
+    open_hidden = 0;
     if (k < 0) { kfree(t); return -1; }
     win[k].term = t;
     win[k].sess = shell_session_start(&t->t, ct_uid, 0, "countertop");
@@ -1085,7 +1096,7 @@ static void files_open(int k, int r) {
         repaint_win(k);
         return;
     }
-    int t = open_terminal();
+    int t = open_terminal(0);
     if (t < 0) return;
     const char *verb = is_text(p) ? "jot" : "pour";   /* text to the editor (v0.60.154) */
     for (const char *c = verb; *c; c++) wt_key(win[t].term, *c);
@@ -1221,7 +1232,7 @@ static void taskbar(void) {
     text(16, y + (TASK_H - 16) / 2, "Terminal", TEXT_RGB);
     int x = 8 + LAUNCH_W + 12, top = topmost();
     for (int i = 0; i < MAX_WIN; i++) {             /* in the order they were opened */
-        if (!win[i].used) continue;
+        if (!win[i].used || win[i].hidden) continue;
         if (x + TBTN_W > W - 8) break;
         uint32_t c = i == top ? FOCUS_RGB : win[i].min ? 0x002A2E34u : BTN_RGB;
         fill(x, y + 4, TBTN_W, TASK_H - 8, c);
@@ -1238,7 +1249,7 @@ static int taskbar_hit(int px, int py) {           /* the window under a taskbar
     if (px >= 8 && px < 8 + LAUNCH_W) return -2;
     int x = 8 + LAUNCH_W + 12;
     for (int i = 0; i < MAX_WIN; i++) {
-        if (!win[i].used) continue;
+        if (!win[i].used || win[i].hidden) continue;
         if (px >= x && px < x + TBTN_W) return i;
         x += TBTN_W + 6;
     }
@@ -1527,14 +1538,14 @@ static void pointer_buttons(int px, int py, int btn, int np) {
     }
     if (np && py < BAR_H) {
         if (px >= BTN_KITCHEN_X && px < BTN_KITCHEN_X + BTN_KITCHEN_W) { menu_set(1); return; }
-        if (px >= BTN_TERM_X && px < BTN_TERM_X + BTN_TERM_W) open_terminal();
+        if (px >= BTN_TERM_X && px < BTN_TERM_X + BTN_TERM_W) open_terminal(0);
         else if (px >= BTN_LEAVE_X && px < BTN_LEAVE_X + BTN_LEAVE_W) ask_leave();
         else if (px >= BTN_FILES_X && px < BTN_FILES_X + BTN_FILES_W) open_files("/");
         return;
     }
     if (np && py >= H - TASK_H) {
         int k = taskbar_hit(px, py);
-        if (k == -2) open_terminal();
+        if (k == -2) open_terminal(0);
         else if (k >= 0 && win[k].min) restore_window(k);
         else if (k >= 0 && k == topmost()) minimise_window(k);
         else if (k >= 0) raise_window(k);
@@ -1801,7 +1812,7 @@ int countertop_run(int (*avail)(void), int (*getch)(void), int uid) {
             if (locked) { cloche_key(c); continue; }   /* under the cloche: keys are for it alone */
             if (c == KEY_CTRL_ALT_T) {                         /* Ctrl+Alt+T: a terminal (v0.60.171) */
                 klog("[countertop] ctrl-alt-t\n");
-                open_terminal();
+                open_terminal(0);
                 continue;
             }
             if (c == KEY_ALT_F4 && k >= 0) {                  /* Alt+F4: as its close box (v0.60.171) */

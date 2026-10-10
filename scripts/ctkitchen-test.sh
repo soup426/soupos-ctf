@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # ctkitchen-test.sh - the Kitchen menu (v0.60.158). Its button drops down
-# the programs that open windows; picking swirl opens a terminal that
-# cooks it (swirl's window appears; q ends it); opened again, a click
+# the programs that open windows; picking swirl opens swirl's window
+# alone (v0.60.178: the terminal that cooks it is hidden, on the screen
+# and the taskbar, and goes when q ends swirl); opened again, a click
 # away closes it and the screen under it comes back. From screendumps
 # and the log.
 set -uo pipefail
@@ -43,10 +44,10 @@ def ppm(n):
         words.append(d[i:j]); i = j
     px = d[i + 1:]; W = int(words[1])
     return lambda x, y: (px[(y*W+x)*3] << 16) | (px[(y*W+x)*3+1] << 8) | px[(y*W+x)*3+2]
-def word(at, ox, oy, n):
+def word(at, ox, oy, n, ink=0x202020):
     s = ''
     for c in range(n):
-        g = bytes(sum(1 << (7 - i) for i in range(8) if at(ox + c*8 + i, oy + j) == 0x202020) for j in range(14))
+        g = bytes(sum(1 << (7 - i) for i in range(8) if at(ox + c*8 + i, oy + j) == ink) for j in range(14))
         s += shape.get(g, '?')
     return s.rstrip()
 MENU = 0xF4F1EA
@@ -59,16 +60,22 @@ for i, name in enumerate(('frost', 'swirl', 'oven', 'expo', 'scale')):
 s2 = ppm('s2')
 if s2(600, 40) == MENU: bad.append('s2: the menu is still down after picking swirl')
 if s2(600, 40) == MENU or s2(500, 200) in (MENU, 0x000000): bad.append(f's2: no swirl window at 500,200 ({s2(500,200):06x})')
+if s2(150, 450) == 0x000000: bad.append('s2: a terminal shows at 150,450')
+tb = word(s2, 8 + 96 + 12 + 2 * 156 + 8, 768 - 28 + 6, 6, 0xF0F0F0)
+if tb != 'swirl': bad.append(f's2: the third taskbar button reads "{tb}", not "swirl"')
 s3 = ppm('s3')
 if s3(600, 40) == MENU: bad.append('s3: the menu is still down after a click away')
 for b in bad: print('        ' + b)
 sys.exit(1 if bad else 0)
 PY
 tr -d '\r' < "$WORK/serial.log" > "$WORK/log"
-grep -E '^\[countertop\] (kitchen|open Terminal|open swirl|program closed swirl)' "$WORK/log" | sed 's/ for pid [0-9]* at .*//' > "$WORK/events"
-printf '[countertop] kitchen menu open\n[countertop] kitchen menu closed\n[countertop] open Terminal 1\n[countertop] kitchen: swirl\n[countertop] open swirl\n[countertop] program closed swirl\n[countertop] kitchen menu open\n[countertop] kitchen menu closed\n' | cmp -s - "$WORK/events" \
+grep -E '^\[countertop\] (kitchen|open Terminal|open kitchen|open swirl|program closed swirl)' "$WORK/log" | sed 's/ for pid [0-9]* at .*//' > "$WORK/events"
+printf '[countertop] kitchen menu open\n[countertop] kitchen menu closed\n[countertop] open kitchen\n[countertop] kitchen: swirl\n[countertop] open swirl\n[countertop] program closed swirl\n[countertop] kitchen menu open\n[countertop] kitchen menu closed\n' | cmp -s - "$WORK/events" \
     || { echo "        the events: $(tr '\n' ';' < "$WORK/events")"; fail=1; }
+# the hidden terminal goes after swirl does, not before (it would take swirl with it)
+awk '/swirl.elf exited/ { ex = NR } /^\[countertop\] close kitchen$/ { ck = NR } END { exit !(ex && ck > ex) }' "$WORK/log" \
+    || { echo "        the hidden terminal did not go after swirl"; fail=1; }
 grep -x '\[countertop\] down' "$WORK/log" >/dev/null || { echo "        Leave did not end the desktop"; fail=1; }
-[ "$fail" = 0 ] && echo "  ok    the Kitchen menu: frost, swirl, oven, expo and scale listed, swirl picked opens a terminal cooking it, a click away closes the menu" \
+[ "$fail" = 0 ] && echo "  ok    the Kitchen menu: frost, swirl, oven, expo and scale listed, swirl picked opens its window alone (the terminal cooking it hidden, gone after swirl), a click away closes the menu" \
     || echo "  FAIL  the Kitchen menu"
 exit $fail

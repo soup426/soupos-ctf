@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.177
+Current version: v0.60.178
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,17 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.178 (2026-10-09)  — PROGRAMS OPEN WITHOUT A TERMINAL
+  - Asked for by the user: a program from the Kitchen menu or an icon
+    opens its own window alone. The terminal that cooks it is hidden
+    (never drawn, off the taskbar and Alt+Tab, not counted in the
+    Terminal numbers) and has "clockout" queued after the cook line, so
+    it goes when the program does. Keys already went to the program's
+    window, not the terminal.
+  - ctkitchen-test.sh: swirl from the menu, no terminal on the screen,
+    the third taskbar button reads swirl, the hidden terminal goes only
+    after swirl exits. Six-wide soak 6 of 6.
 
 v0.60.177 (2026-10-09)  — COPY A FILE BY DRAGGING
   - A file row dragged from one files window and let go over another is
