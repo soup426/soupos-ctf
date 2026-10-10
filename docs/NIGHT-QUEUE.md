@@ -1,15 +1,13 @@
 # Night queue
 
-Fifty-fifth queue. The first fifty-four are in `docs/queue-archive-2026-10-0*.md`;
-queue 54 (`-09t`) added the cloche (locking the desktop), copying files by
-dragging, the user's two requests (programs without a terminal, booting
-straight to the desktop's clock-in screen), CPU use in expo, the network
-on the bar and a picture for the background. Since the desktop is now
-where the machine starts, this one makes it able to stand on its own:
-putting the machine away from it, a menu on the background, a picture of
-the screen, and pictures from the files window. Written by an unattended
-run when queue 54 ran out, as the loop it runs in asks; the user has not
-seen it.
+Fifty-sixth queue. The first fifty-five are in `docs/queue-archive-2026-10-0*.md`;
+queue 55 (`-09u`) added closing the kitchen (power off and reheat from the
+desktop), a menu on the background, Print Screen to a BMP, and pictures
+from the files window. This one: the clock in the cook's own time, a
+window for the desktop's settings instead of a file to edit, a compost
+bowl so a removed file can come back, and Alt+Tab that shows where it
+is going. Written by an unattended run when queue 55 ran out, as the
+loop it runs in asks; the user has not seen it.
 
 ## Standing rules
 
@@ -50,42 +48,43 @@ seen it.
 
 ---
 
-## 1. Closing the kitchen from the desktop — DONE v0.60.183 (menu only)
+## 1. The clock in the cook's own time
 
-Booted straight to the desktop there is no prompt to type `freeze` or
-`reheat` at. The clock-in screen and the Kitchen menu offer "close the
-kitchen" (power off: ACPI's PM1a control port on QEMU's PIIX4, so QEMU
-exits, falling back to freeze's halt) and "reheat" (reboot), the
-headchef's only, as at the prompt: anyone else is told so. Leftovers
-saved first, as freeze does. Measure first how QEMU's i440fx machine
-takes the ACPI write. Test: as the headchef from the menu, QEMU's process
-exits by itself; as saucier refused (logged); reheat reboots (the boot
-banner twice in the serial log).
+The RTC is UTC (QEMU's default), so the bar says 02:00 at 9 pm in
+Alabama. Two settings in the cook's `countertop`: "zone -5" (hours from
+UTC, -12 to +14) and "clock 12" (12-hour, with am/pm). The bar's clock
+and the calendar under it (today's date crosses midnight with the zone)
+use them. Test: with zone and 12-hour set, the bar read back against the
+host's UTC time shifted the same way; the calendar's today mark on the
+shifted date.
 
-## 2. A menu on the background — DONE v0.60.184
+## 2. The spice rack: the desktop's settings in a window
 
-A right-click on the background (not a window, icon or bar) drops a menu
-where it was clicked: Terminal, Files, Kitchen (the programs as a
-submenu or the menu itself), backdrop, cloche. A click away or Esc puts
-it up. Test: the menu read back at the click, each entry doing what its
-button does, a right-click on a window not opening it.
+A window (Kitchen menu and the background menu, "spice rack") with the
+settings as things to click: the four backdrops as swatches, the
+picture (its path, and "none"), the cloche's idle minutes (- and +, and
+never), the zone (- and +) and 12/24-hour. Each click takes effect at
+once and is written to the cook's settings. Test: each control clicked,
+the screen and the settings file after each.
 
-## 3. A picture of the screen — DONE v0.60.185
+## 3. Compost: removing a file can be undone
 
-Print Screen saves the whole screen as a 24-bit BMP in the cook's home,
-"plate1.bmp", "plate2.bmp" and on (the first name not taken), said on
-the bar. Read back by the picture code, it can be the background. Test:
-the file's pixels against the screendump QEMU takes at the same moment
-(nothing moving), and named as the background, drawn back the same.
+The files menu's remove moves a file into the cook's compost bowl
+(`compost` in their home; the headchef's `/compost`), not off the disk;
+a name already there gets a number. Opened, the compost's files menu
+offers "put back" (to where it came from, kept in a small index file)
+and "empty the compost" (asked twice, then really gone). Test: a file
+removed and put back byte for byte; removed again and emptied, gone
+from the disk.
 
-## 4. Pictures from the files window — DONE v0.60.186
+## 4. Alt+Tab you can see
 
-A double click on a .bmp opens it in a window of its own (a platter:
-the picture at its size, scrolled with the wheel if bigger than the
-window); the files menu's right-click gains "use as background", which
-writes the picture line into the cook's settings and redraws. Test: a
-host-made BMP opened (pixels compared), then set as the background
-(settings file and the screen).
+While Alt is held after a Tab, a panel in the middle of the screen
+lists the windows (title, the focused one marked); each Tab moves the
+mark, and letting go of Alt raises the marked window. The keyboard IRQ
+already decides Alt combinations; Alt's release needs to reach the
+desktop too. Test: three windows, Alt+Tab+Tab, the panel read back
+with the third marked, Alt let go, the third on top.
 
 ## 5. Doom at the framebuffer's own resolution — DEFERRED
 
