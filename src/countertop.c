@@ -627,7 +627,8 @@ static const char *const menu_item[][3] = {      /* name, what it is, what to co
     { "oven", "a minute's timer", "oven.elf 60" },          /* (v0.60.164) */
     { "expo", "the processes", "expo.elf" },                /* (v0.60.168) */
     { "scale", "a calculator", "scale.elf" },               /* (v0.60.173) */
-    { "backdrop", "the next one", "" },                     /* (v0.60.169) not a program: the background */
+    { "backdrop", "the next one", "@backdrop" },            /* (v0.60.169) not programs: '@' an action */
+    { "cloche", "lock the desktop", "@cloche" },            /* (v0.60.176) */
 };
 #define MENU_N (int)(sizeof(menu_item) / sizeof(menu_item[0]))
 #define MENU_H (MENU_N * MENU_IH + 4)
@@ -675,7 +676,7 @@ static void draw_menu(void) {                     /* within the clip */
 static const uint32_t icon_rgb[] = { 0x00C0392Bu, 0x002E86DEu, 0x00E67E22u, 0x0027AE60u, 0x008E44ADu };
 static int icon_count(void) {                      /* the menu's programs, not its backdrop */
     int n = 0;
-    for (int i = 0; i < MENU_N; i++) if (menu_item[i][2][0]) n++;
+    for (int i = 0; i < MENU_N; i++) if (menu_item[i][2][0] != '@') n++;
     return n;
 }
 static void big_char(int x, int y, char ch, uint32_t fg) {   /* the font, twice the size */
@@ -701,6 +702,7 @@ static int icon_at(int px, int py) {               /* the icon (its square or it
     return -1;
 }
 
+static int ct_uid;                                 /* whose desktop (v0.60.143) */
 /* A calendar under the clock (v0.60.175): this month from the RTC, today
  * on blue; a click on the clock drops it and puts it up again, a click
  * anywhere else puts it up. */
@@ -742,6 +744,58 @@ static void draw_cal(void) {                       /* within the clip */
         text(x, y, num, today ? TEXT_RGB : 0x00202020u);
     }
 }
+/* The cloche (v0.60.176): the desktop locked under a dome. It covers the
+ * whole screen (drawn over anything repainted while it is down; the bar's
+ * clock and the taskbar wait); keys go to it alone; the cook's secret,
+ * checked by users_check, lifts it. Programs go on under it. Wrong secrets
+ * are logged; after three it waits 3 s before listening again. */
+static int locked, lock_len, lock_fails;
+static char lock_buf[32], lock_msg[48];
+static uint32_t lock_wait;
+static void draw_lock(void) {                      /* within the clip */
+    fill(cx0, cy0, cx1 - cx0, cy1 - cy0, 0x00101418u);
+    const char *who = users_name_of((uint8_t)ct_uid);
+    char line[64] = "secret: ";
+    int l = 8;
+    for (int i = 0; i < lock_len && l < 40; i++) line[l++] = '*';
+    line[l] = '\0';
+    text(W / 2 - 8 * 11, H / 2 - 60, "under the cloche", TEXT_RGB);
+    text(W / 2 - 4 * (int)strlen(who), H / 2 - 30, who, 0x00F0B040u);
+    text(W / 2 - 8 * 10, H / 2, line, TEXT_RGB);
+    if (lock_msg[0]) text(W / 2 - 4 * (int)strlen(lock_msg), H / 2 + 30, lock_msg, 0x00F05050u);
+}
+static void cloche_lock(const char *why) {
+    if (locked) return;
+    locked = 1; lock_len = 0; lock_fails = 0; lock_msg[0] = '\0';
+    cx0 = 0; cy0 = 0; cx1 = W; cy1 = H;
+    draw_lock();
+    klog("[countertop] cloche down (%s)\n", why);
+}
+static void bar(void);
+static void taskbar(void);
+static void cloche_key(int c) {
+    if (lock_wait && timer_get_ticks() < lock_wait) return;   /* after three wrong: waiting */
+    lock_wait = 0;
+    if (c == '\b') { if (lock_len) lock_len--; }
+    else if (c == '\n') {
+        lock_buf[lock_len] = '\0';
+        if (users_check(users_name_of((uint8_t)ct_uid), lock_buf) >= 0) {
+            locked = 0;
+            memset(lock_buf, 0, sizeof(lock_buf)); lock_len = 0;
+            klog("[countertop] cloche lifted\n");
+            repaint(0, BAR_H, W, H - BAR_H - TASK_H);
+            bar(); taskbar();
+            return;
+        }
+        lock_fails++;
+        memset(lock_buf, 0, sizeof(lock_buf)); lock_len = 0;
+        klog("[countertop] cloche: a wrong secret (%d)\n", lock_fails);
+        scopy(lock_msg, "that is not the secret", (int)sizeof(lock_msg));
+        if (lock_fails % 3 == 0) { lock_wait = timer_get_ticks() + 300; scopy(lock_msg, "wait a moment", (int)sizeof(lock_msg)); }
+    } else if (c >= ' ' && c < 127 && lock_len < (int)sizeof(lock_buf) - 1) lock_buf[lock_len++] = (char)c;
+    cx0 = 0; cy0 = 0; cx1 = W; cy1 = H;
+    draw_lock();
+}
 static void cal_set(int open) {
     if (cal_open == open) return;
     cal_open = open;
@@ -760,10 +814,10 @@ static void repaint(int x, int y, int w, int h) {
         if (menu_open) draw_menu();
         if (ctx_win >= 0) draw_ctx();
         if (cal_open) draw_cal();
+        if (locked) draw_lock();                       /* the cloche over everything (v0.60.176) */
     }
     clip_all();
 }
-static int ct_uid;                                 /* whose desktop (v0.60.143) */
 static void settings_path(char *p) {               /* the cook's `countertop` file */
     if (ct_uid == 0) { strcpy(p, "/countertop"); return; }
     strcpy(p, "/home/");
@@ -771,23 +825,43 @@ static void settings_path(char *p) {               /* the cook's `countertop` fi
     p[FAT_PATH_MAX - 14] = '\0';
     strcat(p, "/countertop");
 }
+static uint32_t idle_s = 600;                      /* (v0.60.176) the cloche after this long; 0 never */
 static void load_settings(void) {
-    char p[FAT_PATH_MAX], buf[64];
+    char p[FAT_PATH_MAX], buf[128];
     uint32_t n = 0;
     settings_path(p);
-    bg_choice = 0;
+    bg_choice = 0; idle_s = 600;
     if (fat_read(p, (uint8_t *)buf, sizeof(buf) - 1, &n) < 0) return;
     buf[n < sizeof(buf) - 1 ? n : sizeof(buf) - 1] = '\0';
-    if (!strncmp(buf, "background ", 11) && buf[11] >= '0' && buf[11] < '0' + NBG) bg_choice = buf[11] - '0';
+    int idle_set = 0;
+    for (char *l = buf; *l; ) {                        /* a setting a line */
+        if (!strncmp(l, "background ", 11) && l[11] >= '0' && l[11] < '0' + NBG) bg_choice = l[11] - '0';
+        if (!strncmp(l, "idle ", 5)) {
+            uint32_t v = 0;
+            for (char *d = l + 5; *d >= '0' && *d <= '9'; d++) v = v * 10 + (uint32_t)(*d - '0');
+            idle_s = v; idle_set = 1;
+        }
+        while (*l && *l != '\n') l++;
+        if (*l) l++;
+    }
     klog("[countertop] settings from %s: background %s\n", p, bgs[bg_choice].name);
+    if (idle_set) klog("[countertop] settings: the cloche after %u s idle\n", idle_s);
 }
 static void next_background(void) {
     bg_choice = (bg_choice + 1) % NBG;
     repaint(0, BAR_H, W, H - BAR_H - TASK_H);
-    char p[FAT_PATH_MAX], line[16] = "background 0\n";
+    char p[FAT_PATH_MAX], line[40] = "background 0\n";
     line[11] = (char)('0' + bg_choice);
+    if (idle_s != 600) {                               /* the other setting kept (v0.60.176) */
+        strcat(line, "idle ");
+        char d[12]; int k = 0; uint32_t v = idle_s;
+        do { d[k++] = (char)('0' + v % 10); v /= 10; } while (v);
+        int l = (int)strlen(line);
+        while (k) line[l++] = d[--k];
+        line[l++] = '\n'; line[l] = '\0';
+    }
     settings_path(p);
-    int ok = users_may(p, 'w') && fat_write(p, (const uint8_t *)line, 13) >= 0;
+    int ok = users_may(p, 'w') && fat_write(p, (const uint8_t *)line, (uint32_t)strlen(line)) >= 0;
     klog("[countertop] background %s, %s %s\n", bgs[bg_choice].name, ok ? "kept in" : "not kept in", p);
 }
 static int open_terminal(void);
@@ -1267,6 +1341,7 @@ static void snap_window(int k, int side) {
  * middle click types the clipboard into the terminal under it. A click
  * with no drag, or new output, clears the selection. */
 static int sel_win = -1;
+static uint32_t last_input;                      /* (v0.60.176) for the idle cloche */
 /* A row of a files window dragged (v0.60.163): let go over a terminal, its
  * path is typed there, quoted, with no Enter; let go anywhere else, or
  * hardly moved, nothing happens. */
@@ -1307,6 +1382,8 @@ static void sel_copy(int k) {
 static void pointer_buttons(int px, int py, int btn, int np) {
     int left = btn & 1, was = last_btn;
     last_btn = btn;
+    last_input = timer_get_ticks();
+    if (locked) return;                                /* under the cloche: no clicks */
     if (fd_win >= 0 && (!left || np)) {                /* a files row let go */
         int k = window_at(px, py), from = fd_win;
         fd_win = -1;
@@ -1393,8 +1470,9 @@ static void pointer_buttons(int px, int py, int btn, int np) {
         int i = (py - MENU_Y - 2) / MENU_IH;
         int on_button = py < BAR_H && px >= BTN_KITCHEN_X && px < BTN_KITCHEN_X + BTN_KITCHEN_W;
         menu_set(0);
-        if (px >= MENU_X && px < MENU_X + MENU_W && py >= MENU_Y + 2 && i >= 0 && i < MENU_N && !menu_item[i][2][0]) {
-            next_background();
+        if (px >= MENU_X && px < MENU_X + MENU_W && py >= MENU_Y + 2 && i >= 0 && i < MENU_N && menu_item[i][2][0] == '@') {
+            if (!strcmp(menu_item[i][2], "@cloche")) cloche_lock("the menu");
+            else next_background();
         } else if (px >= MENU_X && px < MENU_X + MENU_W && py >= MENU_Y + 2 && i >= 0 && i < MENU_N) {
             kitchen_launch(i);
         }
@@ -1590,7 +1668,8 @@ int countertop_run(int (*avail)(void), int (*getch)(void), int uid) {
     background();
     draw_icons();
     bar();
-    nwin = 0; drag = -1; last_btn = 0; leave_asked = 0; leave_armed = 0; note_h = note_t = note_showing = 0; menu_open = 0; rs_win = -1; sel_win = -1; fd_win = -1; ctx_win = -1; cal_open = 0; ct_uid = uid; nterm = 0; task_sig = 0xFFFFFFFFu;
+    nwin = 0; drag = -1; last_btn = 0; leave_asked = 0; leave_armed = 0; note_h = note_t = note_showing = 0; menu_open = 0; rs_win = -1; sel_win = -1; fd_win = -1; ctx_win = -1; cal_open = 0; locked = 0; lock_wait = 0;
+    last_input = timer_get_ticks(); ct_uid = uid; nterm = 0; task_sig = 0xFFFFFFFFu;
     for (int k = 0; k < MAX_WIN; k++) win[k].used = 0;
     app_drag = -1;
     mutex_lock(&app_mtx);                            /* programs may ask for windows now */
@@ -1618,6 +1697,7 @@ int countertop_run(int (*avail)(void), int (*getch)(void), int uid) {
         int px, py;
         mouse_get_px(&px, &py, &b);
         if (px != ptr_x || py != ptr_y) {
+            last_input = timer_get_ticks();
             dirty(ptr_x, ptr_y, ARROW_W, ARROW_H);
             ptr_x = px; ptr_y = py;
             dirty(ptr_x, ptr_y, ARROW_W, ARROW_H);
@@ -1653,7 +1733,8 @@ int countertop_run(int (*avail)(void), int (*getch)(void), int uid) {
                 if (top != f->top) { f->top = top; repaint_win(k); klog("[countertop] files scrolled to row %d\n", top); }
             }
         }
-        bar_clock();
+        if (!locked) bar_clock();
+        if (!locked && idle_s && timer_get_ticks() - last_input >= idle_s * 100u) cloche_lock("idle");
         for (int i = 0; i < nwin; i++) {             /* terminals: drawn again, or gone */
             int k = order[i];
             if (!win[k].term) continue;
@@ -1669,6 +1750,8 @@ int countertop_run(int (*avail)(void), int (*getch)(void), int uid) {
         apps_tick();
         while (avail()) {                            /* keys: the focused terminal's */
             int c = getch(), k = topmost();
+            last_input = timer_get_ticks();
+            if (locked) { cloche_key(c); continue; }   /* under the cloche: keys are for it alone */
             if (c == KEY_CTRL_ALT_T) {                         /* Ctrl+Alt+T: a terminal (v0.60.171) */
                 klog("[countertop] ctrl-alt-t\n");
                 open_terminal();
@@ -1705,11 +1788,11 @@ int countertop_run(int (*avail)(void), int (*getch)(void), int uid) {
         }
         if (leave_asked) break;
         if (leave_armed && timer_get_ticks() - leave_armed_at >= 500) { leave_armed = 0; bar_note(0); }   /* the question lapses */
-        notes_tick();
+        if (!locked) notes_tick();
         {                                            /* the taskbar, when the windows changed */
             uint32_t sig = (uint32_t)topmost() * 2654435761u;
             for (int i = 0; i < MAX_WIN; i++) sig = sig * 31u + (uint32_t)(win[i].used * 2 + win[i].min);
-            if (sig != task_sig) { task_sig = sig; taskbar(); }
+            if (sig != task_sig && !locked) { task_sig = sig; taskbar(); }
         }
         flush();
         task_sleep(15);

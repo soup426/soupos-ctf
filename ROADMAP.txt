@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.175
+Current version: v0.60.176
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,22 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.176 (2026-10-09)  — THE CLOCHE: LOCKING THE DESKTOP
+  - The Kitchen menu's cloche (the dome over a plate), or ten minutes
+    with no key or mouse ("idle N" seconds in the cook's `countertop`,
+    0 never), covers the whole screen with a lock showing the cook's
+    name. Anything repainted while it is down is covered again; the
+    bar's clock, the taskbar and notes wait. Keys go to it alone (Esc
+    does not leave); clicks do nothing. The cook's secret, checked by
+    users_check, lifts it. Wrong secrets are logged and said; after
+    every third it waits 3 s, not listening. Programs go on under it.
+  - Menu entries that are not programs are '@' actions now (@backdrop,
+    @cloche), not icons; saving the background keeps an idle setting.
+  - scripts/ctcloche-test.sh: from the menu (the lock read back), Esc
+    held, a wrong secret refused in red, the right one lifting it; with
+    idle 3, three idle seconds bring it down; three wrong secrets, the
+    right one unheard in the wait, heard after. Six-wide soak 6 of 6.
 
 v0.60.175 (2026-10-09)  — A CALENDAR UNDER THE CLOCK
   - A click on the bar's clock drops this month from the RTC: its name

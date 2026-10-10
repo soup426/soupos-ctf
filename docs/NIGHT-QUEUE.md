@@ -47,7 +47,7 @@ queue 53 ran out, as the loop it runs in asks; the user has not seen it.
 
 ---
 
-## 1. cloche: locking the desktop
+## 1. cloche: locking the desktop — DONE v0.60.176
 
 The Kitchen menu's "cloche" (the dome over a plate), and ten minutes with
 no key or mouse, cover the screen with a lock showing the cook's name;
@@ -55,7 +55,8 @@ their secret, typed there and checked by users_check, lifts it. Programs
 go on running under it. Wrong secrets are logged, and after three the
 lock waits a few seconds before the next try. Test: lock from the menu,
 a wrong secret refused (logged), the right one unlocks; the idle lock
-with the timeout shortened for the test (a build switch).
+with the timeout shortened for the test (a build switch; built as an
+"idle N" line in the cook's settings instead, which the test writes).
 
 ## 2. Copy a file by dragging between files windows
 
