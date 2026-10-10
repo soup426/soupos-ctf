@@ -63,7 +63,7 @@ as Leave is). The same permission rule as the shell's (users_may); a
 bowl that is not empty is not removed. Test: as saucier in their home,
 a bowl made and a file removed; in / refused.
 
-## 3. scale.elf: a calculator
+## 3. scale.elf: a calculator — DONE v0.60.173
 
 A window of buttons (digits, + - x /, =, C) clicked or typed, decimals in
 fixed point (ring 3 has no FPU), the display drawn with the kernel's font.

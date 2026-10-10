@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.172
+Current version: v0.60.173
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,20 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.173 (2026-10-09)  — scale.elf: A CALCULATOR
+  - Buttons clicked or keys typed (digits . + - x or * / = or Enter, C),
+    left to right as a pocket calculator. No FPU in ring 3: 64-bit
+    millionths, six decimals with trailing zeros dropped; past 10^12 or a
+    division by 0 the display says error until C. Multiplication splits
+    both sides into whole and fraction and checks each product against
+    the limit; division is long division a decimal at a time, so neither
+    passes 64 bits (fuzzed on the host against exact integers: 20000
+    cases, 0 different). The display is the kernel's font, doubled. In
+    the Kitchen menu.
+  - scripts/ctscale-test.sh: 12.5x4=50, 7/2=3.5, 1/0 an error, 2+3x4=20
+    typed; C 9 x 9 = 81 clicked; the display read back. ctsettings-test
+    finds backdrop a row lower. Six-wide soak 6 of 6.
 
 v0.60.172 (2026-10-09)  — NEW BOWLS AND REMOVING FILES FROM THE FILES WINDOW
   - A right click in a files window drops a small menu where it was:

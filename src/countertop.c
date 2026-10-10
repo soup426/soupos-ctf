@@ -626,6 +626,7 @@ static const char *const menu_item[][3] = {      /* name, what it is, what to co
     { "swirl", "the Mandelbrot set", "swirl.elf" },
     { "oven", "a minute's timer", "oven.elf 60" },          /* (v0.60.164) */
     { "expo", "the processes", "expo.elf" },                /* (v0.60.168) */
+    { "scale", "a calculator", "scale.elf" },               /* (v0.60.173) */
     { "backdrop", "the next one", "" },                     /* (v0.60.169) not a program: the background */
 };
 #define MENU_N (int)(sizeof(menu_item) / sizeof(menu_item[0]))

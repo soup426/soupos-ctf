@@ -108,7 +108,7 @@ UCFLAGS  = -m32 -ffreestanding -fno-pie -no-pie -fno-stack-protector \
            -nostdlib -Isrc -mgeneral-regs-only -O2
 USER_ELFS = user/greet.elf user/spoon.elf user/call.elf user/mise.elf user/whisk.elf \
             user/drop.elf user/unwrap.elf user/ticket.elf user/glutton.elf \
-            user/raise.elf user/weigh.elf user/measure.elf user/proof.elf user/stockpot.elf user/fridge.elf user/peek.elf user/toss.elf user/newbowl.elf user/sift.elf user/skim.elf user/dregs.elf user/rack.elf user/cull.elf user/divvy.elf user/slice.elf user/swap.elf user/tally.elf user/taste.elf user/forage.elf user/pair.elf user/flip.elf user/label.elf user/mince.elf user/knead.elf user/layer.elf user/stack.elf user/spread.elf user/labels.elf user/dish.elf user/marinate.elf user/peel.elf user/stalk.elf user/brine.elf user/brand.elf user/encore.elf user/potluck.elf user/portion.elf user/tumble.elf user/spot.elf user/carve.elf user/reckon.elf user/frost.elf user/prod.elf user/sear.elf user/swirl.elf user/oven.elf user/expo.elf
+            user/raise.elf user/weigh.elf user/measure.elf user/proof.elf user/stockpot.elf user/fridge.elf user/peek.elf user/toss.elf user/newbowl.elf user/sift.elf user/skim.elf user/dregs.elf user/rack.elf user/cull.elf user/divvy.elf user/slice.elf user/swap.elf user/tally.elf user/taste.elf user/forage.elf user/pair.elf user/flip.elf user/label.elf user/mince.elf user/knead.elf user/layer.elf user/stack.elf user/spread.elf user/labels.elf user/dish.elf user/marinate.elf user/peel.elf user/stalk.elf user/brine.elf user/brand.elf user/encore.elf user/potluck.elf user/portion.elf user/tumble.elf user/spot.elf user/carve.elf user/reckon.elf user/frost.elf user/prod.elf user/sear.elf user/swirl.elf user/oven.elf user/expo.elf user/scale.elf
 
 .PHONY: all clean distclean run run-ai run-console run-tcp iso disk user
 
@@ -302,6 +302,7 @@ $(DISK):
 	mcopy -i $(DISK) -o user/swirl.elf    ::SWIRL.ELF
 	mcopy -i $(DISK) -o user/oven.elf     ::OVEN.ELF
 	mcopy -i $(DISK) -o user/expo.elf     ::EXPO.ELF
+	mcopy -i $(DISK) -o user/scale.elf    ::SCALE.ELF
 	@if [ -f DOOM1.WAD ]; then \
 	    echo "  Copying DOOM1.WAD to disk image..."; \
 	    mcopy -i $(DISK) DOOM1.WAD ::DOOM1.WAD; \
