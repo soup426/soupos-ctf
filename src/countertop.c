@@ -664,11 +664,49 @@ static void draw_menu(void) {                     /* within the clip */
         text(MENU_X + 10 + 8 * 8, y, menu_item[i][1], 0x00606870u);
     }
 }
+/* Icons on the background (v0.60.174): the Kitchen menu's programs down
+ * the left, a coloured square with the program's initial and its name
+ * under it. Drawn with the background, so windows cover them; a double
+ * click opens one as the menu does. */
+#define ICON_X  20
+#define ICON_Y0 40
+#define ICON_DY 76
+#define ICON_SZ 40
+static const uint32_t icon_rgb[] = { 0x00C0392Bu, 0x002E86DEu, 0x00E67E22u, 0x0027AE60u, 0x008E44ADu };
+static int icon_count(void) {                      /* the menu's programs, not its backdrop */
+    int n = 0;
+    for (int i = 0; i < MENU_N; i++) if (menu_item[i][2][0]) n++;
+    return n;
+}
+static void big_char(int x, int y, char ch, uint32_t fg) {   /* the font, twice the size */
+    const uint8_t *g = font8x16[(uint8_t)ch];
+    for (int j = 0; j < 32; j++)
+        for (int i = 0; i < 16; i++)
+            if ((g[j / 2] >> (7 - i / 2)) & 1) fill(x + i, y + j, 1, 1, fg);
+}
+static void draw_icons(void) {                     /* within the clip */
+    for (int i = 0; i < icon_count(); i++) {
+        int y = ICON_Y0 + i * ICON_DY;
+        fill(ICON_X, y, ICON_SZ, ICON_SZ, icon_rgb[i % 5]);
+        big_char(ICON_X + (ICON_SZ - 16) / 2, y + (ICON_SZ - 32) / 2, (char)(menu_item[i][0][0] - 32), TEXT_RGB);
+        int l = (int)strlen(menu_item[i][0]);
+        text(ICON_X + ICON_SZ / 2 - 4 * l, y + ICON_SZ + 4, menu_item[i][0], TEXT_RGB);
+    }
+}
+static int icon_at(int px, int py) {               /* the icon (its square or its name) under a point, or -1 */
+    for (int i = 0; i < icon_count(); i++) {
+        int y = ICON_Y0 + i * ICON_DY;
+        if (px >= ICON_X - 12 && px < ICON_X + ICON_SZ + 12 && py >= y && py < y + ICON_SZ + 22) return i;
+    }
+    return -1;
+}
+
 static void repaint(int x, int y, int w, int h) {
     cx0 = x < 0 ? 0 : x; cy0 = y < BAR_H ? BAR_H : y;
     cx1 = x + w > W ? W : x + w; cy1 = y + h > H - TASK_H ? H - TASK_H : y + h;
     if (cx0 < cx1 && cy0 < cy1) {
         background();
+        draw_icons();
         for (int i = 0; i < nwin; i++) if (!win[order[i]].min) draw_window(order[i]);
         if (menu_open) draw_menu();
         if (ctx_win >= 0) draw_ctx();
@@ -701,6 +739,16 @@ static void next_background(void) {
     settings_path(p);
     int ok = users_may(p, 'w') && fat_write(p, (const uint8_t *)line, 13) >= 0;
     klog("[countertop] background %s, %s %s\n", bgs[bg_choice].name, ok ? "kept in" : "not kept in", p);
+}
+static int open_terminal(void);
+static void kitchen_launch(int i) {                /* a terminal that cooks menu_item i */
+    int t = open_terminal();
+    if (t < 0) return;
+    char line[40] = "cook ";
+    scopy(line + 5, menu_item[i][2], (int)sizeof(line) - 6);
+    for (const char *c = line; *c; c++) wt_key(win[t].term, *c);
+    wt_key(win[t].term, '\n');
+    klog("[countertop] kitchen: %s\n", menu_item[i][0]);
 }
 static void menu_set(int open) {
     if (menu_open == open) return;
@@ -1296,14 +1344,7 @@ static void pointer_buttons(int px, int py, int btn, int np) {
         if (px >= MENU_X && px < MENU_X + MENU_W && py >= MENU_Y + 2 && i >= 0 && i < MENU_N && !menu_item[i][2][0]) {
             next_background();
         } else if (px >= MENU_X && px < MENU_X + MENU_W && py >= MENU_Y + 2 && i >= 0 && i < MENU_N) {
-            int t = open_terminal();
-            if (t >= 0) {
-                char line[40] = "cook ";
-                scopy(line + 5, menu_item[i][2], (int)sizeof(line) - 6);
-                for (const char *c = line; *c; c++) wt_key(win[t].term, *c);
-                wt_key(win[t].term, '\n');
-                klog("[countertop] kitchen: %s\n", menu_item[i][0]);
-            }
+            kitchen_launch(i);
         }
         if (on_button || (px >= MENU_X && px < MENU_X + MENU_W && py < MENU_Y + MENU_H)) return;
     }
@@ -1324,7 +1365,15 @@ static void pointer_buttons(int px, int py, int btn, int np) {
     }
     if (np) {
         int k = window_at(px, py);
-        if (k < 0) return;
+        if (k < 0) {                                   /* the background: an icon, twice quickly, opens */
+            static int last_icon = -1;
+            int ic = icon_at(px, py);
+            uint32_t now, before;
+            mouse_presses(&now, &before);
+            if (ic >= 0 && (np >= 2 || (last_icon == ic && now - before < DCLICK))) { last_icon = -1; kitchen_launch(ic); }
+            else last_icon = ic;
+            return;
+        }
         win_t *w = &win[k];
         int bx = w->x + w->w - BORDER - 3 - CLOSE_SZ, by = w->y + BORDER + (TITLE_H - CLOSE_SZ) / 2;
         if (px >= bx && px < bx + CLOSE_SZ && py >= by && py < by + CLOSE_SZ) {
@@ -1487,6 +1536,7 @@ int countertop_run(int (*avail)(void), int (*getch)(void), int uid) {
     ct_uid = uid;
     load_settings();                                 /* before the first background (v0.60.169) */
     background();
+    draw_icons();
     bar();
     nwin = 0; drag = -1; last_btn = 0; leave_asked = 0; leave_armed = 0; note_h = note_t = note_showing = 0; menu_open = 0; rs_win = -1; sel_win = -1; fd_win = -1; ctx_win = -1; ct_uid = uid; nterm = 0; task_sig = 0xFFFFFFFFu;
     for (int k = 0; k < MAX_WIN; k++) win[k].used = 0;

@@ -56,14 +56,15 @@ for i, ch in enumerate('soupOS'):          # glyph for glyph, at 10,4
             want = TEXT if (g[j] >> (7 - k)) & 1 else BAR
             if at(10 + i * 8 + k, 4 + j) != want: bad.append(f'"{ch}" pixel {k},{j}'); break
 for y in (24, 200, 400, 600, 739):          # 740 and below is the taskbar since v0.60.144
-    if at(20, y) != gradc(W, H, y): bad.append(f'gradient at y={y}: {at(20,y):06x} not {gradc(W,H,y):06x}')
+    # gradient samples at x=1000: the icons (v0.60.174) are down the left
+    if at(1000, y) != gradc(W, H, y): bad.append(f'gradient at y={y}: {at(1000,y):06x} not {gradc(W,H,y):06x}')
 if at(512, 384) != 0 or at(513, 386) != 0xFFFFFF: bad.append(f'pointer at mid-screen: {at(512,384):06x} {at(513,386):06x}')
 W, H, at = ppm('s2')
 if at(300, 200) != 0 or at(301, 202) != 0xFFFFFF or at(301, 205) != 0xFFFFFF: bad.append('pointer at 300,200')
 # since v0.60.142 512,384 is inside the Pantry window (its body under the pointer)
 if at(512, 384) != 0xE6EEF5 or at(513, 386) != 0xE6EEF5: bad.append(f'the pointer left something at 512,384: {at(512,384):06x}')
 W, H, at = ppm('s3')
-if at(600, 5) == BAR or at(20, 739) == gradc(W, H, 739) or at(20, 400) == gradc(W, H, 400): bad.append('after Esc the desktop is still there')
+if at(600, 5) == BAR or at(1000, 739) == gradc(W, H, 739) or at(1000, 400) == gradc(W, H, 400): bad.append('after Esc the desktop is still there')
 for b in bad[:8]: print('        ' + b)
 sys.exit(1 if bad else 0)
 PY

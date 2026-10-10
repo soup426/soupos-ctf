@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.173
+Current version: v0.60.174
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,18 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.174 (2026-10-09)  — ICONS ON THE BACKGROUND
+  - The Kitchen menu's programs (frost, swirl, oven, expo, scale) as
+    icons down the left of the background: a coloured square with the
+    program's initial (the font doubled) and its name under it, drawn
+    with the background so windows cover them. A double click on one
+    opens it as the menu does (kitchen_launch() is shared now); one
+    click, or a click between them, does nothing.
+  - scripts/cticons-test.sh: the five squares' colours and initials, a
+    single click and a click between doing nothing, a double click on
+    swirl opening it. Six-wide soak 6 of 6. countertop-test samples
+    the gradient at x=1000 now (it used x=20, where the icons are).
 
 v0.60.173 (2026-10-09)  — scale.elf: A CALCULATOR
   - Buttons clicked or keys typed (digits . + - x or * / = or Enter, C),

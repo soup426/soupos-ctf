@@ -70,7 +70,7 @@ fixed point (ring 3 has no FPU), the display drawn with the kernel's font.
 Named for the kitchen scale. Test: 12.5 x 4 = 50, 7 / 2 = 3.5, 1 / 0 an
 error, typed and clicked, the display read against the font.
 
-## 4. Icons on the background
+## 4. Icons on the background — DONE v0.60.174
 
 The Kitchen menu's programs as icons down the left of the background
 (a drawn glyph and the name under it); a double click opens one as the
