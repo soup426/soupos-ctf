@@ -8,6 +8,10 @@
  * avail/getch read the keyboard of the shell that started it. 0 when it
  * ended on Esc; -1 with no framebuffer; -2 with no memory for its pages. */
 int countertop_run(int (*avail)(void), int (*getch)(void), int uid);   /* uid: whose terminals (v0.60.143) */
+/* The same desktop clocking in first (v0.60.179): its screen asks for the
+ * cook and their secret, and check() (the shell's) gives the uid or -1,
+ * doing what a login does. Returns as countertop_run does, when they leave. */
+int countertop_clock_in(int (*avail)(void), int (*getch)(void), int (*check)(const char *name, const char *secret));
 
 /* Windows for ring-3 programs (v0.60.146), for the SYS_WIN_* calls. They
  * run on the calling program's task; the desktop's loop is the only thing

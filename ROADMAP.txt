@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.178
+Current version: v0.60.179
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,25 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.179 (2026-10-09)  — STRAIGHT TO THE DESKTOP
+  - Asked for by the user: booted with QEMU's
+    `-fw_cfg name=opt/soupos/desktop,string=1` (which `make run` now
+    passes), the console clocks in on the desktop's own screen, the
+    cloche's, with a cook field and a secret field, instead of at the
+    prompt. The shell's callback checks the secret and does what a
+    login does (session uid, home, PWD, leftovers, the logins record);
+    wrong ones are refused there, with the 3 s wait after every third.
+    Leave or Esc clocks out (the leftovers saved, the console's shell
+    wiped as clockout wipes it) back to the clock-in screen. Without
+    the flag (the tests, real hardware) the console's login is as it was.
+  - src/fwcfg.c: fwcfg_has(name), QEMU's fw_cfg file directory over the
+    legacy ports 0x510/0x511, 0 when the "QEMU" signature is not there.
+  - clockout's wipe of the console's shell is clockout_wipe(), shared.
+  - scripts/ctclockin-test.sh: with the flag, the clock-in screen read
+    back at boot, a wrong secret refused on it, the headchef's desktop
+    after the right one, Leave back to the clock-in screen, and the
+    console's prompt never clocking anyone in. Six-wide soak 6 of 6.
 
 v0.60.178 (2026-10-09)  — PROGRAMS OPEN WITHOUT A TERMINAL
   - Asked for by the user: a program from the Kitchen menu or an icon

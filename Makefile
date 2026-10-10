@@ -348,11 +348,14 @@ endif
 
 # Run with VGA window (interactive — click the window to type, Ctrl+Alt+G to release)
 # Primary master (index=0) = disk.img   Secondary master (index=2) = cdrom
+# Straight to the desktop's clock-in screen (v0.60.179); the tests and the
+# other targets leave the flag off and get the console's login.
 run: iso $(DISK)
 	qemu-system-i386 $(ACCEL) $(NET) \
 	    -drive file=$(DISK),format=raw,if=ide,index=0 \
 	    -cdrom $(ISO) -boot d \
 	    -m 128M -no-reboot -no-shutdown \
+	    -fw_cfg name=opt/soupos/desktop,string=1 \
 	    -display gtk -serial file:/tmp/soupos-serial.log
 
 # Run with the `ai` serial bridge attached on COM2. COM1 still goes to the log

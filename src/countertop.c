@@ -751,10 +751,34 @@ static void draw_cal(void) {                       /* within the clip */
  * checked by users_check, lifts it. Programs go on under it. Wrong secrets
  * are logged; after three it waits 3 s before listening again. */
 static int locked, lock_len, lock_fails;
+/* Clocking in on the desktop (v0.60.179): the cloche's screen with two
+ * fields, the cook's name and then their secret, checked by the shell's
+ * callback, which does what a login does; until then nobody's desktop. */
+static uint32_t last_input;                      /* (v0.60.176) for the idle cloche */
+static int (*login_cb)(const char *name, const char *secret);
+static int login_mode, login_len;
+static char login_name[16];
 static char lock_buf[32], lock_msg[48];
 static uint32_t lock_wait;
 static void draw_lock(void) {                      /* within the clip */
     fill(cx0, cy0, cx1 - cx0, cy1 - cy0, 0x00101418u);
+    if (login_mode) {
+        char a[40] = "cook:   ", b[40] = "secret: ";
+        int l = 8;
+        for (int i = 0; i < login_len; i++) a[l++] = login_name[i];
+        if (login_mode == 1) a[l++] = '_';
+        a[l] = '\0';
+        l = 8;
+        for (int i = 0; i < lock_len && l < 38; i++) b[l++] = '*';
+        if (login_mode == 2) b[l++] = '_';
+        b[l] = '\0';
+        text(W / 2 - 8 * 7, H / 2 - 90, "soupOS kitchen", 0x00F0B040u);
+        text(W / 2 - 4 * 28, H / 2 - 60, "clock in to start your shift", TEXT_RGB);
+        text(W / 2 - 8 * 10, H / 2 - 20, a, TEXT_RGB);
+        text(W / 2 - 8 * 10, H / 2 + 4, b, TEXT_RGB);
+        if (lock_msg[0]) text(W / 2 - 4 * (int)strlen(lock_msg), H / 2 + 40, lock_msg, 0x00F05050u);
+        return;
+    }
     const char *who = users_name_of((uint8_t)ct_uid);
     char line[64] = "secret: ";
     int l = 8;
@@ -774,9 +798,45 @@ static void cloche_lock(const char *why) {
 }
 static void bar(void);
 static void taskbar(void);
+static void load_settings(void);
+static void draw_icons(void);
+static void login_key(int c) {
+    if (login_mode == 1) {                             /* the name */
+        if (c == '\b') { if (login_len) login_len--; }
+        else if (c == '\n') { if (login_len) { login_mode = 2; lock_len = 0; } }
+        else if (c > ' ' && c < 127 && login_len < (int)sizeof(login_name) - 1) login_name[login_len++] = (char)c;
+        cx0 = 0; cy0 = 0; cx1 = W; cy1 = H;
+        draw_lock();
+        return;
+    }
+    if (c == '\b') { if (lock_len) lock_len--; }
+    else if (c == '\n') {
+        login_name[login_len] = '\0'; lock_buf[lock_len] = '\0';
+        int uid = login_cb(login_name, lock_buf);
+        memset(lock_buf, 0, sizeof(lock_buf)); lock_len = 0;
+        if (uid >= 0) {
+            ct_uid = uid; login_mode = 0; locked = 0;
+            klog("[countertop] clocked in %s\n", login_name);
+            login_len = 0; lock_msg[0] = '\0';
+            load_settings();                           /* the cook's background */
+            repaint(0, BAR_H, W, H - BAR_H - TASK_H);
+            bar(); taskbar();
+            last_input = timer_get_ticks();
+            return;
+        }
+        lock_fails++;
+        klog("[countertop] clock-in refused (%d)\n", lock_fails);
+        scopy(lock_msg, "wrong cook or secret", (int)sizeof(lock_msg));
+        login_mode = 1; login_len = 0;
+        if (lock_fails % 3 == 0) { lock_wait = timer_get_ticks() + 300; scopy(lock_msg, "wait a moment", (int)sizeof(lock_msg)); }
+    } else if (c >= ' ' && c < 127 && lock_len < (int)sizeof(lock_buf) - 1) lock_buf[lock_len++] = (char)c;
+    cx0 = 0; cy0 = 0; cx1 = W; cy1 = H;
+    draw_lock();
+}
 static void cloche_key(int c) {
     if (lock_wait && timer_get_ticks() < lock_wait) return;   /* after three wrong: waiting */
     lock_wait = 0;
+    if (login_mode) { login_key(c); return; }
     if (c == '\b') { if (lock_len) lock_len--; }
     else if (c == '\n') {
         lock_buf[lock_len] = '\0';
@@ -1397,7 +1457,6 @@ static void snap_window(int k, int side) {
  * middle click types the clipboard into the terminal under it. A click
  * with no drag, or new output, clears the selection. */
 static int sel_win = -1;
-static uint32_t last_input;                      /* (v0.60.176) for the idle cloche */
 /* A row of a files window dragged (v0.60.163): let go over a terminal, its
  * path is typed there, quoted, with no Enter; over another files window
  * (v0.60.177), the file is copied into the bowl that one shows; let go
@@ -1710,6 +1769,13 @@ static void release(int pages) {
     for (int i = 0; i < pages; i++) { pmm_free_page(row[i]); row[i] = 0; }
 }
 
+int countertop_run(int (*avail)(void), int (*getch)(void), int uid);
+int countertop_clock_in(int (*avail)(void), int (*getch)(void), int (*check)(const char *, const char *)) {
+    login_cb = check;
+    int r = countertop_run(avail, getch, -1);
+    login_mode = 0; login_cb = 0;
+    return r;
+}
 int countertop_run(int (*avail)(void), int (*getch)(void), int uid) {
     if (!fb_present()) return -1;
     W = (int)fb_width(); H = (int)fb_height();
@@ -1722,7 +1788,8 @@ int countertop_run(int (*avail)(void), int (*getch)(void), int uid) {
     any_dirty = 0;
     clip_all();
     ct_uid = uid;
-    load_settings();                                 /* before the first background (v0.60.169) */
+    if (uid >= 0) load_settings();                   /* before the first background (v0.60.169) */
+    else { bg_choice = 0; idle_s = 600; }            /* nobody's yet: clocking in first (v0.60.179) */
     background();
     draw_icons();
     bar();
@@ -1740,9 +1807,12 @@ int countertop_run(int (*avail)(void), int (*getch)(void), int uid) {
     static const char *const welcome[] = { "Welcome to countertop.", "", "Drag a window by its title bar,",
                                            "click one to bring it forward,", "and the red box closes it.", "",
                                            "Esc gives the console back.", 0 };
+    static const char *const welcome_in[] = { "Welcome to countertop.", "", "Drag a window by its title bar,",
+                                              "click one to bring it forward,", "and the red box closes it.", "",
+                                              "Leave or Esc clocks out.", 0 };
     static const char *const pantry[] = { "The pantry.", "", "Windows of their own come next:",
                                           "terminals, files, programs.", 0 };
-    open_window(120, 100, 420, 220, "Welcome", 0x00F4F1EAu, welcome);
+    open_window(120, 100, 420, 220, "Welcome", 0x00F4F1EAu, uid < 0 ? welcome_in : welcome);
     open_window(420, 260, 360, 240, "Pantry", 0x00E6EEF5u, pantry);
     int b;
     mouse_get_px(&ptr_x, &ptr_y, &b);
@@ -1751,6 +1821,13 @@ int countertop_run(int (*avail)(void), int (*getch)(void), int uid) {
     wheel_seen = mouse_wheel();
     flush();
     klog("[countertop] up %dx%d, %d pages for the back buffer\n", W, H, H);
+    if (uid < 0) {                                   /* the clock-in screen over it all */
+        cloche_lock("clock in");
+        login_mode = 1; login_len = 0; lock_len = 0; lock_fails = 0;
+        draw_lock();
+        flush();
+        klog("[countertop] clock in to start your shift\n");   /* as the console says it */
+    }
     for (;;) {
         int px, py;
         mouse_get_px(&px, &py, &b);
@@ -1792,7 +1869,7 @@ int countertop_run(int (*avail)(void), int (*getch)(void), int uid) {
             }
         }
         if (!locked) bar_clock();
-        if (!locked && idle_s && timer_get_ticks() - last_input >= idle_s * 100u) cloche_lock("idle");
+        if (!locked && idle_s && ct_uid >= 0 && timer_get_ticks() - last_input >= idle_s * 100u) cloche_lock("idle");
         for (int i = 0; i < nwin; i++) {             /* terminals: drawn again, or gone */
             int k = order[i];
             if (!win[k].term) continue;

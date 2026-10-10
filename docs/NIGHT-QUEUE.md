@@ -52,7 +52,7 @@ queue 53 ran out, as the loop it runs in asks; the user has not seen it.
 Asked for by the user (2026-10-09): pressing a program in the Kitchen
 menu or an icon should open only the program, no terminal alongside it.
 
-## U2. Boot straight to the desktop
+## U2. Boot straight to the desktop — DONE v0.60.179
 
 Asked for by the user (2026-10-09): the desktop instead of the terminal
 at boot. A graphical login (the cloche's screen asking for cook and

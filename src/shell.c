@@ -39,6 +39,7 @@
 #include "wad.h"
 #endif
 #include "countertop.h"
+#include "fwcfg.h"
 #include "fb.h"
 #include "vfs.h"
 #include "klog.h"
@@ -444,12 +445,51 @@ static void run_profile(void) {
 }
 
 static void hist_load(void);     /* below, with the history */
+static void hist_save(void);
+static void clockout_wipe(void);
+static int  ct_avail(void);
+static int  ct_getch(void);
 static void set_var_quiet(const char *name, const char *value);   /* with cd (v0.60.32) */
+
+/* Straight to the desktop (v0.60.179): when the host asks for it (QEMU's
+ * `-fw_cfg name=opt/soupos/desktop,string=1`, which `make run` passes),
+ * the console clocks in on the desktop's own screen, not at this prompt,
+ * and leaving the desktop clocks out back to that screen. Without it (the
+ * tests, which type at the prompt; real hardware) nothing changes. */
+static int desktop_check(const char *name, const char *secret) {
+    int uid = users_check(name, secret);
+    if (uid < 0) { logins_record(name, "console", 0); return -1; }
+    set_session_uid((uint8_t)uid);
+    ensure_home((uint8_t)uid, cur_shell()->cwd);
+    set_var_quiet("PWD", cur_shell()->cwd);
+    hist_load();
+    logins_record(users_current_name(), "console", 1);
+    console_at_login = 0;
+    return uid;
+}
+static void desktop_shifts(void) {
+    for (;;) {
+        console_at_login = 1;
+        int r = countertop_clock_in(ct_avail, ct_getch, desktop_check);
+        t_flush_in();
+        if (r < 0) return;                             /* no framebuffer: the prompt after all */
+        if (console_at_login) continue;                /* (nobody clocked in) */
+        hist_save();                                   /* clocking out, as clockout does */
+        clockout_wipe();
+        klog("[countertop] clocked out\n");
+    }
+}
+
 static void do_login(void) {
     char name[USER_NAME_MAX];
     char secret[64];
     int  pass_fails = 0;
-    if (cur_shell() == &the_shell) console_at_login = 1;
+    if (cur_shell() == &the_shell) {
+        static int asked, desktop;
+        if (!asked) { asked = 1; desktop = fwcfg_has("opt/soupos/desktop"); }
+        if (desktop) desktop_shifts();
+        console_at_login = 1;
+    }
     for (;;) {
         t_color(VGA_LIGHT_CYAN, VGA_BLACK);
         t_puts("\n  soupOS kitchen -- clock in to start your shift.\n");
@@ -3706,6 +3746,10 @@ static void cmd_clockout(void) {
     }
     t_printf("  %s clocks out. The kitchen is yours, next cook.\n",
                users_current_name());
+    clockout_wipe();
+    do_login();
+}
+static void clockout_wipe(void) {
     /* The next cook starts clean (v0.60.12): the console's shell outlives
      * the cook, so what they typed (leftovers and the up arrow), set
      * (variables, functions, $1..$9) and cut (Ctrl+U, Ctrl+W) would pass to whoever
@@ -3725,7 +3769,6 @@ static void cmd_clockout(void) {
     memset(sh->fbody, 0, sizeof(sh->fbody));
     sh->nfuncs = 0;
     clip_clear();
-    do_login();
 }
 
 /* secret - change your own secret (the old one, then the new one twice), or,
