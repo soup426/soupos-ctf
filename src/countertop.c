@@ -701,6 +701,55 @@ static int icon_at(int px, int py) {               /* the icon (its square or it
     return -1;
 }
 
+/* A calendar under the clock (v0.60.175): this month from the RTC, today
+ * on blue; a click on the clock drops it and puts it up again, a click
+ * anywhere else puts it up. */
+static void repaint(int x, int y, int w, int h);
+#define CAL_W 184
+#define CAL_H 158
+#define CAL_X (W - CAL_W - 4)
+#define CAL_Y BAR_H
+static int cal_open;
+static rtc_time_t cal_t;
+static int weekday(int y, int m, int d) {          /* 0 Sunday (Sakamoto's) */
+    static const int t[12] = { 0, 3, 2, 5, 0, 3, 5, 1, 4, 6, 2, 4 };
+    if (m < 3) y--;
+    return (y + y / 4 - y / 100 + y / 400 + t[m - 1] + d) % 7;
+}
+static int month_days(int y, int m) {
+    static const int n[12] = { 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31 };
+    return m == 2 && ((y % 4 == 0 && y % 100) || y % 400 == 0) ? 29 : n[m - 1];
+}
+static void draw_cal(void) {                       /* within the clip */
+    static const char *const mon[12] = { "January", "February", "March", "April", "May", "June", "July",
+                                         "August", "September", "October", "November", "December" };
+    fill(CAL_X, CAL_Y, CAL_W, CAL_H, EDGE_RGB);
+    fill(CAL_X + 1, CAL_Y, CAL_W - 2, CAL_H - 1, 0x00F4F1EAu);
+    char title[24];
+    scopy(title, mon[(cal_t.month + 11) % 12], (int)sizeof(title));
+    int l = (int)strlen(title);
+    title[l++] = ' ';
+    for (int v = 1000; v; v /= 10) title[l++] = (char)('0' + cal_t.year / v % 10);
+    title[l] = '\0';
+    text(CAL_X + 8, CAL_Y + 4, title, 0x00202020u);
+    text(CAL_X + 8, CAL_Y + 24, "Su Mo Tu We Th Fr Sa", 0x00606870u);
+    int first = weekday(cal_t.year, cal_t.month, 1), n = month_days(cal_t.year, cal_t.month);
+    for (int d = 1; d <= n; d++) {
+        int cell = first + d - 1, x = CAL_X + 8 + (cell % 7) * 24, y = CAL_Y + 44 + (cell / 7) * 18;
+        char num[3] = { (char)(d < 10 ? ' ' : '0' + d / 10), (char)('0' + d % 10), 0 };
+        int today = d == cal_t.day;
+        if (today) fill(x - 2, y - 1, 20, 18, FOCUS_RGB);
+        text(x, y, num, today ? TEXT_RGB : 0x00202020u);
+    }
+}
+static void cal_set(int open) {
+    if (cal_open == open) return;
+    cal_open = open;
+    if (open) rtc_read(&cal_t);
+    repaint(CAL_X, CAL_Y, CAL_W, CAL_H);
+    if (open) klog("[countertop] calendar %u-%u, today %u\n", cal_t.year, cal_t.month, cal_t.day);
+}
+
 static void repaint(int x, int y, int w, int h) {
     cx0 = x < 0 ? 0 : x; cy0 = y < BAR_H ? BAR_H : y;
     cx1 = x + w > W ? W : x + w; cy1 = y + h > H - TASK_H ? H - TASK_H : y + h;
@@ -710,6 +759,7 @@ static void repaint(int x, int y, int w, int h) {
         for (int i = 0; i < nwin; i++) if (!win[order[i]].min) draw_window(order[i]);
         if (menu_open) draw_menu();
         if (ctx_win >= 0) draw_ctx();
+        if (cal_open) draw_cal();
     }
     clip_all();
 }
@@ -1337,6 +1387,8 @@ static void pointer_buttons(int px, int py, int btn, int np) {
         if (!np) return;
     }
     if (np && ctx_win >= 0 && ctx_click(px, py)) return;   /* the files menu (v0.60.172) */
+    if (np && py < BAR_H && px >= W - 8 * 8 - 12) { cal_set(!cal_open); return; }   /* the clock: the calendar */
+    if (np && cal_open) cal_set(0);                    /* a click anywhere else puts it up, and goes on */
     if (np && menu_open) {                             /* a click with the menu down: an item, or away */
         int i = (py - MENU_Y - 2) / MENU_IH;
         int on_button = py < BAR_H && px >= BTN_KITCHEN_X && px < BTN_KITCHEN_X + BTN_KITCHEN_W;
@@ -1538,7 +1590,7 @@ int countertop_run(int (*avail)(void), int (*getch)(void), int uid) {
     background();
     draw_icons();
     bar();
-    nwin = 0; drag = -1; last_btn = 0; leave_asked = 0; leave_armed = 0; note_h = note_t = note_showing = 0; menu_open = 0; rs_win = -1; sel_win = -1; fd_win = -1; ctx_win = -1; ct_uid = uid; nterm = 0; task_sig = 0xFFFFFFFFu;
+    nwin = 0; drag = -1; last_btn = 0; leave_asked = 0; leave_armed = 0; note_h = note_t = note_showing = 0; menu_open = 0; rs_win = -1; sel_win = -1; fd_win = -1; ctx_win = -1; cal_open = 0; ct_uid = uid; nterm = 0; task_sig = 0xFFFFFFFFu;
     for (int k = 0; k < MAX_WIN; k++) win[k].used = 0;
     app_drag = -1;
     mutex_lock(&app_mtx);                            /* programs may ask for windows now */

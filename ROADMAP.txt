@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.174
+Current version: v0.60.175
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,16 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.175 (2026-10-09)  — A CALENDAR UNDER THE CLOCK
+  - A click on the bar's clock drops this month from the RTC: its name
+    and year, the day names from Sunday, the weeks (the first's weekday
+    by Sakamoto's method, leap Februaries counted), today on blue.
+    Another click on the clock, or a click anywhere else, puts it up.
+  - scripts/ctcal-test.sh: the date the desktop logged checked against
+    the host's UTC date (QEMU's RTC), the title, day names and every
+    week compared with Python's calendar, today on blue, both ways of
+    putting it up. Six-wide soak 6 of 6.
 
 v0.60.174 (2026-10-09)  — ICONS ON THE BACKGROUND
   - The Kitchen menu's programs (frost, swirl, oven, expo, scale) as

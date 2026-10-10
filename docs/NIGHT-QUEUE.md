@@ -77,7 +77,7 @@ The Kitchen menu's programs as icons down the left of the background
 menu does. Windows cover them; a click on the background between them
 does nothing. Test: double click swirl's icon, its window opens.
 
-## 5. A calendar under the clock
+## 5. A calendar under the clock — DONE v0.60.175
 
 A click on the clock drops down this month (from the RTC), today
 marked; another click or a click away puts it up. Test: the month's
