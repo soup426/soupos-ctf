@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # ctdeskmenu-test.sh - a menu on the background (v0.60.184). A right click
-# on the background at 800,600 drops the menu there (its five entries read
-# back); each entry does what its button does: Terminal, Files, Kitchen
+# on the background at 800,600 drops the menu there, kept above the
+# taskbar (at 800,592 with its six entries, read back); each entry does what its button does: Terminal, Files, Kitchen
 # (the Kitchen menu), backdrop, cloche. Esc puts it up, and so does a click
 # away; a right click on a window or an icon opens nothing.
 set -uo pipefail
@@ -52,8 +52,8 @@ def word(at, x, y, n):
                    for c in range(n)).rstrip()
 bad = []
 s1 = ppm('s1')
-got = [word(s1, 810, 600 + 2 + i * 24 + 4, 8) for i in range(5)]
-if got != ['Terminal', 'Files', 'Kitchen', 'backdrop', 'cloche']: bad.append(f's1: the menu reads {got}')
+got = [word(s1, 810, 592 + 2 + i * 24 + 4, 10) for i in range(6)]
+if got != ['Terminal', 'Files', 'Kitchen', 'backdrop', 'cloche', 'spice rack']: bad.append(f's1: the menu reads {got}')
 for n in ('s2', 's3'):
     if ppm(n)(900, 660) == 0xF4F1EA: bad.append(f'{n}: the menu is still there')
 for b in bad: print('        ' + b)
@@ -61,12 +61,12 @@ sys.exit(1 if bad else 0)
 PY
 tr -d '\r' < "$WORK/serial.log" > "$WORK/log"
 grep -E '^\[countertop\] (background menu|open Terminal|open Files|kitchen menu|background [a-z]+, |cloche (down|lifted))' "$WORK/log" > "$WORK/events"
-printf '%s\n' '[countertop] background menu at 800,600' '[countertop] background menu: Terminal' '[countertop] open Terminal 1' \
-       '[countertop] background menu at 800,600' '[countertop] background menu: Files' '[countertop] open Files at /' \
-       '[countertop] background menu at 800,600' '[countertop] background menu: Kitchen' '[countertop] kitchen menu open' '[countertop] kitchen menu closed' \
-       '[countertop] background menu at 800,600' '[countertop] background menu: backdrop' '[countertop] background sea, kept in /countertop' \
-       '[countertop] background menu at 800,600' '[countertop] background menu at 800,600' \
-       '[countertop] background menu at 800,600' '[countertop] background menu: cloche' '[countertop] cloche down (the background menu)' '[countertop] cloche lifted' \
+printf '%s\n' '[countertop] background menu at 800,592' '[countertop] background menu: Terminal' '[countertop] open Terminal 1' \
+       '[countertop] background menu at 800,592' '[countertop] background menu: Files' '[countertop] open Files at /' \
+       '[countertop] background menu at 800,592' '[countertop] background menu: Kitchen' '[countertop] kitchen menu open' '[countertop] kitchen menu closed' \
+       '[countertop] background menu at 800,592' '[countertop] background menu: backdrop' '[countertop] background sea, kept in /countertop' \
+       '[countertop] background menu at 800,592' '[countertop] background menu at 800,592' \
+       '[countertop] background menu at 800,592' '[countertop] background menu: cloche' '[countertop] cloche down (the background menu)' '[countertop] cloche lifted' \
     | cmp -s - "$WORK/events" || { echo "        the events: $(tr '\n' ';' < "$WORK/events")"; fail=1; }
 [ "$fail" = 0 ] && echo "  ok    the background's menu: read back where it was right-clicked; Terminal, Files, Kitchen, backdrop and cloche each do their thing; Esc and a click away put it up; not over a window or an icon" \
     || echo "  FAIL  the background's menu"

@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.187
+Current version: v0.60.188
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,23 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.188 (2026-10-09)  — THE SPICE RACK
+  - A window of the desktop's settings as things to click, opened from
+    the Kitchen menu (after cloche) and the background menu (sixth): the
+    four backdrops as swatches (the one in use ringed), the picture's
+    path with "none", the cloche's idle time (- and + through 1, 2, 5,
+    10, 15, 30 and 60 minutes, and never), the zone (- and +, -12 to
+    +14) and 24- or 12-hour. Each click takes effect at once (the
+    background redrawn, the clock again) and is written to the cook's
+    settings. Opened again, the same one comes up.
+  - The background menu's six entries no longer fit below 600 over the
+    taskbar: opened at 800,600 it sits at 800,592. ctdeskmenu-test and
+    ctcloseup-test (its rows one lower) follow.
+  - scripts/ctrack-test.sh: each control clicked in turn, logged as
+    kept; the rack read back (UTC-2, never, (none)), am/pm on the bar,
+    and /countertop exactly "background 2, idle 0, zone -2, clock 12".
+    Six-wide soak 6 of 6.
 
 v0.60.187 (2026-10-09)  — THE CLOCK IN THE COOK'S OWN TIME
   - The RTC is UTC (QEMU's default). "zone N" in the cook's settings

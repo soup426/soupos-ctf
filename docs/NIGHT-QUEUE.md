@@ -58,7 +58,7 @@ use them. Test: with zone and 12-hour set, the bar read back against the
 host's UTC time shifted the same way; the calendar's today mark on the
 shifted date.
 
-## 2. The spice rack: the desktop's settings in a window
+## 2. The spice rack: the desktop's settings in a window — DONE v0.60.188
 
 A window (Kitchen menu and the background menu, "spice rack") with the
 settings as things to click: the four backdrops as swatches, the

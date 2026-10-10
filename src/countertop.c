@@ -217,6 +217,7 @@ typedef struct {
     int snapped, rcols, rrows;          /* (v0.60.167) 1 left half, 2 right; a terminal's own size */
     int hidden;                         /* (v0.60.178) a Kitchen terminal: never shown */
     struct platter *plat;               /* (v0.60.186) a picture's window */
+    int rack;                           /* (v0.60.188) the spice rack */
 } win_t;
 static win_t win[MAX_WIN];
 static int order[MAX_WIN], nwin;                 /* z-order, bottom first */
@@ -606,6 +607,59 @@ static void body_origin(const win_t *w, int *bx, int *by) {
     if (eh > 0) *by += eh / 2;
 }
 
+/* The spice rack (v0.60.188): the desktop's settings as things to click,
+ * each taking effect at once and written to the cook's settings. Rows,
+ * from the body's top: backdrop swatches, the picture (and "none"), the
+ * cloche's idle time (- + never), the zone (- +), the clock (24 or 12). */
+#define RACK_W 360
+#define RACK_H 210
+#define RACK_X0 104                                 /* the controls start here, after the labels */
+static int idle_s_steps(int dir);
+static uint32_t idle_s;                          /* the settings, defined with them below */
+static int zone_h, clock12;
+static void draw_rack(const win_t *w) {           /* within the clip */
+    int x = w->x + BORDER, y = w->y + BORDER + TITLE_H;
+    fill(x, y, RACK_W, RACK_H, 0x00F4F1EAu);
+    static const char *const label[] = { "backdrop", "picture", "cloche", "zone", "clock" };
+    for (int r = 0; r < 5; r++) text(x + 10, y + 14 + r * 40, label[r], 0x00606870u);
+    for (int i = 0; i < NBG; i++) {                    /* the swatches, the one in use ringed */
+        int sx = x + RACK_X0 + i * 50, sy = y + 8;
+        fill(sx - 2, sy - 2, 44, 32, i == bg_choice ? FOCUS_RGB : 0x00F4F1EAu);
+        fill(sx, sy, 20, 28, bgs[i].top);
+        fill(sx + 20, sy, 20, 28, bgs[i].bot);
+    }
+    char v[40];
+    const char *pn = pic_path[0] ? pic_path : "(none)";
+    int pl = (int)strlen(pn);
+    scopy(v, pl > 20 ? pn + pl - 20 : pn, (int)sizeof(v));   /* the end of a long path */
+    text(x + RACK_X0, y + 54, v, 0x00202020u);
+    fill(x + 290, y + 50, 56, 24, BTN_RGB); text(x + 302, y + 54, "none", TEXT_RGB);
+    fill(x + RACK_X0, y + 90, 24, 24, BTN_RGB); text(x + RACK_X0 + 8, y + 94, "-", TEXT_RGB);
+    if (!idle_s) scopy(v, "never", (int)sizeof(v));
+    else {
+        uint32_t n = idle_s % 60 ? idle_s : idle_s / 60;
+        int l = 0; char d[12]; int k = 0;
+        do { d[k++] = (char)('0' + n % 10); n /= 10; } while (n);
+        while (k) v[l++] = d[--k];
+        v[l] = '\0';
+        strcat(v, idle_s % 60 ? " s" : " min");
+    }
+    text(x + RACK_X0 + 34, y + 94, v, 0x00202020u);
+    fill(x + RACK_X0 + 116, y + 90, 24, 24, BTN_RGB); text(x + RACK_X0 + 124, y + 94, "+", TEXT_RGB);
+    fill(x + 290, y + 90, 56, 24, BTN_RGB); text(x + 294, y + 94, "never", TEXT_RGB);
+    fill(x + RACK_X0, y + 130, 24, 24, BTN_RGB); text(x + RACK_X0 + 8, y + 134, "-", TEXT_RGB);
+    strcpy(v, "UTC");
+    if (zone_h) {
+        int z = zone_h < 0 ? -zone_h : zone_h, l = 3;
+        v[l++] = zone_h < 0 ? '-' : '+';
+        if (z >= 10) v[l++] = (char)('0' + z / 10);
+        v[l++] = (char)('0' + z % 10); v[l] = '\0';
+    }
+    text(x + RACK_X0 + 34, y + 134, v, 0x00202020u);
+    fill(x + RACK_X0 + 116, y + 130, 24, 24, BTN_RGB); text(x + RACK_X0 + 124, y + 134, "+", TEXT_RGB);
+    fill(x + RACK_X0, y + 170, 80, 24, clock12 ? BTN_RGB : FOCUS_RGB); text(x + RACK_X0 + 8, y + 174, "24-hour", TEXT_RGB);
+    fill(x + RACK_X0 + 90, y + 170, 80, 24, clock12 ? FOCUS_RGB : BTN_RGB); text(x + RACK_X0 + 98, y + 174, "12-hour", TEXT_RGB);
+}
 static void draw_platter(const win_t *w);
 static void draw_window(int k) {
     win_t *w = &win[k];
@@ -628,6 +682,7 @@ static void draw_window(int k) {
     if (w->term) { draw_cells(w->term, bx0, by0, focused); return; }
     if (w->files) { draw_files(w, focused); return; }
     if (w->plat) { draw_platter(w); return; }
+    if (w->rack) { draw_rack(w); return; }
     if (w->app >= 0) { draw_app(w); return; }
     fill(w->x + BORDER, top, w->w - 2 * BORDER, w->h - 2 * BORDER - TITLE_H, w->body);
     for (int i = 0; i < 8 && w->lines[i]; i++) text(w->x + BORDER + 10, top + 8 + i * 18, w->lines[i], 0x00202020u);
@@ -649,6 +704,7 @@ static const char *const menu_item[][3] = {      /* name, what it is, what to co
     { "scale", "a calculator", "scale.elf" },               /* (v0.60.173) */
     { "backdrop", "the next one", "@backdrop" },            /* (v0.60.169) not programs: '@' an action */
     { "cloche", "lock the desktop", "@cloche" },            /* (v0.60.176) */
+    { "spice rack", "the settings", "@rack" },              /* (v0.60.188) */
     { "close up", "power off", "@close" },                  /* (v0.60.183) the headchef's */
     { "reheat", "restart", "@reheat" },
 };
@@ -665,8 +721,8 @@ static int menu_open;
 /* A menu on the background (v0.60.184): a right click where there is no
  * window, icon or bar drops it there. A click on an entry does what its
  * button does; a click anywhere else, or Esc, puts it up. */
-static const char *const desk_item[] = { "Terminal", "Files", "Kitchen", "backdrop", "cloche" };
-#define DESK_N 5
+static const char *const desk_item[] = { "Terminal", "Files", "Kitchen", "backdrop", "cloche", "spice rack" };
+#define DESK_N 6
 #define DESK_W 150
 #define DESK_IH 24
 static int desk_open, desk_x, desk_y;
@@ -1089,6 +1145,68 @@ static int save_settings(char *p) {                /* the cook's settings file, 
     settings_path(p);
     return users_may(p, 'w') && fat_write(p, (const uint8_t *)line, (uint32_t)strlen(line)) >= 0;
 }
+static int idle_s_steps(int dir) {                /* the cloche's next idle time, in minutes' steps */
+    static const uint32_t m[] = { 60, 120, 300, 600, 900, 1800, 3600 };
+    int n = (int)(sizeof(m) / sizeof(m[0]));
+    if (dir > 0) { for (int i = 0; i < n; i++) if (m[i] > idle_s) return (int)m[i]; return (int)m[n - 1]; }
+    if (!idle_s) return 0;
+    for (int i = n - 1; i >= 0; i--) if (m[i] < idle_s) return (int)m[i];
+    return (int)m[0];
+}
+static void repaint_win(int k);
+static void rack_click(int k, int x, int y) {      /* x, y from the body's corner */
+    const char *what = 0;
+    char val[24] = "";
+    if (y >= 6 && y < 38) {
+        for (int i = 0; i < NBG; i++) if (x >= RACK_X0 - 2 + i * 50 && x < RACK_X0 + 42 + i * 50) {
+            bg_choice = i; what = "backdrop"; scopy(val, bgs[i].name, (int)sizeof(val));
+            repaint(0, BAR_H, W, H - BAR_H - TASK_H);
+        }
+    } else if (y >= 50 && y < 74 && x >= 290 && x < 346) {
+        pic_path[0] = '\0'; pic_free(); what = "picture"; scopy(val, "none", (int)sizeof(val));
+        repaint(0, BAR_H, W, H - BAR_H - TASK_H);
+    } else if (y >= 90 && y < 114) {
+        if (x >= RACK_X0 && x < RACK_X0 + 24) idle_s = (uint32_t)idle_s_steps(-1), what = "cloche";
+        else if (x >= RACK_X0 + 116 && x < RACK_X0 + 140) idle_s = (uint32_t)idle_s_steps(1), what = "cloche";
+        else if (x >= 290 && x < 346) idle_s = 0, what = "cloche";
+        if (what) { uint32_t n = idle_s; int l = 0; char d[12]; int c = 0;
+                    do { d[c++] = (char)('0' + n % 10); n /= 10; } while (n);
+                    while (c) val[l++] = d[--c];
+                    val[l] = '\0'; strcat(val, " s"); }
+    } else if (y >= 130 && y < 154) {
+        if (x >= RACK_X0 && x < RACK_X0 + 24 && zone_h > -12) zone_h--, what = "zone";
+        else if (x >= RACK_X0 + 116 && x < RACK_X0 + 140 && zone_h < 14) zone_h++, what = "zone";
+        if (what) { int z = zone_h < 0 ? -zone_h : zone_h, l = 0;
+                    if (zone_h < 0) val[l++] = '-';
+                    if (z >= 10) val[l++] = (char)('0' + z / 10);
+                    val[l++] = (char)('0' + z % 10); val[l] = '\0';
+                    clock_sec = -1; }
+    } else if (y >= 170 && y < 194) {
+        if (x >= RACK_X0 && x < RACK_X0 + 80) clock12 = 0, what = "clock", scopy(val, "24", (int)sizeof(val));
+        else if (x >= RACK_X0 + 90 && x < RACK_X0 + 170) clock12 = 1, what = "clock", scopy(val, "12", (int)sizeof(val));
+        clock_sec = -1;
+    }
+    if (!what) return;
+    char p[FAT_PATH_MAX];
+    int ok = save_settings(p);
+    repaint_win(k);
+    klog("[countertop] spice rack: %s %s, %s %s\n", what, val, ok ? "kept in" : "not kept in", p);
+}
+static int open_hidden;
+static int open_window(int x, int y, int w, int h, const char *title, uint32_t body, const char *const *lines);
+static void raise_window(int k);
+static void open_rack(void) {
+    for (int k = 0; k < MAX_WIN; k++) if (win[k].used && win[k].rack) { raise_window(k); return; }   /* one is enough */
+    static const char *const none[] = { 0 };
+    open_hidden = 1;
+    int k = open_window(W / 2 - RACK_W / 2, BAR_H + 60, RACK_W + 2 * BORDER, RACK_H + 2 * BORDER + TITLE_H, "spice rack", 0, none);
+    open_hidden = 0;
+    if (k < 0) return;
+    win[k].rack = 1; win[k].hidden = win[k].min = 0;
+    for (int i = nwin - 2; i >= 0; i--) if (!win[order[i]].min) { repaint_win(order[i]); break; }
+    repaint_win(k);
+    klog("[countertop] spice rack open\n");
+}
 static void set_picture(const char *path) {       /* the files menu's "use as background" (v0.60.186) */
     scopy(pic_path, path, (int)sizeof(pic_path));
     pic_load();
@@ -1124,7 +1242,7 @@ static int open_window(int x, int y, int w, int h, const char *title, uint32_t b
     for (int k = 0; k < MAX_WIN; k++) if (!win[k].used) {
         win_t *v = &win[k];
         v->used = 1; v->x = x; v->y = y; v->w = w; v->h = h; v->body = body; v->term = 0; v->sess = 0; v->min = 0; v->files = 0; v->app = -1; v->maxed = 0; v->snapped = 0;
-        v->hidden = v->min = open_hidden; v->plat = 0;              /* hidden: minimised for good, and off the taskbar */
+        v->hidden = v->min = open_hidden; v->plat = 0; v->rack = 0;              /* hidden: minimised for good, and off the taskbar */
         scopy(v->title, title, sizeof(v->title));
         for (int i = 0; i < 8; i++) v->lines[i] = lines && lines[i] ? lines[i] : 0;
         int was = topmost();
@@ -1884,7 +2002,8 @@ static void pointer_buttons(int px, int py, int btn, int np) {
             else if (i == 1) open_files("/");
             else if (i == 2) menu_set(1);
             else if (i == 3) next_background();
-            else cloche_lock("the background menu");
+            else if (i == 4) cloche_lock("the background menu");
+            else open_rack();
             return;
         }
     }
@@ -1897,6 +2016,7 @@ static void pointer_buttons(int px, int py, int btn, int np) {
         if (px >= MENU_X && px < MENU_X + MENU_W && py >= MENU_Y + 2 && i >= 0 && i < MENU_N && menu_item[i][2][0] == '@') {
             if (!strcmp(menu_item[i][2], "@cloche")) cloche_lock("the menu");
             else if (!strcmp(menu_item[i][2], "@close")) kitchen_close(0);
+            else if (!strcmp(menu_item[i][2], "@rack")) open_rack();
             else if (!strcmp(menu_item[i][2], "@reheat")) kitchen_close(1);
             else next_background();
         } else if (px >= MENU_X && px < MENU_X + MENU_W && py >= MENU_Y + 2 && i >= 0 && i < MENU_N) {
@@ -1956,6 +2076,10 @@ static void pointer_buttons(int px, int py, int btn, int np) {
             body_origin(w, &ax, &ay);
             app_drag = k; app_lx = px - ax; app_ly = py - ay;
             app_push(w->app, WEV_DOWN, 0, app_lx, app_ly, (unsigned)(btn | 1));
+            return;
+        }
+        if (w->rack && py >= w->y + BORDER + TITLE_H) {    /* (v0.60.188) */
+            rack_click(k, px - (w->x + BORDER), py - (w->y + BORDER + TITLE_H));
             return;
         }
         if (w->files && py >= w->y + BORDER + TITLE_H + 28) {   /* a row: select, twice quickly: open */
