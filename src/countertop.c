@@ -72,6 +72,7 @@
 #include "term.h"
 #include "net.h"
 #include "rtl8139.h"
+#include "power.h"
 #include "shell.h"
 #include "heap.h"
 #include "proc.h"
@@ -645,6 +646,8 @@ static const char *const menu_item[][3] = {      /* name, what it is, what to co
     { "scale", "a calculator", "scale.elf" },               /* (v0.60.173) */
     { "backdrop", "the next one", "@backdrop" },            /* (v0.60.169) not programs: '@' an action */
     { "cloche", "lock the desktop", "@cloche" },            /* (v0.60.176) */
+    { "close up", "power off", "@close" },                  /* (v0.60.183) the headchef's */
+    { "reheat", "restart", "@reheat" },
 };
 #define MENU_N (int)(sizeof(menu_item) / sizeof(menu_item[0]))
 #define MENU_H (MENU_N * MENU_IH + 4)
@@ -1286,6 +1289,38 @@ static void reap_dying(void) {
             dying[i].sess = 0; dying[i].term = 0;
         }
 }
+static void close_window(int k);
+static void bar_note(const char *msg);
+static void flush(void);
+static int note_showing;                         /* with the notes, below */
+static uint32_t note_at;
+/* Closing the kitchen (v0.60.183): power off or restart from the desktop,
+ * which is where the machine now starts. The headchef's only, as freeze
+ * and reheat are at the prompt. Every terminal is hung up first, and its
+ * session given up to 2 s to end, which saves its leftovers. */
+static void kitchen_close(int reboot) {
+    const char *what = reboot ? "reheat the kitchen" : "close the kitchen";
+    if (ct_uid != 0) {
+        char m[48] = "only the headchef may ";
+        strcat(m, what);
+        bar_note(m);
+        note_showing = 1; note_at = timer_get_ticks();   /* goes as a note goes */
+        klog("[countertop] %s may not %s\n", users_name_of((uint8_t)ct_uid), what);
+        return;
+    }
+    klog("[countertop] %s\n", reboot ? "reheating the kitchen" : "closing the kitchen");
+    for (int k = 0; k < MAX_WIN; k++) if (win[k].used && win[k].term) close_window(k);
+    for (int t = 0; t < 200; t++) {                   /* the sessions end, leftovers saved */
+        int left = 0;
+        reap_dying();
+        for (int i = 0; i < MAX_WIN; i++) if (dying[i].sess) left++;
+        if (!left) break;
+        task_sleep(10);
+    }
+    bar_note(reboot ? "reheating..." : "the kitchen is closed");
+    flush();
+    if (reboot) power_reboot(); else power_off();
+}
 static void close_window(int k) {
     if (ctx_win == k) ctx_close();
     if (win[k].files) { kfree(win[k].files); win[k].files = 0; }
@@ -1676,6 +1711,8 @@ static void pointer_buttons(int px, int py, int btn, int np) {
         menu_set(0);
         if (px >= MENU_X && px < MENU_X + MENU_W && py >= MENU_Y + 2 && i >= 0 && i < MENU_N && menu_item[i][2][0] == '@') {
             if (!strcmp(menu_item[i][2], "@cloche")) cloche_lock("the menu");
+            else if (!strcmp(menu_item[i][2], "@close")) kitchen_close(0);
+            else if (!strcmp(menu_item[i][2], "@reheat")) kitchen_close(1);
             else next_background();
         } else if (px >= MENU_X && px < MENU_X + MENU_W && py >= MENU_Y + 2 && i >= 0 && i < MENU_N) {
             kitchen_launch(i);

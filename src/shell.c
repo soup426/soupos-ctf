@@ -40,6 +40,7 @@
 #endif
 #include "countertop.h"
 #include "fwcfg.h"
+#include "power.h"
 #include "fb.h"
 #include "vfs.h"
 #include "klog.h"
@@ -4966,18 +4967,7 @@ static void cmd_freeze(void) {
 
 static void cmd_reheat(void) {
     t_puts("Reheating...\n");
-    uint8_t s;
-    do { __asm__ volatile ("inb $0x64, %0" : "=a"(s)); } while (s & 0x02);
-    outb(0x64, 0xFE);
-    __asm__ volatile (
-        "subl $6, %%esp\n"
-        "movw $0, (%%esp)\n"
-        "movl $0, 2(%%esp)\n"
-        "lidt (%%esp)\n"
-        "int $0x00\n"
-        : : : "memory"
-    );
-    while (1) {}
+    power_reboot();                            /* (moved to power.c, v0.60.183) */
 }
 
 #ifndef NO_DOOM

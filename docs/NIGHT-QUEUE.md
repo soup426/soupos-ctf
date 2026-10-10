@@ -50,7 +50,7 @@ seen it.
 
 ---
 
-## 1. Closing the kitchen from the desktop
+## 1. Closing the kitchen from the desktop — DONE v0.60.183 (menu only)
 
 Booted straight to the desktop there is no prompt to type `freeze` or
 `reheat` at. The clock-in screen and the Kitchen menu offer "close the

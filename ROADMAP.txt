@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.182
+Current version: v0.60.183
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,25 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.183 (2026-10-09)  — CLOSING THE KITCHEN FROM THE DESKTOP
+  - The Kitchen menu gains "close up" (power off) and "reheat" (restart),
+    the headchef's only, as freeze and reheat are at the prompt; anyone
+    else is told so on the bar, and it is logged. Every terminal is hung
+    up first and its session given up to 2 s to end, which saves its
+    leftovers; then the power goes.
+  - src/power.c: power_off() writes SLP_EN to the PIIX4's PM1a control
+    port (0x604, where SeaBIOS puts it; QEMU's DSDT gives S5 sleep type
+    0), then Bochs's 0xB004, then halts as freeze does; measured on
+    QEMU's i440fx machine, the first write is enough and QEMU exits.
+    power_reboot() is reheat's reset, moved there.
+  - Not done: the clock-in screen offering it. Nobody is clocked in
+    there, and it is the headchef's only; clock in and use the menu.
+  - scripts/ctcloseup-test.sh: as the headchef, `whoami` in a terminal,
+    then close up: QEMU (without -no-shutdown) exits by itself and
+    /etc/LEFTOVER holds whoami; as saucier refused, said on the bar,
+    QEMU running; reheat (without -no-reboot) boots to the login again.
+    Six-wide soak 6 of 6.
 
 v0.60.182 (2026-10-09)  — A PICTURE FOR THE BACKGROUND
   - A "picture <path>" line in the cook's `countertop` settings names a
