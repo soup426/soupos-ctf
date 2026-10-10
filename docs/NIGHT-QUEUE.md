@@ -1,12 +1,12 @@
 # Night queue
 
-Fifty-third queue. The first fifty-two are in `docs/queue-archive-2026-10-0*.md`;
-queue 52 (`-09r`) added scrollback, snapping to halves, expo.elf (with
-SYS_PROCS and SYS_KILL), settings kept in the cook's home and notes on the
-bar (SYS_NOTE). This one: keyboard shortcuts, changing files from the
-files window, a calculator, icons on the background and a calendar under
-the clock. Written by an unattended run when queue 52 ran out, as the
-loop it runs in asks; the user has not seen it.
+Fifty-fourth queue. The first fifty-three are in `docs/queue-archive-2026-10-0*.md`;
+queue 53 (`-09s`) added Ctrl+Alt+T and Alt+F4 (Alt decided in the IRQ),
+new bowls and removing files from the files window, scale.elf, icons on
+the background and a calendar under the clock. This one: locking the
+desktop, copying files by dragging, CPU use in expo, the network on the
+bar, and a picture for the background. Written by an unattended run when
+queue 53 ran out, as the loop it runs in asks; the user has not seen it.
 
 ## Standing rules
 
@@ -47,42 +47,44 @@ loop it runs in asks; the user has not seen it.
 
 ---
 
-## 1. Keyboard shortcuts — DONE v0.60.171
+## 1. cloche: locking the desktop
 
-Ctrl+Alt+T opens a terminal and Alt+F4 closes the focused window (a
-program's gets WEV_CLOSE, as its close box sends). Measure first what the
-keyboard delivers for F4 (there is no KEY_F4 yet) and whether Ctrl+Alt+T
-arrives as Ctrl+T with Alt held. Test: both shortcuts, screendumps and
-the log.
+The Kitchen menu's "cloche" (the dome over a plate), and ten minutes with
+no key or mouse, cover the screen with a lock showing the cook's name;
+their secret, typed there and checked by users_check, lifts it. Programs
+go on running under it. Wrong secrets are logged, and after three the
+lock waits a few seconds before the next try. Test: lock from the menu,
+a wrong secret refused (logged), the right one unlocks; the idle lock
+with the timeout shortened for the test (a build switch).
 
-## 2. New bowls and removing files from the files window — DONE v0.60.172
+## 2. Copy a file by dragging between files windows
 
-A right click in a files window: a small menu with "new bowl" (named
-bowl, bowl2, ... in the shown one) and, on a row, "remove" (asked twice,
-as Leave is). The same permission rule as the shell's (users_may); a
-bowl that is not empty is not removed. Test: as saucier in their home,
-a bowl made and a file removed; in / refused.
+A file row dragged from one files window onto another copies it into the
+bowl that one shows: read permission on the file, write on the bowl (the
+shell's rules); a name taken there gets "copy" put in front. Test: as
+saucier, a file copied from / into the home (the bytes on the disk the
+same), and refused into /.
 
-## 3. scale.elf: a calculator — DONE v0.60.173
+## 3. CPU use in expo
 
-A window of buttons (digits, + - x /, =, C) clicked or typed, decimals in
-fixed point (ring 3 has no FPU), the display drawn with the kernel's font.
-Named for the kitchen scale. Test: 12.5 x 4 = 50, 7 / 2 = 3.5, 1 / 0 an
-error, typed and clicked, the display read against the font.
+The scheduler counts each task's ticks a second (cpu_last). SYS_PROCS
+passes it on and expo shows a CPU column, with c sorting by it. Test:
+glutton.elf near 100, an idle process near 0, the sort order.
 
-## 4. Icons on the background — DONE v0.60.174
+## 4. The network on the bar
 
-The Kitchen menu's programs as icons down the left of the background
-(a drawn glyph and the name under it); a double click opens one as the
-menu does. Windows cover them; a click on the background between them
-does nothing. Test: double click swirl's icon, its window opens.
+Next to the clock: the link (up or down) and the address once DHCP has
+given one ("10.0.2.15"), refreshed every few seconds, from what plumbing
+already knows. Test: with QEMU's user network, the address read off the
+bar after `plumbing dhcp`; without a network card, "no network".
 
-## 5. A calendar under the clock — DONE v0.60.175
+## 5. A picture for the background
 
-A click on the clock drops down this month (from the RTC), today
-marked; another click or a click away puts it up. Test: the month's
-first row and today's mark read back against the font, with the date
-the RTC gives QEMU.
+A BMP (24-bit, any size up to the screen) named in the cook's
+`countertop` settings ("picture /home/saucier/sky.bmp") drawn centred on
+the background instead of the gradient. Measure first how long a full
+1024x768 picture takes to read and draw. Test: a small BMP made on the
+host, its pixels on the screendump where expected.
 
 ## 6. Doom at the framebuffer's own resolution — DEFERRED
 
