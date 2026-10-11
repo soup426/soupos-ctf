@@ -257,9 +257,9 @@ fits beside the desktop's other windows.
 
 ### Errors and limits
 
-- `SYS_WIN_OPEN` fails: with no desktop running, the program prints
-  "Mincecraft needs the countertop (start it first)"; with one running, it
-  prints "the countertop refused the window". Either way it exits 1.
+- `SYS_WIN_OPEN` fails: the program prints "Mincecraft could not open its
+  window (is the countertop up?)" and exits 1. A ring-3 program cannot tell
+  "no desktop" from "refused", so one message covers both.
 - Heap: the grid and both frame buffers are taken with `sbrk` at start; a
   failure prints and exits 1.
 - A full disk or failed write: a note on the bar, and the game keeps
@@ -274,7 +274,11 @@ Markers go to fd 2 (serial) as `[mincecraft] ...`, as other programs do:
 Command-line modes for the tests:
 - `-seed N`: a fixed world.
 - `-time T`: start at time of day T (0 is midnight, 600 noon, in a 1200
-  step day), for the day and night screendumps.
+  step day) and hold the clock there, for exact day and night screendumps.
+- `-flat`: a test world (cast iron at y 0 and the edges, parmesan to y 9,
+  crust at y 10), for exact physics checks.
+- `m` (a key) prints `[mincecraft] mark`, so tests can split the log into
+  phases.
 - `-gen`: generate, print the hash marker, exit (no window needed).
 - `-script`: read moves from `SYS_WIN_EVENT` as usual but print the player
   marker after every tick, so key-driven tests can check physics exactly.
