@@ -17,7 +17,7 @@
 - **Kitchen names.** The program is `mincecraft.elf`; `mince.elf` and `scripts/mince-test.sh` already exist and are not touched. Before writing any `scripts/X-test.sh`, run `ls scripts/X-test.sh` to confirm the name is free.
 - **No em-dashes** in code comments, docs or commit messages.
 - **One item, one commit.** Each task bumps the version: Task 1 v0.60.190, Task 2 v0.60.191, Task 3 v0.60.192, Task 4 v0.60.193, Task 5 v0.60.194, Task 6 v0.60.195, Task 7 v0.60.196, Task 8 v0.60.197. Each commit adds a ROADMAP.txt changelog entry in the house style (version, date, title in capitals, indented bullets) and moves "Current version:" and CLAUDE.md's version line.
-- **The pre-commit gate is `./scripts/remote-check.sh`** (CT 123 on atlas; `ssh atlas pct start 123` if it is down). While working, run single test scripts locally. Every new test script is added to the list in `scripts/check.sh` (the `tests=` block around line 120).
+- **The pre-commit gate is `./scripts/check.sh`, run locally** (the user asked, 2026-10-11). While working, run single test scripts locally. Every new test script is added to the list in `scripts/check.sh` (the `tests=` block around line 120).
 - After any change under `user/`: `make user`, then refresh the disk: `rm disk.img && make disk` (`make disk` is a no-op when `disk.img` exists).
 - Window body at most 640x480, `0x00RRGGBB`. Resident pages under 4 MB (`PROC_PAGE_CAP`).
 - Commit trailer: `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`.
@@ -263,7 +263,7 @@ static inline int key_held(const unsigned char *k, int sc) { return (k[sc >> 3] 
 
 - [ ] **Step 5: Run the test to see it pass.** `make user && rm disk.img && make disk && make && ./scripts/winkeys-test.sh`. Expected: `winkeys-test: PASS`. Then `./scripts/prodwin-test.sh` (prod changed) and `./scripts/ctcloche-test.sh` (the lock is shared) must still pass.
 
-- [ ] **Step 6: Changelog, list, gate, commit.** Add `winkeys-test` to `scripts/check.sh`'s list. Add the v0.60.190 entry ("HELD KEYS FOR A PROGRAM'S WINDOW") to ROADMAP.txt, and add `SYS_WIN_KEYS` to CLAUDE.md's syscall table if it has one (search for `SYS_NOTE`). Run `./scripts/remote-check.sh` and expect it to pass.
+- [ ] **Step 6: Changelog, list, gate, commit.** Add `winkeys-test` to `scripts/check.sh`'s list. Add the v0.60.190 entry ("HELD KEYS FOR A PROGRAM'S WINDOW") to ROADMAP.txt, and add `SYS_WIN_KEYS` to CLAUDE.md's syscall table if it has one (search for `SYS_NOTE`). Run `./scripts/check.sh` and expect it to pass.
 
 ```bash
 git add src/keyboard.c src/keyboard.h src/syscall_nr.h src/countertop.c src/countertop.h src/usermode.c \
@@ -328,7 +328,7 @@ static void home_of(uint8_t uid, char *out) {
 
 - [ ] **Step 4: Run to see it pass.** `make && rm disk.img && make disk && ./scripts/env-test.sh`. Expected: PASS for E1 to E12. Also run `./scripts/check.sh quick` locally to catch any gate segment that printed the whole environment.
 
-- [ ] **Step 5: Commit** after `./scripts/remote-check.sh` passes, with the v0.60.191 entry ("HOME FOR EVERY PROGRAM"):
+- [ ] **Step 5: Commit** after `./scripts/check.sh` passes, with the v0.60.191 entry ("HOME FOR EVERY PROGRAM"):
 
 ```bash
 git add src/shell.c scripts/env-test.sh ROADMAP.txt CLAUDE.md
@@ -731,7 +731,7 @@ user/mincecraft.elf: $(MC_SRC) $(wildcard user/mincecraft/*.h) user/ulib.c user/
 
 - [ ] **Step 9: Run the test to see it pass.** `make user && rm disk.img && make disk && make && ./scripts/mincecraft-gen-test.sh`. Expected: three `ok` lines and PASS. A mismatch means C and Python differ: diff them by printing `world_height` for a few columns from both.
 
-- [ ] **Step 10: Commit** after `./scripts/remote-check.sh` passes. Add `mincecraft-gen-test` to check.sh's list and the v0.60.192 entry ("MINCECRAFT: A WORLD OF FOOD"). CLAUDE.md: add `user/mincecraft/` to the source layout and the ELF to the program list, and note that it is copied under its long name.
+- [ ] **Step 10: Commit** after `./scripts/check.sh` passes. Add `mincecraft-gen-test` to check.sh's list and the v0.60.192 entry ("MINCECRAFT: A WORLD OF FOOD"). CLAUDE.md: add `user/mincecraft/` to the source layout and the ELF to the program list, and note that it is copied under its long name.
 
 ```bash
 git add Makefile user/mincecraft/ scripts/mincecraft_gen.py scripts/mincecraft-gen-test.sh scripts/check.sh ROADMAP.txt CLAUDE.md
@@ -947,7 +947,7 @@ void render(const cam_t *c, unsigned *body, int light, unsigned sky) {
 
 - [ ] **Step 7: Run the view test to see it pass.** `./scripts/mincecraft-view-test.sh`. Expected: PASS.
 
-- [ ] **Step 8: Commit** after `./scripts/remote-check.sh`. Add `mincecraft-view-test` to check.sh's list and the v0.60.193 entry ("MINCECRAFT: THE VIEW"), with the measured fps and heap.
+- [ ] **Step 8: Commit** after `./scripts/check.sh`. Add `mincecraft-view-test` to check.sh's list and the v0.60.193 entry ("MINCECRAFT: THE VIEW"), with the measured fps and heap.
 
 ```bash
 git add user/mincecraft/ scripts/mincecraft-view-test.sh scripts/check.sh ROADMAP.txt
@@ -1114,7 +1114,7 @@ int player_tick(player_t *p, const input_t *in, const ray_t *tg) {
 
 - [ ] **Step 5: Run the play test to see it pass.** `make user && rm disk.img && make disk && ./scripts/mincecraft-play-test.sh`. Expected: PASS. Run the view test again, since spawn now places the eye through `player_eye`. The numbers are unchanged: the same column + 0.5 and eye height.
 
-- [ ] **Step 6: Commit** after `./scripts/remote-check.sh`. Add `mincecraft-play-test` to the list and the v0.60.194 entry ("MINCECRAFT: WALKING").
+- [ ] **Step 6: Commit** after `./scripts/check.sh`. Add `mincecraft-play-test` to the list and the v0.60.194 entry ("MINCECRAFT: WALKING").
 
 ```bash
 git add user/mincecraft/ scripts/mincecraft-play-test.sh scripts/check.sh ROADMAP.txt
@@ -1250,7 +1250,7 @@ void hud_draw(unsigned *b, const player_t *p, const ray_t *tg, int tod) {
 
 - [ ] **Step 6: Run both tests to see them pass.** `./scripts/mincecraft-play-test.sh && ./scripts/mincecraft-view-test.sh`.
 
-- [ ] **Step 7: Commit** after `./scripts/remote-check.sh`, with the v0.60.195 entry ("MINCECRAFT: MINING AND BUILDING").
+- [ ] **Step 7: Commit** after `./scripts/check.sh`, with the v0.60.195 entry ("MINCECRAFT: MINING AND BUILDING").
 
 ```bash
 git add user/mincecraft/ scripts/mincecraft-play-test.sh scripts/mincecraft-view-test.sh ROADMAP.txt
@@ -1294,7 +1294,7 @@ static unsigned sky_at(int tod) {              /* 0x87BEEB at noon to 0x0F142D a
 
 - [ ] **Step 4: Run to see it pass.** `./scripts/mincecraft-view-test.sh`.
 
-- [ ] **Step 5: Commit** after `./scripts/remote-check.sh`, with the v0.60.196 entry ("MINCECRAFT: SERVICE AND AFTER HOURS").
+- [ ] **Step 5: Commit** after `./scripts/check.sh`, with the v0.60.196 entry ("MINCECRAFT: SERVICE AND AFTER HOURS").
 
 ```bash
 git add user/mincecraft/main.c scripts/mincecraft-view-test.sh ROADMAP.txt
@@ -1446,7 +1446,7 @@ int load_world(const char *path, player_t *p, unsigned *seed, int *tod) {
 
   Then add the v0.60.197 entry ("MINCECRAFT: KEEPING THE WORLD"), and put a short "Mincecraft" line in the NIGHT-QUEUE or `docs/next-steps.md` for the spec's "Later" list.
 
-- [ ] **Step 7: Commit** after `./scripts/remote-check.sh` passes.
+- [ ] **Step 7: Commit** after `./scripts/check.sh` passes.
 
 ```bash
 git add user/mincecraft/ scripts/mincecraft-save-test.sh scripts/check.sh ROADMAP.txt CLAUDE.md docs/next-steps.md
