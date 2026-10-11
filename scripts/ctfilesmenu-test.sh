@@ -2,7 +2,7 @@
 # ctfilesmenu-test.sh - new bowls and removing files from the files window
 # (v0.60.172), as saucier. In /home/saucier a right click makes a bowl;
 # note.txt's "remove" asks again ("really remove note.txt?") and then
-# removes it; the new, empty bowl is removed too. In / both are refused by
+# moves it to saucier's compost (v0.60.189); the new, empty bowl is removed too. In / both are refused by
 # the shell's rule (saucier may not write there). The listing read back
 # against the font, the disk after, and the log.
 set -uo pipefail
@@ -62,18 +62,18 @@ if r1 != ['..', 'bowl/', 'note.txt']: bad.append(f'after new bowl: {r1}')
 ask = word(ppm('s2'), 718, 159 + 22 + 3, 25, {0xC0504D})    # from its second letter: the pointer is on the first
 if ask != 'eally remove note.txt?': bad.append(f'the second line asks "r{ask}"')
 r3 = rows(ppm('s3'))
-if r3[:1] != ['..'] or any(r3[1:]): bad.append(f'after both removed: {r3}')
+if r3[:2] != ['..', 'compost/'] or any(r3[2:]): bad.append(f'after both removed: {r3}')
 for b in bad: print('        ' + b)
 sys.exit(1 if bad else 0)
 PY
 mdir -i "$WORK/disk.img" ::/home/saucier 2>/dev/null | grep -iE 'note|bowl' && { echo "        /home/saucier still holds them"; fail=1; }
 mdir -i "$WORK/disk.img" ::/HELLO.TXT >/dev/null 2>&1 || { echo "        /HELLO.TXT is gone"; fail=1; }
 tr -d '\r' < "$WORK/serial.log" > "$WORK/log"
-grep -E '^\[countertop\] (new bowl|removed|may not|not empty|could not)' "$WORK/log" > "$WORK/events"
-printf '%s\n' '[countertop] new bowl /home/saucier/bowl' '[countertop] removed /home/saucier/note.txt' '[countertop] removed /home/saucier/bowl' \
+grep -E '^\[countertop\] (new bowl|removed|composted|may not|not empty|could not)' "$WORK/log" > "$WORK/events"
+printf '%s\n' '[countertop] new bowl /home/saucier/bowl' '[countertop] composted /home/saucier/note.txt as /home/saucier/compost/note.txt' '[countertop] removed /home/saucier/bowl' \
        '[countertop] may not make /bowl' '[countertop] may not remove /HELLO.TXT' | cmp -s - "$WORK/events" \
     || { echo "        the events: $(tr '\n' ';' < "$WORK/events")"; fail=1; }
 grep -x '\[countertop\] down' "$WORK/log" >/dev/null || { echo "        Leave did not end the desktop"; fail=1; }
-[ "$fail" = 0 ] && echo "  ok    the files menu: a bowl made and note.txt removed (asked twice) in saucier's home, the bowl removed; both refused in /" \
+[ "$fail" = 0 ] && echo "  ok    the files menu: a bowl made and note.txt to the compost (asked twice) in saucier's home, the bowl removed; both refused in /" \
     || echo "  FAIL  the files window's menu"
 exit $fail

@@ -734,20 +734,34 @@ static void draw_desk(void) {                      /* within the clip */
 }
 static int ctx_win = -1, ctx_row = -1, ctx_x, ctx_y, ctx_armed;
 static int ctx_bmp(void);
-static int ctx_items(void) { return ctx_row < 0 ? 1 : ctx_bmp() ? 3 : 2; }
+static int ctx_compost(void);                     /* the window shows the cook's compost (v0.60.189) */
+static int ctx_items(void) {
+    if (ctx_compost()) return ctx_row >= 0 ? 2 : 1;   /* empty the compost; put back */
+    return ctx_row < 0 ? 1 : ctx_bmp() ? 3 : 2;
+}
+static void ctx_label(int i, char *line, int n) {
+    if (ctx_compost()) {
+        if (i == 0) scopy(line, ctx_armed ? "really empty the compost?" : "empty the compost", n);
+        else { scopy(line, "put back ", n); int l = (int)strlen(line); scopy(line + l, win[ctx_win].files->name[ctx_row], n - l); }
+        return;
+    }
+    if (i == 0) { scopy(line, "new bowl", n); return; }
+    if (i == 2) { scopy(line, "use as background", n); return; }
+    scopy(line, ctx_armed ? "really remove " : "remove ", n);
+    int l = (int)strlen(line);
+    scopy(line + l, win[ctx_win].files->name[ctx_row], n - l - 2);
+    if (ctx_armed) strcat(line, "?");
+}
 static void draw_ctx(void) {                       /* within the clip */
     int h = ctx_items() * CTX_IH + 4;
     fill(ctx_x, ctx_y, CTX_W, h, EDGE_RGB);
     fill(ctx_x + 1, ctx_y + 1, CTX_W - 2, h - 2, 0x00F4F1EAu);
-    text(ctx_x + 10, ctx_y + 2 + (CTX_IH - 16) / 2, "new bowl", 0x00202020u);
-    if (ctx_row >= 0 && win[ctx_win].files) {
-        char line[96] = "remove ";
-        if (ctx_armed) scopy(line, "really remove ", (int)sizeof(line));
-        int l = (int)strlen(line);
-        scopy(line + l, win[ctx_win].files->name[ctx_row], (int)sizeof(line) - l - 2);
-        if (ctx_armed) strcat(line, "?");
-        text(ctx_x + 10, ctx_y + 2 + CTX_IH + (CTX_IH - 16) / 2, line, ctx_armed ? 0x00C0504Du : 0x00202020u);
-        if (ctx_items() == 3) text(ctx_x + 10, ctx_y + 2 + 2 * CTX_IH + (CTX_IH - 16) / 2, "use as background", 0x00202020u);
+    if (!win[ctx_win].files) return;
+    int armed_row = ctx_compost() ? 0 : 1;             /* the entry that asks twice */
+    for (int i = 0; i < ctx_items(); i++) {
+        char line[96];
+        ctx_label(i, line, (int)sizeof(line));
+        text(ctx_x + 10, ctx_y + 2 + i * CTX_IH + (CTX_IH - 16) / 2, line, ctx_armed && i == armed_row ? 0x00C0504Du : 0x00202020u);
     }
 }
 static void draw_menu(void) {                     /* within the clip */
@@ -1373,12 +1387,17 @@ static void ctx_new_bowl(struct files *f) {
     if (!users_may(f->path, 'w')) { klog("[countertop] may not make %s\n", p); return; }
     klog("[countertop] %s %s\n", fat_mkdir(p) == 0 ? "new bowl" : "could not make", p);
 }
+static void compost_add(const char *p);
+static void compost_put_back(const char *name);
+static void compost_empty(void);
+static void files_reload_all(void);
 static void ctx_remove(struct files *f, int r) {
     char p[FAT_PATH_MAX];
     if (files_path(f, r, p) < 0) return;
     int bowl = f->dir[r];
     if (!users_may(bowl ? f->path : p, 'w')) { klog("[countertop] may not remove %s\n", p); return; }
-    int ok = bowl ? fat_rmdir(p) : fat_delete(p);
+    if (!bowl) { compost_add(p); return; }             /* a file to the compost, to come back (v0.60.189) */
+    int ok = fat_rmdir(p);
     klog("[countertop] %s %s\n", ok == 0 ? "removed" : bowl ? "not empty, kept" : "could not remove", p);
 }
 /* A click with the menu up: 1 if it was on the menu. */
@@ -1388,13 +1407,21 @@ static int ctx_click(int px, int py) {
     int i = (py - ctx_y - 2) / CTX_IH, k = ctx_win;
     struct files *f = win[k].files;
     if (!f) { ctx_close(); return 1; }
+    if (ctx_compost()) {                               /* (v0.60.189) */
+        if (i == 0 && !ctx_armed) { ctx_armed = 1; repaint(ctx_x, ctx_y, CTX_W, h); return 1; }   /* empty: ask again */
+        if (i == 0) compost_empty();
+        else if (i == 1 && ctx_row >= 0) compost_put_back(f->name[ctx_row]);
+        ctx_close();
+        files_reload_all();
+        return 1;
+    }
     if (i == 1 && ctx_row >= 0 && !ctx_armed) {        /* remove: ask again */
         ctx_armed = 1;
         repaint(ctx_x, ctx_y, CTX_W, h);
         return 1;
     }
     if (i == 0) ctx_new_bowl(f);
-    else if (i == 1 && ctx_row >= 0) ctx_remove(f, ctx_row);
+    else if (i == 1 && ctx_row >= 0) { ctx_remove(f, ctx_row); ctx_close(); files_reload_all(); return 1; }
     else if (i == 2 && ctx_bmp()) {                    /* (v0.60.186) */
         char path[FAT_PATH_MAX];
         if (files_path(f, ctx_row, path) == 0) set_picture(path);
@@ -1420,6 +1447,16 @@ static int copy_pull(void *ctx, uint32_t off, uint8_t *dst, uint32_t n) {
     c->pos += n;
     return 0;
 }
+static int stream_copy(const char *src, const char *dst, uint32_t *size) {   /* 0, or -1 (v0.60.189: shared) */
+    struct copy_src c;
+    *size = 0;
+    c.fd = fat_fopen(src); c.pos = 0;
+    if (c.fd < 0) return -1;
+    *size = fat_fsize(c.fd);
+    int ok = fat_write_from(dst, *size, copy_pull, &c) == 0;
+    fat_fclose(c.fd);
+    return ok ? 0 : -1;
+}
 static void files_copy(int from, int r, int to) {
     struct files *f = win[from].files, *t = win[to].files;
     char src[FAT_PATH_MAX], dst[FAT_PATH_MAX];
@@ -1438,15 +1475,114 @@ static void files_copy(int from, int r, int to) {
     }
     if (fat_exists(dst)) { klog("[countertop] %s is taken there\n", f->name[r]); return; }
     if (!users_may(src, 'r') || !users_may(t->path, 'w')) { klog("[countertop] may not copy %s to %s\n", src, dst); return; }
-    struct copy_src c;
-    c.fd = fat_fopen(src); c.pos = 0;
-    if (c.fd < 0) { klog("[countertop] could not open %s\n", src); return; }
-    uint32_t size = fat_fsize(c.fd);
-    int ok = fat_write_from(dst, size, copy_pull, &c) == 0;
-    fat_fclose(c.fd);
+    uint32_t size;
+    int ok = stream_copy(src, dst, &size) == 0;
     klog("[countertop] %s %s to %s (%u bytes)\n", ok ? "copied" : "could not copy", src, dst, size);
     files_load(t);
     repaint_win(to);
+}
+/* Compost (v0.60.189): a file removed in a files window goes to the cook's
+ * compost bowl (the headchef's /compost, anyone else's in their home),
+ * numbered if its name is there already; the hidden .whence there says,
+ * a line a file, "name<TAB>where it came from". Put back copies it home
+ * again; emptying is the one way off the disk. A move is a copy and a
+ * delete here, as relabel's is: FAT has no rename across bowls. */
+static void bar_note(const char *msg);
+static int note_showing;                         /* with the notes, below */
+static uint32_t note_at;
+static void compost_dir(char *p) {
+    if (ct_uid == 0) { strcpy(p, "/compost"); return; }
+    strcpy(p, "/home/"); strcat(p, users_name_of((uint8_t)ct_uid)); strcat(p, "/compost");
+}
+static int ctx_compost(void) {
+    char c[FAT_PATH_MAX];
+    compost_dir(c);
+    return ctx_win >= 0 && win[ctx_win].files && !strcmp(win[ctx_win].files->path, c);
+}
+static char whence[2048];                          /* the index, read whole: small, a line a file */
+static int whence_load(const char *dir, char *path) {
+    strcpy(path, dir); strcat(path, "/.whence");
+    uint32_t n = 0;
+    if (fat_read(path, (uint8_t *)whence, sizeof(whence) - 1, &n) < 0) n = 0;
+    if (n > sizeof(whence) - 1) n = sizeof(whence) - 1;
+    whence[n] = '\0';
+    return (int)n;
+}
+static void files_reload_all(void) {
+    for (int k = 0; k < MAX_WIN; k++) if (win[k].used && win[k].files) { files_load(win[k].files); repaint_win(k); }
+}
+static void compost_add(const char *p) {
+    char dir[FAT_PATH_MAX], dst[FAT_PATH_MAX], idx[FAT_PATH_MAX];
+    compost_dir(dir);
+    if (!fat_is_dir(dir) && fat_mkdir(dir) < 0) { klog("[countertop] no compost at %s\n", dir); return; }
+    const char *base = p;
+    for (const char *c = p; *c; c++) if (*c == '/') base = c + 1;
+    for (int n = 1; n < 100; n++) {                    /* name, name.2, name.3 ... */
+        if ((int)(strlen(dir) + strlen(base)) + 5 >= FAT_PATH_MAX) return;
+        strcpy(dst, dir); strcat(dst, "/"); strcat(dst, base);
+        if (n > 1) { int l = (int)strlen(dst); dst[l++] = '.'; if (n >= 10) dst[l++] = (char)('0' + n / 10); dst[l++] = (char)('0' + n % 10); dst[l] = '\0'; }
+        if (!fat_exists(dst)) break;
+    }
+    uint32_t size;
+    if (fat_exists(dst) || stream_copy(p, dst, &size) < 0) { klog("[countertop] could not compost %s\n", p); return; }
+    fat_delete(p);
+    int n = whence_load(dir, idx);
+    const char *name = dst + strlen(dir) + 1;
+    if (n + (int)strlen(name) + (int)strlen(p) + 3 < (int)sizeof(whence)) {
+        strcat(whence, name); strcat(whence, "\t"); strcat(whence, p); strcat(whence, "\n");
+        fat_write(idx, (const uint8_t *)whence, (uint32_t)strlen(whence));
+    }
+    klog("[countertop] composted %s as %s\n", p, dst);
+}
+static void compost_put_back(const char *name) {
+    char dir[FAT_PATH_MAX], idx[FAT_PATH_MAX], src[FAT_PATH_MAX], to[FAT_PATH_MAX];
+    compost_dir(dir);
+    whence_load(dir, idx);
+    int nl = (int)strlen(name);
+    char *line = 0;
+    for (char *l = whence; *l; ) {                     /* the line for this name */
+        if (!strncmp(l, name, (uint32_t)nl) && l[nl] == '\t') { line = l; break; }
+        while (*l && *l != '\n') l++;
+        if (*l) l++;
+    }
+    if (!line) { klog("[countertop] %s: not known where it came from\n", name); return; }
+    int k = 0;
+    for (char *c = line + nl + 1; *c && *c != '\n' && k < FAT_PATH_MAX - 1; c++) to[k++] = *c;
+    to[k] = '\0';
+    strcpy(src, dir); strcat(src, "/"); strcat(src, name);
+    char par[FAT_PATH_MAX];
+    strcpy(par, to);
+    char *slash = 0;
+    for (char *c = par; *c; c++) if (*c == '/') slash = c;
+    if (slash == par) par[1] = '\0'; else if (slash) *slash = '\0';
+    uint32_t size;
+    if (fat_exists(to)) { klog("[countertop] %s is taken, %s stays in the compost\n", to, name); bar_note("put back: the name is taken there"); note_showing = 1; note_at = timer_get_ticks(); return; }
+    if (!users_may(par, 'w') || stream_copy(src, to, &size) < 0) { klog("[countertop] could not put %s back to %s\n", name, to); return; }
+    fat_delete(src);
+    char *end = line;                                  /* its line out of the index */
+    while (*end && *end != '\n') end++;
+    if (*end) end++;
+    memmove(line, end, strlen(end) + 1);
+    fat_write(idx, (const uint8_t *)whence, (uint32_t)strlen(whence));
+    klog("[countertop] put back %s to %s\n", name, to);
+}
+static void compost_empty(void) {
+    char dir[FAT_PATH_MAX], p[FAT_PATH_MAX];
+    compost_dir(dir);
+    static fat_entry_t e[FAT_LS_MAX];
+    int gone = 0;
+    for (int again = 1; again; ) {                     /* listed afresh after each round of deletes */
+        again = 0;
+        int got = fat_ls(dir, e, FAT_LS_MAX);
+        for (int i = 0; i < got; i++) {
+            const char *nm = fat_display_name(&e[i]);
+            if (e[i].attr & FAT_ATTR_DIR) continue;
+            if ((int)(strlen(dir) + strlen(nm)) + 2 >= FAT_PATH_MAX) continue;
+            strcpy(p, dir); strcat(p, "/"); strcat(p, nm);
+            if (fat_delete(p) == 0) { gone += strcmp(nm, ".whence") != 0; again = 1; }
+        }
+    }
+    klog("[countertop] compost emptied, %d file%s gone\n", gone, gone == 1 ? "" : "s");
 }
 /* A platter (v0.60.186): a .bmp double-clicked in a files window, in a
  * window of its own at its own size up to most of the screen; the wheel

@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.188
+Current version: v0.60.189
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,24 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.189 (2026-10-09)  — COMPOST: REMOVING A FILE CAN BE UNDONE
+  - The files menu's remove (still asked twice) moves a file into the
+    cook's compost bowl, the headchef's /compost or ~/compost, made when
+    first needed; a name already there gets .2, .3 and on. The hidden
+    .whence there keeps "name<TAB>where it came from" a line a file.
+    Removing a bowl is as it was (only an empty one, really gone).
+  - In the compost the menu is "put back <name>" (home again, refused
+    if the name is taken there or the cook may not write it) and "empty
+    the compost" (asked twice; the one way off the disk). Files windows
+    are all reloaded after any of these.
+  - A move is a copy and a delete, as relabel's is (FAT has no rename
+    across bowls): files_copy's streamed copy is now stream_copy, shared.
+  - scripts/ctcompost-test.sh: as saucier, with an older note.txt in the
+    compost already, note.txt (to note.txt.2) and other.txt removed, the
+    compost read back, note.txt.2 put back with its words, the compost
+    emptied (two files off the disk). ctfilesmenu-test follows remove's
+    new end. Six-wide soak 6 of 6.
 
 v0.60.188 (2026-10-09)  — THE SPICE RACK
   - A window of the desktop's settings as things to click, opened from

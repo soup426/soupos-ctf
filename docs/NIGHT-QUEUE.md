@@ -67,7 +67,7 @@ never), the zone (- and +) and 12/24-hour. Each click takes effect at
 once and is written to the cook's settings. Test: each control clicked,
 the screen and the settings file after each.
 
-## 3. Compost: removing a file can be undone
+## 3. Compost: removing a file can be undone — DONE v0.60.189
 
 The files menu's remove moves a file into the cook's compost bowl
 (`compost` in their home; the headchef's `/compost`), not off the disk;
