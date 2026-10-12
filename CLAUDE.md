@@ -3,7 +3,7 @@
 ## What this is
 
 soupOS is a 32-bit x86 hobby OS written in C and NASM assembly (currently
-**v0.60.265**; ROADMAP.txt is the authority on the version). It boots via GRUB and runs in protected mode with paging, a
+**v0.60.266**; ROADMAP.txt is the authority on the version). It boots via GRUB and runs in protected mode with paging, a
 physical/heap allocator, and a cooperative scheduler. On top of that:
 
 - **Filesystem**: FAT16 read/write with subdirectories ("bowls") and a VFS shim
@@ -928,7 +928,8 @@ too, the way the matching shell command does. The open check is
 soupyc's open(), lines(), write_lines() and include ask the same rule
 (`users_may_open`, v0.60.262) through `sc_open` in soupyc.c; only the
 CHALLENGE build's stay unchecked. Whose rights it checks: inside a program's syscall the program's own
-`proc_t.owner` (v0.60.258, `shell_uid_resolver`), never its shell's current
+`proc_t.owner` (v0.60.258, `shell_uid_resolver`), in a spawn()ed soupyc task
+its `task_t.uid`, the spawner's cook (v0.60.266), never its shell's current
 cook, which clockout changes; `infuse.elf GOPATH PATH` (a test fixture) waits
 for GOPATH to exist and then opens PATH, for clockout-rights-test. Copy
 any user path with `copy_user_path`, never read it in place. In tests, check

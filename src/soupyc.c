@@ -141,6 +141,8 @@ typedef struct soupyc_ctx {
     uint32_t m_arr_owned;
     /* spawned scripts only: index into m_funcs of the function to run */
     int      m_entry_func;
+    /* spawned scripts only: the cook who spawned it (v0.60.266) */
+    int      m_uid;
 } soupyc_ctx_t;
 
 static inline soupyc_ctx_t *cur_ctx(void) {
@@ -1900,6 +1902,10 @@ static void release_ctx(soupyc_ctx_t *c) {
 static void soupyc_child(void *arg) {
     soupyc_ctx_t *ctx = (soupyc_ctx_t *)arg;
     task_current()->soupyc = ctx;
+    /* Before anything it opens (v0.60.266, review R-K14): a kernel task has
+     * no program, so its rights were its shell's current cook, and a script
+     * left running after clockout had the next cook's. */
+    task_current()->uid = ctx->m_uid;
 
     eval_block(funcs[ctx->m_entry_func].body);
 
@@ -1925,6 +1931,7 @@ static int soupyc_spawn(int func_index) {
 
     clone_code(child, parent);
     child->m_entry_func = func_index;
+    child->m_uid = users_current_uid();      /* the spawner's cook, now (review R-K14) */
 
     char tname[16];
     tname[0] = 's'; tname[1] = 'o'; tname[2] = 'u'; tname[3] = 'p'; tname[4] = ':';

@@ -323,6 +323,7 @@ static int shell_uid_resolver(void) {
     proc_t *pr = proc_current();
     if (pr) return pr->owner;
     task_t *me = task_current();
+    if (me && me->uid >= 0) return me->uid;           /* (v0.60.266) a spawn()ed script's cook */
     return (me && me->shell) ? ((shell_t *)me->shell)->uid : -1;
 }
 static uint8_t shell_creator(void) { return users_current_uid(); }

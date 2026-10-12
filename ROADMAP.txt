@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.265
+Current version: v0.60.266
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,19 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.266 (2026-10-12)  — A SPAWNED SCRIPT KEEPS ITS COOK
+  - A spawn()ed soupyc script runs as a kernel task with no program, so
+    v0.60.258's rule (a program's own cook) missed it and its rights were
+    its shell's current cook: one left running after clockout opened
+    files as the next cook, /etc/kitchen included once the headchef
+    clocked in (review R-K14, worse since v0.60.262 made soupyc ask at
+    all). A task now has a uid, -1 unless set; the spawned script's is the
+    spawner's cook, set before it runs a line, and the resolver asks it
+    after a program's owner.
+  - scripts/soupyc-spawn-rights-test.sh: saucier's worker waits for a file
+    the headchef makes after clocking in; /etc/kitchen is refused and
+    saucier's own file opens. Before the fix it opened both.
 
 v0.60.265 (2026-10-12)  — WINDOW SLOTS DO NOT OUTLIVE A DESKTOP
   - Leave marks a live program's windows gone, so its calls get -1, but

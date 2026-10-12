@@ -631,7 +631,7 @@ Mincecraft; neosim and rx.c; Doom; tests, build and docs.)
   foreground check, and a spawn()ed soupyc task outlives clockout, so it
   could read keys typed at the next login. Fix: refuse /dev/kbd to all but
   the foreground, or to soupyc entirely.
-- **R-K14 (medium).** A soupyc spawn() task has no proc, so the resolver
+- **R-K14 (high, once K12 made soupyc ask) — DONE v0.60.266 (soupyc-spawn-rights-test).** A soupyc spawn() task has no proc, so the resolver
   gives it the console shell's current cook: one outliving clockout makes
   files owned by the next cook. Fix: an owner on soupyc tasks (or their end
   at clockout), with K12.

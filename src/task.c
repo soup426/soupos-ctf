@@ -124,6 +124,7 @@ void task_init(void) {
     t->sys_write     = 0;   /* not inside a kernel-internal write (v0.55.5) */
     t->user_resume_esp = 0; /* never been in ring 3 */
     t->proc          = 0;
+    t->uid           = -1;
     t->term          = 0;
     t->shell         = 0;
     t->page_dir      = paging_kernel_dir();
@@ -154,6 +155,7 @@ task_t *task_spawn(const char *name, void (*entry)(void *), void *arg) {
     t->sys_write     = 0;   /* not inside a kernel-internal write (v0.55.5) */
     t->user_resume_esp = 0; /* never been in ring 3 */
     t->proc          = 0;
+    t->uid           = -1;
     t->page_dir      = paging_kernel_dir();
     /* A task prints where its parent prints: a program cooked from an SSH
      * session writes to that session, a script's spawn to the same place. */

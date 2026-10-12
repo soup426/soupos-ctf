@@ -42,6 +42,10 @@ typedef struct task {
                                   * Inherited by every task it spawns (v0.36.0) */
     void         *shell;         /* the shell it belongs to (shell_t), inherited */
     void         *soupyc;        /* soupyc_ctx_t while this task interprets  */
+    int           uid;           /* the cook a kernel task works for, or -1:
+                                  * a spawn()ed soupyc script's (v0.60.266),
+                                  * so its rights do not follow its shell's
+                                  * cook through a clockout */
     int           service;       /* a background service (fbcon, mixer): it
                                   * is alive, but it is not another program
                                   * competing for the machine */
