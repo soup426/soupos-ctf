@@ -436,7 +436,7 @@ Mincecraft; neosim and rx.c; Doom; tests, build and docs.)
   read the console's keys, secrets typed at login and at chef included
   (src/vfs.c:318). Fix: through user_stdin_getchar (sti, foreground, kills)
   or refuse it from ring 3.
-- **R-K2 (critical, security).** A cook's background program takes the next
+- **R-K2 (critical, security) — DONE v0.60.258 (clockout-rights-test; the owner rule, programs not killed at clockout).** A cook's background program takes the next
   user's rights after clockout: syscall checks use the shell's current user,
   not the process's owner (users.c eff_uid; usermode.c SYS_OPEN UNLINK
   MKDIR READDIR STAT KILL). Reproduced: the probe read /etc/kitchen as the

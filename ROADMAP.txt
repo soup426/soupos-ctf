@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.257
+Current version: v0.60.258
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,20 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.258 (2026-10-12)  — A PROGRAM HAS ITS OWN COOK'S RIGHTS
+  - A program's open, unlink, mkdir, readdir, stat and kill were decided
+    by its shell's current cook, which clockout changes: a program left
+    running had the next cook's rights, and saucier's background program
+    read the headchef's line of /etc/kitchen once the headchef clocked in
+    (review R-K2, critical). Inside a program's syscall the uid is now the
+    program's own owner, set at spawn. Programs left running still are
+    not killed at clockout: what they can do is their own cook's.
+  - infuse.elf SECONDS PATH, a test fixture: waits, then opens PATH and
+    prints its first line or INFUSE refused.
+  - scripts/clockout-rights-test.sh: saucier's two background infuse.elf
+    wake after the headchef has clocked in; /etc/kitchen is refused and
+    saucier's own file still read. Before the fix the hash was printed.
 
 v0.60.257 (2026-10-12)  — /DEV/KBD NO LONGER FREEZES THE MACHINE
   - A program's read of /dev/kbd ran dev_kbd_read inside the syscall,

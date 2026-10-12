@@ -315,6 +315,13 @@ static void set_session_uid(uint8_t uid) {
  * shell's user; the console (and every task with no shell) with -1, meaning
  * the global. */
 static int shell_uid_resolver(void) {
+    /* Inside a program's syscall, the program's own cook (v0.60.258, review
+     * R-K2): its shell's cook changes at clockout, so a program left running
+     * had the next cook's rights (saucier's read /etc/kitchen once the
+     * headchef clocked in). proc_current() is the ring-3 program this task
+     * runs, set from spawn to exit; its owner is the cook who cooked it. */
+    proc_t *pr = proc_current();
+    if (pr) return pr->owner;
     task_t *me = task_current();
     return (me && me->shell) ? ((shell_t *)me->shell)->uid : -1;
 }

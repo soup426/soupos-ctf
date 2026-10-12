@@ -3,7 +3,7 @@
 ## What this is
 
 soupOS is a 32-bit x86 hobby OS written in C and NASM assembly (currently
-**v0.60.257**; ROADMAP.txt is the authority on the version). It boots via GRUB and runs in protected mode with paging, a
+**v0.60.258**; ROADMAP.txt is the authority on the version). It boots via GRUB and runs in protected mode with paging, a
 physical/heap allocator, and a cooperative scheduler. On top of that:
 
 - **Filesystem**: FAT16 read/write with subdirectories ("bowls") and a VFS shim
@@ -923,7 +923,11 @@ gates kill/plate/steep; kernel tasks are the headchef's to kill.
 `users_may(path, need)` in users.c is THE check, used by the shell's `may()` and
 by the open/unlink/mkdir syscalls. A new syscall that touches a file asks it
 too, the way the matching shell command does. The open check is
-`#ifdef NO_CHALLENGE`: the challenge build's unchecked open is deliberate. Copy
+`#ifdef NO_CHALLENGE`: the challenge build's unchecked open is deliberate.
+Whose rights it checks: inside a program's syscall the program's own
+`proc_t.owner` (v0.60.258, `shell_uid_resolver`), never its shell's current
+cook, which clockout changes; `infuse.elf SECONDS PATH` (a test fixture) waits
+and then opens, for clockout-rights-test. Copy
 any user path with `copy_user_path`, never read it in place. In tests, check
 the key-typer's exit status: an untypeable character ends the sequence silently.
 
