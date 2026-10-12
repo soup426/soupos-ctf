@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.224
+Current version: v0.60.225
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,25 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.225 (2026-10-12)  — DOOM: THE PISTOL, AT LAST ON SCREEN
+  - Fixed: the gun was never seen. Weapons were drawn from (160, 168),
+    but Doom's weapon patches are offset from (1, 16) in 320x168 (x = 1 -
+    leftoffset; the top 100 - WEAPONTOP below the view's middle): the
+    pistol's top landed at y 274, under the screen. They are drawn from
+    there now; the status bar, drawn after, covers the gun's bottom as
+    Doom's does.
+  - Fixed: the muzzle flash was the lump PISFB0, which DOOM1.WAD has not
+    (it is PISFA0), so it never loaded; and it was drawn in place of the
+    gun. Now it is drawn over the gun's shot frame (PISGB0), then the gun
+    goes through PISGC0 back to PISGA0 in the cooldown, as Doom's pistol.
+    The flash lasts 8 ticks (it was 5, two frames).
+  - Queue 60's item had it that v0.60.220's cooldown fix brought the
+    flash back; measured, it had never been drawn at all.
+  - scripts/doom-flash-test.sh: the opening frame's pistol against
+    PISGA0 decoded from the WAD through PLAYPAL (all 1359 of its pixels
+    above the status bar; the old code had 99), and five shots, each with
+    its flash drawn within 8 ticks. Picture: docs/doom/pistol-flash.png.
 
 v0.60.224 (2026-10-12)  — MINCECRAFT: EATING
   - e eats the food in hand: sugar gives a heart back, butter two, a

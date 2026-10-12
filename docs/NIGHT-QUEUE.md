@@ -74,7 +74,7 @@ cast iron refused ("not food"). A crunch. Test: a world file from the host
 with 4 hearts and food in hand, e on each: the hearts and the counts in
 the markers, the HUD's hearts read back.
 
-## 4. Doom: the pistol's flash
+## 4. Doom: the pistol's flash — DONE v0.60.225 (it, and the gun, had never been on screen)
 
 The flash is drawn while the fire cooldown is high; with the cooldown in
 loop passes (before v0.60.220) it lasted a pass. Measure first: is the

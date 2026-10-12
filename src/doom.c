@@ -1671,6 +1671,7 @@ static int pl_health  = 100;
 static int pl_armor   = 0;
 static int pl_ammo    = 50;
 static int pl_fire_cd = 0;   /* weapon fire cooldown in ticks */
+static int g_flash_logged;   /* this shot's flash has been drawn, and logged (v0.60.225) */
 static int pl_keys    = 0;   /* bitmask: KEY_BLUE=1, KEY_YELLOW=2, KEY_RED=4 */
 static int g_level_exit = 0; /* set when player crosses/uses an exit linedef */
 
@@ -2143,6 +2144,7 @@ static void fire_weapon(void) {
     if (!lv_things || !lv_thing_ai) return;
     pl_ammo--;
     klog("[doom] fire ammo=%d tick=%u\n", pl_ammo, (unsigned)timer_get_ticks());
+    g_flash_logged = 0;
     pl_fire_cd = FIRE_CD_TICKS;
     doomsnd_play("DSPISTOL");       /* non-blocking: the frame carries on */
     int32_t px   = pl_x >> 8, py = pl_y >> 8;
@@ -2697,9 +2699,13 @@ static void draw_vissprites(void) {
 static uint8_t  *g_pistol_raw   = NULL;
 static uint32_t  g_pistol_sz    = 0;
 static uint8_t  *g_pistol_flash = NULL;
+static uint8_t  *g_pistol_fire[2];             /* (v0.60.225) PISGB0 the shot, PISGC0 after */
+static uint32_t  g_pistol_firesz[2];
 static uint32_t  g_pistol_fsz   = 0;
 
-#define FLASH_TICKS 5   /* frames to show muzzle flash after firing */
+/* The flash's ticks after a shot (v0.60.225: 5 was two frames; Doom's own
+ * lasts 7 of its 35 Hz tics, 200 ms), inside FIRE_CD_TICKS. */
+#define FLASH_TICKS 8
 
 static void weapon_load_lump(const char *name, uint8_t **buf, uint32_t *sz) {
     int idx = wad_find_lump(name);
@@ -2715,20 +2721,37 @@ static void weapon_load_lump(const char *name, uint8_t **buf, uint32_t *sz) {
 
 static void weapon_init(void) {
     if (!g_pistol_raw)   weapon_load_lump("PISGA0", &g_pistol_raw,   &g_pistol_sz);
-    if (!g_pistol_flash) weapon_load_lump("PISFB0", &g_pistol_flash, &g_pistol_fsz);
+    if (!g_pistol_fire[0]) weapon_load_lump("PISGB0", &g_pistol_fire[0], &g_pistol_firesz[0]);
+    if (!g_pistol_fire[1]) weapon_load_lump("PISGC0", &g_pistol_fire[1], &g_pistol_firesz[1]);
+    if (!g_pistol_flash) weapon_load_lump("PISFA0", &g_pistol_flash, &g_pistol_fsz);   /* (v0.60.225) was PISFB0, no such lump */
 }
 
 static void weapon_free(void) {
     if (g_pistol_raw)   { kfree(g_pistol_raw);   g_pistol_raw   = NULL; g_pistol_sz  = 0; }
+    for (int i = 0; i < 2; i++) if (g_pistol_fire[i]) { kfree(g_pistol_fire[i]); g_pistol_fire[i] = NULL; g_pistol_firesz[i] = 0; }
     if (g_pistol_flash) { kfree(g_pistol_flash); g_pistol_flash = NULL; g_pistol_fsz = 0; }
 }
 
+/* Where Doom puts a weapon (v0.60.225): its patches' offsets are from
+ * x 1 and y 16 in 320x168 (r_things.c: x = 1 - leftoffset, the top 100 -
+ * WEAPONTOP 32 below the view's middle, 84). They were drawn from (160,
+ * 168), the pistol's top at y 274: under the screen, so no gun and no flash
+ * were ever seen. The status bar, drawn after, covers its bottom as Doom's. */
+#define WEAPON_X 1
+#define WEAPON_Y (VIEW_H_320 / 2 - 100 + 32)
 static void draw_weapon(void) {
-    /* Show muzzle flash for the first FLASH_TICKS frames of cooldown */
-    if (g_pistol_flash && pl_fire_cd > FIRE_CD_TICKS - FLASH_TICKS)
-        draw_patch(g_pistol_flash, 160, VIEW_H_320);
-    else if (g_pistol_raw)
-        draw_patch(g_pistol_raw, 160, VIEW_H_320);
+    /* The gun, and over it (as Doom draws its flash, a layer of its own)
+     * the muzzle flash for the first FLASH_TICKS of the cooldown. */
+    /* As Doom's pistol: the shot frame (B) under the flash, then C, then
+     * back to A, through the cooldown. */
+    int flash = pl_fire_cd > FIRE_CD_TICKS - FLASH_TICKS;
+    const uint8_t *gun = flash && g_pistol_fire[0] ? g_pistol_fire[0]
+                       : pl_fire_cd > FIRE_CD_TICKS - FLASH_TICKS - 4 && g_pistol_fire[1] ? g_pistol_fire[1] : g_pistol_raw;
+    if (gun) draw_patch(gun, WEAPON_X, WEAPON_Y);
+    if (g_pistol_flash && flash) {
+        draw_patch(g_pistol_flash, WEAPON_X, WEAPON_Y);
+        if (!g_flash_logged) { g_flash_logged = 1; klog("[doom] flash tick=%u\n", (unsigned)timer_get_ticks()); }
+    }
 }
 
 /* ── Sector specials (damage floors + light effects) ─────────────────────── */
