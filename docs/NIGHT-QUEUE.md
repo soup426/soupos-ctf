@@ -57,7 +57,7 @@ A count before i a I A o O repeats what was typed when Esc ends it
 (3ihi<Esc> hihihi, 2onew<Esc> two lines); . repeats it with the count.
 Test: cases against neovim's.
 
-## 2. neosim: paragraphs
+## 2. neosim: paragraphs — DONE v0.60.235
 
 { and } to the blank line before and after (counts; as motions, d} and
 y{), ip and ap (the lines of the paragraph, ap with the blank lines after
@@ -128,3 +128,8 @@ pixels in the sky in both, and moved; the frame rate still at its cap.
 
 - 2026-10-12 (queue 62 item 3): neosim has no paragraphs: no { } motions
   and no ip ap objects. A later item.
+
+- 2026-10-12 (queue 63 item 2): the full check is 420 s now (it was 373
+  at queue 58's start), run under timeout 590; each new test adds 5-10 s.
+  Before it nears the limit: find the slowest tests (check.sh prints each
+  one's time) and share boots, or raise the timeout on purpose.

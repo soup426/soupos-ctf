@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.234
+Current version: v0.60.235
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,20 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.235 (2026-10-12)  — NEOSIM: PARAGRAPHS
+  - { and } go to the empty line before and after, as neovim's findpar
+    (past the run of lines of the cursor's kind; at the text's end, its
+    last character, taken). As motions they keep vim's exclusive-linewise
+    rule: ending in column 0, whole lines when they start at or before the
+    first non-blank (d} from a line's start), else up to the line before's
+    end (d} from mid-line keeps the blank line).
+  - ip ap: the paragraph's lines, or the run of blank lines the cursor is
+    on; ap with the blank lines after (or before, when none are after),
+    on blank lines them and the paragraph after; counts, visual vip vap.
+    Listed on :help.
+  - scripts/neosim-para-test.sh: 32 cases against neovim 0.12.5. Queue
+    62's note (no paragraphs) is done with it.
 
 v0.60.234 (2026-10-12)  — NEOSIM: COUNTS ON INSERTS
   - A count before i a I A o O types what was typed again when Esc ends

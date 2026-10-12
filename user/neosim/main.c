@@ -12,7 +12,8 @@
  * :help, a read-only page of all this (v0.60.219); f t F T ; , r ~ (v0.60.222);
  * Ctrl-D Ctrl-U Ctrl-F Ctrl-B, zz zt zb (v0.60.223); * # (v0.60.226);
  * text objects iw aw i" a" i( a( i{ a{ ... (v0.60.227); marks m ' ` (v0.60.231);
- * gu gU g~ and in visual u U ~ (v0.60.232); counts on inserts, 3. (v0.60.234)
+ * gu gU g~ and in visual u U ~ (v0.60.232); counts on inserts, 3. (v0.60.234);
+ * paragraphs { } ip ap (v0.60.235)
  * (v0.60.206); i a A I o O into insert mode; : for a command. Insert mode:
  * typing, Enter, Backspace (joining lines at the start of one), Tab as four
  * spaces, the arrows, Esc back. Commands: :w [FILE], :q, :q!, :wq, :x,
@@ -375,9 +376,41 @@ static int find_on_line(int cmd, int ch, int cnt, int again) {   /* the column i
     }
     return -1;
 }
+/* Paragraphs (v0.60.235), as neovim's findpar: an empty line bounds one. */
+static int blank(int y) { return lenof(y) == 0; }
+static int findpar(int dir, int cnt, int *eof) {    /* the line } or { lands on */
+    int curr = E.cy;
+    *eof = 0;
+    while (cnt--) {
+        int skipped = 0;
+        for (int first = 1; ; first = 0) {
+            if (!blank(curr)) skipped = 1;
+            if (!first && skipped && blank(curr)) break;
+            curr += dir;
+            if (curr < 0 || curr >= E.t.n) { curr -= dir; *eof = 1; break; }
+        }
+        if (*eof) break;
+    }
+    return curr;
+}
 static mv_t motion(unsigned k, int cnt, int had, int op) {
     mv_t m = { 1, E.cy, E.cx, 0, 0 };
     switch (k) {
+    case '}': case '{': {
+        int eof, dir = k == '}' ? 1 : -1, ty = findpar(dir, cnt, &eof);
+        if (ty == E.cy && (dir < 0 ? E.cx == 0 : (eof && E.cx >= imax(lenof(ty) - 1, 0)))) { m.ok = 0; break; }
+        m.y = ty; m.x = 0;
+        if (dir > 0 && eof) { m.x = imax(lenof(ty) - 1, 0); m.incl = 1; break; }   /* the end of the text: its last character, taken */
+        if (!op) break;
+        /* An operator on an exclusive motion that ends in column 0 (:h
+         * exclusive-linewise): whole lines if it starts at or before its
+         * line's first non-blank, else up to the end of the line before. */
+        int sy = dir > 0 ? E.cy : ty, sx = dir > 0 ? E.cx : 0, ey = dir > 0 ? ty : E.cy, ex = dir > 0 ? 0 : E.cx;
+        if (ex != 0 || ey == sy) break;
+        if (sx <= first_nonblank(&E.t, sy)) { m.line = 1; m.y = dir > 0 ? ey - 1 : sy; if (dir < 0) E.cy = ey - 1; }
+        else if (dir > 0) { m.y = ey - 1; m.x = imax(lenof(ey - 1) - 1, 0); m.incl = lenof(ey - 1) > 0; }
+        break;
+    }
     case '\'': case '`': {                          /* a mark (v0.60.231) */
         int i = find_ch >= 'a' && find_ch <= 'z' ? find_ch - 'a' : -1;
         if (i < 0 || !marks[i].set) { msg("E20: Mark not set", 0, 0); m.ok = 0; break; }
@@ -570,9 +603,33 @@ static int obj_block(int a, char o, char c, int cnt, int *ay, int *ax, int *by, 
     if (sy > ey || (sy == ey && sx > ex)) return 0;
     *ay = sy; *ax = sx; *by = ey; *bx = ex; return 1;
 }
+static int obj_para(int a, int cnt, int *ay, int *by) {   /* ip ap (v0.60.235): whole lines */
+    int n = E.t.n, kind = blank(E.cy), s = E.cy, e = E.cy;
+    while (s > 0 && blank(s - 1) == kind) s--;
+    while (e + 1 < n && blank(e + 1) == kind) e++;
+    if (!a) {
+        for (int k = 1; k < cnt && e + 1 < n; k++) { int kd = blank(e + 1); e++; while (e + 1 < n && blank(e + 1) == kd) e++; }
+    } else if (kind) {                               /* on blank lines: them and the paragraph after */
+        for (int k = 0; k < cnt && e + 1 < n; k++) {
+            if (k) { e++; while (e + 1 < n && blank(e + 1)) e++; }
+            e++; while (e + 1 < n && !blank(e + 1)) e++;
+        }
+    } else {
+        int after = 0;
+        for (int k = 0; k < cnt; k++) {
+            if (k) { if (e + 1 >= n) break; e++; while (e + 1 < n && !blank(e + 1)) e++; }
+            after = 0;
+            while (e + 1 < n && blank(e + 1)) { e++; after = 1; }
+        }
+        if (!after) while (s > 0 && blank(s - 1)) s--;   /* none after: the blank lines before */
+    }
+    *ay = s; *by = e;
+    return 1;
+}
 static int textobj(int a, int k, int cnt, int *ay, int *ax, int *by, int *bx, int *line) {
     *line = 0; *ay = *by = E.cy;
     switch (k) {
+    case 'p': *line = 1; *ax = *bx = 0; return obj_para(a, cnt, ay, by);
     case 'w': return obj_word(a, 0, cnt, ax, bx);
     case 'W': return obj_word(a, 1, cnt, ax, bx);
     case '"': case '\'': case '`': return obj_quote(a, (char)k, ax, bx);

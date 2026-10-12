@@ -10,6 +10,7 @@ const char *const help_text[] = {
     "  0 ^ $              the line's start, first non-blank, end",
     "  gg G  5G           the first line, the last, line 5",
     "  %                  the matching ( [ { or ) ] }",
+    "  { }                the blank line before, after (ip ap: a paragraph)",
     "  f t F T  + a char  to it (t: before it), on the line; F T back",
     "  ; ,                the last f t F T again; the other way",
     "  Ctrl-D Ctrl-U      half a screen down, up (a count: that many, kept)",
