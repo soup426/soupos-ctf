@@ -10,6 +10,8 @@
  *   cook prod.elf limits    (v0.60.150) the window calls, attacked: sizes,
  *                           a title running off its memory, pixel and event
  *                           pointers it never had, ids that are not its own
+ *   cook prod.elf hog &     (v0.60.265) every window slot it can get, held
+ *                           while it sleeps (ctslots-test)
  *   cook prod.elf keys      (v0.60.190) SYS_WIN_KEYS: its limits, then the
  *                           held keys whenever they change (winkeys-test)
  *
@@ -148,10 +150,20 @@ static int keys_mode(void) {
     return 0;
 }
 
+/* (v0.60.265) hog: as many small windows as the desktop gives, then it
+ * sleeps for ever. A program left running from one shift kept its window
+ * slots into the next, and eight shut every later cook out (ctslots-test). */
+static int hog(void) {
+    int n = open_when_up(40, 30, "hog") >= 0;
+    while (n && sys_win_open(40, 30, "hog") >= 0) n++;
+    print("prod: hog holds "); print_int(n); print("\n");
+    for (;;) sys_sleep(1000);
+}
+
 int main(void) {
     char *argv[4];
     int argc = uargv(argv, 4);
-    if (argc < 1) { print("usage: prod.elf write|gap|read|stat|victim|limits|keys\n"); return 2; }
+    if (argc < 1) { print("usage: prod.elf write|gap|read|stat|victim|limits|keys|hog\n"); return 2; }
     const char *m = argv[0];
     if (same(m, "write")) said("write", sys_write(FD_STDOUT, (const char *)ABOVE_BRK, 16));
     else if (same(m, "gap")) said("write", sys_write(FD_STDOUT, (const char *)GAP, 16));
@@ -163,6 +175,7 @@ int main(void) {
     else if (same(m, "victim")) return victim();
     else if (same(m, "limits")) return limits();
     else if (same(m, "keys")) return keys_mode();
-    else { print("usage: prod.elf write|gap|read|stat|victim|limits|keys\n"); return 2; }
+    else if (same(m, "hog")) return hog();
+    else { print("usage: prod.elf write|gap|read|stat|victim|limits|keys|hog\n"); return 2; }
     return 0;
 }

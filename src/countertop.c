@@ -2618,7 +2618,11 @@ int countertop_run(int (*avail)(void), int (*getch)(void), int uid) {
     mutex_lock(&app_mtx);                            /* programs may ask for windows now */
     for (int i = 0; i < APP_MAX; i++) {
         proc_t *p = proc_by_pid(app[i].pid);
-        if (app[i].used && (!p || p->state == PROC_ZOMBIE)) app_free(&app[i]);   /* left from last time */
+        /* Left from last time: a program's that ended, or (v0.60.265, review
+         * R-C10) one marked gone at the last Leave. A gone slot only ever
+         * answers -1 to its program, but it kept the slot and its pixels:
+         * one program left running held all eight into the next shift. */
+        if (app[i].used && (app[i].gone || !p || p->state == PROC_ZOMBIE)) app_free(&app[i]);
     }
     ct_running = 1;
     mutex_unlock(&app_mtx);

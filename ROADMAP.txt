@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.264
+Current version: v0.60.265
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,19 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.265 (2026-10-12)  — WINDOW SLOTS DO NOT OUTLIVE A DESKTOP
+  - Leave marks a live program's windows gone, so its calls get -1, but
+    kept their slots and their pixels in the kernel's heap, and the next
+    desktop freed only slots of programs that had ended: one program left
+    running with eight windows (there are eight slots) shut every later
+    cook out of program windows until a reboot, and seven at 640x480 held
+    7.2 MB of heap (review R-C10). The desktop's start frees every gone
+    slot now. A cap on slots per program is not taken yet.
+  - prod.elf hog: every slot it can get, held while it sleeps.
+  - scripts/ctslots-test.sh: saucier's hog takes all eight, saucier leaves
+    and clocks out, and the headchef's prod.elf victim still gets its
+    window. Before the fix it got none.
 
 v0.60.264 (2026-10-12)  — /DEV/KBD IS NOT SOUPYC'S
   - v0.60.257 sent a program's /dev/kbd reads through the stdin rule, but

@@ -639,7 +639,7 @@ Mincecraft; neosim and rx.c; Doom; tests, build and docs.)
 
 ### The desktop (reviewer confirmed 1 and the apostrophe paths in QEMU on copies)
 
-- **R-C10 (medium-high).** A program left running from an earlier shift
+- **R-C10 (medium-high) — DONE v0.60.265 (gone slots freed at the start; no per-program cap yet; ctslots-test).** A program left running from an earlier shift
   keeps its window slots and their kernel-heap pixels into later shifts:
   the desktop's start frees only slots of dead programs (:2606), Leave
   only marks them gone, and APP_MAX is 8 for the whole machine with no cap
