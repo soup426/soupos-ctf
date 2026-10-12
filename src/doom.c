@@ -1792,6 +1792,12 @@ static uint32_t st_digit_sz[10] = {0};
 static uint8_t *st_percent   = NULL;
 static uint8_t *st_bar       = NULL;
 static uint8_t *st_face      = NULL;
+/* (v0.60.230) the right of the bar: the ARMS box, its digits, the small
+ * ammo numbers, the keys */
+static uint8_t *st_arms      = NULL;
+static uint8_t *st_ysnum[10] = {0};             /* STYSNUM0-9: small yellow */
+static uint8_t *st_gnum[8]   = {0};             /* STGNUM2-7: small grey (2..7 used) */
+static uint8_t *st_keys[6]   = {0};             /* STKEYS0-5: blue, yellow, red cards; skulls */
 
 static uint8_t *load_patch_cached(const char *name, uint32_t *out_sz) {
     int idx = wad_find_lump(name);
@@ -1813,6 +1819,11 @@ static void st_cache_init(void) {
         st_digit[d] = load_patch_cached(name, &st_digit_sz[d]);
     }
     st_percent = load_patch_cached("STTPRCNT", NULL);
+    st_arms    = load_patch_cached("STARMS",   NULL);
+    char sm[9] = "STYSNUM0", gn[8] = "STGNUM2", ky[8] = "STKEYS0";
+    for (int d = 0; d < 10; d++) { sm[7] = (char)('0' + d); st_ysnum[d] = load_patch_cached(sm, NULL); }
+    for (int d = 2; d < 8; d++)  { gn[6] = (char)('0' + d); st_gnum[d]  = load_patch_cached(gn, NULL); }
+    for (int d = 0; d < 6; d++)  { ky[6] = (char)('0' + d); st_keys[d]  = load_patch_cached(ky, NULL); }
     st_bar     = load_patch_cached("STBAR",    NULL);
     st_face    = load_patch_cached("STFST00",  NULL);
 }
@@ -1823,6 +1834,10 @@ static void st_cache_free(void) {
         st_digit_sz[d] = 0;
     }
     if (st_percent) { kfree(st_percent); st_percent = NULL; }
+    if (st_arms)    { kfree(st_arms);    st_arms    = NULL; }
+    for (int d = 0; d < 10; d++) if (st_ysnum[d]) { kfree(st_ysnum[d]); st_ysnum[d] = NULL; }
+    for (int d = 0; d < 8; d++)  if (st_gnum[d])  { kfree(st_gnum[d]);  st_gnum[d]  = NULL; }
+    for (int d = 0; d < 6; d++)  if (st_keys[d])  { kfree(st_keys[d]);  st_keys[d]  = NULL; }
     if (st_bar)     { kfree(st_bar);     st_bar     = NULL; }
     if (st_face)    { kfree(st_face);    st_face    = NULL; }
 }
@@ -1845,6 +1860,14 @@ static void st_number(int n, int rx, int y, int digits) {
     }
 }
 
+/* The small numbers of the ammo panel, as st_number but in STYSNUM. */
+static void st_small(int n, int rx, int y) {
+    if (!st_ysnum[0]) return;
+    int w = *(const int16_t *)st_ysnum[0], x = rx;
+    if (w <= 0 || w >= 64) return;
+    if (n <= 0) { draw_patch(st_ysnum[0], x - w, y); return; }
+    for (int d = 0; d < 3 && n; d++) { x -= w; if (st_ysnum[n % 10]) draw_patch(st_ysnum[n % 10], x, y); n /= 10; }
+}
 static void draw_statusbar(void) {
     st_cache_init();
     if (st_bar)  draw_patch(st_bar,  0,         ST_Y);
@@ -1856,6 +1879,22 @@ static void draw_statusbar(void) {
         draw_patch(st_percent, ST_HEALTHX, ST_HEALTHY);   /* at the field's end, as Doom's (v0.60.229: was +1) */
         draw_patch(st_percent, ST_ARMORX,  ST_ARMORY);
     }
+    /* (v0.60.230) As st_stuff.c, a game that is not deathmatch: the ARMS
+     * box over STBAR's FRAG at (104,168), weapons 2-7 at 111 + 12 a column,
+     * 172 + 10 a row, yellow if owned (only the pistol here) and grey if not;
+     * the ammo held at x 288 and the most at 314, on rows 173 (bullets),
+     * 179 (shells), 185 (rockets), 191 (cells). One pool here: every
+     * pickup is bullets, so the others are 0. The keys at 239, 171 + 10 a
+     * key (blue, yellow, red). */
+    if (st_arms) draw_patch(st_arms, 104, 168);
+    for (int i = 0; i < 6; i++) {
+        uint8_t *g = i == 0 ? st_ysnum[2] : st_gnum[i + 2];
+        if (g) draw_patch(g, 111 + (i % 3) * 12, 172 + (i / 3) * 10);
+    }
+    static const int ammo_y[4] = { 173, 179, 185, 191 }, ammo_max[4] = { 200, 50, 50, 300 };
+    for (int a = 0; a < 4; a++) { st_small(a == 0 ? pl_ammo : 0, 288, ammo_y[a]); st_small(ammo_max[a], 314, ammo_y[a]); }
+    for (int k = 0; k < 3; k++)
+        if ((pl_keys & (k == 0 ? KEY_BLUE : k == 1 ? KEY_YELLOW : KEY_RED)) && st_keys[k]) draw_patch(st_keys[k], 239, 171 + k * 10);
 }
 
 /* ── Collision detection ─────────────────────────────────────────────────── */

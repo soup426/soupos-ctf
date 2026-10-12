@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.229
+Current version: v0.60.230
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,19 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.230 (2026-10-12)  — DOOM: THE WHOLE STATUS BAR
+  - The right of the bar, as st_stuff.c draws it in a game that is not
+    deathmatch: the ARMS box (STARMS) over STBAR's FRAG, its weapons 2-7
+    in yellow when owned (the pistol) and grey when not; the ammo held
+    and the most that can be held for bullets, shells, rockets and cells
+    in the small yellow digits (50/200 0/50 0/50 0/300 at the start); the
+    keys held, at 239 and 171 + 10 a key. soupOS has one ammo pool (every
+    pickup is bullets), so shells, rockets and cells read 0.
+  - doom-places-test's status bar now has all of it: 0 of 9312 pixels
+    differ from the WAD drawn by Doom's rules (the face left out). The
+    keys are drawn by the same rule but none is held in that frame, so
+    no test sees them yet. docs/doom/statusbar.png is the new bar.
 
 v0.60.229 (2026-10-12)  — DOOM: THE PICTURES WHERE DOOM PUTS THEM
   - Measured, as the pistol should have been: every lump name the code

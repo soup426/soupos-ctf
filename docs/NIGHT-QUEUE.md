@@ -51,7 +51,7 @@ asked on 2026-10-11; the user has not seen it.
 
 ---
 
-## 1. Doom: the status bar's arms and ammo panel
+## 1. Doom: the status bar's arms and ammo panel — DONE v0.60.230
 
 The right of the status bar shows BULL SHEL RCKT CELL with slashes and
 no numbers; the ARMS box no digits. Doom draws (st_stuff.c) the ammo

@@ -5,7 +5,10 @@
 #   the status bar of E1M1's opening frame, all but the face: STBAR, the
 #     numbers as STlib_drawNum draws them (every digit a cell as wide as
 #     STTNUM0, no leading zeros: 50 ammo, 100 health, 0 armor) and the
-#     percent signs at ST_HEALTHX and ST_ARMORX;
+#     percent signs at ST_HEALTHX and ST_ARMORX; (v0.60.230) the ARMS box
+#     (STARMS over STBAR's FRAG, as in a game not deathmatch), its digits
+#     2-7 yellow when owned (the pistol) and grey when not, and the ammo
+#     panel's held and most-held counts in STYSNUM (50/200 0/50 0/50 0/300);
 #   the menu's skull at x - 32 (SKULLXOFF) and y - 5 of the first item;
 #   the episode menu with three lines (DOOM1.WAD has no M_EPI4): three
 #     downs bring the skull round to the first again.
@@ -54,14 +57,19 @@ def screen(nm):
     d = open(f'{work}/{nm}.ppm', 'rb').read(); hd = d.split(b'\n', 3); W = int(hd[1].split()[0]); px = hd[3]
     return lambda x, y: px[((84 + y * 3 + 1) * W + 32 + x * 3 + 1) * 3:((84 + y * 3 + 1) * W + 32 + x * 3 + 1) * 3 + 3]
 def near(a, b): return all(abs(p - q) <= 12 for p, q in zip(a, b))
-def num(v, rx, y, into):                     # STlib_drawNum
-    w = struct.unpack('<h', lump['STTNUM0'][:2])[0]; x = rx
-    if v == 0: patch('STTNUM0', x - w, y, into); return
-    while v: x -= w; patch('STTNUM%d' % (v % 10), x, y, into); v //= 10
+def num(v, rx, y, into, font='STTNUM'):      # STlib_drawNum
+    w = struct.unpack('<h', lump[font + '0'][:2])[0]; x = rx
+    if v == 0: patch(font + '0', x - w, y, into); return
+    while v: x -= w; patch(font + '%d' % (v % 10), x, y, into); v //= 10
 want = {}
 patch('STBAR', 0, 168, want)
 num(50, 44, 171, want); num(100, 90, 171, want); num(0, 221, 171, want)
 patch('STTPRCNT', 90, 171, want); patch('STTPRCNT', 221, 171, want)
+patch('STARMS', 104, 168, want)
+for i in range(6):                           # weapons 2..7: only the pistol owned
+    patch(('STYSNUM%d' if i == 0 else 'STGNUM%d') % (i + 2), 111 + (i % 3) * 12, 172 + (i // 3) * 10, want)
+for held, most, y in ((50, 200, 173), (0, 50, 179), (0, 50, 185), (0, 300, 191)):   # bullets, shells, rockets, cells
+    num(held, 288, y, want, 'STYSNUM'); num(most, 314, y, want, 'STYSNUM')
 lv = screen('level')
 cells = [(x, y) for (x, y) in want if 0 <= x < 320 and 168 <= y < 200 and not (143 <= x < 172)]   # the face (STFST00 reaches x 171) left out
 bad = [(x, y) for (x, y) in cells if not near(lv(x, y), pal[3 * want[(x, y)]:3 * want[(x, y)] + 3])]
