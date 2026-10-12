@@ -601,7 +601,7 @@ Mincecraft; neosim and rx.c; Doom; tests, build and docs.)
   (shown: WAIT:3 before rosemary, the resolver fix reverted, PASS). Fix:
   infuse waits for a file the headchef makes after clocking in, or the
   refusal must come after the Welcome.
-- **R-T20 (medium).** devkbd-test's background check cannot fail: a spoon
+- **R-T20 (medium) — DONE v0.60.261 (fails with the foreground check removed).** devkbd-test's background check cannot fail: a spoon
   that reads the console's keys never closes /KEYS.TXT, so the file is
   missing and "nothing in it" passes (shown with the foreground check
   removed: keys were stolen, the test blamed a hang). Fix: the background

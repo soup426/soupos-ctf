@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.260
+Current version: v0.60.261
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,15 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.261 (2026-10-12)  — DEVKBD-TEST'S BACKGROUND HALF CAN FAIL
+  - A background spoon that steals the console's keys never ends, so its
+    /KEYS.TXT was never written, and "nothing in it" passed (review
+    R-T20). Now the background spoon must have ended before the word is
+    typed, /KEYS.TXT must be there and empty, and the shell must have had
+    the whole word; a failed drive no longer hides those checks behind
+    "the machine stopped answering". With the foreground check taken out
+    of user_stdin_getchar all three fail and say so.
 
 v0.60.260 (2026-10-12)  — CLOCKOUT-RIGHTS-TEST CANNOT PASS BY TIMING
   - infuse.elf waited a fixed 12 s, so on a slow login it woke at the
