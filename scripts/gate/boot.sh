@@ -31,7 +31,7 @@ check "preemption armed"             '\[boot\] preemption enabled'
 check "ring3 write syscall"          'USERELF: ring3 syscall write ok'
 check "ring3 args syscall"           'TESTOUT args=hello world'
 check "ring3 open/read syscall"      'TESTOUT read=Hello from soupOS'
-check "ring3 sbrk syscall"           'TESTOUT heap='
+check "ring3 sbrk syscall"           'TESTOUT heap=AX$'
 check "ring3 yield reaches sched"    '\[u\] step'
 check "background task ran"          '\[bg\] done'
 check "preempt_disable works"        '^\[pt\] PASS'
@@ -54,7 +54,7 @@ check "its pages went out and came back"          '\[swap\] /proof\.elf: [0-9]+ 
 check "past cap and swap together is refused"     '\[demand\] /proof\.elf: no page for 0x.*swap 4096 of 4096'
 check "and that program was killed for it"        '\[user\] fault exc=14 .* -> program killed'
 check "swap was found past the volume at boot"    '\[swap\] 4096 pages past the volume'
-check "a wild fault still kills" '/drop\.elf exited with code'
+check "a wild fault still kills" '/drop\.elf exited with code -142,'
 # The stack grows on demand to 1 MB, far past the 16 KB it used to be, and
 # its guard page turns running off the end into a named kill.
 check "a deep stack grows on demand"        'DEEP reached 600 levels ok'

@@ -29,5 +29,11 @@ run_() {
 # R-T1: preempttest's own verdict, not any PASS in the log
 case_ boot "preempt_disable works" "[pt] A=1 B=2 C=3 depth=0" "[pt] FAIL" "[vmtest] PASS"
 ok_   boot "preempt_disable works" "[pt] A=1 B=2 C=3 depth=0" "[pt] PASS"
+# R-T4: mise's heap round trip, not a heap line that says FAIL
+case_ boot "ring3 sbrk syscall" "TESTOUT heap=FAIL"
+ok_   boot "ring3 sbrk syscall" "TESTOUT heap=AX"
+# R-T4: drop.elf killed by its page fault (-(128 + 14)), not a clean exit
+case_ boot "a wild fault still kills" "crash: STILL ALIVE (this should not print)" "[proc 15] /drop.elf exited with code 0, 29634 pages free, 1 ticks"
+ok_   boot "a wild fault still kills" "[proc 15] /drop.elf exited with code -142, 29634 pages free, 1 ticks"
 [ "$fail" = 0 ] && echo "gate-patterns-test: PASS" || echo "gate-patterns-test: FAIL"
 exit "$fail"

@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.253
+Current version: v0.60.254
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,14 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.254 (2026-10-12)  — TWO MORE GATE CHECKS CAN FAIL
+  - "ring3 sbrk syscall" took any TESTOUT heap= line, mise's own
+    heap=FAIL included; it wants heap=AX, the pattern written and read
+    back. "a wild fault still kills" took any drop.elf exit, a clean 0
+    after "STILL ALIVE" included; it wants code -142, -(128 + 14), the
+    page fault's kill (review R-T4).
+  - gate-patterns-test has both failures and both real lines.
 
 v0.60.253 (2026-10-12)  — DOOM-FB-TEST NEEDS DOOM
   - doom-fb-test compared the two builds' screens after a fixed wait with

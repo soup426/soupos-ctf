@@ -380,7 +380,7 @@ Mincecraft; neosim and rx.c; Doom; tests, build and docs.)
 - **R-T3 (high) — DONE v0.60.253.** doom-fb-test passes when Doom never runs (a cleared
   screen agrees 99.8%). Fix: a Doom serial marker, a share of non-black
   pixels, a serial log for the login wait.
-- **R-T4 (medium-high).** Gate checks that accept failure: drop.elf's
+- **R-T4 (medium-high) — DONE v0.60.254.** Gate checks that accept failure: drop.elf's
   "exited with code" takes code 0 ("STILL ALIVE"); 'TESTOUT heap=' takes
   "heap=FAIL". Fix: exact patterns.
 - **R-T5 (medium).** qemu_keys' UNTIL after TYPE:/KEY: items anchors on the
