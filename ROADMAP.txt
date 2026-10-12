@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.251
+Current version: v0.60.252
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,16 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.252 (2026-10-12)  — THE FULL CHECK REFUSES A STALE DISK
+  - The tests boot copies of disk.img, and make never rebuilds it, so a
+    change under user/ was tested only after rm disk.img && make disk by
+    hand (review R-T2). check.sh now builds the programs after the default
+    build and runs scripts/disk-fresh.sh: every program the disk recipe
+    copies is read back out of the image and compared with the one just
+    built; any that differ are named and the check stops there.
+  - scripts/disk-fresh-test.sh: a fresh copy passes; one with SPOON.ELF
+    replaced fails and names it. No QEMU.
 
 v0.60.251 (2026-10-12)  — THE GATE'S PREEMPT CHECK CAN FAIL
   - "preempt_disable works" matched PASS anywhere in its log, so

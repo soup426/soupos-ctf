@@ -32,6 +32,13 @@ make clean >/dev/null 2>&1
 if ! make >"$WORK/build-default.log" 2>&1; then
     echo "  FAIL  default build"; grep -E "error|undefined" "$WORK/build-default.log" | head -5; exit 1
 fi
+# The tests boot copies of disk.img, which make never rebuilds: it must hold
+# the programs this tree builds (v0.60.252, review R-T2).
+if ! make user >"$WORK/build-user.log" 2>&1; then
+    echo "  FAIL  the programs' build"; grep -E "error|undefined" "$WORK/build-user.log" | head -5; exit 1
+fi
+if ! fresh=$(bash scripts/disk-fresh.sh disk.img); then echo "  FAIL  $fresh"; exit 1; fi
+echo "  ok    $fresh"
 echo "  ok    default build ($(now)s)"
 
 # Every test boots a COPY of disk.img; one that booted the original changed it
@@ -116,7 +123,7 @@ if [ "$MODE" = "full" ]; then
            run-test lname-test seq-test vars-test testcmd-test glob-test stat-test lsl-test
            find-test control-test cmp-test arith-test while-test args-test subst-test read-test
            profile-test flip-test label-test tab-test clockout-test clip-test mince-test
-           knead-test layer-test leftovers-test search-test case-test lint-test stderr-test gate-patterns-test
+           knead-test layer-test leftovers-test search-test case-test lint-test stderr-test gate-patterns-test disk-fresh-test
            func-test stack-test spread-test env-test bpipe-test longword-test cd-test
            loopin-test pipeloop-test wordsplit-test litexp-test assign-test prefix-test
            param-test until-test break-test herestr-test return-test rest-test dish-test

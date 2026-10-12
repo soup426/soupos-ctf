@@ -3,7 +3,7 @@
 ## What this is
 
 soupOS is a 32-bit x86 hobby OS written in C and NASM assembly (currently
-**v0.60.251**; ROADMAP.txt is the authority on the version). It boots via GRUB and runs in protected mode with paging, a
+**v0.60.252**; ROADMAP.txt is the authority on the version). It boots via GRUB and runs in protected mode with paging, a
 physical/heap allocator, and a cooperative scheduler. On top of that:
 
 - **Filesystem**: FAT16 read/write with subdirectories ("bowls") and a VFS shim
@@ -97,6 +97,8 @@ on the first missing marker.
 `make disk` is a no-op when `disk.img` already exists. After changing anything
 under `user/`, run `make user` and re-`mcopy` the ELFs (or `rm disk.img &&
 make disk`) — otherwise you are testing the stale copies on the old image.
+`scripts/check.sh` refuses to run on a stale image (v0.60.252): it builds the
+programs and `scripts/disk-fresh.sh` names any whose copy in disk.img differs.
 
 **QEMU invocation** (from Makefile):
 ```

@@ -369,7 +369,7 @@ Mincecraft; neosim and rx.c; Doom; tests, build and docs.)
 
 ### Tests, build and docs (do these first: the other fixes lean on them)
 
-- **R-T2 (high).** check.sh never rebuilds the user programs or disk.img
+- **R-T2 (high) — DONE v0.60.252 (disk-fresh.sh, disk-fresh-test).** check.sh never rebuilds the user programs or disk.img
   (`all: iso`, `$(DISK):` has no prerequisites), so a change under user/
   is tested only if someone ran `rm disk.img && make disk` by hand. Fix:
   check.sh builds the programs and fails if any differs from the copy
