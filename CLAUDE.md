@@ -3,7 +3,7 @@
 ## What this is
 
 soupOS is a 32-bit x86 hobby OS written in C and NASM assembly (currently
-**v0.60.213**; ROADMAP.txt is the authority on the version). It boots via GRUB and runs in protected mode with paging, a
+**v0.60.214**; ROADMAP.txt is the authority on the version). It boots via GRUB and runs in protected mode with paging, a
 physical/heap allocator, and a cooperative scheduler. On top of that:
 
 - **Filesystem**: FAT16 read/write with subdirectories ("bowls") and a VFS shim
@@ -956,7 +956,7 @@ them. Its `[mincecraft]` serial markers reach the log only when it runs at the
 console (a desktop terminal takes a program's stderr), so tests start it in
 the background before `countertop` with `-wait`.
 
-Controls: W A S D walk, arrows look, space jumps (held keys come from
+Controls: W A S D walk, arrows (or a right-button drag) look, space jumps (held keys come from
 `SYS_WIN_KEYS`, so only while its window has the focus); F or the left button
 held breaks, r or q places, 1-9 or the wheel pick the slot; P saves, Esc or the
 close box saves and quits. A kill does NOT save. Flags: `-seed N -flat -gen

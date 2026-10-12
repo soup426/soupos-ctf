@@ -53,7 +53,7 @@ the user has not seen it.
 
 ---
 
-## 1. Mincecraft: look with the mouse
+## 1. Mincecraft: look with the mouse — DONE v0.60.214
 
 Arrows only, today: the desktop passes left-button presses and drags to a
 program's window, and a right press in a body is not handed on

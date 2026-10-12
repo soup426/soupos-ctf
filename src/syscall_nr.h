@@ -77,6 +77,11 @@ typedef struct {
 #define WEV_WHEEL  6   /* the wheel over the body (v0.60.157): key is the
                         * notches as a signed int, down positive; x, y
                         * where the pointer was                            */
+#define WEV_RDOWN  7   /* (v0.60.214) the right button pressed in the body,
+                        * as WEV_DOWN; programs that know nothing of it get
+                        * nothing new                                      */
+#define WEV_RMOVE  8   /* the pointer moved with the right button held     */
+#define WEV_RUP    9   /* and let go                                       */
 
 /* One process for SYS_PROCS (v0.60.168). */
 typedef struct {

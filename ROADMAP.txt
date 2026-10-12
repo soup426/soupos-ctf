@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.213
+Current version: v0.60.214
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,20 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.214 (2026-10-12)  — MINCECRAFT: LOOK WITH THE MOUSE
+  - The desktop hands a right-button press in a program's body to the
+    program, and its drag and its letting go, as three new events:
+    WEV_RDOWN, WEV_RMOVE, WEV_RUP (new types, so frost, swirl, scale and
+    expo, which take any WEV_DOWN as a left click, see nothing new). A
+    right press on a terminal still pastes, on the background still opens
+    its menu, on a files window still opens its menu.
+  - Mincecraft turns and tilts by a right-button drag, two pixels an angle
+    step (the odd pixel kept for the next move); the arrows still look and
+    the left button still breaks.
+  - mincecraft-play-test: a right-button drag 120 right and 40 down turns
+    the cook 60 steps right and 20 down; a left click looking down breaks
+    the crust.
 
 v0.60.213 (2026-10-12)  — DOOM AT 960X600
   - Queue 57 item 10, the second half. When the framebuffer has room

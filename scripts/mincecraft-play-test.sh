@@ -47,6 +47,14 @@ boot build "TYPE:m" "KEY:down 2000" "WAIT:1" "MON:screendump $WORK/look.ppm" "WA
            "TYPE:m" "TYPE:r" "WAIT:1" \
            "TYPE:m" "KEY:up 1000" "WAIT:1" "TYPE:r" "WAIT:1" "KEY:up 200" "WAIT:1" "TYPE:r" "WAIT:1" "KEY:up 200" "WAIT:1" "TYPE:r" "WAIT:1" \
            "TYPE:m" "WAIT:1" "KEY:esc" "WAIT:3"
+# (v0.60.214) the mouse: the pointer to the body's middle (561,333); a
+# right-button drag 120 right and 40 down turns the cook right and tilts the
+# view down; then looking down, a left click still breaks the crust.
+L="MON:mouse_move -120 -120"
+boot mouse "$L" "$L" "$L" "$L" "$L" "MON:mouse_move 280 166" "MON:mouse_move 281 167" "WAIT:1" \
+           "TYPE:m" "MON:mouse_button 2" "WAIT:1" "MON:mouse_move 60 0" "WAIT:1" "MON:mouse_move 60 0" "WAIT:1" "MON:mouse_move 0 40" "WAIT:1" "MON:mouse_button 0" "WAIT:1" \
+           "TYPE:m" "KEY:down 2000" "WAIT:1" "MON:mouse_button 1" "WAIT:1" "MON:mouse_button 0" "WAIT:2" \
+           "TYPE:m" "WAIT:1" "KEY:esc" "WAIT:3"
 # (v0.60.209) W held down across an Alt+Tab: key down and up events over a
 # QMP socket (HMP's sendkey would let W go before the Alt+Tab).
 cp disk.img "$WORK/disk-hold.img"
@@ -137,6 +145,14 @@ check(edge >= 50, 'looking down, the block aimed at is outlined: %d outline pixe
 br = ppm('broke')
 slot = [br(x, y) for x in range(124, 160) for y in range(434, 470)]
 check(0xFFFFFF in slot and 0x000000 in slot, 'the count in the first slot: white over a black shadow')
+ml = open(sys.argv[1] + '/serial-mouse.log', 'rb').read().decode('latin-1')
+mparts = re.split(r'\[mincecraft\] mark\n', ml)
+check(len(mparts) == 4, 'mouse: three marks: %d stretches' % len(mparts))
+if len(mparts) == 4:
+    drag = [tuple(int(v) for v in m.groups()) for m in re.finditer(r'\[mincecraft\] p -?\d+ -?\d+ -?\d+ (-?\d+) (-?\d+)', mparts[1])]
+    check(drag and 20 <= drag[-1][0] <= 200, 'a right-button drag right turned the cook right: yaw %r' % (drag[-1:],))
+    check(drag and drag[-1][1] < -5, 'and down tilted the view down: pitch %r' % (drag[-1][1] if drag else None,))
+    check('[mincecraft] broke' in mparts[2], 'a left click still breaks (looking down at the crust)')
 hl = open(sys.argv[1] + '/serial-hold.log', 'rb').read().decode('latin-1')
 cut = hl.find('alt-tab to')
 zs = lambda t: [int(m.group(1)) for m in re.finditer(r'\[mincecraft\] p -?\d+ -?\d+ (-?\d+)', t)]

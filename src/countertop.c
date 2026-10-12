@@ -488,6 +488,7 @@ static app_t app[APP_MAX];
 static mutex_t app_mtx;
 static int ct_running;                  /* countertop_run is in its loop (under app_mtx) */
 static int app_drag = -1, app_lx, app_ly;  /* a press in a program's body, held: that window */
+static int app_drag_right;                  /* (v0.60.214) that press was the right button's */
 
 static uint64_t rdtsc_(void) { uint32_t lo, hi; __asm__ volatile ("rdtsc" : "=a"(lo), "=d"(hi)); return ((uint64_t)hi << 32) | lo; }
 static void app_report(const app_t *a) { /* app_mtx held: what it put and what was drawn (v0.60.152) */
@@ -2170,6 +2171,14 @@ static void pointer_buttons(int px, int py, int btn, int np) {
             ctx_open(k, r, px, py);
             return;
         }
+        if ((btn & 2) && k >= 0 && win[k].app >= 0 && py >= win[k].y + BORDER + TITLE_H) {   /* a program's body: its own (v0.60.214) */
+            int ax, ay;
+            raise_window(k);
+            body_origin(&win[k], &ax, &ay);
+            app_drag = k; app_drag_right = 1; app_lx = px - ax; app_ly = py - ay;
+            app_push(win[k].app, WEV_RDOWN, 0, app_lx, app_ly, (unsigned)btn);
+            return;
+        }
         if (k >= 0 && win[k].term && py >= win[k].y + BORDER + TITLE_H) {
             raise_window(k);
             uint32_t n = clip_len();
@@ -2184,8 +2193,9 @@ static void pointer_buttons(int px, int py, int btn, int np) {
         int bx, by;
         body_origin(w, &bx, &by);
         int x = px - bx, y = py - by;
-        if (x != app_lx || y != app_ly) { app_push(w->app, WEV_MOVE, 0, x, y, (unsigned)btn); app_lx = x; app_ly = y; }
-        if (!left || np) { app_push(w->app, WEV_UP, 0, x, y, (unsigned)btn); app_drag = -1; }
+        int held = app_drag_right ? (btn & 2) != 0 : left;
+        if (x != app_lx || y != app_ly) { app_push(w->app, app_drag_right ? WEV_RMOVE : WEV_MOVE, 0, x, y, (unsigned)btn); app_lx = x; app_ly = y; }
+        if (!held || np) { app_push(w->app, app_drag_right ? WEV_RUP : WEV_UP, 0, x, y, (unsigned)btn); app_drag = -1; app_drag_right = 0; }
         if (!np) return;
     }
     if (np && ctx_win >= 0 && ctx_click(px, py)) return;   /* the files menu (v0.60.172) */
@@ -2271,7 +2281,7 @@ static void pointer_buttons(int px, int py, int btn, int np) {
         if (w->app >= 0 && py >= w->y + BORDER + TITLE_H) {      /* the body: the program's */
             int ax, ay;
             body_origin(w, &ax, &ay);
-            app_drag = k; app_lx = px - ax; app_ly = py - ay;
+            app_drag = k; app_drag_right = 0; app_lx = px - ax; app_ly = py - ay;
             app_push(w->app, WEV_DOWN, 0, app_lx, app_ly, (unsigned)(btn | 1));
             return;
         }

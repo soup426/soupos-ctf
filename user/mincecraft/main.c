@@ -15,7 +15,7 @@
  *   cook mincecraft.elf -check          (v0.60.197) load the world file, say
  *                                       what came of it, end (for the tests)
  *
- * W A S D walk, the arrows look, space jumps (all held, read through
+ * W A S D walk, the arrows look (or a right-button drag, v0.60.214), space jumps (all held, read through
  * SYS_WIN_KEYS at a fixed 20 ticks a second); F or the left button held
  * breaks what the crosshair is on (v0.60.195), r or q places the hotbar's
  * block on that face, 1 to 9 or the wheel choose the slot; P saves, Esc or
@@ -173,7 +173,7 @@ int main(void) {
     ray_t tg = { 0 };
     fx dx, dy, dz;
     unsigned last = sys_ticks(), fps_t = last;
-    int frames = 0, lbtn = 0, unsaved = 0;
+    int frames = 0, lbtn = 0, unsaved = 0, rx = 0, ry = 0;
     unsigned short inv_last[B_COUNT] = { 0 };
     inv_marker(&pl, inv_last);                                   /* what a loaded world has in hand */
     unsigned tt = 0;                                             /* game ticks, for the clock */
@@ -195,6 +195,14 @@ int main(void) {
             }
             else if (ev.type == WEV_DOWN) lbtn = 1;
             else if (ev.type == WEV_UP) lbtn = 0;
+            else if (ev.type == WEV_RDOWN) { rx = ev.x; ry = ev.y; }       /* look with the mouse (v0.60.214): */
+            else if (ev.type == WEV_RMOVE) {                              /* two pixels an angle step */
+                pl.yaw = (pl.yaw + (ev.x - rx) / 2) & 1023;
+                pl.pitch -= (ev.y - ry) / 2;
+                if (pl.pitch > 227) pl.pitch = 227;
+                if (pl.pitch < -227) pl.pitch = -227;
+                rx += (ev.x - rx) / 2 * 2; ry += (ev.y - ry) / 2 * 2;    /* keep the odd pixel for next time */
+            }
         }
         if (g < 0) { do_save(wpath, &pl, seed, tod); break; }   /* the desktop is gone: save if it can, and go */
         if (quit) {                                               /* Esc or the close box: save, then go */
