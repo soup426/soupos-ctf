@@ -1,11 +1,11 @@
 # Night queue
 
-Fifty-ninth queue. The first fifty-eight are in `docs/queue-archive-2026-10-*.md`;
-queue 58 (`-12b`) gave Mincecraft mouse look, crafting and tealights and
-neosim its colours, and closed the "first line after a login" item with the
-numbers. This one: neosim's indent, % and :help; Doom with the mouse;
-Mincecraft's health. Written by an unattended run when queue 58 ran out, as
-the user asked on 2026-10-11; the user has not seen it.
+Sixtieth queue. The first fifty-nine are in `docs/queue-archive-2026-10-*.md`;
+queue 59 (`-12c`) gave neosim auto-indent, % and :help, Doom the mouse (and
+fixed a held trigger emptying the clip), Mincecraft hearts. This one:
+neosim's character motions and paging; Mincecraft eating; Doom's flash.
+Written by an unattended run when queue 59 ran out, as the user asked on
+2026-10-11; the user has not seen it.
 
 ## Standing rules
 
@@ -51,41 +51,38 @@ the user asked on 2026-10-11; the user has not seen it.
 
 ---
 
-## 1. neosim: auto-indent and % — DONE v0.60.218
+## 1. neosim: f t F T ; , r ~
 
-Enter, o and O keep the line's indent (neovim with `set autoindent`, the
-indent being the leading spaces); % jumps to the matching ( [ { or ) ] }
-(the first bracket on the line at or after the cursor, then its match,
-across lines), and works as a motion (d%). Test: cases against neovim's
-(nvim --clean --headless, set autoindent, feedkeys "tx"), as
-neosim-ops-test.
+f t F T and a character (a count before them too), ; and , to repeat or
+reverse the last; as motions (dt, cf); r and a character replaces (a count
+replaces that many, none if the line is short); ~ toggles case and moves on.
+Test: cases against neovim's, as neosim-ops-test.
 
-## 2. neosim: :help — DONE v0.60.219
+## 2. neosim: paging
 
-:help (and :h) opens a read-only page listing the keys and commands neosim
-has, grouped (moving, changing, searching, files), :q back to the file.
-Test: the page read back against the font, its first lines; :q returns to
-the file unchanged; a :w on the help page refused.
+Ctrl-D and Ctrl-U half a screen (the cursor goes with the text), Ctrl-F and
+Ctrl-B a screen, zz zt zb put the cursor's line in the middle, top, bottom.
+Test: a 200-line file, each key's screen read back (the first line number
+shown, the cursor's line), the numbers worked out from neovim's (its
+`line('w0')` and `line('.')` at 28 rows).
 
-## 3. Doom: turn with the mouse — DONE v0.60.220
+## 3. Mincecraft: eating
 
-Doom runs on the console screen, not in a window, so it can read the mouse
-itself (mouse.c): its x movement turns the view (so many counts a step),
-the left button fires. The keyboard still does all it did. Measure first:
-how mouse.c gives counts (moves since boot, a wheel total), and that a
-QEMU mouse_move reaches it while Doom runs. Test: a mouse_move in a level
-turns the view (the picture changes as an arrow key would change it).
+e eats the food in hand: a heart back for sugar, two for butter, three
+for a floret; not past ten, nothing eaten at ten ("not hungry"), crust or
+cast iron refused ("not food"). A crunch. Test: a world file from the host
+with 4 hearts and food in hand, e on each: the hearts and the counts in
+the markers, the HUD's hearts read back.
 
-## 4. Mincecraft: health — DONE v0.60.221
+## 4. Doom: the pistol's flash
 
-Ten hearts on the HUD. A fall of more than three blocks takes a heart a
-block past three (broth breaks the fall, none taken); at none the cook
-wakes at the spawn with the inventory kept, the world as it was. Saved
-(version 4). Test: a world file made on the host with the cook on a
-pillar 9 high, a step off: hearts 10 to 4 in the markers; the HUD's hearts
-read from a screendump; a step into broth from the same height takes none.
+The flash is drawn while the fire cooldown is high; with the cooldown in
+loop passes (before v0.60.220) it lasted a pass. Measure first: is the
+flash on screen in a dump taken just after a shot now? If it is, a test
+that pins it; if it is not, find why.
 
 ## Notes left by unattended runs
+
 
 
 
