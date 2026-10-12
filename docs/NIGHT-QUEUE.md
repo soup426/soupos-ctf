@@ -593,6 +593,27 @@ Mincecraft; neosim and rx.c; Doom; tests, build and docs.)
 
 ## Area review findings (2026-10-12, began at e8bc3b7)
 
+### Kernel and shell (reviewer confirmed K12 in QEMU on a copy)
+
+- **R-K12 (critical, security).** soupyc's open(), read(), write() and its
+  file loads call vfs_open with no users_may in the ordinary build
+  (soupyc.c :738 :1634 :1674 :1704). soupyc runs in ring 0 on the shell's
+  task, so `soup -c` as any cook reads /etc/kitchen (reproduced: the
+  headchef's hash printed where `pour` said Permission denied) and writes
+  anywhere (a file made in /). The unchecked open is the CHALLENGE build's
+  taught stage 1 (challenge.c), not the ordinary build's. Fix: users_may
+  ('r' or 'w', as SYS_OPEN asks) on every soupyc open under NO_CHALLENGE.
+- **R-K13 (high, security, suspected).** soupyc can still read /dev/kbd
+  through dev_kbd_read: no freeze (interrupts are on there) but no
+  foreground check, and a spawn()ed soupyc task outlives clockout, so it
+  could read keys typed at the next login. Fix: refuse /dev/kbd to all but
+  the foreground, or to soupyc entirely.
+- **R-K14 (medium).** A soupyc spawn() task has no proc, so the resolver
+  gives it the console shell's current cook: one outliving clockout makes
+  files owned by the next cook. Fix: an owner on soupyc tasks (or their end
+  at clockout), with K12.
+- (Its F4 is R-C10 below.)
+
 ### The desktop (reviewer confirmed 1 and the apostrophe paths in QEMU on copies)
 
 - **R-C10 (medium-high).** A program left running from an earlier shift
@@ -626,8 +647,8 @@ Mincecraft; neosim and rx.c; Doom; tests, build and docs.)
    click opens neosim).
 1. The test harness (R-T1, R-T2, R-T3, R-T4, R-T5, R-T6), so the fixes
    after it are measured by tests that can fail.
-2. Security: R-K1, R-K2, R-C1, R-C2, then R-C10 and R-C12 (the area
-   review's, 2026-10-12).
+2. Security: R-K1, R-K2, R-C1, then R-K12 (critical), R-C2, R-K13,
+   R-C10, R-K14, R-C12 (the area review's, 2026-10-12).
 3. Kernel crashes any cook can cause: R-K5, R-K4, R-K3.
 4. Data loss: R-M1, R-M4, R-N3, R-N4, R-N5, R-N1, R-N2.
 5. Item 0b, Doom, from R-D3, R-D2, R-D4, R-D1 down.
