@@ -85,7 +85,7 @@ boot check "cook mincecraft.elf -check -world /BAD.WLD" "UNTIL:@soupOS:" \
            "cook mincecraft.elf -check -world /V3.WLD" "UNTIL:@soupOS:" \
            "cook mincecraft.elf -check -world /DEAD.WLD" "UNTIL:@soupOS:" \
            "cook mincecraft.elf -check -world /SWAP.WLD" "UNTIL:@soupOS:" \
-           "cook mincecraft.elf -flat -script -wait -world /T.WLD &" "WAIT:1" "countertop" "WAIT:5" \
+           "cook mincecraft.elf -flat -script -wait -world /T.WLD &" "UNTIL:[mincecraft] world seed" "countertop" "UNTIL:[mincecraft] window up" "UNTIL:[mincecraft] fps=" \
            "TYPE:p" "WAIT:2" "KEY:esc" "WAIT:4"
 mcopy -n -i "$WORK/disk.img" ::T.WLD.bad "$WORK/t.bad" 2>/dev/null
 mdir -i "$WORK/disk.img" ::BAD.WLD.bad >/dev/null 2>&1 && echo yes > "$WORK/bad-aside"

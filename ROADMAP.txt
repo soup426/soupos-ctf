@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.238
+Current version: v0.60.239
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,33 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.239 (2026-10-12)  — MINCECRAFT AND DOOM ON THE DESKTOP
+  - Two more icons down the left of the desktop, and in the Kitchen menu:
+    mincecraft and doom (asked for by the user: no terminal to open first).
+    Mincecraft's double click cooks it in a hidden terminal, as the other
+    programs' do, so only its window shows.
+  - Doom cannot run in a terminal: it needs the kitchen's own screen and the
+    machine to itself (it never yields). So its icon runs it from the
+    desktop's own task, the console's: the doom command's rules first (no
+    other task alive, DOOM1.WAD on the disk), each refusal a note on the
+    bar ("Doom: close the other programs first"); then the title and menu
+    as `doom` has them, and after Quit Game the desktop drawn again whole,
+    the console paused again (Doom's leaving woke it), and the keys and
+    clicks Doom had dropped, so none lands on the desktop.
+  - scripts/ctgames-test.sh: the two icons read back by name; Mincecraft's
+    opens its window and no terminal; Doom's runs Doom; Quit Game gives
+    back the desktop, its icons pixel for pixel; with Mincecraft open,
+    Doom's icon refused. Pictures: docs/countertop/game-icons.png,
+    doom-refused.png.
+  - The menu has two rows more above its actions, so ctcloche, ctcloseup,
+    ctrack and ctsettings click them 48 pixels lower.
+  - mincecraft-save-test's third boot: countertop typed only once the game
+    is done with /T.WLD (its world seed line), then "[mincecraft] window
+    up" and its first fps line waited for, not five seconds. Typed during the game's 3 MB copy of
+    the refused file to /T.WLD.bad, "countertop" lost its last keys (only
+    "countert" was echoed) and the desktop never came: keys typed during
+    a long write can go missing (a queue note).
 
 v0.60.238 (2026-10-12)  — THE FULL CHECK, FASTER
   - Measured: the tests' times add up to 12674 s, over 32 at a time; the

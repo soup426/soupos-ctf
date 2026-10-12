@@ -80,6 +80,9 @@
 #include "fat.h"
 #include "users.h"
 #include "keyboard.h"
+#ifndef NO_DOOM
+#include "doom.h"                                /* (v0.60.238) the Doom icon */
+#endif
 #include "syscall_nr.h"
 #include "timer.h"
 #include "clip.h"
@@ -703,6 +706,8 @@ static const char *const menu_item[][3] = {      /* name, what it is, what to co
     { "oven", "a minute's timer", "oven.elf 60" },          /* (v0.60.164) */
     { "expo", "the processes", "expo.elf" },                /* (v0.60.168) */
     { "scale", "a calculator", "scale.elf" },               /* (v0.60.173) */
+    { "mincecraft", "a world of food", "mincecraft.elf" },  /* (v0.60.238) */
+    { "doom", "the shareware episode", "@doom" },           /* (v0.60.238) the desktop runs it itself */
     { "backdrop", "the next one", "@backdrop" },            /* (v0.60.169) not programs: '@' an action */
     { "cloche", "lock the desktop", "@cloche" },            /* (v0.60.176) */
     { "spice rack", "the settings", "@rack" },              /* (v0.60.188) */
@@ -810,9 +815,9 @@ static void draw_menu(void) {                     /* within the clip */
 #define ICON_DY 76
 #define ICON_SZ 40
 static const uint32_t icon_rgb[] = { 0x00C0392Bu, 0x002E86DEu, 0x00E67E22u, 0x0027AE60u, 0x008E44ADu };
-static int icon_count(void) {                      /* the menu's programs, not its backdrop */
+static int icon_count(void) {                      /* the menu's programs (and Doom), not its backdrop */
     int n = 0;
-    for (int i = 0; i < MENU_N; i++) if (menu_item[i][2][0] != '@') n++;
+    while (n < MENU_N && (menu_item[n][2][0] != '@' || !strcmp(menu_item[n][2], "@doom"))) n++;
     return n;
 }
 static void big_char(int x, int y, char ch, uint32_t fg) {   /* the font, twice the size */
@@ -1274,10 +1279,12 @@ static void set_picture(const char *path) {       /* the files menu's "use as ba
     klog("[countertop] picture %s %s %s\n", path, ok ? "kept in" : "not kept in", ok ? p : "the settings");
 }
 static int open_terminal(int hidden);
+static void ct_doom(void);
 /* A program from the Kitchen menu or an icon: a hidden terminal (v0.60.178:
  * never drawn, not on the taskbar) cooks it and then clocks out, so only the
  * program's own window shows, and the terminal goes when the program does. */
 static void kitchen_launch(int i) {
+    if (!strcmp(menu_item[i][2], "@doom")) { ct_doom(); return; }   /* (v0.60.238) not through a terminal */
     int t = open_terminal(1);
     if (t < 0) return;
     char line[48] = "cook ";
@@ -1884,6 +1891,44 @@ static int window_at(int x, int y) {
  * it, the close box closes it. */
 /* ---- the taskbar (v0.60.144) ------------------------------------------- */
 
+/* Doom from the desktop (v0.60.238): the doom command's own rules (the
+ * machine to itself, the WAD on the disk), then doom_menu_run() from here,
+ * the desktop's own task, which is the console's; Doom never yields, so
+ * nothing else may be alive. After it, everything drawn again; the keys and
+ * clicks Doom had are not the desktop's. */
+static void ct_doom(void) {
+#ifndef NO_DOOM
+    if (task_count_users() > 1) {
+        klog("[countertop] doom refused: %d tasks\n", (int)task_count_users());
+        bar_note("Doom: close the other programs first");   /* the bar shows ~43 characters */
+        note_showing = 1; note_at = timer_get_ticks();
+        return;
+    }
+    if (!fat_exists("DOOM1.WAD")) {
+        bar_note("Doom needs DOOM1.WAD on the disk (make wad)");
+        note_showing = 1; note_at = timer_get_ticks();
+        return;
+    }
+    klog("[countertop] doom\n");
+    doom_menu_run();
+    fbcon_pause();                                   /* Doom's leaving woke the console */
+    keyboard_flush();
+    clip_all();
+    repaint(0, BAR_H, W, H - BAR_H - TASK_H);
+    bar();
+    taskbar();
+    int b;
+    mouse_get_px(&ptr_x, &ptr_y, &b);
+    last_btn = b;
+    presses_seen = mouse_presses(0, 0);
+    wheel_seen = mouse_wheel();
+    flush();
+    klog("[countertop] doom over\n");
+#else
+    bar_note("this soupOS was built without Doom");
+    note_showing = 1; note_at = timer_get_ticks();
+#endif
+}
 static void taskbar(void) {
     int y = H - TASK_H;
     fill(0, y, W, TASK_H, BAR_RGB);
@@ -2225,6 +2270,7 @@ static void pointer_buttons(int px, int py, int btn, int np) {
             else if (!strcmp(menu_item[i][2], "@close")) kitchen_close(0);
             else if (!strcmp(menu_item[i][2], "@rack")) open_rack();
             else if (!strcmp(menu_item[i][2], "@reheat")) kitchen_close(1);
+            else if (!strcmp(menu_item[i][2], "@doom")) ct_doom();
             else next_background();
         } else if (px >= MENU_X && px < MENU_X + MENU_W && py >= MENU_Y + 2 && i >= 0 && i < MENU_N) {
             kitchen_launch(i);

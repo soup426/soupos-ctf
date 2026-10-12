@@ -14,10 +14,10 @@ trap cleanup EXIT
 cp disk.img "$WORK/disk.img"
 L="MON:mouse_move -120 -120"
 CLICK=("MON:mouse_button 1" "WAIT:1" "MON:mouse_button 0" "WAIT:2")
-# Kitchen at 420,12; its sixth row (backdrop) at y 158; Leave at 288,12
+# Kitchen at 420,12; its eighth row (backdrop) at y 206 (v0.60.239: mincecraft and doom above it, two rows more); Leave at 288,12
 keys=("headchef" "rosemary" "WAIT:1" "hire saucier" "WAIT:1" "basil" "WAIT:1" "basil" "WAIT:1" "countertop" "WAIT:2"
-      "$L" "$L" "$L" "$L" "$L" "MON:mouse_move 420 12" "WAIT:1" "${CLICK[@]}" "MON:mouse_move 0 146" "WAIT:1" "${CLICK[@]}"
-      "MON:screendump $WORK/s1.ppm" "WAIT:1" "MON:mouse_move -132 -146" "WAIT:1" "${CLICK[@]}" "WAIT:1"
+      "$L" "$L" "$L" "$L" "$L" "MON:mouse_move 420 12" "WAIT:1" "${CLICK[@]}" "MON:mouse_move 0 194" "WAIT:1" "${CLICK[@]}"
+      "MON:screendump $WORK/s1.ppm" "WAIT:1" "MON:mouse_move -132 -194" "WAIT:1" "${CLICK[@]}" "WAIT:1"
       "countertop" "WAIT:3" "MON:screendump $WORK/s2.ppm" "WAIT:1" "${CLICK[@]}" "WAIT:1"
       "clockout" "WAIT:2" "saucier" "basil" "WAIT:2" "countertop" "WAIT:3" "MON:screendump $WORK/s3.ppm" "WAIT:1" "${CLICK[@]}" "WAIT:2")
 qemu-system-i386 -accel kvm -cpu host -drive "file=$WORK/disk.img,format=raw,if=ide,index=0" \

@@ -137,3 +137,10 @@ back against the font after F3, the numbers as the markers have them.
   at queue 58's start), run under timeout 590; each new test adds 5-10 s.
   Before it nears the limit: find the slowest tests (check.sh prints each
   one's time) and share boots, or raise the timeout on purpose.
+
+- 2026-10-12 (v0.60.239): keys typed while a program writes a large file
+  can be lost. mincecraft-save-test typed "countertop" during the game's
+  3 MB copy of a refused world; the console echoed "countert" and the rest
+  never reached the shell. Measure: type a line during a big write
+  (pour a 3 MB file) and count what arrives; then whether the keyboard IRQ
+  is held off (cli) through the ATA writes, or the buffer overflows.

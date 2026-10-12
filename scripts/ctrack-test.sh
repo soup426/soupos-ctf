@@ -27,7 +27,7 @@ def go(x, y):
     out.append('WAIT:1')
 click = ['MON:mouse_button 1', 'WAIT:1', 'MON:mouse_button 0', 'WAIT:2']
 BX, BY = 333, 107                                  # the rack's body: the window at 332,84
-go(420, 12); out += click; go(420, 206); out += click        # Kitchen, then its 8th row: spice rack
+go(420, 12); out += click; go(420, 254); out += click        # Kitchen, then its 10th row: spice rack (v0.60.239: mincecraft and doom above it, two rows more)
 for x, y in ((214, 20), (232, 102), (318, 102), (116, 142), (116, 142), (234, 182), (318, 62)):
     go(BX + x, BY + y); out += click
 go(900, 650); out += ['MON:mouse_button 2', 'WAIT:1', 'MON:mouse_button 0', 'WAIT:2']   # the background menu at 800,592
