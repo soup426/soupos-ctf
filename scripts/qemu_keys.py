@@ -25,7 +25,9 @@ def keys_for(ch):
     raise ValueError('unmapped char %r' % ch)
 
 s = socket.socket(socket.AF_UNIX)
-for _ in range(50):
+# Up to 30 s for QEMU's monitor (2026-10-12): under check.sh's load a QEMU
+# took more than the 10 s this used to allow to come up ("could not drive").
+for _ in range(150):
     try:
         s.connect(MON); break
     except OSError:

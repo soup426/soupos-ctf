@@ -16,9 +16,11 @@ cp disk.img "$WORK/disk.img"
 L="MON:mouse_move -120 -120"
 CLICK=("MON:mouse_button 1" "WAIT:1" "MON:mouse_button 0" "WAIT:2")
 # Leave on the bar at 260-332
-keys=("WAIT:1" "MON:screendump $WORK/s1.ppm" "WAIT:1"
-      "headchef" "WAIT:1" "basil" "WAIT:2" "MON:screendump $WORK/s2.ppm" "WAIT:1"
-      "headchef" "WAIT:1" "rosemary" "WAIT:3" "MON:screendump $WORK/s3.ppm" "WAIT:1"
+# Each step waits for what the desktop says it did, not a fixed time
+# (2026-10-12: under check.sh's load the fixed waits were once too short).
+keys=("UNTIL:clock in to start your shift" "WAIT:1" "MON:screendump $WORK/s1.ppm" "WAIT:1"
+      "headchef" "WAIT:1" "basil" "UNTIL:clock-in refused" "WAIT:1" "MON:screendump $WORK/s2.ppm" "WAIT:1"
+      "headchef" "WAIT:1" "rosemary" "UNTIL:clocked in headchef" "WAIT:2" "MON:screendump $WORK/s3.ppm" "WAIT:1"
       "$L" "$L" "$L" "$L" "$L" "MON:mouse_move 288 12" "WAIT:1" "${CLICK[@]}" "WAIT:3" "MON:screendump $WORK/s4.ppm" "WAIT:1")
 qemu-system-i386 -accel kvm -cpu host -drive "file=$WORK/disk.img,format=raw,if=ide,index=0" \
     -cdrom soupOS.iso -boot d -m 128M -no-reboot -no-shutdown -display none \

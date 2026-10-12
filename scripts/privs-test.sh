@@ -26,7 +26,10 @@ keys "headchef" "rosemary" "WAIT:1" "vault 22" "WAIT:2" "stir /PUBLIC.TXT anyone
      "spill" "WAIT:1" "freeze" "WAIT:1" "reheat" "WAIT:1" "fatstress" "WAIT:1" "bowltest" "WAIT:1" "vault" "WAIT:1" \
      "chef whoami" "WAIT:1" "wrongone" "WAIT:3" "chef whoami" "WAIT:1" "wrongtwo" "WAIT:4" \
      "chef vault idle 0" "WAIT:1" "rosemary" "WAIT:2" "hatch 80" "WAIT:2"
-code() { curl -s -o "$WORK/body" -w '%{http_code}' -m 10 "http://127.0.0.1:$PORT$1"; }
+# 000 is no answer at all (under check.sh's load hatch once took longer than
+# curl's 10 s for the second request, 2026-10-12): asked again, up to three
+# times; any status at all is the answer.
+code() { local c i; for i in 1 2 3; do c=$(curl -s -o "$WORK/body" -w '%{http_code}' -m 10 "http://127.0.0.1:$PORT$1"); [ "$c" != 000 ] && break; sleep 2; done; printf '%s' "$c"; }
 k=$(code /etc/kitchen); h=$(code /HOSTKEY.ED); pub=$(code /PUBLIC.TXT); body=$(cat "$WORK/body")
 [ "$k" = 403 ] && [ "$h" = 403 ] \
     && echo "  ok    the cook's hatch refuses the roster and the host key (403, 403)" \

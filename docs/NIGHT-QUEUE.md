@@ -129,7 +129,7 @@ framebuffer at all ("[fb] bootloader gave no framebuffer info"), the kernel
 ran in VGA text and Doom in real mode 13h. What the first survey wanted, a
 finer picture, is item 10.
 
-## 8. check.sh under load
+## 8. check.sh under load — DONE v0.60.211 (1 of 5 runs failed before, 0 of 5 after)
 
 Two of today's full runs each had one test fail that passed six of six
 in a soak (ctclockin, ctfiles "could not drive QEMU"), as the notes below
