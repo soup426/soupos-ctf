@@ -398,7 +398,7 @@ Mincecraft; neosim and rx.c; Doom; tests, build and docs.)
 - **R-T5 (medium) — DONE v0.60.255 (keys-until-test).** qemu_keys' UNTIL after TYPE:/KEY: items anchors on the
   last plain line, so a prompt already printed satisfies it at once
   (bigdir-test's Tab, cont-test's up-arrow). Fix: anchor on each item.
-- **R-T6 (medium).** Mincecraft checks skipped when their markers are
+- **R-T6 (medium) — DONE v0.60.256.** Mincecraft checks skipped when their markers are
   missing: fly-test's after-load check, play-test's walk/jump/focus. Fix:
   check the stretches exist before reading them.
 - **R-T7 (medium).** gate/vga.sh's long-name check matches the typed echo;

@@ -76,6 +76,7 @@ if len(p) == 6:
     check('[mincecraft] saved /FLY.WLD' in p[5], 'P saved, flying')
 t2, q = parts('load')
 check('[mincecraft] loaded /FLY.WLD' in t2, 'boot 2: the world loaded')
+check(len(q) >= 2, 'boot 2: a mark after the load: %d stretches' % len(q))   # (v0.60.256, R-T6) not a skip
 if len(q) >= 2:
     h = ys(q[1])
     check(h and max(h) - min(h) < 0.01 and h[0] > 12, 'still flying after the load: hanging at %.1f, not falling' % (h[0] if h else 0))

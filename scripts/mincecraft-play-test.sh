@@ -98,6 +98,9 @@ phases.append(cur)
 check(len(phases) == 5, 'four marks, five stretches of ticks: %d' % len(phases))
 if len(phases) == 5:
     pre, walk, jump, away, end = phases
+    # (v0.60.256, review R-T6) a stretch with no ticks fails, not skips
+    for name, st in (('walking', walk), ('jumping', jump), ('the focus elsewhere', away)):
+        check(len(st) >= 2, 'ticks logged while %s: %d' % (name, len(st)))
     check(pre and pre[-1][1] == G and pre[-1][5] == 1, 'spawned on the ground at y 11: %r' % (pre[-1:],))
     check(pre and pre[-1][0] == 64 * ONE + ONE // 2 and pre[-1][2] == 64 * ONE + ONE // 2, 'at x = z = 64.5')
     if walk:
