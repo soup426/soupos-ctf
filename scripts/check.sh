@@ -39,6 +39,15 @@ echo "  ok    default build ($(now)s)"
 # and compare at the end.
 DISK_SUM=$(sha256sum disk.img | cut -d' ' -f1)
 
+# (v0.60.238) /tmp is a RAM disk on the laptop, and a failed test keeps its
+# 50-60 MB folder there; a full /tmp failed every command partway through a
+# run once (2026-10-11). Do not start with less than 2 GB of it free.
+TMPFREE=$(df -Pk /tmp | awk 'NR == 2 { print $4 }')
+if [ "${TMPFREE:-0}" -lt 2097152 ]; then
+    echo "check: /tmp has only $(( ${TMPFREE:-0} / 1024 )) MB free (kept test folders: /tmp/soupos-*); clear them first" >&2
+    exit 1
+fi
+
 # ── 1. everything else, at once ──────────────────────────────────────────────
 # A job writes its exit status to $WORK/<name>.status when done.
 #

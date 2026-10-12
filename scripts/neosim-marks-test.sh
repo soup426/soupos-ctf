@@ -6,6 +6,8 @@
 # the keys fed as typed with feedkeys "tx" so undo blocks are as typed; the
 # expected files below came from it, so the test does not need nvim). One
 # session: for each case, :e! a fresh copy of the same text, the keys, :w.
+# (v0.60.238) each case waits for neosim's own "open" and "wrote" lines, not a
+# fixed second each: the same keys, the same checks, two seconds a case less.
 set -uo pipefail
 cd "$(dirname "$0")/.."
 fail=0
@@ -18,26 +20,26 @@ N=20
 printf '%s' $'one\n  two two\n    three three\nfour\n  five five\nsix\n' > "$WORK/text"
 for i in $(seq 0 $((N - 1))); do mcopy -o -i "$WORK/disk.img" "$WORK/text" "::C$i.TXT"; done
 keys=("headchef" "rosemary" "WAIT:1" "cook neosim.elf -wait /C0.TXT &" "WAIT:1" "countertop" "WAIT:4" \
-    "TYPE::e! /C0.TXT" "KEY:ret" "WAIT:1" 'TYPE:jjmagg'"'"'ax' "TYPE::w" "KEY:ret" "WAIT:1" \
-    "TYPE::e! /C1.TXT" "KEY:ret" "WAIT:1" 'TYPE:jjwwmagg`ax' "TYPE::w" "KEY:ret" "WAIT:1" \
-    "TYPE::e! /C2.TXT" "KEY:ret" "WAIT:1" 'TYPE:jjmaggd'"'"'a' "TYPE::w" "KEY:ret" "WAIT:1" \
-    "TYPE::e! /C3.TXT" "KEY:ret" "WAIT:1" 'TYPE:jjwmaggd`a' "TYPE::w" "KEY:ret" "WAIT:1" \
-    "TYPE::e! /C4.TXT" "KEY:ret" "WAIT:1" TYPE:jjmaggOnew KEY:esc 'TYPE:'"'"'ax' "TYPE::w" "KEY:ret" "WAIT:1" \
-    "TYPE::e! /C5.TXT" "KEY:ret" "WAIT:1" 'TYPE:jjjmaggdd'"'"'ax' "TYPE::w" "KEY:ret" "WAIT:1" \
-    "TYPE::e! /C6.TXT" "KEY:ret" "WAIT:1" 'TYPE:jjmaddgg'"'"'ax' "TYPE::w" "KEY:ret" "WAIT:1" \
-    "TYPE::e! /C7.TXT" "KEY:ret" "WAIT:1" 'TYPE:'"'"'zx' "TYPE::w" "KEY:ret" "WAIT:1" \
-    "TYPE::e! /C8.TXT" "KEY:ret" "WAIT:1" 'TYPE:jjmbjjma'"'"'bx`ax' "TYPE::w" "KEY:ret" "WAIT:1" \
-    "TYPE::e! /C9.TXT" "KEY:ret" "WAIT:1" 'TYPE:jjwmaggy`aP' "TYPE::w" "KEY:ret" "WAIT:1" \
-    "TYPE::e! /C10.TXT" "KEY:ret" "WAIT:1" 'TYPE:jjmaGd'"'"'a' "TYPE::w" "KEY:ret" "WAIT:1" \
-    "TYPE::e! /C11.TXT" "KEY:ret" "WAIT:1" 'TYPE:jjmaG`ax' "TYPE::w" "KEY:ret" "WAIT:1" \
-    "TYPE::e! /C12.TXT" "KEY:ret" "WAIT:1" 'TYPE:jjwmaGd`a' "TYPE::w" "KEY:ret" "WAIT:1" \
-    "TYPE::e! /C13.TXT" "KEY:ret" "WAIT:1" TYPE:jjmaggOnew KEY:esc TYPE:Onew KEY:esc 'TYPE:'"'"'ax' "TYPE::w" "KEY:ret" "WAIT:1" \
-    "TYPE::e! /C14.TXT" "KEY:ret" "WAIT:1" 'TYPE:jjmaggjdd'"'"'ax' "TYPE::w" "KEY:ret" "WAIT:1" \
-    "TYPE::e! /C15.TXT" "KEY:ret" "WAIT:1" 'TYPE:jjwmaggc`aq' KEY:esc "TYPE::w" "KEY:ret" "WAIT:1" \
-    "TYPE::e! /C16.TXT" "KEY:ret" "WAIT:1" 'TYPE:jjmaggyyP'"'"'ax' "TYPE::w" "KEY:ret" "WAIT:1" \
-    "TYPE::e! /C17.TXT" "KEY:ret" "WAIT:1" 'TYPE:jjmaggJ'"'"'ax' "TYPE::w" "KEY:ret" "WAIT:1" \
-    "TYPE::e! /C18.TXT" "KEY:ret" "WAIT:1" 'TYPE:jjjmaggJ'"'"'ax' "TYPE::w" "KEY:ret" "WAIT:1" \
-    "TYPE::e! /C19.TXT" "KEY:ret" "WAIT:1" TYPE:jjmaGo KEY:esc 'TYPE:'"'"'ax' "TYPE::w" "KEY:ret" "WAIT:1" \
+    "TYPE::e! /C0.TXT" "KEY:ret" "UNTIL:[neosim] open /C0.TXT" 'TYPE:jjmagg'"'"'ax' "TYPE::w" "KEY:ret" "UNTIL:[neosim] wrote /C0.TXT" \
+    "TYPE::e! /C1.TXT" "KEY:ret" "UNTIL:[neosim] open /C1.TXT" 'TYPE:jjwwmagg`ax' "TYPE::w" "KEY:ret" "UNTIL:[neosim] wrote /C1.TXT" \
+    "TYPE::e! /C2.TXT" "KEY:ret" "UNTIL:[neosim] open /C2.TXT" 'TYPE:jjmaggd'"'"'a' "TYPE::w" "KEY:ret" "UNTIL:[neosim] wrote /C2.TXT" \
+    "TYPE::e! /C3.TXT" "KEY:ret" "UNTIL:[neosim] open /C3.TXT" 'TYPE:jjwmaggd`a' "TYPE::w" "KEY:ret" "UNTIL:[neosim] wrote /C3.TXT" \
+    "TYPE::e! /C4.TXT" "KEY:ret" "UNTIL:[neosim] open /C4.TXT" TYPE:jjmaggOnew KEY:esc 'TYPE:'"'"'ax' "TYPE::w" "KEY:ret" "UNTIL:[neosim] wrote /C4.TXT" \
+    "TYPE::e! /C5.TXT" "KEY:ret" "UNTIL:[neosim] open /C5.TXT" 'TYPE:jjjmaggdd'"'"'ax' "TYPE::w" "KEY:ret" "UNTIL:[neosim] wrote /C5.TXT" \
+    "TYPE::e! /C6.TXT" "KEY:ret" "UNTIL:[neosim] open /C6.TXT" 'TYPE:jjmaddgg'"'"'ax' "TYPE::w" "KEY:ret" "UNTIL:[neosim] wrote /C6.TXT" \
+    "TYPE::e! /C7.TXT" "KEY:ret" "UNTIL:[neosim] open /C7.TXT" 'TYPE:'"'"'zx' "TYPE::w" "KEY:ret" "UNTIL:[neosim] wrote /C7.TXT" \
+    "TYPE::e! /C8.TXT" "KEY:ret" "UNTIL:[neosim] open /C8.TXT" 'TYPE:jjmbjjma'"'"'bx`ax' "TYPE::w" "KEY:ret" "UNTIL:[neosim] wrote /C8.TXT" \
+    "TYPE::e! /C9.TXT" "KEY:ret" "UNTIL:[neosim] open /C9.TXT" 'TYPE:jjwmaggy`aP' "TYPE::w" "KEY:ret" "UNTIL:[neosim] wrote /C9.TXT" \
+    "TYPE::e! /C10.TXT" "KEY:ret" "UNTIL:[neosim] open /C10.TXT" 'TYPE:jjmaGd'"'"'a' "TYPE::w" "KEY:ret" "UNTIL:[neosim] wrote /C10.TXT" \
+    "TYPE::e! /C11.TXT" "KEY:ret" "UNTIL:[neosim] open /C11.TXT" 'TYPE:jjmaG`ax' "TYPE::w" "KEY:ret" "UNTIL:[neosim] wrote /C11.TXT" \
+    "TYPE::e! /C12.TXT" "KEY:ret" "UNTIL:[neosim] open /C12.TXT" 'TYPE:jjwmaGd`a' "TYPE::w" "KEY:ret" "UNTIL:[neosim] wrote /C12.TXT" \
+    "TYPE::e! /C13.TXT" "KEY:ret" "UNTIL:[neosim] open /C13.TXT" TYPE:jjmaggOnew KEY:esc TYPE:Onew KEY:esc 'TYPE:'"'"'ax' "TYPE::w" "KEY:ret" "UNTIL:[neosim] wrote /C13.TXT" \
+    "TYPE::e! /C14.TXT" "KEY:ret" "UNTIL:[neosim] open /C14.TXT" 'TYPE:jjmaggjdd'"'"'ax' "TYPE::w" "KEY:ret" "UNTIL:[neosim] wrote /C14.TXT" \
+    "TYPE::e! /C15.TXT" "KEY:ret" "UNTIL:[neosim] open /C15.TXT" 'TYPE:jjwmaggc`aq' KEY:esc "TYPE::w" "KEY:ret" "UNTIL:[neosim] wrote /C15.TXT" \
+    "TYPE::e! /C16.TXT" "KEY:ret" "UNTIL:[neosim] open /C16.TXT" 'TYPE:jjmaggyyP'"'"'ax' "TYPE::w" "KEY:ret" "UNTIL:[neosim] wrote /C16.TXT" \
+    "TYPE::e! /C17.TXT" "KEY:ret" "UNTIL:[neosim] open /C17.TXT" 'TYPE:jjmaggJ'"'"'ax' "TYPE::w" "KEY:ret" "UNTIL:[neosim] wrote /C17.TXT" \
+    "TYPE::e! /C18.TXT" "KEY:ret" "UNTIL:[neosim] open /C18.TXT" 'TYPE:jjjmaggJ'"'"'ax' "TYPE::w" "KEY:ret" "UNTIL:[neosim] wrote /C18.TXT" \
+    "TYPE::e! /C19.TXT" "KEY:ret" "UNTIL:[neosim] open /C19.TXT" TYPE:jjmaGo KEY:esc 'TYPE:'"'"'ax' "TYPE::w" "KEY:ret" "UNTIL:[neosim] wrote /C19.TXT" \
     "TYPE::q!" "KEY:ret" "WAIT:2")
 qemu-system-i386 -accel kvm -cpu host -drive "file=$WORK/disk.img,format=raw,if=ide,index=0" \
     -cdrom soupOS.iso -boot d -m 128M -no-reboot -no-shutdown -display none \

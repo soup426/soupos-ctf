@@ -51,7 +51,7 @@ asked on 2026-10-11; the user has not seen it.
 
 ---
 
-## 1. The full check's time
+## 1. The full check's time — DONE v0.60.238 (422 s to 406 s)
 
 422 s under timeout 590, 5-10 s more a test. Measure first: each test's
 time from check.sh's own output, and where it goes (boots, waits). Then

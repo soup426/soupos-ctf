@@ -7,6 +7,8 @@
 # the keys fed as typed with feedkeys "tx" so undo blocks are as typed; the
 # expected files below came from it, so the test does not need nvim). One
 # session: for each case, :e! a fresh copy of the same text, the keys, :w.
+# (v0.60.238) each case waits for neosim's own "open" and "wrote" lines, not a
+# fixed second each: the same keys, the same checks, two seconds a case less.
 set -uo pipefail
 cd "$(dirname "$0")/.."
 fail=0
@@ -19,51 +21,51 @@ N=45
 printf '%s' $'fn f(a, (b + c)) {\n    pour "hot soup" + \'x\';\n    if [1, 2] { beep }\n}\nend  of   it\n' > "$WORK/text"
 for i in $(seq 0 $((N - 1))); do mcopy -o -i "$WORK/disk.img" "$WORK/text" "::C$i.TXT"; done
 keys=("headchef" "rosemary" "WAIT:1" "cook neosim.elf -wait /C0.TXT &" "WAIT:1" "countertop" "WAIT:4" \
-    "TYPE::e! /C0.TXT" "KEY:ret" "WAIT:1" TYPE:diw "TYPE::w" "KEY:ret" "WAIT:1" \
-    "TYPE::e! /C1.TXT" "KEY:ret" "WAIT:1" TYPE:daw "TYPE::w" "KEY:ret" "WAIT:1" \
-    "TYPE::e! /C2.TXT" "KEY:ret" "WAIT:1" TYPE:wdiw "TYPE::w" "KEY:ret" "WAIT:1" \
-    "TYPE::e! /C3.TXT" "KEY:ret" "WAIT:1" TYPE:Gwdiw "TYPE::w" "KEY:ret" "WAIT:1" \
-    "TYPE::e! /C4.TXT" "KEY:ret" "WAIT:1" TYPE:Gwdaw "TYPE::w" "KEY:ret" "WAIT:1" \
-    "TYPE::e! /C5.TXT" "KEY:ret" "WAIT:1" TYPE:Gwwdaw "TYPE::w" "KEY:ret" "WAIT:1" \
-    "TYPE::e! /C6.TXT" "KEY:ret" "WAIT:1" 'TYPE:G$daw' "TYPE::w" "KEY:ret" "WAIT:1" \
-    "TYPE::e! /C7.TXT" "KEY:ret" "WAIT:1" TYPE:Gdaw "TYPE::w" "KEY:ret" "WAIT:1" \
-    "TYPE::e! /C8.TXT" "KEY:ret" "WAIT:1" TYPE:G2daw "TYPE::w" "KEY:ret" "WAIT:1" \
-    "TYPE::e! /C9.TXT" "KEY:ret" "WAIT:1" TYPE:Gd2aw "TYPE::w" "KEY:ret" "WAIT:1" \
-    "TYPE::e! /C10.TXT" "KEY:ret" "WAIT:1" TYPE:ciwz KEY:esc "TYPE::w" "KEY:ret" "WAIT:1" \
-    "TYPE::e! /C11.TXT" "KEY:ret" "WAIT:1" 'TYPE:jdi"' "TYPE::w" "KEY:ret" "WAIT:1" \
-    "TYPE::e! /C12.TXT" "KEY:ret" "WAIT:1" 'TYPE:jda"' "TYPE::w" "KEY:ret" "WAIT:1" \
-    "TYPE::e! /C13.TXT" "KEY:ret" "WAIT:1" 'TYPE:jf"di"' "TYPE::w" "KEY:ret" "WAIT:1" \
-    "TYPE::e! /C14.TXT" "KEY:ret" "WAIT:1" 'TYPE:jfhdi"' "TYPE::w" "KEY:ret" "WAIT:1" \
-    "TYPE::e! /C15.TXT" "KEY:ret" "WAIT:1" 'TYPE:j$di"' "TYPE::w" "KEY:ret" "WAIT:1" \
-    "TYPE::e! /C16.TXT" "KEY:ret" "WAIT:1" 'TYPE:jdi'"'"'' "TYPE::w" "KEY:ret" "WAIT:1" \
-    "TYPE::e! /C17.TXT" "KEY:ret" "WAIT:1" 'TYPE:jda'"'"'' "TYPE::w" "KEY:ret" "WAIT:1" \
-    "TYPE::e! /C18.TXT" "KEY:ret" "WAIT:1" 'TYPE:jci"q' KEY:esc "TYPE::w" "KEY:ret" "WAIT:1" \
-    "TYPE::e! /C19.TXT" "KEY:ret" "WAIT:1" 'TYPE:fadi(' "TYPE::w" "KEY:ret" "WAIT:1" \
-    "TYPE::e! /C20.TXT" "KEY:ret" "WAIT:1" 'TYPE:fada(' "TYPE::w" "KEY:ret" "WAIT:1" \
-    "TYPE::e! /C21.TXT" "KEY:ret" "WAIT:1" 'TYPE:fbdi(' "TYPE::w" "KEY:ret" "WAIT:1" \
-    "TYPE::e! /C22.TXT" "KEY:ret" "WAIT:1" 'TYPE:fbda(' "TYPE::w" "KEY:ret" "WAIT:1" \
-    "TYPE::e! /C23.TXT" "KEY:ret" "WAIT:1" TYPE:fbdib "TYPE::w" "KEY:ret" "WAIT:1" \
-    "TYPE::e! /C24.TXT" "KEY:ret" "WAIT:1" TYPE:fbdab "TYPE::w" "KEY:ret" "WAIT:1" \
-    "TYPE::e! /C25.TXT" "KEY:ret" "WAIT:1" 'TYPE:f(di(' "TYPE::w" "KEY:ret" "WAIT:1" \
-    "TYPE::e! /C26.TXT" "KEY:ret" "WAIT:1" 'TYPE:di(' "TYPE::w" "KEY:ret" "WAIT:1" \
-    "TYPE::e! /C27.TXT" "KEY:ret" "WAIT:1" 'TYPE:jjfbdi{' "TYPE::w" "KEY:ret" "WAIT:1" \
-    "TYPE::e! /C28.TXT" "KEY:ret" "WAIT:1" 'TYPE:jjfbda{' "TYPE::w" "KEY:ret" "WAIT:1" \
-    "TYPE::e! /C29.TXT" "KEY:ret" "WAIT:1" 'TYPE:jjf1di[' "TYPE::w" "KEY:ret" "WAIT:1" \
-    "TYPE::e! /C30.TXT" "KEY:ret" "WAIT:1" 'TYPE:jjf1da[' "TYPE::w" "KEY:ret" "WAIT:1" \
-    "TYPE::e! /C31.TXT" "KEY:ret" "WAIT:1" 'TYPE:jjdi{' "TYPE::w" "KEY:ret" "WAIT:1" \
-    "TYPE::e! /C32.TXT" "KEY:ret" "WAIT:1" TYPE:jjdiB "TYPE::w" "KEY:ret" "WAIT:1" \
-    "TYPE::e! /C33.TXT" "KEY:ret" "WAIT:1" 'TYPE:jdi{' "TYPE::w" "KEY:ret" "WAIT:1" \
-    "TYPE::e! /C34.TXT" "KEY:ret" "WAIT:1" 'TYPE:jda{' "TYPE::w" "KEY:ret" "WAIT:1" \
-    "TYPE::e! /C35.TXT" "KEY:ret" "WAIT:1" 'TYPE:f{di{' "TYPE::w" "KEY:ret" "WAIT:1" \
-    "TYPE::e! /C36.TXT" "KEY:ret" "WAIT:1" 'TYPE:Gkdi{' "TYPE::w" "KEY:ret" "WAIT:1" \
-    "TYPE::e! /C37.TXT" "KEY:ret" "WAIT:1" TYPE:fbviwd "TYPE::w" "KEY:ret" "WAIT:1" \
-    "TYPE::e! /C38.TXT" "KEY:ret" "WAIT:1" 'TYPE:fbvi(d' "TYPE::w" "KEY:ret" "WAIT:1" \
-    "TYPE::e! /C39.TXT" "KEY:ret" "WAIT:1" 'TYPE:fbva(d' "TYPE::w" "KEY:ret" "WAIT:1" \
-    "TYPE::e! /C40.TXT" "KEY:ret" "WAIT:1" 'TYPE:jjfbvi{d' "TYPE::w" "KEY:ret" "WAIT:1" \
-    "TYPE::e! /C41.TXT" "KEY:ret" "WAIT:1" TYPE:ewviwd "TYPE::w" "KEY:ret" "WAIT:1" \
-    "TYPE::e! /C42.TXT" "KEY:ret" "WAIT:1" 'TYPE:fb2di(' "TYPE::w" "KEY:ret" "WAIT:1" \
-    "TYPE::e! /C43.TXT" "KEY:ret" "WAIT:1" 'TYPE:di)' "TYPE::w" "KEY:ret" "WAIT:1" \
-    "TYPE::e! /C44.TXT" "KEY:ret" "WAIT:1" 'TYPE:jjf[di]' "TYPE::w" "KEY:ret" "WAIT:1" \
+    "TYPE::e! /C0.TXT" "KEY:ret" "UNTIL:[neosim] open /C0.TXT" TYPE:diw "TYPE::w" "KEY:ret" "UNTIL:[neosim] wrote /C0.TXT" \
+    "TYPE::e! /C1.TXT" "KEY:ret" "UNTIL:[neosim] open /C1.TXT" TYPE:daw "TYPE::w" "KEY:ret" "UNTIL:[neosim] wrote /C1.TXT" \
+    "TYPE::e! /C2.TXT" "KEY:ret" "UNTIL:[neosim] open /C2.TXT" TYPE:wdiw "TYPE::w" "KEY:ret" "UNTIL:[neosim] wrote /C2.TXT" \
+    "TYPE::e! /C3.TXT" "KEY:ret" "UNTIL:[neosim] open /C3.TXT" TYPE:Gwdiw "TYPE::w" "KEY:ret" "UNTIL:[neosim] wrote /C3.TXT" \
+    "TYPE::e! /C4.TXT" "KEY:ret" "UNTIL:[neosim] open /C4.TXT" TYPE:Gwdaw "TYPE::w" "KEY:ret" "UNTIL:[neosim] wrote /C4.TXT" \
+    "TYPE::e! /C5.TXT" "KEY:ret" "UNTIL:[neosim] open /C5.TXT" TYPE:Gwwdaw "TYPE::w" "KEY:ret" "UNTIL:[neosim] wrote /C5.TXT" \
+    "TYPE::e! /C6.TXT" "KEY:ret" "UNTIL:[neosim] open /C6.TXT" 'TYPE:G$daw' "TYPE::w" "KEY:ret" "UNTIL:[neosim] wrote /C6.TXT" \
+    "TYPE::e! /C7.TXT" "KEY:ret" "UNTIL:[neosim] open /C7.TXT" TYPE:Gdaw "TYPE::w" "KEY:ret" "UNTIL:[neosim] wrote /C7.TXT" \
+    "TYPE::e! /C8.TXT" "KEY:ret" "UNTIL:[neosim] open /C8.TXT" TYPE:G2daw "TYPE::w" "KEY:ret" "UNTIL:[neosim] wrote /C8.TXT" \
+    "TYPE::e! /C9.TXT" "KEY:ret" "UNTIL:[neosim] open /C9.TXT" TYPE:Gd2aw "TYPE::w" "KEY:ret" "UNTIL:[neosim] wrote /C9.TXT" \
+    "TYPE::e! /C10.TXT" "KEY:ret" "UNTIL:[neosim] open /C10.TXT" TYPE:ciwz KEY:esc "TYPE::w" "KEY:ret" "UNTIL:[neosim] wrote /C10.TXT" \
+    "TYPE::e! /C11.TXT" "KEY:ret" "UNTIL:[neosim] open /C11.TXT" 'TYPE:jdi"' "TYPE::w" "KEY:ret" "UNTIL:[neosim] wrote /C11.TXT" \
+    "TYPE::e! /C12.TXT" "KEY:ret" "UNTIL:[neosim] open /C12.TXT" 'TYPE:jda"' "TYPE::w" "KEY:ret" "UNTIL:[neosim] wrote /C12.TXT" \
+    "TYPE::e! /C13.TXT" "KEY:ret" "UNTIL:[neosim] open /C13.TXT" 'TYPE:jf"di"' "TYPE::w" "KEY:ret" "UNTIL:[neosim] wrote /C13.TXT" \
+    "TYPE::e! /C14.TXT" "KEY:ret" "UNTIL:[neosim] open /C14.TXT" 'TYPE:jfhdi"' "TYPE::w" "KEY:ret" "UNTIL:[neosim] wrote /C14.TXT" \
+    "TYPE::e! /C15.TXT" "KEY:ret" "UNTIL:[neosim] open /C15.TXT" 'TYPE:j$di"' "TYPE::w" "KEY:ret" "UNTIL:[neosim] wrote /C15.TXT" \
+    "TYPE::e! /C16.TXT" "KEY:ret" "UNTIL:[neosim] open /C16.TXT" 'TYPE:jdi'"'"'' "TYPE::w" "KEY:ret" "UNTIL:[neosim] wrote /C16.TXT" \
+    "TYPE::e! /C17.TXT" "KEY:ret" "UNTIL:[neosim] open /C17.TXT" 'TYPE:jda'"'"'' "TYPE::w" "KEY:ret" "UNTIL:[neosim] wrote /C17.TXT" \
+    "TYPE::e! /C18.TXT" "KEY:ret" "UNTIL:[neosim] open /C18.TXT" 'TYPE:jci"q' KEY:esc "TYPE::w" "KEY:ret" "UNTIL:[neosim] wrote /C18.TXT" \
+    "TYPE::e! /C19.TXT" "KEY:ret" "UNTIL:[neosim] open /C19.TXT" 'TYPE:fadi(' "TYPE::w" "KEY:ret" "UNTIL:[neosim] wrote /C19.TXT" \
+    "TYPE::e! /C20.TXT" "KEY:ret" "UNTIL:[neosim] open /C20.TXT" 'TYPE:fada(' "TYPE::w" "KEY:ret" "UNTIL:[neosim] wrote /C20.TXT" \
+    "TYPE::e! /C21.TXT" "KEY:ret" "UNTIL:[neosim] open /C21.TXT" 'TYPE:fbdi(' "TYPE::w" "KEY:ret" "UNTIL:[neosim] wrote /C21.TXT" \
+    "TYPE::e! /C22.TXT" "KEY:ret" "UNTIL:[neosim] open /C22.TXT" 'TYPE:fbda(' "TYPE::w" "KEY:ret" "UNTIL:[neosim] wrote /C22.TXT" \
+    "TYPE::e! /C23.TXT" "KEY:ret" "UNTIL:[neosim] open /C23.TXT" TYPE:fbdib "TYPE::w" "KEY:ret" "UNTIL:[neosim] wrote /C23.TXT" \
+    "TYPE::e! /C24.TXT" "KEY:ret" "UNTIL:[neosim] open /C24.TXT" TYPE:fbdab "TYPE::w" "KEY:ret" "UNTIL:[neosim] wrote /C24.TXT" \
+    "TYPE::e! /C25.TXT" "KEY:ret" "UNTIL:[neosim] open /C25.TXT" 'TYPE:f(di(' "TYPE::w" "KEY:ret" "UNTIL:[neosim] wrote /C25.TXT" \
+    "TYPE::e! /C26.TXT" "KEY:ret" "UNTIL:[neosim] open /C26.TXT" 'TYPE:di(' "TYPE::w" "KEY:ret" "UNTIL:[neosim] wrote /C26.TXT" \
+    "TYPE::e! /C27.TXT" "KEY:ret" "UNTIL:[neosim] open /C27.TXT" 'TYPE:jjfbdi{' "TYPE::w" "KEY:ret" "UNTIL:[neosim] wrote /C27.TXT" \
+    "TYPE::e! /C28.TXT" "KEY:ret" "UNTIL:[neosim] open /C28.TXT" 'TYPE:jjfbda{' "TYPE::w" "KEY:ret" "UNTIL:[neosim] wrote /C28.TXT" \
+    "TYPE::e! /C29.TXT" "KEY:ret" "UNTIL:[neosim] open /C29.TXT" 'TYPE:jjf1di[' "TYPE::w" "KEY:ret" "UNTIL:[neosim] wrote /C29.TXT" \
+    "TYPE::e! /C30.TXT" "KEY:ret" "UNTIL:[neosim] open /C30.TXT" 'TYPE:jjf1da[' "TYPE::w" "KEY:ret" "UNTIL:[neosim] wrote /C30.TXT" \
+    "TYPE::e! /C31.TXT" "KEY:ret" "UNTIL:[neosim] open /C31.TXT" 'TYPE:jjdi{' "TYPE::w" "KEY:ret" "UNTIL:[neosim] wrote /C31.TXT" \
+    "TYPE::e! /C32.TXT" "KEY:ret" "UNTIL:[neosim] open /C32.TXT" TYPE:jjdiB "TYPE::w" "KEY:ret" "UNTIL:[neosim] wrote /C32.TXT" \
+    "TYPE::e! /C33.TXT" "KEY:ret" "UNTIL:[neosim] open /C33.TXT" 'TYPE:jdi{' "TYPE::w" "KEY:ret" "UNTIL:[neosim] wrote /C33.TXT" \
+    "TYPE::e! /C34.TXT" "KEY:ret" "UNTIL:[neosim] open /C34.TXT" 'TYPE:jda{' "TYPE::w" "KEY:ret" "UNTIL:[neosim] wrote /C34.TXT" \
+    "TYPE::e! /C35.TXT" "KEY:ret" "UNTIL:[neosim] open /C35.TXT" 'TYPE:f{di{' "TYPE::w" "KEY:ret" "UNTIL:[neosim] wrote /C35.TXT" \
+    "TYPE::e! /C36.TXT" "KEY:ret" "UNTIL:[neosim] open /C36.TXT" 'TYPE:Gkdi{' "TYPE::w" "KEY:ret" "UNTIL:[neosim] wrote /C36.TXT" \
+    "TYPE::e! /C37.TXT" "KEY:ret" "UNTIL:[neosim] open /C37.TXT" TYPE:fbviwd "TYPE::w" "KEY:ret" "UNTIL:[neosim] wrote /C37.TXT" \
+    "TYPE::e! /C38.TXT" "KEY:ret" "UNTIL:[neosim] open /C38.TXT" 'TYPE:fbvi(d' "TYPE::w" "KEY:ret" "UNTIL:[neosim] wrote /C38.TXT" \
+    "TYPE::e! /C39.TXT" "KEY:ret" "UNTIL:[neosim] open /C39.TXT" 'TYPE:fbva(d' "TYPE::w" "KEY:ret" "UNTIL:[neosim] wrote /C39.TXT" \
+    "TYPE::e! /C40.TXT" "KEY:ret" "UNTIL:[neosim] open /C40.TXT" 'TYPE:jjfbvi{d' "TYPE::w" "KEY:ret" "UNTIL:[neosim] wrote /C40.TXT" \
+    "TYPE::e! /C41.TXT" "KEY:ret" "UNTIL:[neosim] open /C41.TXT" TYPE:ewviwd "TYPE::w" "KEY:ret" "UNTIL:[neosim] wrote /C41.TXT" \
+    "TYPE::e! /C42.TXT" "KEY:ret" "UNTIL:[neosim] open /C42.TXT" 'TYPE:fb2di(' "TYPE::w" "KEY:ret" "UNTIL:[neosim] wrote /C42.TXT" \
+    "TYPE::e! /C43.TXT" "KEY:ret" "UNTIL:[neosim] open /C43.TXT" 'TYPE:di)' "TYPE::w" "KEY:ret" "UNTIL:[neosim] wrote /C43.TXT" \
+    "TYPE::e! /C44.TXT" "KEY:ret" "UNTIL:[neosim] open /C44.TXT" 'TYPE:jjf[di]' "TYPE::w" "KEY:ret" "UNTIL:[neosim] wrote /C44.TXT" \
     "TYPE::q!" "KEY:ret" "WAIT:2")
 qemu-system-i386 -accel kvm -cpu host -drive "file=$WORK/disk.img,format=raw,if=ide,index=0" \
     -cdrom soupOS.iso -boot d -m 128M -no-reboot -no-shutdown -display none \
