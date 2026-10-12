@@ -109,7 +109,7 @@ blocks), a plop on a place, a soft tick while breaking, splash entering
 broth. Nothing with no sound card. Test: the mixer's markers in the log
 for each, as ctoven-test reads the oven's.
 
-## 7. Doom at the framebuffer's own resolution
+## 7. Doom at the framebuffer's own resolution — CLOSED, measured (2026-10-12)
 
 Deferred in queue 48 at the user's request ("OS work only"); allowed again
 2026-10-11. Doom draws 320x200 into mode 13h-style memory and the console
@@ -117,6 +117,17 @@ scales it; at the framebuffer's resolution (1024x768 under QEMU) it should
 draw scaled to fit, centred, aspect kept, not stretched. Measure first
 (rule 3): the frame time now and after. Test: a screendump in a level,
 the picture centred and the borders black.
+
+**Closed with the numbers (rule 3).** At the framebuffer GRUB gives under
+QEMU, 1024x768, vga13h_present already draws Doom 3x (960x600), centred
+(offset 32, 84), square pixels: the premise ("should draw scaled to fit,
+centred, aspect kept") was already true. The case it would have mattered
+for, a framebuffer smaller than 960x600 (the fixed SCALE's unsigned offset
+would wrap and fb_blit_row drop every row), does not reach Doom under GRUB:
+booted with -global VGA.vgamem_mb=2 (no room for 1024x768x32), GRUB gave no
+framebuffer at all ("[fb] bootloader gave no framebuffer info"), the kernel
+ran in VGA text and Doom in real mode 13h. What the first survey wanted, a
+finer picture, is item 10.
 
 ## 8. check.sh under load
 
@@ -132,6 +143,18 @@ failing. The numbers in the changelog either way.
 CLAUDE.md's Doom section says "the enemy AI regression noted in ROADMAP.txt
 is still open"; ROADMAP has it RESOLVED in v0.7.6. Read the code and the
 roadmap, fix whichever is wrong.
+
+## 10. Doom drawn at 640x400
+
+From queue 52's survey (docs/queue-archive-2026-10-07c.md item 2): render
+at 640x400 natively, 2x the original geometry, and blit it 1:1 centred, so
+the same picture is drawn more finely rather than blown up. VGA13_W/H are
+compile-time and in 41 places in doom.c, four width-sized scratch arrays,
+two full-screen buffers, and PROJ_DIST 160 is VGA13_W/2 (the 90-degree
+view). Generalise first in its own commit (the sizes as runtime values,
+buffers sized by a maximum, mode 13h boots staying 320x200), then change.
+Measure with doom-profile (it must still clear the 50 fps cap) and check
+with doom-fb-test's comparison against the 3x picture, the same scene.
 
 ## Notes left by unattended runs
 
