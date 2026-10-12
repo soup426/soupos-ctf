@@ -1,22 +1,23 @@
 # Night queue
 
-Fifty-sixth queue. The first fifty-five are in `docs/queue-archive-2026-10-0*.md`;
-queue 55 (`-09u`) added closing the kitchen (power off and reheat from the
-desktop), a menu on the background, Print Screen to a BMP, and pictures
-from the files window. This one: the clock in the cook's own time, a
-window for the desktop's settings instead of a file to edit, a compost
-bowl so a removed file can come back, and Alt+Tab that shows where it
-is going. Written by an unattended run when queue 55 ran out, as the
-loop it runs in asks; the user has not seen it.
+Fifty-seventh queue. The first fifty-six are in `docs/queue-archive-2026-10-*.md`;
+queue 56 (`-11a`) did the clock in the cook's own time, the spice rack,
+compost and a visible Alt+Tab, and Mincecraft was built beside it
+(v0.60.190 to v0.60.202, its own spec and plan in docs/superpowers/). This
+one: neosim, Mincecraft's review leftovers and sound, Doom at the
+framebuffer's resolution, and check.sh's flakes under load. Written by an
+unattended run when queue 56 ran out, at the user's request ("if the queue
+is empty, add stuff to the queue, like a word editor called neosim (based
+off of neovim)"; Doom allowed again after Mincecraft); the user has not
+seen it.
 
 ## Standing rules
 
 1. **One item, one commit**, and split when an item splits naturally.
 2. **`scripts/check.sh` must pass before every commit** (five configurations
    in parallel copies, the gate's eight segments, every test script), run
-   with `scripts/check.sh` here (the user allowed the laptop again later on
-   2026-10-09; it runs at most CHECK_JOBS at once) or on the test container
-   with `scripts/remote-check.sh` if the laptop is wanted for other things.
+   here on the laptop: the user asked on 2026-10-11 for everything to run
+   locally, so not `scripts/remote-check.sh`.
    Keep soaks six wide at most. Commit with
    explicit paths when other work is in the tree.
 3. **Measure before building, and measure the fix.** An item whose premise
@@ -45,53 +46,96 @@ loop it runs in asks; the user has not seen it.
     a Unix tool (queue 42 queued wait and getopts, already rest and pluck).
 15. If an item is blocked or needs a decision that is not written down, leave
     a note at the bottom and move on.
+16. **Never run an interactive QEMU on the tree's disk.img** (2026-10-11: a
+    session's /etc and /countertop writes failed eight tests). Copy it.
+17. **Test directories are kept on failure, 50 MB each**: clear
+    /tmp/soupos-* after a run of failures, and never let a test compute a
+    size from parsed tool output without checking it is a sane number
+    (2026-10-11: `head -c` of a misparsed negative count wrote 11 GB).
 
 ---
 
-## 1. The clock in the cook's own time — DONE v0.60.187
+## 1. neosim: a modal editor, the first part
 
-The RTC is UTC (QEMU's default), so the bar says 02:00 at 9 pm in
-Alabama. Two settings in the cook's `countertop`: "zone -5" (hours from
-UTC, -12 to +14) and "clock 12" (12-hour, with am/pm). The bar's clock
-and the calendar under it (today's date crosses midnight with the zone)
-use them. Test: with zone and 12-hour set, the bar read back against the
-host's UTC time shifted the same way; the calendar's today mark on the
-shifted date.
+The user's name, kept as asked (it simmers). A ring-3 program in a
+desktop window, `user/neosim/` with its own Makefile rule as Mincecraft
+has: `cook neosim.elf FILE`. 640x480, the kernel's 8x16 font: 80 columns,
+28 rows of text, a status line (mode, file name, line:column, [+] when
+changed) and a command line. Normal mode: h j k l and the arrows, i a o O
+A I into insert mode, Esc out, x, :w :q :wq :q! (q with changes refused,
+said on the command line), :e FILE. Lines numbered down the left. The
+file is read whole into a gap buffer per line or an array of lines; a
+missing file opens empty and is made at :w. Markers ([neosim] ...) for
+the tests, which start it at the console with -wait before the desktop
+(as Mincecraft's do). Test: a scripted edit of a copy of RECIPE.TXT
+(insert, append, open lines, x, :wq) against the expected file; :q with
+changes refused; a screendump with the status line read against the font.
 
-## 2. The spice rack: the desktop's settings in a window — DONE v0.60.188
+## 2. neosim: counts, operators, undo
 
-A window (Kitchen menu and the background menu, "spice rack") with the
-settings as things to click: the four backdrops as swatches, the
-picture (its path, and "none"), the cloche's idle minutes (- and +, and
-never), the zone (- and +) and 12/24-hour. Each click takes effect at
-once and is written to the cook's settings. Test: each control clicked,
-the screen and the settings file after each.
+w b e 0 ^ $ gg G and counts (3j, 5x, 2dd); d c y with a motion (dw, d$,
+cw, db), dd yy cc, p P (line-wise and character-wise registers), u and
+Ctrl-R through a list of changes (each insert-mode visit one change), J.
+Test: each against vim's behaviour on the same text, the expected files
+written by hand from vim on the host and kept in the test.
 
-## 3. Compost: removing a file can be undone — DONE v0.60.189
+## 3. neosim: search, substitute, visual, repeat
 
-The files menu's remove moves a file into the cook's compost bowl
-(`compost` in their home; the headchef's `/compost`), not off the disk;
-a name already there gets a number. Opened, the compost's files menu
-offers "put back" (to where it came from, kept in a small index file)
-and "empty the compost" (asked twice, then really gone). Test: a file
-removed and put back byte for byte; removed again and emptied, gone
-from the disk.
+/ and ? with n N (plain text, wraps with a note), :s/a/b/ and :%s/a/b/g
+(plain text, no regex), v and V with d y c > <, and . repeating the last
+change. Test: each, as item 2.
 
-## 4. Alt+Tab you can see — DONE v0.60.203
+## 4. neosim from the files window
 
-While Alt is held after a Tab, a panel in the middle of the screen
-lists the windows (title, the focused one marked); each Tab moves the
-mark, and letting go of Alt raises the marked window. The keyboard IRQ
-already decides Alt combinations; Alt's release needs to reach the
-desktop too. Test: three windows, Alt+Tab+Tab, the panel read back
-with the third marked, Alt let go, the third on top.
+The files window's menu gains "open in neosim" for a file (as "use as
+background" is for a picture), and a double click on a .txt, .md, .sc or
+.c opens it there. Test: the menu entry and the double click, the window
+up with the file's first line read back.
 
-## 5. Doom at the framebuffer's own resolution — DEFERRED
+## 5. Mincecraft's review leftovers
 
-Skipped at the user's request (queue 48): OS work only.
+From the branch review (minors, deferred): Esc first closes a desktop menu
+that is up (close desk_open when the focus goes to a program window);
+mouse_init could read a key byte pending at boot as the config byte
+(drain the buffer after cli); no test holds W across the focus change
+itself (one long hold spanning an Alt+Tab, z stops within two ticks); the
+save's byte sum becomes a CRC-32 (version 2 files, version 1 still read);
+a HOME over 140 characters is refused with a message, not cut.
+
+## 6. Mincecraft: sounds
+
+SYS_TONE (the mixer): a short low crunch on a break (lower for harder
+blocks), a plop on a place, a soft tick while breaking, splash entering
+broth. Nothing with no sound card. Test: the mixer's markers in the log
+for each, as ctoven-test reads the oven's.
+
+## 7. Doom at the framebuffer's own resolution
+
+Deferred in queue 48 at the user's request ("OS work only"); allowed again
+2026-10-11. Doom draws 320x200 into mode 13h-style memory and the console
+scales it; at the framebuffer's resolution (1024x768 under QEMU) it should
+draw scaled to fit, centred, aspect kept, not stretched. Measure first
+(rule 3): the frame time now and after. Test: a screendump in a level,
+the picture centred and the borders black.
+
+## 8. check.sh under load
+
+Two of today's full runs each had one test fail that passed six of six
+in a soak (ctclockin, ctfiles "could not drive QEMU"), as the notes below
+have it for the gate's boot and audio segments. Run check.sh five times,
+count each test's failures, and give the flakers what they wait for (a
+marker, a prompt) instead of a fixed time. Then five more runs, none
+failing. The numbers in the changelog either way.
+
+## 9. CLAUDE.md: the Doom note
+
+CLAUDE.md's Doom section says "the enemy AI regression noted in ROADMAP.txt
+is still open"; ROADMAP has it RESOLVED in v0.7.6. Read the code and the
+roadmap, fix whichever is wrong.
 
 ## Notes left by unattended runs
 
+(Carried from queue 56, still open.)
 - From queue 48 (v0.60.143), still open: a terminal window shows stderr,
   as SSH sessions do, so peek.elf's "LS f SIZE NAME" serial markers
   (written for ls-test) appear under its listing there, and frost's
