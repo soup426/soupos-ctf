@@ -12,7 +12,7 @@
  * :help, a read-only page of all this (v0.60.219); f t F T ; , r ~ (v0.60.222);
  * Ctrl-D Ctrl-U Ctrl-F Ctrl-B, zz zt zb (v0.60.223); * # (v0.60.226);
  * text objects iw aw i" a" i( a( i{ a{ ... (v0.60.227); marks m ' ` (v0.60.231);
- * gu gU g~ and in visual u U ~ (v0.60.232)
+ * gu gU g~ and in visual u U ~ (v0.60.232); counts on inserts, 3. (v0.60.234)
  * (v0.60.206); i a A I o O into insert mode; : for a command. Insert mode:
  * typing, Enter, Backspace (joining lines at the start of one), Tab as four
  * spaces, the arrows, Esc back. Commands: :w [FILE], :q, :q!, :wq, :x,
@@ -294,12 +294,26 @@ static int only_spaces(int y) { return indent_of(y) == lenof(y); }
 static void put_indent(int y, int n) { for (int i = 0; i < n; i++) text_insert_char(&E.t, y, 0, ' '); }
 
 /* ---- insert mode ---- */
+/* A count on i a I A o O (v0.60.234): what is typed is typed again at Esc,
+ * count - 1 times (for o and O after a new line each time); one undo step. */
+static int ins_count = 1, ins_open, ins_n, ins_again;
+static unsigned ins_keys[256];
 static void insert_mode(int x, int push) {
+    ins_count = 1; ins_open = 0; ins_n = 0;
     if (push) change_begin();
     E.ins_dirty = !push;                            /* an operator before it already changed the text */
     E.mode = M_INSERT; E.cx = x; clamp(); E.want = E.cx;
 }
 static void insert_key(unsigned k) {
+    if (k == 27 && ins_count > 1 && ins_n && !ins_again) {
+        ins_again = 1;
+        for (int r = 1; r < ins_count; r++) {
+            if (ins_open) insert_key('\n');
+            for (int i = 0; i < ins_n; i++) insert_key(ins_keys[i]);
+        }
+        ins_again = 0;
+    }
+    if (k != 27 && !ins_again && ins_n < (int)(sizeof ins_keys / sizeof ins_keys[0])) ins_keys[ins_n++] = k;
     if (k == 27) {
         if (ai_pending && only_spaces(E.cy)) { while (lenof(E.cy)) text_delete_char(&E.t, E.cy, 0); E.cx = 0; }   /* an indent nothing came after */
         ai_pending = 0;
@@ -763,12 +777,12 @@ static void normal_key(unsigned k) {
     case '~': toggle_case(cnt); break;
     case 'u': { int n = 0; for (int i = 0; i < cnt; i++) n += undo_undo(&E.t, &E.cy, &E.cx, &E.seq); after_undo(); if (!n) msg("Already at oldest change", 0, 0); break; }
     case 0x12: { int n = 0; for (int i = 0; i < cnt; i++) n += undo_redo(&E.t, &E.cy, &E.cx, &E.seq); after_undo(); if (!n) msg("Already at newest change", 0, 0); break; }
-    case 'i': insert_mode(E.cx, 1); break;
-    case 'a': insert_mode(len() ? E.cx + 1 : 0, 1); break;
-    case 'A': insert_mode(len(), 1); break;
-    case 'I': insert_mode(len() ? first_nonblank(&E.t, E.cy) : 0, 1); break;
-    case 'o': { int ind = indent_of(E.cy); change_begin(); if (text_insert_line(&E.t, E.cy + 1) == 0) { E.cy++; put_indent(E.cy, ind); insert_mode(ind, 0); ai_pending = ind; } break; }
-    case 'O': { int ind = indent_of(E.cy); change_begin(); if (text_insert_line(&E.t, E.cy) == 0) { put_indent(E.cy, ind); insert_mode(ind, 0); ai_pending = ind; } break; }
+    case 'i': insert_mode(E.cx, 1); ins_count = cnt; break;
+    case 'a': insert_mode(len() ? E.cx + 1 : 0, 1); ins_count = cnt; break;
+    case 'A': insert_mode(len(), 1); ins_count = cnt; break;
+    case 'I': insert_mode(len() ? first_nonblank(&E.t, E.cy) : 0, 1); ins_count = cnt; break;
+    case 'o': { int ind = indent_of(E.cy); change_begin(); if (text_insert_line(&E.t, E.cy + 1) == 0) { E.cy++; put_indent(E.cy, ind); insert_mode(ind, 0); ai_pending = ind; ins_count = cnt; ins_open = 1; } break; }
+    case 'O': { int ind = indent_of(E.cy); change_begin(); if (text_insert_line(&E.t, E.cy) == 0) { put_indent(E.cy, ind); insert_mode(ind, 0); ai_pending = ind; ins_count = cnt; ins_open = 1; } break; }
     case ':': E.mode = M_COMMAND; E.cmdch = ':'; E.cmdn = 0; break;
     }
 }
@@ -848,6 +862,19 @@ static int idle(void) { return E.mode == M_NORMAL && !P.count && !P.op && !P.g &
 static int key(unsigned k) {                        /* 1: end neosim */
     if (!replaying) {                               /* the keys of a change, for . */
         if (idle() && k == '.') { E.msg[0] = 0; dot(); return 0; }
+        if (k == '.' && E.mode == M_NORMAL && P.count && !P.op && !P.g && !P.wait && !P.z) {   /* (v0.60.234) 3.: the count in place of the change's own */
+            int c = P.count; P.count = 0; E.msg[0] = 0; curn = 0;
+            if (!recn) return 0;
+            char d[8]; int dn = 0; do { d[dn++] = (char)('0' + c % 10); c /= 10; } while (c);
+            int skip = 0; while (skip < recn && rec[skip] >= '0' && rec[skip] <= '9' && !(skip == 0 && rec[0] == '0')) skip++;
+            char again[256]; int n = 0;
+            while (dn && n < 255) again[n++] = d[--dn];
+            for (int i = skip; i < recn && n < 255; i++) again[n++] = rec[i];
+            for (int i = 0; i < n; i++) rec[i] = again[i];
+            recn = n;
+            dot();
+            return 0;
+        }
         if (idle()) { curn = 0; cur_change = 0; }
         if (E.mode == M_NORMAL || E.mode == M_INSERT) { if (curn < (int)sizeof(cur)) cur[curn++] = k < 256 ? (char)k : 0; else cur_change = -1; }
         if (k >= 256) cur_change = -1;              /* arrows are not kept */

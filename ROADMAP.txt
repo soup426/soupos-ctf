@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.233
+Current version: v0.60.234
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,16 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.234 (2026-10-12)  — NEOSIM: COUNTS ON INSERTS
+  - A count before i a I A o O types what was typed again when Esc ends
+    it, count - 1 more times (3ihi<Esc> hihihi; 2onew<Esc> two lines, each
+    with the indent; 2ia<CR>b<Esc> the Enter too); one undo step for it
+    all; . repeats it with its count, and a count before . takes the place
+    of the change's own (ihi<Esc>3. three, 3ihi<Esc>2. two), for every
+    change, as neovim's.
+  - scripts/neosim-count-test.sh: 20 cases against neovim 0.12.5. This
+    was queue 62's note (found by a marks case).
 
 v0.60.233 (2026-10-12)  — MINCECRAFT: SUGAR FALLS
   - Sugar is sand: a block broken queues the one above it, a block placed

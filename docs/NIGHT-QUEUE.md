@@ -51,7 +51,7 @@ asked on 2026-10-11; the user has not seen it.
 
 ---
 
-## 1. neosim: counts on inserts
+## 1. neosim: counts on inserts — DONE v0.60.234
 
 A count before i a I A o O repeats what was typed when Esc ends it
 (3ihi<Esc> hihihi, 2onew<Esc> two lines); . repeats it with the count.
