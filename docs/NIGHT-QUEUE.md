@@ -50,6 +50,16 @@ under the standing rules (a test that fails first, then the fix).
     /tmp/soupos-* after a run of failures, and never let a test compute a
     size from parsed tool output without checking it is a sane number
     (2026-10-11: `head -c` of a misparsed negative count wrote 11 GB).
+18. **A review every 10 commits** (the user, 2026-10-12): once 10 commits that
+    change more than this queue file have landed since the last review, stop
+    taking items and review the whole project: six reviewers in parallel, one
+    an area (kernel and shell; the desktop; Mincecraft; neosim and rx.c;
+    Doom; tests, build and docs), read-only, each claim checked before it is
+    queued. Their findings go into this queue's review section, most severe
+    first, and are worked from the top. Count with
+    `git log --oneline LAST..HEAD -- . ':!docs/NIGHT-QUEUE.md' ':!docs/queue-archive-*' | wc -l`.
+    **Last review began at 7647649** (2026-10-12); move this line to the
+    commit each new review begins at.
 
 ---
 
