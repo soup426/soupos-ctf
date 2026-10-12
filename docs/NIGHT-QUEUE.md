@@ -1,10 +1,10 @@
 # Night queue
 
-Sixty-second queue. The first sixty-one are in `docs/queue-archive-2026-10-*.md`;
-queue 61 (`-12e`) gave neosim * # and text objects, toast as food, and put
-Doom's status numbers and menu skull where Doom puts them. This one: the
-status bar's right-hand panel; neosim marks and case operators; sugar that
-falls. Written by an unattended run when queue 61 ran out, as the user
+Sixty-third queue. The first sixty-two are in `docs/queue-archive-2026-10-*.md`;
+queue 62 (`-12f`) gave Doom its whole status bar, neosim marks and gu gU g~,
+and Mincecraft falling sugar. This one: two gaps those found in neosim
+(counts on inserts, paragraphs), its line-number settings, and clouds over
+Mincecraft. Written by an unattended run when queue 62 ran out, as the user
 asked on 2026-10-11; the user has not seen it.
 
 ## Standing rules
@@ -51,36 +51,34 @@ asked on 2026-10-11; the user has not seen it.
 
 ---
 
-## 1. Doom: the status bar's arms and ammo panel — DONE v0.60.230
+## 1. neosim: counts on inserts
 
-The right of the status bar shows BULL SHEL RCKT CELL with slashes and
-no numbers; the ARMS box no digits. Doom draws (st_stuff.c) the ammo
-held and the most it can hold in STYSNUM digits at ST_AMMO0X.. and
-ST_MAXAMMO0X.., and the arms 2-7 in STGNUM (owned) or STYSNUM grey.
-Test: the opening frame's panel drawn from the WAD by those rules, every
-pixel compared, as doom-places-test.
+A count before i a I A o O repeats what was typed when Esc ends it
+(3ihi<Esc> hihihi, 2onew<Esc> two lines); . repeats it with the count.
+Test: cases against neovim's.
 
-## 2. neosim: marks — DONE v0.60.231
+## 2. neosim: paragraphs
 
-m and a letter sets a mark; ' and the letter goes to its line's first
-non-blank, ` to its place; as motions (d'a linewise, d`a not). Marks
-move with lines put in or taken out above them. Test: cases against
-neovim's.
+{ and } to the blank line before and after (counts; as motions, d} and
+y{), ip and ap (the lines of the paragraph, ap with the blank lines after
+or before). Test: cases against neovim's.
 
-## 3. neosim: gu gU g~ — DONE v0.60.232
+## 3. neosim: :set number and relativenumber
 
-The case operators with motions, text objects, visual mode and their
-doubled forms (guu gUU g~~), counts and . Test: cases against neovim's.
+:set nu / nonu / rnu / nornu (and number, relativenumber): with rnu the
+other lines show their distance from the cursor's, the cursor's line its
+own number when nu is on too (0 when not), as neovim's. Test: a screen read
+back after each, the numbers worked out from neovim's rule.
 
-## 4. Mincecraft: sugar falls — DONE v0.60.233
+## 4. Mincecraft: clouds
 
-Sugar is sand: with air (or broth) under it, it falls, a block a tick or
-so, until it lands. Breaking the block under a column of sugar brings
-the column down. Test: a world from the host with a sugar column on a
-crumb; the crumb broken: the sugar's cells in the markers as it falls,
-the column whole on the ground after.
+A layer of flat cream clouds high up (y 52), a fixed noise pattern that
+drifts with the time of day, drawn in the sky before the terrain and
+faded with the fog. Test: two screendumps a while apart looking up: cloud
+pixels in the sky in both, and moved; the frame rate still at its cap.
 
 ## Notes left by unattended runs
+
 
 
 
