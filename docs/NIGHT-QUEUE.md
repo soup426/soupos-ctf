@@ -1,11 +1,12 @@
 # Night queue
 
-Sixty-fourth queue. The first sixty-three are in `docs/queue-archive-2026-10-*.md`;
-queue 63 (`-12g`) gave neosim counts on inserts, paragraphs and :set nu rnu,
-and Mincecraft clouds. This one starts with the risk its notes raised (the
-full check's time), then neosim registers and macros, and a Mincecraft F3
-screen. Written by an unattended run when queue 63 ran out, as the user
-asked on 2026-10-11; the user has not seen it.
+Sixty-fifth queue. The first sixty-four are in `docs/queue-archive-2026-10-*.md`;
+queue 64 (`-12h`) made the full check faster, gave neosim registers, :reg
+and macros, and Mincecraft F3 (and, asked for by the user between items,
+Mincecraft and Doom icons on the desktop). This one: the keys lost during
+a big write that its notes found; neosim patterns; a sun and a moon; a
+neosim icon. Written by an unattended run when queue 64 ran out, as the
+user asked on 2026-10-11; the user has not seen it.
 
 ## Standing rules
 
@@ -51,36 +52,38 @@ asked on 2026-10-11; the user has not seen it.
 
 ---
 
-## 1. The full check's time — DONE v0.60.238 (422 s to 406 s)
+## 1. Keys lost during a big write
 
-422 s under timeout 590, 5-10 s more a test. Measure first: each test's
-time from check.sh's own output, and where it goes (boots, waits). Then
-cut it without weakening a test: share a boot between tests of one
-program where they can, shorter fixed waits where an UNTIL can stand in.
-The number before and after; every test still fails when its feature is
-taken away (spot-check two).
+Typed while a program wrote 3 MB, "countertop" arrived as "countert".
+Measure first: a line typed at the console during a long write (a test
+program writing a few MB, or the shell copying a big file), the keys that
+arrive counted, under KVM; then whether the keyboard IRQ is held off
+through the ATA writes (cli, polling), or the key buffer overflows, or the
+echo is lost and the keys are not. Fix what it is; a test that types
+during a big write and gets every key.
 
-## 2. neosim: registers — DONE v0.60.240
+## 2. neosim: patterns
 
-"a to "z before y d c p P x (and their doubled forms), "A to "Z adding
-to the register; "" the unnamed one; "0 the last yank; "1 the last
-delete of lines. :reg lists them. Test: cases against neovim's (the text,
-and :reg's lines read back).
+/ ? n N * and :s with vim's basic patterns: . * ^ $ [abc] [^a-z] \< \>
+\. (the magic ones, as 'magic' is on), plus \| ? Measure what neosim's
+plain search would miss first. Test: searches and substitutes against
+neovim's.
 
-## 3. neosim: macros — DONE v0.60.241
+## 3. Mincecraft: a sun and a moon
 
-q and a letter records the keys typed until q; @ and the letter plays
-them (a count: that many times), @@ the last again; the macro is the
-register's text, so "ap shows it. Test: cases against neovim's.
+A square sun crossing the sky from east to west through the day, a
+square moon by night (as Minecraft's), drawn behind the clouds and the
+terrain. Test: dumps at three times of day, the sun's square where its
+angle puts it (low east in the morning, high at noon), the moon at night.
 
-## 4. Mincecraft: F3 — DONE v0.60.242
+## 4. neosim on the desktop
 
-F3 shows the cook's place (x y z to a tenth), the way it faces (N E S W
-and the yaw), the frame rate, the block aimed at and its place, and the
-time; F3 again hides it. Shadowed text at the left. Test: the screen read
-back against the font after F3, the numbers as the markers have them.
+An icon and a Kitchen entry: a double click opens neosim with no file
+([No Name]), a :w NAME writes it. Test as ctgames-test: the icon named,
+its window up with no terminal on show.
 
 ## Notes left by unattended runs
+
 
 
 
