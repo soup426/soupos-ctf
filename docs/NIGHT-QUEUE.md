@@ -183,3 +183,10 @@ with doom-fb-test's comparison against the 3x picture, the same scene.
   opens jot, as it has since v0.60.154; only the menu's "open in neosim" was
   added. Moving the double click to neosim is the user's call: one line in
   files_open (countertop.c), and ctfiles-test's double-click checks follow.
+- v0.60.212: litexp-test failed once under check.sh ("expanded text differs
+  from bash:" with nothing after it, so its output file was empty), passed
+  three of three alone and the rerun passed. It already waits for each
+  prompt; the empty file suggests the first line, typed one second after the
+  secret, was lost while the login was checked. If it comes back, wait for
+  the first prompt (UNTIL) before the first line, in every test that types
+  straight after logging in.

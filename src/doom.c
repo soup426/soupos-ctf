@@ -107,7 +107,15 @@ static void pf_maybe_report(void) {
 #endif
 
 /* ── Double-buffer ────────────────────────────────────────────────────────── */
-static uint8_t g_backbuf[VGA13_W * VGA13_H];
+/* The size Doom draws at (v0.60.212): 320x200 times ds, the scale. The
+ * game's geometry is 320x200's: 2D pictures (the status bar, the weapon,
+ * the menus) are placed in 320x200 coordinates and drawn ds times over; the
+ * 3D view is drawn at the full size. Buffers are sized for the largest. */
+#define DS_MAX 3
+#define DMAX_W (VGA13_W * DS_MAX)
+#define DMAX_H (VGA13_H * DS_MAX)
+static int ds = 1, dw = VGA13_W, dh = VGA13_H;
+static uint8_t g_backbuf[DMAX_W * DMAX_H];
 
 static inline uint8_t vga_inb(uint16_t port) {
     uint8_t r; __asm__ volatile ("inb %1,%0" : "=a"(r) : "Nd"(port)); return r;
@@ -126,16 +134,18 @@ static void present_frame(void) {
     }
 
     PF_T0(t_copy);
-    uint8_t *fb = vga13h_fb();
-    for (int i = 0; i < VGA13_W * VGA13_H; i++) fb[i] = g_backbuf[i];
-    vga13h_present();
+    if (ds == 1) {                                   /* 320x200: through mode 13h or its scaler */
+        uint8_t *fb = vga13h_fb();
+        for (int i = 0; i < VGA13_W * VGA13_H; i++) fb[i] = g_backbuf[i];
+        vga13h_present();
+    } else vga13h_present_full(g_backbuf, dw, dh);  /* drawn at the full size: straight out */
     PF_ACC(pf_copy, t_copy);
 }
 
 static void bb_fill_rect(int x, int y, int w, int h, uint8_t c) {
-    for (int row = y; row < y + h && row < VGA13_H; row++) {
-        uint8_t *p = g_backbuf + row * VGA13_W + x;
-        for (int col = 0; col < w && x + col < VGA13_W; col++) p[col] = c;
+    for (int row = y; row < y + h && row < dh; row++) {
+        uint8_t *p = g_backbuf + row * dw + x;
+        for (int col = 0; col < w && x + col < dw; col++) p[col] = c;
     }
 }
 
@@ -174,9 +184,32 @@ static void patch_blit(const uint8_t *data,
     }
 }
 
-/* Draw to back buffer */
+/* Draw to the back buffer at 320x200 coordinates, ds times over (v0.60.212). */
 static void draw_patch(const uint8_t *data, int ox, int oy) {
-    patch_blit(data, g_backbuf, VGA13_W, VGA13_H, ox, oy);
+    if (ds == 1) { patch_blit(data, g_backbuf, VGA13_W, VGA13_H, ox, oy); return; }
+    int16_t width = *(const int16_t *)(data + 0);
+    int16_t loffs = *(const int16_t *)(data + 4);
+    int16_t toffs = *(const int16_t *)(data + 6);
+    const uint32_t *colofs = (const uint32_t *)(data + 8);
+    int x0 = ox - (int)loffs, y0 = oy - (int)toffs;
+    for (int col = 0; col < (int)width; col++) {
+        int sx = x0 + col;
+        if (sx < 0 || sx >= VGA13_W) continue;
+        const uint8_t *post = data + colofs[col];
+        while (*post != 0xFF) {
+            int top = *post++, count = *post++;
+            post++;
+            for (int i = 0; i < count; i++, post++) {
+                int sy = y0 + top + i;
+                if ((unsigned)sy >= (unsigned)VGA13_H) continue;
+                for (int a = 0; a < ds; a++) {
+                    uint8_t *o = g_backbuf + (sy * ds + a) * dw + sx * ds;
+                    for (int b = 0; b < ds; b++) o[b] = *post;
+                }
+            }
+            post++;
+        }
+    }
 }
 
 /* ── Background buffer ────────────────────────────────────────────────────── */
@@ -204,7 +237,12 @@ static void load_bg(void) {
 }
 
 static void blit_bg(void) {
-    memcpy(g_backbuf, bg_pixels, VGA13_W * VGA13_H);
+    if (ds == 1) { memcpy(g_backbuf, bg_pixels, VGA13_W * VGA13_H); return; }
+    for (int y = 0; y < dh; y++) {
+        const uint8_t *src = bg_pixels + (y / ds) * VGA13_W;
+        uint8_t *o = g_backbuf + y * dw;
+        for (int x = 0; x < dw; x++) o[x] = src[x / ds];
+    }
 }
 
 /* ── Lump-patch helper ────────────────────────────────────────────────────── */
@@ -725,21 +763,23 @@ static void draw_automap(void) {
  *   Toggle automap ↔ 3D with TAB.
  * ══════════════════════════════════════════════════════════════════════════ */
 
-#define PROJ_DIST    160
-#define VIEW_H       168   /* 3D viewport height; bottom 32 rows = status bar */
-#define VIEW_HALF_H   84   /* VIEW_H / 2 — horizon line */
+#define PROJ_DIST    (160 * ds)   /* dw / 2: the 90-degree view (v0.60.212: by the scale) */
+#define VIEW_H       (168 * ds)   /* 3D viewport height; bottom 32 rows (x ds) = status bar */
+#define VIEW_H_320    168         /* the same, in 320x200 coordinates, for 2D pictures */
+#define VIEW_HALF_H  (84 * ds)    /* VIEW_H / 2: the horizon line */
+#define SCR_CX       (dw / 2)     /* the view's middle column */
 #define CEIL_COL      25   /* palette index for ceiling */
 #define FLOOR_COL     55   /* palette index for floor   */
 
 /* Per-column open span (wall occlusion) */
-static int16_t col_top[VGA13_W];
-static int16_t col_bot[VGA13_W];
+static int16_t col_top[DMAX_W];
+static int16_t col_bot[DMAX_W];
 static int     cols_open;
 
 /* Per-column sprite clip — updated by portal steps only, NOT by solid wall
  * closures. Solid walls behind sprites must not hide them. */
-static int16_t spr_top[VGA13_W];
-static int16_t spr_bot[VGA13_W];
+static int16_t spr_top[DMAX_W];
+static int16_t spr_bot[DMAX_W];
 
 /* ── COLORMAP-based diminished lighting ───────────────────────────────────
  * COLORMAP is 34 × 256 bytes: 32 shade levels (0 = full-bright, 31 = black),
@@ -885,9 +925,9 @@ static int flat_row_runs(int32_t wx0, int32_t wy0,
     int xa   = 0;
     int seca = flat_sec_px(wx0, wy0, step_x, step_y, 0, psec);
 
-    while (xa < VGA13_W - 1) {
+    while (xa < dw - 1) {
         int xb = xa + FLAT_STEP;
-        if (xb > VGA13_W - 1) xb = VGA13_W - 1;
+        if (xb > dw - 1) xb = dw - 1;
         int secb = flat_sec_px(wx0, wy0, step_x, step_y, xb, psec);
         if (secb == seca) { xa = xb; continue; }   /* same run, keep going */
 
@@ -904,7 +944,7 @@ static int flat_row_runs(int32_t wx0, int32_t wy0,
         xa = hi; seca = secb;
     }
 
-    end[n] = VGA13_W - 1; sec[n] = seca; n++;
+    end[n] = dw - 1; sec[n] = seca; n++;
     return n;
 }
 
@@ -943,7 +983,7 @@ static void draw_flats(int psec) {
         int32_t step_x = d *   sin_a  / (PROJ_DIST * 4);
         int32_t step_y = d * (-cos_a) / (PROJ_DIST * 4);
 
-        uint8_t *row = g_backbuf + y * VGA13_W;
+        uint8_t *row = g_backbuf + y * dw;
 
         int sky_u_base = ((int)pl_angle * ANG_SKY_U) & 255;
         int sky_v = y * 128 / VIEW_HALF_H;
@@ -961,7 +1001,7 @@ static void draw_flats(int psec) {
         int ri  = 0;
         int sec = run_sec[0];
 
-        for (int sx = 0; sx < VGA13_W; sx++, wx_fp += step_x, wy_fp += step_y) {
+        for (int sx = 0; sx < dw; sx++, wx_fp += step_x, wy_fp += step_y) {
             if (sx > run_end[ri]) { ri++; sec = run_sec[ri]; }
             if (sec < 0 || sec >= lv_nsectors) continue;
 
@@ -981,7 +1021,7 @@ static void draw_flats(int psec) {
 
             if (is_sky_here) {
                 if (g_sky_loaded == 1) {
-                    int sky_u = (sky_u_base + sx * 64 / VGA13_W) & 255;
+                    int sky_u = (sky_u_base + sx * 64 / dw) & 255;
                     row[sx] = g_sky_pixels[sky_v * 256 + sky_u];
                 }
                 continue;
@@ -999,13 +1039,13 @@ static void draw_flats(int psec) {
 }
 
 static void spans_reset(void) {
-    for (int i = 0; i < VGA13_W; i++) {
+    for (int i = 0; i < dw; i++) {
         col_top[i] = 0;
         col_bot[i] = VIEW_H - 1;   /* clip to viewport, not full screen */
         spr_top[i] = 0;
         spr_bot[i] = VIEW_H - 1;
     }
-    cols_open = VGA13_W;
+    cols_open = dw;
 }
 
 /* ══════════════════════════════════════════════════════════════════════════
@@ -1313,15 +1353,15 @@ static void col_fill_tex(int sx, int y0, int y1,
     const int th_pow2 = (th > 0) && ((th & th_mask) == 0);
     const uint8_t *cmap = g_colormap ? (g_colormap + shade * 256) : NULL;
     const uint8_t *texcol = tex->pixels + u;   /* column stride = tw */
-    uint8_t *fb = g_backbuf + (unsigned)(y0 * VGA13_W + sx);
+    uint8_t *fb = g_backbuf + (unsigned)(y0 * dw + sx);
     if (th_pow2) {
-        for (int y = y0; y <= y1; y++, v_fixed += v_step, fb += VGA13_W) {
+        for (int y = y0; y <= y1; y++, v_fixed += v_step, fb += dw) {
             int v = (v_fixed >> 8) & th_mask;
             uint8_t raw = texcol[v * tw];
             *fb = cmap ? cmap[raw] : raw;
         }
     } else {
-        for (int y = y0; y <= y1; y++, v_fixed += v_step, fb += VGA13_W) {
+        for (int y = y0; y <= y1; y++, v_fixed += v_step, fb += dw) {
             int v = (v_fixed >> 8) % th;
             if (v < 0) v += th;
             uint8_t raw = texcol[v * tw];
@@ -1396,7 +1436,7 @@ static void col_fill(int sx, int y0, int y1, uint8_t c) {
     if (y0 > y1) return;
     uint8_t *fb = g_backbuf + (unsigned)sx;
     for (int y = y0; y <= y1; y++)
-        fb[(unsigned)y * VGA13_W] = c;
+        fb[(unsigned)y * dw] = c;
 }
 
 /* ── Seg renderer ────────────────────────────────────────────────────────── */
@@ -1417,8 +1457,8 @@ static void render_seg_3d(const dseg_t *seg) {
     if (vx2 < NP) { int32_t d=vx1-vx2; vy2=vy2+(vy1-vy2)*(NP-vx2)/d; vx2=NP; }
     #undef NP
 
-    int sx1 = 160 + (int)(vy1 * PROJ_DIST / vx1);
-    int sx2 = 160 + (int)(vy2 * PROJ_DIST / vx2);
+    int sx1 = SCR_CX + (int)(vy1 * PROJ_DIST / vx1);
+    int sx2 = SCR_CX + (int)(vy2 * PROJ_DIST / vx2);
 
     /* Seg U coordinates: offset at v1, offset+length at v2 */
     int32_t sdx = lv_verts[seg->v2].x - lv_verts[seg->v1].x;
@@ -1433,9 +1473,9 @@ static void render_seg_3d(const dseg_t *seg) {
         int32_t tv=vx1; vx1=vx2; vx2=tv;
         int32_t tu=u1;  u1=u2;   u2=tu;
     }
-    if (sx2 < 0 || sx1 >= VGA13_W) return;
+    if (sx2 < 0 || sx1 >= dw) return;
     if (sx1 < 0)        sx1 = 0;
-    if (sx2 >= VGA13_W) sx2 = VGA13_W - 1;
+    if (sx2 >= dw) sx2 = dw - 1;
 
     /* Look up front/back sectors and sidedefs */
     int front_sec = -1, back_sec = -1, two_sided = 0;
@@ -1698,17 +1738,17 @@ static void projs_draw(void) {
         int32_t vx = (int32_t)view_cos[pl_angle] * wx + (int32_t)view_sin[pl_angle] * wy;
         int32_t vy = (int32_t)view_sin[pl_angle] * wx - (int32_t)view_cos[pl_angle] * wy;
         if (vx <= 256) continue; /* behind near plane */
-        int sx = 160 + (int)((int64_t)vy * PROJ_DIST / vx);
-        if (sx < 1 || sx >= VGA13_W - 1) continue;
+        int sx = SCR_CX + (int)((int64_t)vy * PROJ_DIST / vx);
+        if (sx < 1 || sx >= dw - 1) continue;
         /* Fireball flies at player eye height → screen center */
         int sy = VIEW_HALF_H;
         /* 3×3 dot */
         for (int dy2 = -1; dy2 <= 1; dy2++) {
             int row = sy + dy2;
             if (row < 0 || row >= VIEW_H) continue;
-            g_backbuf[row * VGA13_W + sx - 1] = PROJ_COL;
-            g_backbuf[row * VGA13_W + sx    ] = PROJ_COL;
-            g_backbuf[row * VGA13_W + sx + 1] = PROJ_COL;
+            g_backbuf[row * dw + sx - 1] = PROJ_COL;
+            g_backbuf[row * dw + sx    ] = PROJ_COL;
+            g_backbuf[row * dw + sx + 1] = PROJ_COL;
         }
     }
 }
@@ -2467,8 +2507,8 @@ typedef struct {
     int             screen_h;
     const sprite_t *spr;
     const uint8_t  *cmap;
-    int16_t         snap_top[VGA13_W];
-    int16_t         snap_bot[VGA13_W];
+    int16_t         snap_top[DMAX_W];
+    int16_t         snap_bot[DMAX_W];
 } vissprite_t;
 
 static vissprite_t g_vislist[MAX_VIS_SPR];
@@ -2536,10 +2576,10 @@ static void build_vissprites(void) {
         }
         if (!spr) continue;
 
-        int scx = 160 + (int)(vy * PROJ_DIST / vx);
+        int scx = SCR_CX + (int)(vy * PROJ_DIST / vx);
         int sx_left  = scx - (int)((int64_t)spr->loffset * PROJ_DIST * 1024 / vx);
         int sx_right = sx_left + (int)((int64_t)spr->width  * PROJ_DIST * 1024 / vx) - 1;
-        if (sx_right < 0 || sx_left >= VGA13_W) continue;
+        if (sx_right < 0 || sx_left >= dw) continue;
 
         int tsec = find_sector_at((int32_t)th->x, (int32_t)th->y);
         int32_t thing_floor = (tsec >= 0 && tsec < lv_nsectors)
@@ -2575,7 +2615,7 @@ static void snap_vissprites(int ss) {
         vissprite_t *v = &g_vislist[k];
         if (v->snapshot_valid || v->ssec_id != ss) continue;
         int lo = v->sx_left  < 0       ? 0           : v->sx_left;
-        int hi = v->sx_right >= VGA13_W ? VGA13_W - 1 : v->sx_right;
+        int hi = v->sx_right >= dw ? dw - 1 : v->sx_right;
         for (int sx = lo; sx <= hi; sx++) {
             v->snap_top[sx] = spr_top[sx];
             v->snap_bot[sx] = spr_bot[sx];
@@ -2609,7 +2649,7 @@ static void draw_vissprites(void) {
         int32_t u_fixed = 0;
         for (int sx = sx_left; sx <= sx_right; sx++, u_fixed += u_step) {
             if (sx < 0) continue;
-            if (sx >= VGA13_W) break;
+            if (sx >= dw) break;
             int stop = v->snap_top[sx], sbot = v->snap_bot[sx];
             if (stop > sbot) continue;
 
@@ -2631,7 +2671,7 @@ static void draw_vissprites(void) {
                 if (vp >= spr->height) vp = spr->height - 1;
                 uint8_t pix = spr->pixels[vp * spr->width + patch_col];
                 if (pix != 0xFF)
-                    g_backbuf[(unsigned)y * VGA13_W + (unsigned)sx]
+                    g_backbuf[(unsigned)y * dw + (unsigned)sx]
                         = cmap ? cmap[pix] : pix;
             }
         }
@@ -2671,9 +2711,9 @@ static void weapon_free(void) {
 static void draw_weapon(void) {
     /* Show muzzle flash for the first FLASH_TICKS frames of cooldown */
     if (g_pistol_flash && pl_fire_cd > FIRE_CD_TICKS - FLASH_TICKS)
-        draw_patch(g_pistol_flash, 160, VIEW_H);
+        draw_patch(g_pistol_flash, 160, VIEW_H_320);
     else if (g_pistol_raw)
-        draw_patch(g_pistol_raw, 160, VIEW_H);
+        draw_patch(g_pistol_raw, 160, VIEW_H_320);
 }
 
 /* ── Sector specials (damage floors + light effects) ─────────────────────── */
@@ -2732,8 +2772,8 @@ static void draw_3d(void) {
 
     PF_T0(t_total);
 
-    bb_fill_rect(0,           0, VGA13_W, VIEW_HALF_H,          CEIL_COL);
-    bb_fill_rect(0, VIEW_HALF_H, VGA13_W, VIEW_H - VIEW_HALF_H, FLOOR_COL);
+    bb_fill_rect(0,           0, dw, VIEW_HALF_H,          CEIL_COL);
+    bb_fill_rect(0, VIEW_HALF_H, dw, VIEW_H - VIEW_HALF_H, FLOOR_COL);
 
     PF_T0(t_flats);
     draw_flats(psec);

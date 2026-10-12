@@ -63,6 +63,21 @@ void vga13h_present(void) {
     }
 }
 
+/* A frame drawn at its full size (v0.60.212, Doom at 960x600): w x h
+ * palette indices straight to the framebuffer, centred, through the same
+ * palette as the scaler. Nothing on a mode 13h boot. */
+void vga13h_present_full(const uint8_t *src, int w, int h) {
+    if (!to_fb || w <= 0 || h <= 0 || (uint32_t)w > fb_width() || (uint32_t)h > fb_height()) return;
+    static uint32_t line[VGA13_W * SCALE];
+    if (w > VGA13_W * SCALE) return;
+    uint32_t ox = (fb_width() - (uint32_t)w) / 2, oy = (fb_height() - (uint32_t)h) / 2;
+    for (int y = 0; y < h; y++) {
+        const uint8_t *s = src + y * w;
+        for (int x = 0; x < w; x++) line[x] = pal32[s[x]];
+        fb_blit_row(ox, oy + (uint32_t)y, line, (uint32_t)w);
+    }
+}
+
 /* ── port helpers ─────────────────────────────────────────────── */
 static inline void outb(uint16_t p, uint8_t v) {
     __asm__ volatile ("outb %0,%1"::"a"(v),"Nd"(p));

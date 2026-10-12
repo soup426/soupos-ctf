@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.211
+Current version: v0.60.212
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,20 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.212 (2026-10-12)  — DOOM: ITS SIZE AS RUNTIME VALUES
+  - Queue 57 item 10, the first half: generalise, change nothing. Doom
+    draws at 320x200 times ds, the scale, held in ds/dw/dh; its buffers
+    are sized for 960x600; PROJ_DIST, VIEW_H, the horizon and the middle
+    column (four literal 160s) follow the scale; 2D pictures (the status
+    bar, the weapon, the menus, the title) are placed in 320x200
+    coordinates and drawn ds times over (draw_patch, blit_bg); the 3D view
+    draws at the full size; vga13h_present_full hands a full-size frame
+    straight to the framebuffer, centred. The automap keeps its own
+    320x200 path.
+  - ds stays 1: E1M1's opening frame, screendumped, is the same as before
+    in all 786,432 pixels (two runs before also agreed exactly, so the
+    scene is deterministic), and doom-fb-test still matches mode 13h.
 
 v0.60.211 (2026-10-12)  — CHECK.SH UNDER LOAD
   - Counted (queue 57 item 8): five full check.sh runs, one failed

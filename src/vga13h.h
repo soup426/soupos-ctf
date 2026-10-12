@@ -27,6 +27,7 @@ void vga13h_init_target(void);
  * in video memory; on a framebuffer boot it scales 320x200 up by 3 through
  * the palette. Call it where a mode 13h program would have finished a frame. */
 void vga13h_present(void);
+void vga13h_present_full(const uint8_t *src, int w, int h);   /* a full-size frame, centred (v0.60.212) */
 
 /* Single-pixel ops */
 static inline void vga13h_plot(int x, int y, uint8_t c) {
