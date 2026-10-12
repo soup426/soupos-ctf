@@ -62,6 +62,25 @@ expect jot there (ctjot-test, ctfiles*). Then neosim for text files, jot
 still in the right-click menu; those tests changed to say neosim. Done
 first, once the review's six reviewers are finished with the tree.
 
+## 0b. Doom: make it play right (the user, 2026-10-12)
+
+The user played it and reports "tons of problems": the graphics, the
+enemies, more. This item gathers them and fixes them, one commit each,
+most visible first. Measure first, from the play itself:
+- A scripted walk through E1M1 (the start, the zigzag room, the nukage,
+  the exit), screendumps every few steps, looked at for what is wrong:
+  walls, floors and ceilings, sprites (in place, clipped, sorted, lit),
+  the sky, the weapon, the HUD.
+- Enemies against Doom's own rules (p_enemy.c, p_mobj.c): waking on sight
+  and sound, chasing, attacking (hitscan and missiles), pain, death and
+  their frames, damage they take and deal, line of sight.
+- The player: movement and collision against walls and things, steps up
+  and down, doors and lifts, damage floors, pickups, the level's exit.
+- The Doom review's findings (below, when it reports) go here too.
+Each problem found becomes a line here: what is wrong, Doom's rule, the
+fix, the test (a screendump or the log against the rule). Ask the user for
+the ones they saw first if they are around.
+
 ## 1. Mincecraft: the moon's top rows
 
 Looking straight up at midnight, the moon's top rows are two pixels wider
