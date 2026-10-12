@@ -3,7 +3,7 @@
 ## What this is
 
 soupOS is a 32-bit x86 hobby OS written in C and NASM assembly (currently
-**v0.60.201**; ROADMAP.txt is the authority on the version). It boots via GRUB and runs in protected mode with paging, a
+**v0.60.202**; ROADMAP.txt is the authority on the version). It boots via GRUB and runs in protected mode with paging, a
 physical/heap allocator, and a cooperative scheduler. On top of that:
 
 - **Filesystem**: FAT16 read/write with subdirectories ("bowls") and a VFS shim
@@ -963,7 +963,8 @@ close box saves and quits. A kill does NOT save. Flags: `-seed N -flat -gen
 (HOME since v0.60.191) unless `-world`: "MINC", version 1, seed, time, x y z
 yaw pitch, 11 counts (32 bits each, little-endian), the grid as (count, id)
 runs, then the sum of every byte before it; a short, long, other-version or
-bad-sum file is refused (a new world, the file kept until a save). Memory:
+bad-sum file is refused (a new world; the file copied to PATH.bad first). SYS_CLOSE returns the
+close's result since v0.60.202: a file is written at its close, so check it. Memory:
 grid 1 MB + 640x480 body 1.2 MB + 320x240 buffer 0.3 MB stays under the
 4 MB `PROC_PAGE_CAP`. Tests: `mincecraft-{gen,view,play,save}-test.sh`.
 

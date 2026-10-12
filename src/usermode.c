@@ -508,7 +508,9 @@ void syscall_dispatch(registers_t *r) {
         case SYS_CLOSE: {
             uint32_t fd = r->ebx;
             if (pr && fd >= 3 && fd < PROC_UFD_MAX && pr->ufds[fd]) {
-                vfs_close(pr->ufds[fd]); pr->ufds[fd] = 0; r->eax = 0;
+                /* (v0.60.202) the close's own result: a file is written out
+                 * at its close, and a full disk only shows there */
+                r->eax = (uint32_t)vfs_close(pr->ufds[fd]); pr->ufds[fd] = 0;
             } else {
                 r->eax = (uint32_t)-1;
             }

@@ -30,7 +30,7 @@ int save_world(const char *path, const player_t *p, unsigned seed, int tod, unsi
     }
     put32(iosum);
     flush();
-    sys_close(iofd);
+    if (sys_close(iofd) < 0) ioerr = 1;                          /* the write happens at the close (v0.60.202) */
     if (bytes) *bytes = iototal;
     return ioerr ? -1 : 0;
 }
@@ -64,11 +64,15 @@ int load_world(const char *path, player_t *p, unsigned *seed, int *tod) {
     if (!bad) { want = iosum; if (get32(&got) < 0 || got != want || get() >= 0) bad = 1; }
     sys_close(iofd);
     if (bad) return -2;
+    /* Everything is checked before anything is handed back (v0.60.202).
+     * The feet may be above the top row: on the ceiling's top block, or
+     * jumping off it (up to 1.3 more); the walls keep x and z inside. */
+    fx x = (fx)v[3], y = (fx)v[4], z = (fx)v[5];
+    if (x < 0 || x >= WX << 16 || z < 0 || z >= WZ << 16 || y < 0 || y >= (WY + 4) << 16) return -2;
     *seed = v[1]; *tod = (int)v[2];
     player_spawn(p);
-    p->x = (fx)v[3]; p->y = (fx)v[4]; p->z = (fx)v[5]; p->yaw = (int)v[6] & 1023; p->pitch = (int)v[7];
+    p->x = x; p->y = y; p->z = z; p->yaw = (int)v[6] & 1023; p->pitch = (int)v[7];
     if (p->pitch > 227 || p->pitch < -227) p->pitch = 0;
-    if (p->x < FX_ONE || p->x >= (WX - 1) << 16 || p->z < FX_ONE || p->z >= (WZ - 1) << 16 || p->y < FX_ONE || p->y >= WY << 16) return -2;
     for (int i = 0; i < B_COUNT; i++) p->inv[i] = (unsigned short)inv[i];
     p->ground = 0;
     return 0;

@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.201
+Current version: v0.60.202
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,25 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.202 (2026-10-11)  — MINCECRAFT: A WORLD IS NOT LOST
+  - From the branch's review. A save with the feet above y 64 (standing
+    on a block at the ceiling, or jumping off one) was refused as damaged
+    at the next start, and the next quit saved a new world over it. The
+    loader now takes feet to y 68 and anywhere inside the walls, and
+    checks the whole file before it hands anything back.
+  - SYS_CLOSE gives the close's own result: a file is written out at its
+    close, so a full disk only shows there, and it always said 0. A save
+    that fails now says so; Esc or the close box then does not quit (a
+    note says to press Esc again to quit unsaved).
+  - A refused world file is kept as PATH.bad (copied whole) before
+    anything is saved over it; -check leaves it alone.
+  - Held to about 33 frames a second (it drew 100 to 170 while the desktop
+    shows about 30, and burnt a host core for nothing).
+  - mincecraft-save-test: a file with the feet at y 64.3 loads; the 3 MB
+    refused file kept whole as /T.WLD.bad; on a disk with 12 KB free, P
+    says "save failed", the first Esc stays, the second goes.
+    mincecraft-view-test: fps 5 to 35.
 
 v0.60.201 (2026-10-11)  — MINCECRAFT: STARS
   - By night the sky has stars: one cell in 64 of a grid over the view's

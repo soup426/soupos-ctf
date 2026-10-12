@@ -19,7 +19,8 @@
  * SYS_WIN_KEYS at a fixed 20 ticks a second); F or the left button held
  * breaks what the crosshair is on (v0.60.195), r or q places the hotbar's
  * block on that face, 1 to 9 or the wheel choose the slot; P saves, Esc or
- * the close box saves and ends it (a kill does not save).
+ * the close box saves and ends it (a kill does not save); if that save
+ * fails it says so and a second Esc ends it unsaved (v0.60.202).
  *
  * Markers on stderr, [mincecraft] ...: window up, fps=N every 5 s, bye;
  * with -script "p x y z yaw pitch ground" each tick (16.16, angle units),
@@ -71,11 +72,29 @@ static unsigned sky_at(int tod) {
 static void pos_marker(const player_t *p) {
     eprint(" x="); eprint_int(p->x); eprint(" y="); eprint_int(p->y); eprint(" z="); eprint_int(p->z);
 }
-static void do_save(const char *path, const player_t *p, unsigned seed, int tod) {
+static int do_save(const char *path, const player_t *p, unsigned seed, int tod) {   /* 0, or -1 */
     unsigned n = 0;
-    if (save_world(path, p, seed, tod, &n) < 0) { sys_note("Mincecraft: could not save"); eprint("[mincecraft] save failed\n"); return; }
+    if (save_world(path, p, seed, tod, &n) < 0) { sys_note("Mincecraft: could not save"); eprint("[mincecraft] save failed\n"); return -1; }
     eprint("[mincecraft] saved "); eprint(path); eprint(" bytes="); eprint_u(n); eprint(" hash="); eprint_u(world_hash());
     pos_marker(p); eprint("\n");
+    return 0;
+}
+/* A refused world file is kept as PATH.bad before anything is saved over
+ * it (v0.60.202): the cook may want it back. */
+static void keep_aside(const char *path) {
+    static char dst[176], buf[4096];
+    int n = 0, in, out, got, okay = 1;
+    while (path[n] && n < 160) { dst[n] = path[n]; n++; }
+    for (const char *t = ".bad"; *t; t++) dst[n++] = *t;
+    dst[n] = 0;
+    if ((in = sys_open(path, O_READ)) < 0) return;
+    if ((out = sys_open(dst, O_WRITE)) < 0) { sys_close(in); okay = 0; }
+    else {
+        while ((got = sys_read(in, buf, sizeof(buf))) > 0) if (sys_write(out, buf, got) != got) { okay = 0; break; }
+        sys_close(in);
+        if (sys_close(out) < 0) okay = 0;
+    }
+    eprint(okay ? "[mincecraft] kept " : "[mincecraft] could not keep "); eprint(path); eprint(" as "); eprint(dst); eprint("\n");
 }
 static int same(const char *a, const char *b) { while (*a && *a == *b) { a++; b++; } return *a == *b; }
 
@@ -120,7 +139,11 @@ int main(void) {
     int got = load_world(wpath, &pl, &seed, &tod);
     if (got == 0) { eprint("[mincecraft] loaded "); eprint(wpath); eprint(" hash="); eprint_u(world_hash()); pos_marker(&pl); eprint("\n"); }
     else {
-        if (got == -2) { sys_note("Mincecraft: that world is damaged; a new one"); eprint("[mincecraft] refused "); eprint(wpath); eprint("\n"); }
+        if (got == -2) {
+            sys_note("Mincecraft: that world is damaged; a new one");
+            eprint("[mincecraft] refused "); eprint(wpath); eprint("\n");
+            if (!check) keep_aside(wpath);
+        }
         else { eprint("[mincecraft] no world at "); eprint(wpath); eprint("\n"); }
         if (flat) world_flat(); else world_gen(seed);
         player_spawn(&pl);
@@ -139,7 +162,7 @@ int main(void) {
     ray_t tg = { 0 };
     fx dx, dy, dz;
     unsigned last = sys_ticks(), fps_t = last;
-    int frames = 0, lbtn = 0;
+    int frames = 0, lbtn = 0, unsaved = 0;
     unsigned short inv_last[B_COUNT] = { 0 };
     inv_marker(&pl, inv_last);                                   /* what a loaded world has in hand */
     unsigned tt = 0;                                             /* game ticks, for the clock */
@@ -147,6 +170,7 @@ int main(void) {
         uwinev_t ev;
         int g, quit = 0;
         while ((g = sys_win_event(win, &ev, 0)) == 1) {
+            if (ev.type == WEV_KEY && ev.key != 27 && ev.key != 'm') unsaved = 0;   /* an unsaved warning holds until the next Esc */
             if (ev.type == WEV_CLOSE || (ev.type == WEV_KEY && ev.key == 27)) quit = 1;
             else if (ev.type == WEV_KEY && ev.key == 'm') eprint("[mincecraft] mark\n");
             else if (ev.type == WEV_KEY && ev.key == 'p') do_save(wpath, &pl, seed, tod);
@@ -161,7 +185,13 @@ int main(void) {
             else if (ev.type == WEV_DOWN) lbtn = 1;
             else if (ev.type == WEV_UP) lbtn = 0;
         }
-        if (g < 0 || quit) { do_save(wpath, &pl, seed, tod); break; }
+        if (g < 0) { do_save(wpath, &pl, seed, tod); break; }   /* the desktop is gone: save if it can, and go */
+        if (quit) {                                               /* Esc or the close box: save, then go */
+            if (do_save(wpath, &pl, seed, tod) == 0 || unsaved) break;
+            unsaved = 1;                                          /* (v0.60.202) not without saying so */
+            sys_note("Mincecraft: could not save; Esc again to quit");
+            eprint("[mincecraft] unsaved, Esc again to quit\n");
+        }
         unsigned char k[32];
         if (sys_win_keys(win, k) < 0) for (int i = 0; i < 32; i++) k[i] = 0;
         input_t in = { key_held(k, SC_W) - key_held(k, SC_S), key_held(k, SC_D) - key_held(k, SC_A),
@@ -204,6 +234,10 @@ int main(void) {
         hud_draw(body, &pl, &tg, tod);
         sys_win_put(win, body);
         frames++;
+        /* About 33 frames a second (v0.60.202): the desktop draws the
+         * window about 30 times a second, so faster only burns the CPU. */
+        unsigned spent = sys_ticks() - now;
+        if (spent < 3) sys_sleep((3 - spent) * 10);
         if (now - fps_t >= 500) { eprint("[mincecraft] fps="); eprint_u((unsigned)(frames * 100 / (int)(now - fps_t))); eprint("\n"); frames = 0; fps_t = now; }
     }
     eprint("[mincecraft] bye\n");

@@ -57,7 +57,7 @@ for n in ('flat', 'view', 'night'):
     log = open(f'{work}/serial-{n}.log', 'rb').read().decode('latin-1')
     check('[mincecraft] window up' in log, f'{n}: the window opened')
     fps = [int(v) for v in re.findall(r'\[mincecraft\] fps=(\d+)', log)]
-    check(fps and max(fps) >= 5, f'{n}: fps markers {fps}, 5 or more')
+    check(fps and max(fps) >= 5 and max(fps) <= 35, f'{n}: fps markers {fps}, 5 to 35 (v0.60.202: held to the desktop\'s ~30 draws a second)')
     check('[mincecraft] bye' in log, f'{n}: Esc ended it')
 f = ppm('flat')
 top = [body(f, x, y) for y in range(4) for x in range(0, 640, 8)]
