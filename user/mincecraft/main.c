@@ -234,6 +234,16 @@ int main(void) {
             else if (ev.type == WEV_KEY && ev.key == 'm') eprint("[mincecraft] mark\n");
             else if (ev.type == WEV_KEY && ev.key == 'p') do_save(wpath, &pl, seed, tod);
             else if (ev.type == WEV_KEY && ev.key == 'c') { int ids[9], n = hotbar(&pl, ids); craft(&pl, pl.slot < n ? ids[pl.slot] : 0, inv_last); }
+            else if (ev.type == WEV_KEY && ev.key == 'e') {      /* (v0.60.224) eat what is in hand */
+                int ids[9], n = hotbar(&pl, ids), id = pl.slot < n ? ids[pl.slot] : 0;
+                int r = player_eat(&pl, id);
+                if (r > 0) {
+                    eprint("[mincecraft] ate "); eprint(blocks[id].name); eprint(" hearts="); eprint_u((unsigned)pl.hp); eprint("\n");
+                    sys_tone(360, 90);                               /* a crunch */
+                    inv_marker(&pl, inv_last);
+                } else if (r == 0) { sys_note("Mincecraft: not hungry"); eprint("[mincecraft] not hungry\n"); }
+                else { sys_note("Mincecraft: not food"); eprint("[mincecraft] not food\n"); }
+            }
             else if (ev.type == WEV_KEY && ev.key >= '1' && ev.key <= '9') pl.slot = (int)ev.key - '1';
             else if (ev.type == WEV_WHEEL) pl.slot = ((pl.slot + (int)ev.key) % 9 + 9) % 9;
             else if (ev.type == WEV_KEY && (ev.key == 'r' || ev.key == 'q')) {

@@ -66,7 +66,7 @@ Test: a 200-line file, each key's screen read back (the first line number
 shown, the cursor's line), the numbers worked out from neovim's (its
 `line('w0')` and `line('.')` at 28 rows).
 
-## 3. Mincecraft: eating
+## 3. Mincecraft: eating — DONE v0.60.224
 
 e eats the food in hand: a heart back for sugar, two for butter, three
 for a floret; not past ten, nothing eaten at ten ("not hungry"), crust or
@@ -118,3 +118,7 @@ that pins it; if it is not, find why.
   secret, was lost while the login was checked. If it comes back, wait for
   the first prompt (UNTIL) before the first line, in every test that types
   straight after logging in.
+
+- 2026-10-12 (queue 60 item 3): toast (crafted from a stalk) is not food
+  yet; the queue named only sugar, butter and florets. Making it the best
+  food (four hearts, say) would give crafting a reason; a later item.

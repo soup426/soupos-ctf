@@ -3,7 +3,7 @@
 ## What this is
 
 soupOS is a 32-bit x86 hobby OS written in C and NASM assembly (currently
-**v0.60.223**; ROADMAP.txt is the authority on the version). It boots via GRUB and runs in protected mode with paging, a
+**v0.60.224**; ROADMAP.txt is the authority on the version). It boots via GRUB and runs in protected mode with paging, a
 physical/heap allocator, and a cooperative scheduler. On top of that:
 
 - **Filesystem**: FAT16 read/write with subdirectories ("bowls") and a VFS shim
@@ -960,7 +960,9 @@ Controls: W A S D walk, arrows (or a right-button drag) look, space jumps (held 
 `SYS_WIN_KEYS`, so only while its window has the focus); F or the left button
 held breaks, r or q places, 1-9 or the wheel pick the slot; P saves, Esc or the
 close box saves and quits, c crafts (stalk to toast, parmesan to a grater,
-butter to tealights). A kill does NOT save. Flags: `-seed N -flat -gen
+butter to tealights), e eats (sugar 1 heart, butter 2, a floret 3; v0.60.224);
+ten hearts, a fall past 3 blocks takes one a block (broth breaks it), at none the
+cook wakes at the spawn (v0.60.221). A kill does NOT save. Flags: `-seed N -flat -gen
 -wait -script -time T -world PATH -check`. The world file is `$HOME/mincecraft.wld`
 (HOME since v0.60.191) unless `-world`: "MINC", version 4, seed, time, x y z
 yaw pitch, 14 counts (11 in versions 1 and 2), the hearts 1..10 (v0.60.221; none
