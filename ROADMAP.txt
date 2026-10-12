@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.222
+Current version: v0.60.223
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,17 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.223 (2026-10-12)  — NEOSIM: PAGING
+  - Ctrl-D and Ctrl-U scroll half the screen (14 lines; a count before
+    them is the amount from then on), the cursor going with the text;
+    Ctrl-F and Ctrl-B a screen less two, the cursor to the new top or
+    bottom row (Ctrl-F with the end on screen puts the last line at the
+    top); zz zt zb put the cursor's line in the middle, top, bottom. All
+    as neovim's with scrolloff 0, and listed on :help.
+  - scripts/neosim-page-test.sh: 29 cases on a 200-line file, the first
+    line shown and the cursor's line read off the screen, against neovim
+    0.12.5's line('w0') and line('.') at 28 rows.
 
 v0.60.222 (2026-10-12)  — NEOSIM: f t F T ; , r ~
   - f t F T and a character go to it (t and T stop beside it) on the

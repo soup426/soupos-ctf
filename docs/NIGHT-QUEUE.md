@@ -58,7 +58,7 @@ reverse the last; as motions (dt, cf); r and a character replaces (a count
 replaces that many, none if the line is short); ~ toggles case and moves on.
 Test: cases against neovim's, as neosim-ops-test.
 
-## 2. neosim: paging
+## 2. neosim: paging — DONE v0.60.223
 
 Ctrl-D and Ctrl-U half a screen (the cursor goes with the text), Ctrl-F and
 Ctrl-B a screen, zz zt zb put the cursor's line in the middle, top, bottom.

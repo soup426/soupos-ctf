@@ -9,7 +9,8 @@
  * the operators d c y with a motion, dd cc yy, D C; x X, p P, J; u and
  * Ctrl-R; > < (four spaces); / ? n N (plain text); v V with d y c > <; .;
  * % to the matching bracket; Enter, o and O keep the indent (v0.60.218);
- * :help, a read-only page of all this (v0.60.219); f t F T ; , r ~ (v0.60.222)
+ * :help, a read-only page of all this (v0.60.219); f t F T ; , r ~ (v0.60.222);
+ * Ctrl-D Ctrl-U Ctrl-F Ctrl-B, zz zt zb (v0.60.223)
  * (v0.60.206); i a A I o O into insert mode; : for a command. Insert mode:
  * typing, Enter, Backspace (joining lines at the start of one), Tab as four
  * spaces, the arrows, Esc back. Commands: :w [FILE], :q, :q!, :wq, :x,
@@ -453,7 +454,7 @@ static void join(int cnt) {
 }
 
 /* ---- normal mode: a count, an operator waiting, a g waiting ---- */
-static struct { int count, op, opcount, ophad, g, gcount, ghad, wait, wcount, whad; } P;   /* wait: f t F T r for a character */
+static struct { int count, op, opcount, ophad, g, gcount, ghad, wait, wcount, whad, z; } P;   /* wait: f t F T r for a character */
 static void replace_chars(int ch, int cnt) {        /* r (v0.60.222): none if the line is too short */
     if (E.cx + cnt > len()) return;
     change_begin();
@@ -470,6 +471,36 @@ static void toggle_case(int cnt) {                   /* ~ (v0.60.222), on to the
         E.t.s[E.cy][i] = c;
     }
     E.cx = imin(end, len() - 1); E.want = E.cx;
+}
+/* Paging (v0.60.223), as neovim's with scrolloff 0: Ctrl-D Ctrl-U scroll
+ * half (14, or the count, which is kept), the cursor going with the text;
+ * Ctrl-F Ctrl-B a screen less two, the cursor to the new top or bottom row;
+ * zz zt zb put the cursor's line in the middle, top, bottom. */
+static int half = TEXT_ROWS / 2;
+static void page(int k, int cnt, int had) {
+    int last = E.t.n - 1;
+    if (k == 4 || k == 0x15) {
+        if (had) half = cnt;
+        if (k == 4) {
+            int maxtop = imax(last - TEXT_ROWS + 1, 0);
+            if (E.cy == last) return;
+            if (E.top < maxtop) E.top = imin(E.top + half, maxtop);
+            E.cy = imin(E.cy + half, last);
+        } else {
+            if (E.cy == 0) return;
+            E.top = imax(E.top - half, 0);
+            E.cy = imax(E.cy - half, 0);
+        }
+    } else if (k == 6) {
+        if (E.top >= last) return;
+        E.top = E.top + TEXT_ROWS - 1 >= last ? last : imin(E.top + TEXT_ROWS - 2, last);   /* the end on screen: it goes to the top */
+        E.cy = E.top;
+    } else if (k == 2) {
+        if (E.top == 0) return;
+        E.top = imax(E.top - (TEXT_ROWS - 2), 0);
+        E.cy = imin(E.top + TEXT_ROWS - 1, last);
+    }
+    E.cx = E.want; clamp();
 }
 static void normal_key(unsigned k) {
     if (P.wait) {                                   /* the character after f t F T r */
@@ -493,6 +524,15 @@ static void normal_key(unsigned k) {
     if ((k >= '1' && k <= '9') || (k == '0' && P.count)) { P.count = P.count * 10 + (int)(k - '0'); if (P.count > 99999) P.count = 99999; return; }
     int had = P.count > 0, cnt = had ? P.count : 1;
     P.count = 0;
+    if (P.z) {                                      /* (v0.60.223) z then: zz zt zb */
+        P.z = 0;
+        if (k == 'z') E.top = imax(E.cy - (TEXT_ROWS / 2 - 1), 0);
+        else if (k == 't') E.top = E.cy;
+        else if (k == 'b') E.top = imax(E.cy - TEXT_ROWS + 1, 0);
+        return;
+    }
+    if (!P.op && (k == 4 || k == 0x15 || k == 6 || k == 2)) { page((int)k, cnt, had); return; }
+    if (!P.op && !P.g && k == 'z') { P.z = 1; return; }
     if (P.g) {                                      /* g then: only gg */
         P.g = 0;
         if (k != 'g') { P.op = 0; return; }
@@ -601,7 +641,7 @@ static void help_key(unsigned k) {                  /* (v0.60.219) the help page
     else if (k == 'q') E.help = 0;
     else if (k != 27) msg(E21, 0, 0);
 }
-static int idle(void) { return E.mode == M_NORMAL && !P.count && !P.op && !P.g && !P.wait; }
+static int idle(void) { return E.mode == M_NORMAL && !P.count && !P.op && !P.g && !P.wait && !P.z; }
 static int key(unsigned k) {                        /* 1: end neosim */
     if (!replaying) {                               /* the keys of a change, for . */
         if (idle() && k == '.') { E.msg[0] = 0; dot(); return 0; }
