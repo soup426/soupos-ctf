@@ -52,7 +52,7 @@ not seen it.
 
 ---
 
-## 1. The full check's time, the desktop tests
+## 1. The full check's time, the desktop tests — DONE v0.60.246 (another way: 418 s to 292 s)
 
 418 s under timeout 590 again. The ct*-test scripts are 40 tests and the
 biggest share of the sum (2403 s of 12123 at queue 64). Measure first:
@@ -79,6 +79,13 @@ Space twice quickly toggles flying: no fall, Space up and Shift down,
 walking as before; landing ends it. Saved in the world file (version 5).
 Test: the markers' y across a double space, a held space, a held Shift;
 a save and load keeps it.
+
+**Ruling (item 1):** the waits were not the lever. Measured, the CPU sat
+75% idle through a full check and the desktop tests' waits were worth some
+30 s of the total; running more tests at once was worth 126 s and changes
+no test, so that is what was done. The waits stay as they are. Cost if
+wrong: heavier load could bring out timing flakes the old pace hid; three
+full checks at 48 passed.
 
 ## Notes left by unattended runs
 

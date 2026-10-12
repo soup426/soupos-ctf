@@ -51,12 +51,20 @@ fi
 # ── 1. everything else, at once ──────────────────────────────────────────────
 # A job writes its exit status to $WORK/<name>.status when done.
 #
-# At most CHECK_JOBS at a time (2026-10-09; default twice the cores). All
+# At most CHECK_JOBS at a time (2026-10-09; the default below). All
 # ~200 at once is ~200 QEMUs of 128 MB each, which is what made the laptop
 # unusable and would overrun the 8 GB of the test container on atlas
 # (scripts/remote-check.sh). A job's time in its .status is its own, from
 # when it started, not from when it was queued.
-JOBS=${CHECK_JOBS:-$(( $(nproc) * 2 ))}
+# (2026-10-12, v0.60.246) three times the cores, no more than a job for each
+# 256 MB free: the tests mostly wait (a full check left the CPU 75% idle at
+# twice the cores), so 48 here took it from 418 s to 292 s, three runs alike,
+# 13 GB still free at the least. The memory cap keeps the 8 GB container on
+# atlas inside itself.
+MEM_JOBS=$(awk '/^MemAvailable:/ { print int($2 / 262144) }' /proc/meminfo 2>/dev/null)
+JOBS=$(( $(nproc) * 3 ))
+[ -n "${MEM_JOBS:-}" ] && [ "$MEM_JOBS" -ge 1 ] && [ "$MEM_JOBS" -lt "$JOBS" ] && JOBS=$MEM_JOBS
+JOBS=${CHECK_JOBS:-$JOBS}
 TIMES=${CHECK_TIMES:-$HOME/.cache/soupos-check-times}   # "name seconds", the last full run
 PIDS=()
 run() {                                   # run <name> <command...>
