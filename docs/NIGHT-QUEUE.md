@@ -435,13 +435,14 @@ Mincecraft; neosim and rx.c; Doom; tests, build and docs.)
 
 ## The order to work the review in
 
-1. The test harness first (R-T1, R-T2, R-T3, R-T4, R-T5, R-T6), so the
-   fixes after it are measured by tests that can fail.
+0. Item 0 first (the user asked for it directly: a text file's double
+   click opens neosim).
+1. The test harness (R-T1, R-T2, R-T3, R-T4, R-T5, R-T6), so the fixes
+   after it are measured by tests that can fail.
 2. Security: R-K1, R-K2, R-C1, R-C2.
 3. Kernel crashes any cook can cause: R-K5, R-K4, R-K3.
 4. Data loss: R-M1, R-M4, R-N3, R-N4, R-N5, R-N1, R-N2.
-5. Item 0 (neosim on a double click, the user's), then 0b Doom from R-D3,
-   R-D2, R-D4, R-D1 down.
+5. Item 0b, Doom, from R-D3, R-D2, R-D4, R-D1 down.
 6. The rest by severity, the area's mediums before the lows; items 1-9
    where they fit.
 
