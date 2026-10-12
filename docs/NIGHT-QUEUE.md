@@ -161,6 +161,42 @@ save on the host.
 (Added as the six reviewers report: kernel and shell; the desktop;
 Mincecraft; neosim and rx.c; Doom; tests, build and docs.)
 
+### Mincecraft (reviewer reproduced 1-3 on the host with the game's own C)
+
+- **R-M1 (high).** Flying has no ceiling (player.c fly branch); a save with
+  the feet above y 68 is refused on load (save.c:90), so the next start
+  makes a new world and its Esc saves over the real one. Fix: cap flight
+  (feet at most (WY+2)<<16) inside the load bound. Test: fly past 64, save,
+  reload.
+- **R-M2 (high).** Falling sugar lands in the cook's own cells (world.c
+  fall step); the cook is stuck, cannot aim at the sugar it is inside
+  (ray.c never tests the eye's cell), and jumping climbs up through solid
+  ceilings (move_y/x snap as if the hit came from the leading edge). Fix:
+  a fall stops where it would meet the player's box; moves leave the
+  position alone when the box already overlaps.
+- **R-M4 (medium).** A failed save over an existing world destroys it: fat
+  frees the old chain before writing and the fail path leaves the entry on
+  freed clusters (src/fat.c:1021, 1117). Fix: write PATH.tmp then replace,
+  or fat_write allocates before freeing.
+- **R-M5 (medium).** Only the first 9 kinds held can be chosen; 11 can be
+  held, so the grater and tealights can become unusable (player.c hotbar,
+  main.c). Fix: page the slots, or pin a slot to an id.
+- **R-M6 (low).** "The 16 nearest tealights" are the first 16 in scan order
+  (main.c:143); past 256 they are dropped silently. Fix: keep the 16
+  smallest distances.
+- **R-M7 (low).** Sugar sinking through broth leaves air holes for good
+  (world.c:99 writes air, not what was below). Fix: swap the two cells.
+- **R-M3 (low).** Space held under a 2-high ceiling hovers at +0.2 (move_y
+  leaves ground set on a blocked upward move). Fix: ground = 0 there.
+- **R-M10 (low).** The cloud drift is a signed int that overflows after
+  about 18 h of play (main.c:288). Fix: wrap it at a multiple of the
+  16-block region.
+- **R-M8 (test).** The health test's broth case passes if the boot never
+  loads the world. Fix: require the load and a y in the pool.
+- **R-M9 (test).** The save test checks only "loaded" for version 3 and 4
+  files, not the hearts and flying they should load with. Fix: -check
+  prints hearts= fly=; check them.
+
 ## Notes left by unattended runs
 
 
