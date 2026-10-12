@@ -55,7 +55,7 @@ seen it.
 
 ---
 
-## 1. neosim: a modal editor, the first part
+## 1. neosim: a modal editor, the first part — DONE v0.60.204
 
 The user's name, kept as asked (it simmers). A ring-3 program in a
 desktop window, `user/neosim/` with its own Makefile rule as Mincecraft

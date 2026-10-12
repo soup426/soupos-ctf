@@ -3,7 +3,7 @@
 ## What this is
 
 soupOS is a 32-bit x86 hobby OS written in C and NASM assembly (currently
-**v0.60.203**; ROADMAP.txt is the authority on the version). It boots via GRUB and runs in protected mode with paging, a
+**v0.60.204**; ROADMAP.txt is the authority on the version). It boots via GRUB and runs in protected mode with paging, a
 physical/heap allocator, and a cooperative scheduler. On top of that:
 
 - **Filesystem**: FAT16 read/write with subdirectories ("bowls") and a VFS shim
@@ -967,6 +967,15 @@ bad-sum file is refused (a new world; the file copied to PATH.bad first). SYS_CL
 close's result since v0.60.202: a file is written at its close, so check it. Memory:
 grid 1 MB + 640x480 body 1.2 MB + 320x240 buffer 0.3 MB stays under the
 4 MB `PROC_PAGE_CAP`. Tests: `mincecraft-{gen,view,play,save}-test.sh`.
+
+## neosim (v0.60.204)
+
+A modal editor after neovim, `user/neosim/` (its own Makefile rule, copied as
+`neosim.elf`): text.c the line buffer (a pool of 256-byte lines, 4096 of
+them), screen.c the 80x30-cell window, main.c the modes and : commands.
+Tests start it at the console with `-wait`, as Mincecraft's do, and read the
+screen against the font: the cursor is an underline in the font's empty
+bottom rows on purpose. Night queue 57 items 2 to 4 grow it.
 
 ## Homes (v0.52.2)
 

@@ -52,6 +52,16 @@ int  sys_win_keys(int id, unsigned char *out);   /* 32 bytes of held keys; 0, or
 #define SC_LEFT  0xCB
 #define SC_RIGHT 0xCD
 static inline int key_held(const unsigned char *k, int sc) { return (k[sc >> 3] >> (sc & 7)) & 1; }
+/* WEV_KEY codes past 255, as the kernel's keyboard.h has them (v0.60.204). */
+#define KEY_UP    256
+#define KEY_DOWN  257
+#define KEY_LEFT  258
+#define KEY_RIGHT 259
+#define KEY_DEL   260
+#define KEY_HOME  261
+#define KEY_END   262
+#define KEY_PGUP  263
+#define KEY_PGDN  264
 __attribute__((noreturn)) void sys_exit(int code);
 
 /* conveniences */

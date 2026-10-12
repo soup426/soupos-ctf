@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.203
+Current version: v0.60.204
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,25 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.204 (2026-10-11)  — NEOSIM: A MODAL EDITOR
+  - neosim.elf (user/neosim/, its own Makefile rule): an editor after
+    neovim in a window of its own, the user's name for it (it simmers).
+    cook neosim.elf FILE. 80 x 28 cells of text in the kernel's 8x16 font
+    with line numbers (the cursor's in amber) and ~ past the end, a status
+    line (the mode, the file, [+] when changed, line:column) and a command
+    line. Normal mode: h j k l and the arrows, i a A I o O, x, :. Insert
+    mode: typing, Enter, Backspace (joining lines), Tab as four spaces,
+    the arrows, Esc (the cursor back one, as vim's). Commands: :w [FILE],
+    :q (refused with changes, vim's E37 on the command line), :q!, :wq,
+    :x, :e[!] FILE. A missing file opens empty and is made at :w; lines
+    over 255 are cut at load, said so. The cursor is an underline in the
+    font's two empty rows, so it never hides a character.
+  - ulib has KEY_UP and the other codes past 255 that WEV_KEY carries.
+  - scripts/neosim-test.sh: a scripted edit (A O o x I, :wq) of a two-line
+    file against the expected bytes; the status line and the numbered
+    lines read back from screendumps against the font; :q refused and
+    said, :q! leaving the file as it was.
 
 v0.60.203 (2026-10-11)  — ALT+TAB YOU CAN SEE
   - While Alt is held after a Tab, a panel in the middle of the screen
