@@ -2,7 +2,7 @@
  * block from a pool (255 characters at most; longer lines are cut at load,
  * and the count is said). */
 #pragma once
-#define T_MAXL 4096
+#define T_MAXL 2048
 #define T_COLS 255
 typedef struct {
     char *s[T_MAXL];

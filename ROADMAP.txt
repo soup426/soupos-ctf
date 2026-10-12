@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.204
+Current version: v0.60.205
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,24 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.205 (2026-10-11)  — NEOSIM: COUNTS, OPERATORS, UNDO
+  - Counts before commands and motions (3j, 5x, 2dd, 2d3w); the motions
+    w b e (vim's three classes: blanks, keyword characters, the rest; an
+    empty line a word) 0 ^ $ gg G; the operators d c y with any of them,
+    dd cc yy, D C, cw as ce on a word, an operator's w stopping at the end
+    of the line. x X, p P (line-wise or character-wise, as the register
+    was filled, counts too), J and 3J (one space, none before a ")", none
+    onto an empty line).
+  - u and Ctrl-R through whole-text snapshots taken before each change
+    (an operator, x, p, J, a visit to insert mode; an empty visit leaves
+    none) in a 1 MB arena for undo and 512 KB for redo, the oldest going
+    when full. [+] goes when undo comes back to the text last written.
+  - The line pool is 2048 lines now (4096 left no room under the 4 MB of
+    pages a process may keep), the text, undo, register and window 3.3 MB.
+  - scripts/neosim-ops-test.sh: 33 cases, each against neovim 0.12.5
+    (nvim --clean --headless with the keys fed as typed, so undo steps are
+    as typed; the expected files are kept in the test).
 
 v0.60.204 (2026-10-11)  — NEOSIM: A MODAL EDITOR
   - neosim.elf (user/neosim/, its own Makefile rule): an editor after

@@ -15,5 +15,7 @@ typedef struct {
     char   cmd[80];            /* what is typed after : */
     int    cmdn;
     char   msg[80];            /* the command line's message, until the next key */
+    unsigned seq, saved, idgen;   /* (v0.60.205) the text's state, the one last written, the next id */
+    int    ins_dirty;          /* this visit to insert mode changed something */
 } ed_t;
 void screen_draw(const ed_t *e, unsigned *body);   /* 640x480 */

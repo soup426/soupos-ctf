@@ -71,7 +71,7 @@ the tests, which start it at the console with -wait before the desktop
 (insert, append, open lines, x, :wq) against the expected file; :q with
 changes refused; a screendump with the status line read against the font.
 
-## 2. neosim: counts, operators, undo
+## 2. neosim: counts, operators, undo — DONE v0.60.205
 
 w b e 0 ^ $ gg G and counts (3j, 5x, 2dd); d c y with a motion (dw, d$,
 cw, db), dd yy cc, p P (line-wise and character-wise registers), u and
