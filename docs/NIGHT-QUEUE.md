@@ -314,8 +314,7 @@ host twin of its logic where there is logic to check (rule 4's way).
   A1 references, + - * / and parentheses, SUM/AVG/MIN/MAX over ranges,
   recalculation in dependency order, a cycle shown as #LOOP. Saves to and
   opens CSV, so the text tools read it. Test: the formula engine on the
-  host against cases with known answers (and LibreOffice-free: the
-  answers are written in the test), a sheet saved and read back in QEMU.
+  host against cases with known answers written in the test, a sheet saved and read back in QEMU.
 - **17. kettle.elf: a sound player.** WAV (PCM, 8/16-bit, mono/stereo,
   resampled to the mixer's rate) with a level meter and a seek bar.
   Measure first: there is no audio syscall for cooks (whistle and hum
@@ -327,6 +326,35 @@ host twin of its logic where there is logic to check (rule 4's way).
   buffer per channel, the topic and names list. Test: a small IRC server
   on the host (a python script in scripts/), a conversation replayed and
   both sides checked. TLS (port 6697) once 11c is in.
+
+## 19-21. Three more programs (the user, 2026-10-12)
+
+Rule 14 closed two of the five suggested unbuilt: a screenshot is
+already Print Screen's plateN.bmp (v0.60.185), and the settings panel is
+the spice rack (v0.60.188, clock 12/24 included). What was left of the
+settings idea is a spice rack row for item 10's trap (on, off), in item
+10's commit.
+
+- **19. cookbook.elf: a recipe box.** Recipes as plain text files in
+  ~/recipes (a title, servings, ingredient lines "2 cup flour", steps),
+  a list on the left, the card on the right, a servings - + that scales
+  the amounts (fractions kept as fractions: 3/4 cup, not 0.75), and a
+  few recipes on the disk to start with. Test: the scaling on the host
+  against written answers (units, fractions, "a pinch" left alone), a
+  card opened and scaled in QEMU.
+- **20. Doom in a window.** Doom takes the whole screen; on the desktop
+  it opens in a window (320x200 at 2x, the status bar included), its
+  keys and mouse through SYS_WIN_* while focused, paused when
+  minimised. Measure first how Doom draws today (doom.c in the kernel,
+  not a cook) and what moving its output into a window costs per frame;
+  if it must become a cook first, that is its own commit. Test: a timedemo
+  in a window, frames in the markers, the console's full-screen Doom
+  unchanged.
+- **21. flapjack.elf: Pong over the network.** Two soupOS machines, a
+  pancake between two pans. After 11a; UDP is simpler and enough (the
+  host's ball, the guest's paddle, a frame number on every packet, late
+  ones dropped); one machine alone plays the computer. Test: two QEMUs on
+  a QEMU socket network, a scripted rally, both sides' scores agreeing.
 
 ## Review findings (2026-10-12)
 
@@ -561,6 +589,7 @@ Mincecraft; neosim and rx.c; Doom; tests, build and docs.)
    11 is a long one, its stages one commit each.
 8. Items 12-18 between Roux's stages, smallest first (popcorn,
    noodle, layercake); 18 waits on 11a.
+9. Items 19-21 with them; 21 waits on 11a, 20 is measured first.
 
 ## Notes left by unattended runs
 
