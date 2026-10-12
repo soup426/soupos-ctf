@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.246
+Current version: v0.60.247
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,22 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.247 (2026-10-12)  — NEOSIM: RANGES, :g, :sort
+  - Ranges before a command: % the whole text, N . $ a line, two of them
+    with a comma (:2,4d :.,$s/a/b/ :3 to go there); :d deletes lines as dd
+    does (the register too).
+  - :g/pat/cmd, :g!/pat/cmd and :v/pat/cmd run cmd (d, s/../../, normal
+    KEYS) on each line that matches (or not), the whole text unless a
+    range says; the lines are marked first and the marks move as lines are
+    put in or taken out, so a d does not skip the next one. :normal KEYS
+    on its own runs the keys on each line of its range, an insert left
+    open ended. Either is one undo step.
+  - :sort, :sort! (reversed), n (by the first number on each line, lines
+    without one first), u (one of each run alike); stable, so lines that
+    sort alike keep their order, as neovim's. One undo step.
+  - scripts/neosim-global-test.sh: 23 cases against neovim 0.12.5 (3 on
+    the neosim before). Listed on :help.
 
 v0.60.246 (2026-10-12)  — THE FULL CHECK, 418 S TO 292 S
   - Measured before cutting waits: during a full check at twice the cores

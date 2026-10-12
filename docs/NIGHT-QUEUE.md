@@ -61,7 +61,7 @@ wait for a [countertop] line instead (open, close, kitchen, ...). Change
 those, the same keys and checks; the numbers before and after; every
 changed test still fails when its feature is taken away (spot-check two).
 
-## 2. neosim: :g and :sort
+## 2. neosim: :g and :sort — DONE v0.60.247
 
 :g/pat/cmd and :v/pat/cmd over the lines matching (or not) with d, s,
 normal-mode keys after :normal; :sort (and :sort!, :sort n, :sort u) over

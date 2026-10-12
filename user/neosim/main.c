@@ -14,7 +14,7 @@
  * text objects iw aw i" a" i( a( i{ a{ ... (v0.60.227); marks m ' ` (v0.60.231);
  * gu gU g~ and in visual u U ~ (v0.60.232); counts on inserts, 3. (v0.60.234);
  * paragraphs { } ip ap (v0.60.235); :set nu rnu (v0.60.236); registers "a-"z "0 "1-"9 (v0.60.240);
- * macros q @ @@ (v0.60.241)
+ * macros q @ @@ (v0.60.241); ranges, :d :g :v :normal :sort (v0.60.247)
  * (v0.60.206); i a A I o O into insert mode; : for a command. Insert mode:
  * typing, Enter, Backspace (joining lines at the start of one), Tab as four
  * spaces, the arrows, Esc back. Commands: :w [FILE], :q, :q!, :wq, :x,
@@ -63,6 +63,9 @@ static int lenof(int y) { return E.t.len[y]; }
 static int imin(int a, int b) { return a < b ? a : b; }
 static int imax(int a, int b) { return a > b ? a : b; }
 static struct { int y, x, set; } marks[26];      /* (v0.60.231) m a .. m z */
+static char gmark[T_MAXL + 1];                       /* (v0.60.247) :g's lines still to do; moved as lines move */
+static int g_active;
+static void op_lines(int op, int a, int b);
 static void clamp(void) {
     if (E.cy >= E.t.n) E.cy = E.t.n - 1;
     if (E.cy < 0) E.cy = 0;
@@ -338,6 +341,99 @@ static int write_file(const char *path) {
     return 0;
 }
 static const char E21[] = "E21: Cannot make changes, 'modifiable' is off";
+/* ---- :g :v :normal :sort and ranges (v0.60.247) ---- */
+static int range_line(char **pc, int *out) {         /* N . or $, as a line index; 0 if none */
+    char *c = *pc;
+    if (*c == '.') { *out = E.cy; c++; }
+    else if (*c == '$') { *out = E.t.n - 1; c++; }
+    else if (*c >= '0' && *c <= '9') { int n = 0; while (*c >= '0' && *c <= '9') n = n * 10 + (*c++ - '0'); *out = n - 1; }
+    else return 0;
+    *pc = c;
+    return 1;
+}
+static int command(char *c);
+static int key(unsigned k);
+static void normal_cmd(int a, int b, const char *keys) {
+    int outer = !grouping;
+    if (outer) { grouping = 1; group_pushed = 0; }
+    for (int y = a; y <= b && y < E.t.n; y++) {
+        E.cy = y; E.cx = 0; E.want = 0; E.mode = M_NORMAL;
+        for (const char *q = keys; *q; q++) key((unsigned)(unsigned char)*q);
+        if (E.mode != M_NORMAL) key(27);             /* an insert not ended is ended */
+    }
+    if (outer) grouping = 0;
+}
+static void global_cmd(int a, int b, int inv, char *spec) {
+    char *pat = spec, *cmd = spec;
+    while (*cmd && *cmd != '/') { if (*cmd == '\\' && cmd[1]) cmd++; cmd++; }
+    if (*cmd) *cmd++ = 0;
+    if (!pat[0]) { if (!last_pat[0]) { msg("E35: No previous regular expression", 0, 0); return; } pat = last_pat; }
+    else scopy(last_pat, pat, sizeof(last_pat));
+    if (pat_compile(pat) < 0) { msg("E486: Pattern not found: ", pat, 0); return; }
+    int any = 0, s0, e0;
+    for (int y = 0; y < E.t.n; y++) {
+        int m = y >= a && y <= b && (rx_at(y, 0, &s0, &e0) != inv);
+        gmark[y] = (char)m; any |= m;
+    }
+    if (!any) { msg("E486: Pattern not found: ", pat, 0); return; }
+    char saved[80];
+    scopy(saved, cmd, sizeof(saved));
+    int outer = !grouping;
+    if (outer) { grouping = 1; group_pushed = 0; }
+    g_active = 1;
+    for (;;) {                                       /* the first line still marked, each time */
+        int y = 0;
+        while (y < E.t.n && !gmark[y]) y++;
+        if (y >= E.t.n) break;
+        gmark[y] = 0;
+        E.cy = y; E.cx = 0; E.want = 0;
+        char one[80];
+        scopy(one, saved, sizeof(one));
+        command(one[0] ? one : (char[]){ 'p', 0 });
+    }
+    g_active = 0;
+    if (outer) grouping = 0;
+}
+static int first_num(int y, int *v) {                /* the first decimal number on the line, a - before it kept */
+    const char *t = E.t.s[y]; int n = lenof(y);
+    for (int i = 0; i < n; i++) if (t[i] >= '0' && t[i] <= '9') {
+        int neg = i > 0 && t[i - 1] == '-', x = 0;
+        while (i < n && t[i] >= '0' && t[i] <= '9') x = x * 10 + (t[i++] - '0');
+        *v = neg ? -x : x; return 1;
+    }
+    return 0;
+}
+static int line_cmp(int y1, int y2, int num) {       /* <0 0 >0, as sort compares two lines */
+    if (num) {
+        int a, b, ha = first_num(y1, &a), hb = first_num(y2, &b);
+        if (!ha || !hb) return ha - hb;              /* no number: before those with one */
+        return a < b ? -1 : a > b;
+    }
+    int la = lenof(y1), lb = lenof(y2);
+    for (int i = 0; i < la && i < lb; i++) {
+        unsigned char p = (unsigned char)E.t.s[y1][i], q = (unsigned char)E.t.s[y2][i];
+        if (p != q) return p < q ? -1 : 1;
+    }
+    return la - lb;
+}
+static void line_swap(int y1, int y2) { char *t = E.t.s[y1]; E.t.s[y1] = E.t.s[y2]; E.t.s[y2] = t; int l = E.t.len[y1]; E.t.len[y1] = E.t.len[y2]; E.t.len[y2] = l; }
+static void sort_cmd(int a, int b, const char *c) {
+    int rev = 0, num = 0, uniq = 0;
+    while (*c && *c != ' ' && *c != '!') c++;
+    if (*c == '!') { rev = 1; c++; }
+    for (; *c; c++) { if (*c == 'n') num = 1; else if (*c == 'u') uniq = 1; }
+    change_begin();
+    for (int i = a + 1; i <= b; i++)                 /* insertion: stable, so equal lines keep their order */
+        for (int j = i; j > a; j--) {
+            int d = line_cmp(j - 1, j, num);
+            if (rev ? d < 0 : d > 0) line_swap(j - 1, j); else break;
+        }
+    if (uniq)
+        for (int y = a + 1; y <= b; ) {
+            if (line_cmp(y - 1, y, 0) == 0) { text_delete_line(&E.t, y); b--; } else y++;
+        }
+    E.cy = a; E.cx = 0; clamp(); E.want = E.cx;
+}
 /* :reg (v0.60.240): the registers as neovim's :registers lists them, on the
  * read-only page :help uses: "Type Name Content", then "" "0-"9 "a-"z that
  * hold anything, l lines or c characters, a new line as ^J. */
@@ -373,10 +469,38 @@ static int command(char *c) {                        /* 1: end neosim */
         if (!(c[0] == 'e' && (c[1] == ' ' || c[1] == '!'))) { msg(E21, 0, 0); return 0; }
         E.help = 0;
     }
-    if ((c[0] == 's' && c[1] == '/') || (c[0] == '%' && c[1] == 's' && c[2] == '/')) {   /* :s keeps its spaces */
-        if (c[0] == 's') substitute(E.cy, E.cy, c + 2); else substitute(0, E.t.n - 1, c + 3);
+    /* A range (v0.60.247): % the whole text, N . $ a line, two of them with
+     * a comma; then s/ d sort normal, and g/ v/ g!/ (whole text by default). */
+    int ra = E.cy, rb = E.cy, ranged = 0;
+    if (*c == '%') { ra = 0; rb = E.t.n - 1; c++; ranged = 1; }
+    else if ((*c >= '0' && *c <= '9') || *c == '.' || *c == '$') {
+        ranged = 1;
+        if (!range_line(&c, &ra)) { msg("E16: Invalid range", 0, 0); return 0; }
+        rb = ra;
+        if (*c == ',') { c++; if (!range_line(&c, &rb)) { msg("E16: Invalid range", 0, 0); return 0; } }
+        if (ra > rb) { int t = ra; ra = rb; rb = t; }
+        if (ra < 0 || rb >= E.t.n) { msg("E16: Invalid range", 0, 0); return 0; }
+    }
+    if (c[0] == 's' && c[1] == '/') { substitute(ra, rb, c + 2); return 0; }   /* :s keeps its spaces */
+    if ((c[0] == 'g' || c[0] == 'v') && (c[1] == '/' || (c[0] == 'g' && c[1] == '!' && c[2] == '/'))) {
+        int inv = c[0] == 'v' || c[1] == '!';
+        if (!ranged) { ra = 0; rb = E.t.n - 1; }
+        global_cmd(ra, rb, inv, c + (c[1] == '!' ? 3 : 2));
         return 0;
     }
+    if (c[0] == 'n' && c[1] == 'o' && c[2] == 'r' && c[3] == 'm') {   /* :norm :normal KEYS */
+        char *k = c; while (*k && *k != ' ') k++;
+        while (*k == ' ') k++;
+        normal_cmd(ra, rb, k);
+        return 0;
+    }
+    if (same(c, "d") || same(c, "delete")) { op_lines('d', ra, rb); return 0; }   /* :d, the cursor's line without a range */
+    if (c[0] == 's' && c[1] == 'o' && c[2] == 'r') {                   /* :sort[!] [n] [u] */
+        if (!ranged) { ra = 0; rb = E.t.n - 1; }
+        sort_cmd(ra, rb, c);
+        return 0;
+    }
+    if (ranged && !*c) { E.cy = rb; E.cx = first_nonblank(&E.t, rb); E.want = E.cx; return 0; }   /* :N goes there */
     char *arg = c;
     while (*arg && *arg != ' ') arg++;
     if (*arg) { *arg++ = 0; while (*arg == ' ') arg++; }
@@ -483,6 +607,10 @@ typedef struct { int ok, y, x, line, incl; } mv_t;
  * to its place. They move with lines put in or taken out above them; a
  * mark on a line taken out is gone, on a line joined it goes along. */
 static void marks_lines(int at, int delta, int join_col) {
+    if (g_active) {                                  /* (v0.60.247) :g's lines still to do move too */
+        if (delta > 0) { for (int i = E.t.n - 1; i > at; i--) gmark[i] = gmark[i - 1]; gmark[at] = 0; }
+        else { for (int i = at; i < E.t.n; i++) gmark[i] = gmark[i + 1]; gmark[E.t.n] = 0; }
+    }
     for (int i = 0; i < 26; i++) {
         if (!marks[i].set) continue;
         if (delta > 0) { if (marks[i].y >= at) marks[i].y++; }
