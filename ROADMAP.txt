@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.214
+Current version: v0.60.215
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,22 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.215 (2026-10-12)  — MINCECRAFT: CRAFTING
+  - c makes something from the hotbar's block: a broccoli stalk into four
+    toast (golden, crisp), two parmesan into a cheese grater (grey, rows
+    of holes), a butter into four tealights (wax, a flame on top; their
+    light is the next item). Said on the bar and in the log ("crafted 4
+    toast from 1 broccoli stalk", "need 2 parmesan", "nothing to make from
+    toast"), a short tone. The three are crafted only, never found.
+  - The world file is version 3: fourteen counts. Versions 1 and 2 (eleven
+    counts, a byte sum or a CRC) are still read.
+  - The flat test world has a broccoli stalk two high beside the spawn,
+    to the left, out of the other tests' way.
+  - scripts/mincecraft-craft-test.sh: the stalk mined and made toast, two
+    parmesan dug and made a grater, c on toast refused; the inventory in
+    the markers each time. mincecraft-save-test also loads a version 2
+    file and checks saves are version 3.
 
 v0.60.214 (2026-10-12)  — MINCECRAFT: LOOK WITH THE MOUSE
   - The desktop hands a right-button press in a program's body to the

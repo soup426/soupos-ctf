@@ -1,5 +1,5 @@
 /* save.c - the world file (v0.60.197), little-endian:
- *   "MINC", version 2, seed, time of day, x y z yaw pitch, B_COUNT counts
+ *   "MINC", version 3, seed, time of day, x y z yaw pitch, B_COUNT counts
  *   (32 bits each), the grid as (count 1..255, id) pairs, then the CRC-32
  *   of every byte before it (v0.60.209; version 1 files, with a byte sum
  *   there instead, are still read). Written and read through 4 KB, never whole: the
@@ -8,7 +8,7 @@
 #include "../ulib.h"
 #include "save.h"
 #include "world.h"
-#define VERSION 2
+#define VERSION 3                    /* (v0.60.215) B_COUNT counts; 1 and 2 had B_FOUND */
 static unsigned char io[4096];
 /* CRC-32 (the zlib one: reflected, 0xEDB88320, starting and ending all ones), a byte at a time. */
 static unsigned crc_table[256];
@@ -64,8 +64,10 @@ int load_world(const char *path, player_t *p, unsigned *seed, int *tod) {
     iolen = iopos = 0; iosum = 0; iocrc = 0xFFFFFFFFu;
     int bad = !(get() == 'M' && get() == 'I' && get() == 'N' && get() == 'C');
     for (int i = 0; i < 8 && !bad; i++) if (get32(&v[i]) < 0) bad = 1;
-    for (int i = 0; i < B_COUNT && !bad; i++) if (get32(&inv[i]) < 0 || inv[i] > 999) bad = 1;
-    if (!bad && ((v[0] != 1 && v[0] != VERSION) || v[2] >= 1200)) bad = 1;
+    if (!bad && ((v[0] < 1 || v[0] > VERSION) || v[2] >= 1200)) bad = 1;
+    int counts = v[0] >= 3 ? B_COUNT : B_FOUND;          /* crafted blocks came in version 3 */
+    for (int i = 0; i < B_COUNT; i++) inv[i] = 0;
+    for (int i = 0; i < counts && !bad; i++) if (get32(&inv[i]) < 0 || inv[i] > 999) bad = 1;
     for (int i = 0; i < WCELLS && !bad; ) {
         int n = get(), b = get();
         if (n <= 0 || b < 0 || b >= B_COUNT || i + n > WCELLS) { bad = 1; break; }

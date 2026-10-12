@@ -18,7 +18,9 @@
  * W A S D walk, the arrows look (or a right-button drag, v0.60.214), space jumps (all held, read through
  * SYS_WIN_KEYS at a fixed 20 ticks a second); F or the left button held
  * breaks what the crosshair is on (v0.60.195), r or q places the hotbar's
- * block on that face, 1 to 9 or the wheel choose the slot; P saves, Esc or
+ * block on that face, 1 to 9 or the wheel choose the slot; c crafts from the
+ * slot's block (v0.60.215: a stalk to four toast, two parmesan to a cheese
+ * grater, a butter to four tealights); P saves, Esc or
  * the close box saves and ends it (a kill does not save); if that save
  * fails it says so and a second Esc ends it unsaved (v0.60.202).
  *
@@ -99,6 +101,32 @@ static void keep_aside(const char *path) {
         if (sys_close(out) < 0) okay = 0;
     }
     eprint(okay ? "[mincecraft] kept " : "[mincecraft] could not keep "); eprint(path); eprint(" as "); eprint(dst); eprint("\n");
+}
+/* Crafting (v0.60.215): c on the hotbar's block. */
+static const struct { int from, need, to, makes; } recipes[] = {
+    { B_STALK, 1, B_TOAST, 4 }, { B_PARMESAN, 2, B_GRATER, 1 }, { B_BUTTER, 1, B_TEALIGHT, 4 },
+};
+static void craft(player_t *p, int id, unsigned short *inv_last) {
+    if (id <= 0) { sys_note("Mincecraft: nothing in hand"); eprint("[mincecraft] craft: nothing in hand\n"); return; }
+    for (unsigned r = 0; r < sizeof(recipes) / sizeof(recipes[0]); r++) {
+        if (recipes[r].from != id) continue;
+        if (p->inv[id] < recipes[r].need) {
+            eprint("[mincecraft] craft: need "); eprint_u((unsigned)recipes[r].need); eprint(" "); eprint(blocks[id].name); eprint("\n");
+            sys_note("Mincecraft: not enough for that");
+            return;
+        }
+        if (p->inv[recipes[r].to] + recipes[r].makes > 999) { sys_note("Mincecraft: no room in the hand"); return; }
+        p->inv[id] -= (unsigned short)recipes[r].need;
+        p->inv[recipes[r].to] += (unsigned short)recipes[r].makes;
+        eprint("[mincecraft] crafted "); eprint_u((unsigned)recipes[r].makes); eprint(" "); eprint(blocks[recipes[r].to].name);
+        eprint(" from "); eprint_u((unsigned)recipes[r].need); eprint(" "); eprint(blocks[id].name); eprint("\n");
+        sys_note("Mincecraft: crafted");
+        sys_tone(660, 50);
+        inv_marker(p, inv_last);
+        return;
+    }
+    eprint("[mincecraft] craft: nothing to make from "); eprint(blocks[id].name); eprint("\n");
+    sys_note("Mincecraft: nothing to make from that");
 }
 static int same(const char *a, const char *b) { while (*a && *a == *b) { a++; b++; } return *a == *b; }
 
@@ -185,6 +213,7 @@ int main(void) {
             if (ev.type == WEV_CLOSE || (ev.type == WEV_KEY && ev.key == 27)) quit = 1;
             else if (ev.type == WEV_KEY && ev.key == 'm') eprint("[mincecraft] mark\n");
             else if (ev.type == WEV_KEY && ev.key == 'p') do_save(wpath, &pl, seed, tod);
+            else if (ev.type == WEV_KEY && ev.key == 'c') { int ids[9], n = hotbar(&pl, ids); craft(&pl, pl.slot < n ? ids[pl.slot] : 0, inv_last); }
             else if (ev.type == WEV_KEY && ev.key >= '1' && ev.key <= '9') pl.slot = (int)ev.key - '1';
             else if (ev.type == WEV_WHEEL) pl.slot = ((pl.slot + (int)ev.key) % 9 + 9) % 9;
             else if (ev.type == WEV_KEY && (ev.key == 'r' || ev.key == 'q')) {

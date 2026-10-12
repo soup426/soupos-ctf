@@ -64,7 +64,7 @@ MOVE / UP with buttons bit 1), then Mincecraft turns and tilts by the drag
 cook (the yaw in the -script markers) and a left one still breaks; frost
 and the other window programs unchanged (their tests).
 
-## 2. Mincecraft: crafting
+## 2. Mincecraft: crafting — DONE v0.60.215
 
 The spec's first "later": c on the hotbar's broccoli stalk turns one into
 four of a new block, toast (golden, crisp), and c on parmesan two into a

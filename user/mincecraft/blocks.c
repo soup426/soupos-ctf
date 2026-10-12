@@ -13,6 +13,9 @@ const block_t blocks[B_COUNT] = {
     [B_FLORET]     = { "floret",         0x2F6B2A, 0x1D4A1A, 110, 1,  3 },
     [B_PEPPERCORN] = { "peppercorn",     0xEFE8C8, 0x1A1410,  40, 1, 24 },
     [B_BUTTER]     = { "butter",         0xF6DC6B, 0xEBCB52,  30, 1, 10 },
+    [B_TOAST]      = { "toast",          0xD9A55B, 0x8B5A2B,  60, 1,  8 },   /* (v0.60.215) */
+    [B_GRATER]     = { "cheese grater",  0xB8BCC4, 0x2A2D33,   0, 1, 15 },
+    [B_TEALIGHT]   = { "tealight",       0xF2F2EE, 0xFFB43C,   0, 1,  2 },
 };
 static unsigned tex_hash(int id, int face, int tx, int ty) {
     unsigned h = (unsigned)id * 73856093u ^ (unsigned)face * 19349663u
@@ -26,6 +29,11 @@ unsigned block_texel(int id, int face, int tx, int ty) {
     if (id == B_STALK && face != FACE_SIDE) {                     /* rings on the cut ends */
         int d = (2 * tx - 7) * (2 * tx - 7) + (2 * ty - 7) * (2 * ty - 7);
         return d >= 18 && d <= 34 ? b->alt : b->base;
+    }
+    if (id == B_GRATER) return (tx % 3 == 1 && ty % 3 == 1) ? b->alt : b->base;       /* rows of holes */
+    if (id == B_TEALIGHT) {                                                         /* wax, a flame on top */
+        if (face == FACE_TOP) { int d = (2 * tx - 7) * (2 * tx - 7) + (2 * ty - 7) * (2 * ty - 7); return d <= 10 ? b->alt : b->base; }
+        return ty < 2 ? 0xC8C8C0u : b->base;
     }
     return tex_hash(id, face, tx, ty) < b->speck ? b->alt : b->base;
 }

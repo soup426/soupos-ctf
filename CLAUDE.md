@@ -3,7 +3,7 @@
 ## What this is
 
 soupOS is a 32-bit x86 hobby OS written in C and NASM assembly (currently
-**v0.60.214**; ROADMAP.txt is the authority on the version). It boots via GRUB and runs in protected mode with paging, a
+**v0.60.215**; ROADMAP.txt is the authority on the version). It boots via GRUB and runs in protected mode with paging, a
 physical/heap allocator, and a cooperative scheduler. On top of that:
 
 - **Filesystem**: FAT16 read/write with subdirectories ("bowls") and a VFS shim
@@ -959,10 +959,11 @@ the background before `countertop` with `-wait`.
 Controls: W A S D walk, arrows (or a right-button drag) look, space jumps (held keys come from
 `SYS_WIN_KEYS`, so only while its window has the focus); F or the left button
 held breaks, r or q places, 1-9 or the wheel pick the slot; P saves, Esc or the
-close box saves and quits. A kill does NOT save. Flags: `-seed N -flat -gen
+close box saves and quits, c crafts (stalk to toast, parmesan to a grater,
+butter to tealights). A kill does NOT save. Flags: `-seed N -flat -gen
 -wait -script -time T -world PATH -check`. The world file is `$HOME/mincecraft.wld`
-(HOME since v0.60.191) unless `-world`: "MINC", version 2, seed, time, x y z
-yaw pitch, 11 counts (32 bits each, little-endian), the grid as (count, id)
+(HOME since v0.60.191) unless `-world`: "MINC", version 3, seed, time, x y z
+yaw pitch, 14 counts (11 in versions 1 and 2; 32 bits each, little-endian), the grid as (count, id)
 runs, then the CRC-32 (zlib's) of every byte before it (version 1: a byte sum,
 still read); a short, long, other-version or bad-check file is refused (a new world; the file copied to PATH.bad first). SYS_CLOSE returns the
 close's result since v0.60.202: a file is written at its close, so check it. Memory:

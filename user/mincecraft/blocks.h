@@ -1,7 +1,10 @@
 /* blocks.h - what the world is made of (v0.60.192). */
 #pragma once
 enum { B_AIR, B_CRUST, B_CRUMB, B_PARMESAN, B_CASTIRON, B_BROTH, B_SUGAR,
-       B_STALK, B_FLORET, B_PEPPERCORN, B_BUTTER, B_COUNT };
+       B_STALK, B_FLORET, B_PEPPERCORN, B_BUTTER,
+       B_TOAST, B_GRATER, B_TEALIGHT,          /* (v0.60.215) crafted, never found */
+       B_COUNT };
+#define B_FOUND 11                             /* the blocks before crafting: a version 1 or 2 file's counts */
 enum { FACE_TOP, FACE_BOTTOM, FACE_SIDE };
 typedef struct {
     const char   *name;
