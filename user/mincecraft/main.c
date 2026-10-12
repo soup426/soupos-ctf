@@ -158,6 +158,7 @@ int main(void) {
     for (int i = 0; i < argc; i++) {
         if (same(argv[i], "-gen")) gen_only = 1;
         else if (same(argv[i], "-flat")) flat = 1;
+        else if (same(argv[i], "-clear")) render_clouds = 0;   /* (v0.60.237) a clear sky, no clouds */
         else if (same(argv[i], "-wait")) wait = 1;
         else if (same(argv[i], "-seed") && i + 1 < argc) { seed = parse_u(argv[++i]); seeded = 1; }
         else if (same(argv[i], "-script")) script = 1;
@@ -283,6 +284,7 @@ int main(void) {
             ray_cast(cam.x, cam.y, cam.z, dx, dy, dz, 5 << 16, &tg);
             if (!hold_time && ++tt % 20 == 0) tod = (tod + 1) % 1200;
             world_fall_step(fell_marker);                          /* (v0.60.233) sugar a block a tick */
+            render_cloud_drift += 65536 / 40;                     /* (v0.60.237) half a block a second, whatever the clock */
             int was_wet = pl.wet;
             int broke = player_tick(&pl, &in, &tg);
             if (broke) {

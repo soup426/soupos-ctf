@@ -14,3 +14,5 @@ typedef struct { int x, y, z; } lamp_t;          /* a tealight's cell (v0.60.216
 /* lamps: up to 16 near the camera, their light added to the day's */
 void render(const cam_t *c, unsigned *body, int light, unsigned sky, const ray_t *target, int crack,
             const lamp_t *lamps, int nlamps);
+extern fx render_cloud_drift;   /* (v0.60.237) set before render(): the clouds' drift along x */
+extern int render_clouds;       /* (v0.60.237) 0: a clear sky */

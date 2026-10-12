@@ -13,6 +13,10 @@
 #define KPIX 287                         /* tan(35 degrees) / 160, 16.16: a 70-degree view */
 static unsigned *rbuf;
 static unsigned frame;                   /* for the broth's simmer */
+fx render_cloud_drift;                   /* (v0.60.237) how far the clouds have blown, along x */
+int render_clouds = 1;                   /* (v0.60.237) 0: a clear sky (-clear) */
+#define CLOUD_Y   (52 << 16)             /* the clouds' plane */
+#define CLOUD_COL 0xFFF4DCu              /* cream */
 #define BROTH_COL 0xB0661C               /* deeper than its texture: soup, not sand */
 #define OUTLINE   0x1A1208               /* the edges of the block aimed at */
 int render_alloc(void) {
@@ -61,6 +65,13 @@ void render(const cam_t *c, unsigned *body, int light, unsigned sky, const ray_t
         fx stx = fx_mul(rx, KPIX), stz = fx_mul(rz, KPIX);
         int sk = dy <= 0 ? 0 : dy >= 26214 ? 256 : dy / 102;       /* the row's sky, by how far up it looks */
         unsigned rowsky = mix(horizon, sky, sk);
+        /* Clouds (v0.60.237): where this row's rays meet y 52 (one divide a
+         * row: dy is the row's), cells 4 blocks wide, cloud where a 16-block
+         * region's cloudiness and the cell's own add up (about a fifth),
+         * fading into the horizon colour the lower they are seen. */
+        fx ct = render_clouds && dy > 2000 && c->y < CLOUD_Y ? fx_div(CLOUD_Y - c->y, dy) : 0;
+        int cfade = ct ? (dy >= 9000 ? 220 : (dy - 2000) * 220 / 7000) : 0;
+        unsigned ccol = shade(CLOUD_COL, 96 + (light * 160 >> 8));
         for (int px = 0; px < RW; px++, dx += stx, dz += stz) {
             ray_t r;
             unsigned col;
@@ -68,6 +79,13 @@ void render(const cam_t *c, unsigned *body, int light, unsigned sky, const ray_t
             ray_cast(c->x, c->y, c->z, dx, dy, dz, VIEW << 16, &r);
             if (!r.hit) {
                 col = rowsky;
+                if (ct) {
+                    int cx = (int)((c->x + fx_mul(dx, ct) + render_cloud_drift) >> 18), cz = (int)((c->z + fx_mul(dz, ct)) >> 18);
+                    unsigned h1 = (unsigned)(cx >> 2) * 73856093u ^ (unsigned)(cz >> 2) * 19349663u, h2 = (unsigned)cx * 83492791u ^ (unsigned)cz * 2654435761u;
+                    h1 ^= h1 >> 13; h1 *= 0x5bd1e995u; h1 ^= h1 >> 15;
+                    h2 ^= h2 >> 13; h2 *= 0x5bd1e995u; h2 ^= h2 >> 15;
+                    if ((h1 & 3) + (h2 & 3) >= 5) col = mix(col, ccol, cfade);   /* a cloudy region's cells, ragged at its edge */
+                }
                 if (light < 150 && sk > 64) {                     /* stars (v0.60.201), fixed in the sky as it turns: */
                     int az = c->yaw * 8 + (px - RW / 2) * 5, el = c->pitch * 8 + (RH / 2 - py) * 5;   /* 8ths of an angle unit */
                     unsigned h = (unsigned)(az >> 4) * 2654435761u ^ (unsigned)(el >> 4) * 40503u;

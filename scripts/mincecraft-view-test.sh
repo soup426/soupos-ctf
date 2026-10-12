@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # mincecraft-view-test.sh - Mincecraft's view (v0.60.193), from screendumps
 # of its 640x480 body (the first program window: 241,93 on the screen).
+# (v0.60.237) -clear: no clouds, so the sky's own colours are what is read.
 # Boot 1, the flat world at noon: the top rows are the noon sky exactly
 # (nothing above the eye), the bottom rows are crust (the ground three
 # blocks ahead), and the fps marker is there, 5 or more (check.sh runs
@@ -22,7 +23,7 @@ cleanup() { [ -n "$PID" ] && kill "$PID" 2>/dev/null; if [ "$fail" != 0 ] || [ "
 trap cleanup EXIT
 boot() {   # $1: name, $2: the arguments
     cp disk.img "$WORK/disk-$1.img"
-    local keys=("headchef" "rosemary" "WAIT:1" "cook mincecraft.elf $2 -wait &" "WAIT:1" "countertop" "WAIT:9"
+    local keys=("headchef" "rosemary" "WAIT:1" "cook mincecraft.elf $2 -clear -wait &" "WAIT:1" "countertop" "WAIT:9"
                 "MON:screendump $WORK/$1.ppm" "WAIT:1" "KEY:esc" "WAIT:2")
     qemu-system-i386 -accel kvm -cpu host -drive "file=$WORK/disk-$1.img,format=raw,if=ide,index=0" \
         -cdrom soupOS.iso -boot d -m 128M -no-reboot -no-shutdown -display none \

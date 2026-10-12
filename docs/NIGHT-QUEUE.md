@@ -70,7 +70,7 @@ other lines show their distance from the cursor's, the cursor's line its
 own number when nu is on too (0 when not), as neovim's. Test: a screen read
 back after each, the numbers worked out from neovim's rule.
 
-## 4. Mincecraft: clouds
+## 4. Mincecraft: clouds — DONE v0.60.237
 
 A layer of flat cream clouds high up (y 52), a fixed noise pattern that
 drifts with the time of day, drawn in the sky before the terrain and
