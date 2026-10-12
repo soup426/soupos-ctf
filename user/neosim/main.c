@@ -14,7 +14,7 @@
  * text objects iw aw i" a" i( a( i{ a{ ... (v0.60.227); marks m ' ` (v0.60.231);
  * gu gU g~ and in visual u U ~ (v0.60.232); counts on inserts, 3. (v0.60.234);
  * paragraphs { } ip ap (v0.60.235); :set nu rnu (v0.60.236); registers "a-"z "0 "1-"9 (v0.60.240);
- * macros q @ @@ (v0.60.241); ranges, :d :g :v :normal :sort (v0.60.247)
+ * macros q @ @@ (v0.60.241); ranges, :d :g :v :normal :sort (v0.60.247); Ctrl-A Ctrl-X (v0.60.248)
  * (v0.60.206); i a A I o O into insert mode; : for a command. Insert mode:
  * typing, Enter, Backspace (joining lines at the start of one), Tab as four
  * spaces, the arrows, Esc back. Commands: :w [FILE], :q, :q!, :wq, :x,
@@ -978,6 +978,48 @@ static void toggle_case(int cnt) {                   /* ~ (v0.60.222), on to the
     }
     E.cx = imin(end, len() - 1); E.want = E.cx;
 }
+/* Ctrl-A Ctrl-X (v0.60.248), as neovim's (nrformats bin,hex): the number
+ * under the cursor or the first after it on the line, a - just before it
+ * its sign, 0x numbers hex (their digits' count and case kept); the cursor
+ * to its last character. */
+static int hexv(char c) { return c >= '0' && c <= '9' ? c - '0' : c >= 'a' && c <= 'f' ? c - 'a' + 10 : c >= 'A' && c <= 'F' ? c - 'A' + 10 : -1; }
+static void add_number(int delta) {
+    const char *t = E.t.s[E.cy]; int n = len(), p = 0;
+    while (p < n) {                                  /* the numbers on the line, in turn */
+        if (!(t[p] >= '0' && t[p] <= '9')) { p++; continue; }
+        int hex = t[p] == '0' && p + 2 < n && (t[p + 1] == 'x' || t[p + 1] == 'X') && hexv(t[p + 2]) >= 0;
+        int d0 = hex ? p + 2 : p, e = d0;
+        while (e < n && (hex ? hexv(t[e]) >= 0 : t[e] >= '0' && t[e] <= '9')) e++;
+        int s0 = !hex && p > 0 && t[p - 1] == '-' ? p - 1 : p;
+        if (e <= E.cx) { p = e; continue; }          /* before the cursor */
+        char out[40]; int k = 0;
+        if (hex) {
+            unsigned v = 0; int upper = 0;
+            for (int i = d0; i < e; i++) { v = v * 16 + (unsigned)hexv(t[i]); if (t[i] >= 'A' && t[i] <= 'F') upper = 1; }
+            v += (unsigned)delta;
+            char d[12]; int m = 0;
+            do { int h = (int)(v & 15); d[m++] = (char)(h < 10 ? '0' + h : (upper ? 'A' : 'a') + h - 10); v >>= 4; } while (v);
+            out[k++] = t[p]; out[k++] = t[p + 1];
+            for (int i = m; i < e - d0; i++) out[k++] = '0';   /* as many digits as it had */
+            while (m) out[k++] = d[--m];
+        } else {
+            long long v = 0;
+            for (int i = p; i < e; i++) v = v * 10 + (t[i] - '0');
+            if (s0 < p) v = -v;
+            v += delta;
+            if (v < 0) { out[k++] = '-'; v = -v; }
+            char d[24]; int m = 0;
+            do { d[m++] = (char)('0' + v % 10); v /= 10; } while (v);
+            while (m) out[k++] = d[--m];
+        }
+        if (n - (e - s0) + k > T_COLS) return;
+        change_begin();
+        for (int i = s0; i < e; i++) text_delete_char(&E.t, E.cy, s0);
+        for (int i = 0; i < k; i++) text_insert_char(&E.t, E.cy, s0 + i, out[i]);
+        E.cx = s0 + k - 1; E.want = E.cx;
+        return;
+    }
+}
 /* Paging (v0.60.223), as neovim's with scrolloff 0: Ctrl-D Ctrl-U scroll
  * half (14, or the count, which is kept), the cursor going with the text;
  * Ctrl-F Ctrl-B a screen less two, the cursor to the new top or bottom row;
@@ -1109,6 +1151,8 @@ static void normal_key(unsigned k) {
     case 'P': paste(0, cnt); break;
     case 'J': join(had ? cnt : 2); break;
     case '~': toggle_case(cnt); break;
+    case 0x01: add_number(cnt); break;               /* Ctrl-A (v0.60.248) */
+    case 0x18: add_number(-cnt); break;              /* Ctrl-X */
     case 'u': { int n = 0; for (int i = 0; i < cnt; i++) n += undo_undo(&E.t, &E.cy, &E.cx, &E.seq); after_undo(); if (!n) msg("Already at oldest change", 0, 0); break; }
     case 0x12: { int n = 0; for (int i = 0; i < cnt; i++) n += undo_redo(&E.t, &E.cy, &E.cx, &E.seq); after_undo(); if (!n) msg("Already at newest change", 0, 0); break; }
     case 'i': insert_mode(E.cx, 1); ins_count = cnt; break;

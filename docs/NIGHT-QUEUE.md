@@ -67,7 +67,7 @@ changed test still fails when its feature is taken away (spot-check two).
 normal-mode keys after :normal; :sort (and :sort!, :sort n, :sort u) over
 a range or the whole text. Test: cases against neovim's.
 
-## 3. neosim: Ctrl-A and Ctrl-X
+## 3. neosim: Ctrl-A and Ctrl-X — DONE v0.60.248
 
 The number under or after the cursor on the line, plus or minus the
 count; negative numbers, 0x hex, the cursor to its last digit; . repeats.

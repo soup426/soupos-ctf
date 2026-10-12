@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.247
+Current version: v0.60.248
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,17 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.248 (2026-10-12)  — NEOSIM: CTRL-A, CTRL-X
+  - Ctrl-A adds the count (1 without) to the number under the cursor or
+    the first after it on the line, Ctrl-X takes it away, as neovim's
+    (nrformats bin,hex): a - just before the digits is its sign (-3 + 4
+    is 1, 9 - 10 is -1); 0x numbers stay hex, as many digits as they had
+    and their letters' case (0x0f + 1 is 0x10); the cursor goes to the
+    number's last character; . repeats it, u takes it back. A line with no
+    number at or after the cursor is left alone. Listed on :help.
+  - scripts/neosim-incr-test.sh: 25 cases against neovim 0.12.5 (3 on the
+    neosim before). The case generator has a Ctrl token now.
 
 v0.60.247 (2026-10-12)  — NEOSIM: RANGES, :g, :sort
   - Ranges before a command: % the whole text, N . $ a line, two of them
