@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.200
+Current version: v0.60.201
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,15 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.201 (2026-10-11)  — MINCECRAFT: STARS
+  - By night the sky has stars: one cell in 64 of a grid over the view's
+    angles (azimuth from the yaw and the column, elevation from the pitch
+    and the row, in eighths of an angle unit), so they keep their places
+    as the cook turns and only drift as a sky would. White or warm, fading
+    in as the light falls under 150/256, none by day or near the horizon.
+  - mincecraft-view-test: stars in the upper sky at midnight, none at
+    noon; the midnight sky's top rows allow the odd star.
 
 v0.60.200 (2026-10-11)  — MINCECRAFT: WHAT YOU ARE AIMING AT
   - The block the crosshair is on is outlined: its edges (3/64 of a block)

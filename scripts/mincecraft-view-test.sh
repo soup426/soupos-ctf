@@ -101,8 +101,13 @@ for y in range(0, 480, 4):
         if c in pal: seen[pal[c]] = seen.get(pal[c], 0) + 1
 check(len([n for n, k in seen.items() if k >= 20]) >= 3, 'seed 42: three or more blocks drawn in their own colours: %r' % seen)
 n = ppm('night')
-top = {body(n, x, y) for y in range(4) for x in range(0, 640, 8)}
-check(top == {0x0F142D}, 'night: the top rows are the midnight sky: %s' % sorted('%06x' % c for c in top))
+top = [body(n, x, y) for y in range(4) for x in range(0, 640, 8)]
+check(sum(c == 0x0F142D for c in top) >= 0.97 * len(top), 'night: the top rows are the midnight sky (a star or two aside): %s' % sorted({'%06x' % c for c in top})[:4])
+# Stars (v0.60.201): by night some of the upper sky is far brighter than
+# the sky; at noon none is.
+stars = lambda at, sky: sum(1 for y in range(30, 200) for x in range(0, 640) if lum(at(BX + x, BY + y)) > lum(sky) + 90)   # below the clock and the name
+check(stars(n, 0x0F142D) >= 20, 'night: stars: %d bright pixels in the upper sky' % stars(n, 0x0F142D))
+check(stars(f, SKY) == 0, 'noon: no stars')
 def chans(c): return (c >> 16, c >> 8 & 255, c & 255)
 dim = [(body(f, x, 400), body(n, x, 400)) for x in range(0, 640, 16)]
 check(all(all(b <= a * 0.31 + 2 for a, b in zip(chans(d), chans(m))) for d, m in dim) and any(d != m for d, m in dim),

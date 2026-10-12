@@ -53,7 +53,18 @@ void render(const cam_t *c, unsigned *body, int light, unsigned sky, const ray_t
             unsigned col;
             fx dist = -1;
             ray_cast(c->x, c->y, c->z, dx, dy, dz, VIEW << 16, &r);
-            if (!r.hit) col = rowsky;
+            if (!r.hit) {
+                col = rowsky;
+                if (light < 150 && sk > 64) {                     /* stars (v0.60.201), fixed in the sky as it turns: */
+                    int az = c->yaw * 8 + (px - RW / 2) * 5, el = c->pitch * 8 + (RH / 2 - py) * 5;   /* 8ths of an angle unit */
+                    unsigned h = (unsigned)(az >> 4) * 2654435761u ^ (unsigned)(el >> 4) * 40503u;
+                    h ^= h >> 15; h *= 0x2c1b3c6du; h ^= h >> 12;
+                    if ((h & 63) == 0 && (az & 15) < 5 && (el & 15) < 5) {
+                        int k = (150 - light) * 256 / 73;
+                        col = mix(col, (h & 0x300) ? 0xFFFFFF : 0xFFE8B0, k > 256 ? 256 : k);
+                    }
+                }
+            }
             else {
                 int b = world_get(r.x, r.y, r.z);
                 int face = r.axis == 1 ? (r.step < 0 ? FACE_TOP : FACE_BOTTOM) : FACE_SIDE;
