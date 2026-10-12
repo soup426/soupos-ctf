@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.192
+Current version: v0.60.193
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,24 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.193 (2026-10-11)  — MINCECRAFT: THE VIEW
+  - A ray a pixel through the grid (ray.c, Amanatides and Woo in 16.16;
+    a direction component near zero gets a step held at 2^30 and is never
+    taken, rays above the world going up stop as sky), 320x240 with a
+    70-degree view and 24 blocks of reach, the last 8 fading into the
+    sky, faces shaded by axis, broth a half blend over what is under it,
+    doubled into a 640x480 window (render.c). A fixed camera for now.
+  - Measured under KVM: 101 frames a second on the flat world, 168 on
+    seed 42 (far above the spec's 15, so no fallback). The desktop draws
+    the window about 30 times a second (546 draws of 1849 puts in 18 s,
+    554 us a draw), so the screen, not the ray caster, sets the pace.
+    The kernel heap had 6890 KB free when the 640x480 body was asked for.
+  - -wait: keep asking for the window for up to a minute, so tests can
+    start it at the console before the desktop and read its markers.
+  - scripts/mincecraft-view-test.sh: the flat world's top rows are the
+    noon sky and its nearest ground exactly crust; seed 42 draws three or
+    more blocks in their own colours; fps markers, and Esc ends it.
 
 v0.60.192 (2026-10-11)  — MINCECRAFT: A WORLD OF FOOD
   - user/mincecraft/, the start of a voxel sandbox (the spec and plan are
