@@ -349,6 +349,13 @@ static void deny(const char *path) {
  * first login of a cook hired before homes existed. Built here with the
  * kernel's own hands, not the cook's, since a cook may not write in /home. */
 static void ensure_home_inner(uint8_t uid, char *cwd_out);
+/* A cook's home bowl as a path: / for the headchef, /home/<cook> (v0.60.191,
+ * shared by ensure_home and build_env's HOME). */
+static void home_of(uint8_t uid, char *out) {
+    if (uid == 0) { strcpy(out, "/"); return; }
+    strcpy(out, "/home/");
+    strncpy(out + 6, users_name_of(uid), FAT_PATH_MAX - 7); out[FAT_PATH_MAX - 1] = '\0';
+}
 static void ensure_home(uint8_t uid, char *cwd_out) {
     users_sys_begin();            /* a home may use the disk's reserve (v0.55.5) */
     ensure_home_inner(uid, cwd_out);
@@ -358,8 +365,7 @@ static void ensure_home_inner(uint8_t uid, char *cwd_out) {
     if (uid == 0) { strcpy(cwd_out, "/"); return; }
     const char *name = users_name_of(uid);
     char home[FAT_PATH_MAX];
-    strcpy(home, "/home/");
-    strncpy(home + 6, name, sizeof(home) - 7); home[sizeof(home) - 1] = '\0';
+    home_of(uid, home);
     if (!fat_is_dir("/home")) {
         fat_mkdir("/home");
         fat_chown("/home", 0);
@@ -6000,8 +6006,15 @@ static void cmd_hand(const char *args) {
  * a line, as much as fits. */
 static void build_env(char *out, int max) {
     shell_t *me = cur_shell();
-    int n = 0;
+    int n = 0, own = 0;
     out[0] = '\0';
+    /* HOME (v0.60.191): the cook's home bowl, unless they handed their own. */
+    for (int i = 0; i < me->nvars; i++) if (me->vhand[i] && !strcmp(me->vname[i], "HOME")) own = 1;
+    if (!own) {
+        char home[FAT_PATH_MAX];
+        home_of(me->uid, home);
+        if ((int)strlen(home) + 6 < max) { strcpy(out, "HOME="); strcat(out, home); strcat(out, "\n"); n = (int)strlen(out); }
+    }
     for (int i = 0; i < me->nvars; i++) {
         if (!me->vhand[i]) continue;
         int need = (int)strlen(me->vname[i]) + 1 + (int)strlen(me->vval[i]) + 1;

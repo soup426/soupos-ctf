@@ -13,19 +13,31 @@ cleanup() { [ -n "$PID" ] && kill "$PID" 2>/dev/null; if [ "$fail" != 0 ] || [ "
 trap cleanup EXIT
 cp disk.img "$WORK/disk.img"
 LINES=(
-  'SA=1 ; SB=2 ; hand SA ; cook labels.elf | rack.elf > /E1.TXT'
-  'hand SB SC=three ; cook labels.elf | rack.elf > /E2.TXT'
-  'discard SA ; cook labels.elf | rack.elf > /E3.TXT'
-  'hand SD ; cook labels.elf | rack.elf > /E4.TXT ; SD=late ; cook labels.elf | rack.elf > /E5.TXT'
+  'SA=1 ; SB=2 ; hand SA ; cook labels.elf | sift.elf S | rack.elf > /E1.TXT'
+  'hand SB SC=three ; cook labels.elf | sift.elf S | rack.elf > /E2.TXT'
+  'discard SA ; cook labels.elf | sift.elf S | rack.elf > /E3.TXT'
+  'hand SD ; cook labels.elf | sift.elf S | rack.elf > /E4.TXT ; SD=late ; cook labels.elf | sift.elf S | rack.elf > /E5.TXT'
   'SB=changed ; cook labels.elf SB > /E6.TXT'
   'cook labels.elf NOPE > /E7.TXT ; cook call.elf $? > /E8.TXT'
   'hand SE="a b" ; cook labels.elf SE > /E9.TXT'
   'cook labels.elf SC | raise.elf > /E10.TXT'
 )
 FILES="E1 E2 E3 E4 E5 E6 E7 E8 E9 E10"
+# HOME (v0.60.191): every program is handed the cook's home bowl unless the
+# cook handed their own. Not compared with bash, whose HOME is the host's;
+# the listings above keep to the S variables (sift.elf S: "HOME=/" has no
+# capital S) so the HOME line does not change them.
+HOME_LINES=(
+  'cook labels.elf HOME > /E11.TXT'
+  'hand HOME=/elsewhere ; cook labels.elf HOME > /E12.TXT ; discard HOME'
+  'cook labels.elf HOME > /E13.TXT'
+)
 keys=("headchef" "rosemary" "WAIT:1")
-for l in "${LINES[@]}"; do keys+=("$l" "UNTIL:@soupOS:"); done
+for l in "${LINES[@]}" "${HOME_LINES[@]}"; do keys+=("$l" "UNTIL:@soupOS:"); done
 keys+=("cook mise.elf after-env" "UNTIL:@soupOS:")
+# An ordinary cook's HOME is their bowl, /home/<cook>.
+keys+=("hire saucier" "WAIT:1" "basil" "WAIT:1" "basil" "WAIT:1" "clockout" "WAIT:2"
+       "saucier" "basil" "WAIT:2" "cook labels.elf HOME > /home/saucier/E14.TXT" "UNTIL:@soupOS:")
 qemu-system-i386 -accel kvm -cpu host -drive "file=$WORK/disk.img,format=raw,if=ide,index=0" \
     -cdrom soupOS.iso -boot d -m 128M -no-reboot -no-shutdown -display none \
     -serial "file:$WORK/serial.log" -monitor "unix:$WORK/mon.sock,server,nowait" >/dev/null 2>&1 &
@@ -35,7 +47,7 @@ kill "$PID" 2>/dev/null; wait "$PID" 2>/dev/null; PID=""
 mkdir -p "$WORK/host"
 script=""
 for l in "${LINES[@]}"; do
-    b=${l//cook labels.elf | rack.elf/env | grep -E \'^S[A-E]=\' | sort}
+    b=${l//cook labels.elf | sift.elf S | rack.elf/env | grep -E \'^S[A-E]=\' | sort}
     b=${b//cook labels.elf/printenv}; b=${b//hand /export }; b=${b//discard /unset }
     b=${b//cook call.elf/echo}; b=${b//raise.elf/tr a-z A-Z}; b=${b//> \//> }
     script+="$b"$'\n'
@@ -48,6 +60,11 @@ for f in $FILES; do
 done
 [ "$bad" = 0 ] && echo "  ok    all ${#LINES[@]} lines write what bash writes ($(echo $FILES | wc -w) files: handed and not, discard, hand before set, a changed value, a missing name's status, a quoted value, both stages of a pipe)" \
     || { echo "  FAIL  hand differs from bash's export"; fail=1; }
+for want in "E11 /" "E12 /elsewhere" "E13 /" "home/saucier/E14 /home/saucier"; do
+    set -- $want
+    got=$(mcopy -n -i "$WORK/disk.img" "::/$1.TXT" - 2>/dev/null)
+    if [ "$got" = "$2" ]; then echo "  ok    $1: HOME is '$2'"; else echo "  FAIL  $1: HOME '$got', want '$2'"; fail=1; fi
+done
 grep -q 'TESTOUT args=after-env' "$WORK/serial.log" && echo "  ok    programs still run after all that" \
     || { echo "  FAIL  a program did not run after the env lines"; fail=1; }
 exit $fail
