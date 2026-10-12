@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.220
+Current version: v0.60.221
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,22 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.221 (2026-10-12)  — MINCECRAFT: HEARTS
+  - Ten hearts over the hotbar. A fall of more than three blocks takes a
+    heart a block past three, counted from the highest the feet were;
+    broth breaks a fall (in it, the fall starts again), so a dive into the
+    pool takes none. A low thud when hurt. At none the cook wakes at the
+    spawn, the hands and the world as they were, with a note.
+  - The world file is version 4: the hearts after the counts. Version 3
+    files load with ten; a save with none (or more than ten) is refused.
+  - Markers: [mincecraft] hurt N hearts=M, and woke at the spawn.
+  - scripts/mincecraft-health-test.sh: a saved flat world given three
+    pillars on the host; walking off 9 onto crust takes 6 (10 to 4, and
+    the HUD shows 4 red, 6 empty), 9 into the broth none, 14 all ten:
+    woken at the spawn, the seven crust still in hand. The save and light
+    tests know the new header (and a version 3 file, and a dead save).
+    Picture in docs/mincecraft/hearts.png.
 
 v0.60.220 (2026-10-12)  — DOOM WITH THE MOUSE
   - The mouse turns the view: five counts to an angle step (2.8 degrees),

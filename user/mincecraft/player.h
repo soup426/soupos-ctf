@@ -7,6 +7,8 @@
 #define P_HW  19661          /* half the box's width, 0.3  */
 #define P_H   117965         /* its height, 1.8            */
 #define P_EYE 104858         /* the eye above the feet, 1.6 */
+#define P_HEARTS 10          /* (v0.60.221) */
+#define P_SAFE 3             /* blocks a cook can fall unhurt */
 typedef struct {
     fx x, y, z;              /* the feet: the box's bottom centre */
     fx vy;
@@ -16,6 +18,8 @@ typedef struct {
     int slot;                /* the hotbar's chosen slot, 0..8 */
     int bx, by, bz, bn;      /* the block being broken, and ticks so far */
     int wet;                 /* in broth this tick (v0.60.210: the splash) */
+    int hp, hurt;            /* (v0.60.221) hearts, 0..10; hearts taken this tick */
+    fx fall_top;             /* the highest feet since last on the ground or in broth */
 } player_t;
 typedef struct { int fwd, side, turn, tilt, jump, brk; } input_t;   /* -1, 0, 1; jump and brk 0/1 */
 void player_spawn(player_t *p);

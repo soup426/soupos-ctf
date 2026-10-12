@@ -76,7 +76,7 @@ how mouse.c gives counts (moves since boot, a wheel total), and that a
 QEMU mouse_move reaches it while Doom runs. Test: a mouse_move in a level
 turns the view (the picture changes as an arrow key would change it).
 
-## 4. Mincecraft: health
+## 4. Mincecraft: health — DONE v0.60.221
 
 Ten hearts on the HUD. A fall of more than three blocks takes a heart a
 block past three (broth breaks the fall, none taken); at none the cook

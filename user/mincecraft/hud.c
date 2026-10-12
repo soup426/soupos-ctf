@@ -1,5 +1,5 @@
 /* hud.c - the crosshair, the hotbar with counts, the name of the block
- * looked at, and the time (v0.60.195). Text in the kernel's 8x16 font. */
+ * looked at, and the time (v0.60.195); the hearts (v0.60.221). Text in the kernel's 8x16 font. */
 #include "../ulib.h"
 #include "hud.h"
 #include "world.h"
@@ -37,6 +37,12 @@ void hud_draw(unsigned *b, const player_t *p, const ray_t *tg, int tod) {
             text_shadowed(b, x + 37 - 8 * strlen_(c), y0 + 21, c, 0xFFFFFF);
         }
     }
+    static const unsigned char heart[6] = { 0x36, 0x7F, 0x7F, 0x3E, 0x1C, 0x08 };   /* (v0.60.221) 7 wide, drawn 2x */
+    for (int h = 0; h < P_HEARTS; h++)
+        for (int j = 0; j < 6; j++) for (int i = 0; i < 7; i++) if ((heart[j] >> (6 - i)) & 1) {
+            rect(b, x0 + h * 16 + i * 2 + 1, y0 - 16 + j * 2 + 1, 2, 2, 0x000000);
+            rect(b, x0 + h * 16 + i * 2, y0 - 16 + j * 2, 2, 2, h < p->hp ? 0xE8364Au : 0x3A3A3Au);
+        }
     if (tg->hit) text_shadowed(b, 8, 8, blocks[world_get(tg->x, tg->y, tg->z)].name, 0xFFFFFF);
     int m = tod * 1440 / 1200;                                     /* minutes past midnight */
     char clk[6] = { (char)('0' + m / 600), (char)('0' + m / 60 % 10), ':', (char)('0' + m % 60 / 10), (char)('0' + m % 10), 0 };

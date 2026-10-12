@@ -280,6 +280,19 @@ int main(void) {
                 sys_tone((unsigned)(hz < 60 ? 60 : hz), 80);       /* the crunch: lower for harder */
             } else if (pl.bn && pl.bn % 4 == 0) sys_tone(330, 20);  /* breaking: a soft tick */
             if (pl.wet && !was_wet) sys_tone(300, 120);           /* into the broth */
+            if (pl.hurt) {                                        /* (v0.60.221) a fall */
+                eprint("[mincecraft] hurt "); eprint_u((unsigned)pl.hurt); eprint(" hearts="); eprint_u((unsigned)pl.hp); eprint("\n");
+                sys_tone(110, 150);
+                if (pl.hp == 0) {                                 /* wakes at the spawn, the hands as they were */
+                    unsigned short keep[B_COUNT]; int slot = pl.slot;
+                    for (int i = 0; i < B_COUNT; i++) keep[i] = pl.inv[i];
+                    player_spawn(&pl);
+                    for (int i = 0; i < B_COUNT; i++) pl.inv[i] = keep[i];
+                    pl.slot = slot;
+                    sys_note("Mincecraft: you fell too far, and woke at the spawn");
+                    eprint("[mincecraft] woke at the spawn hearts="); eprint_u((unsigned)pl.hp); eprint("\n");
+                }
+            }
             if (script) {
                 char b[96]; int n2 = 0;
                 const int v[6] = { pl.x, pl.y, pl.z, pl.yaw, pl.pitch, pl.ground };

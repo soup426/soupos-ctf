@@ -49,6 +49,7 @@ void player_spawn(player_t *p) {
     p->x = (x << 16) + FX_ONE / 2; p->z = (z << 16) + FX_ONE / 2;
     p->y = (world_top(x, z) + 1) << 16;
     p->ground = 1; p->bx = -1;
+    p->hp = P_HEARTS; p->fall_top = p->y;
 }
 void player_eye(const player_t *p, cam_t *c) { c->x = p->x; c->y = p->y + P_EYE; c->z = p->z; c->yaw = p->yaw; c->pitch = p->pitch; }
 int player_tick(player_t *p, const input_t *in, const ray_t *tg) {
@@ -72,7 +73,20 @@ int player_tick(player_t *p, const input_t *in, const ray_t *tg) {
     move_z(p, fx_mul(c, in->fwd * sp) - fx_mul(s, in->side * sp));
     if (wet) { p->vy -= GRAV / 2; if (in->jump) p->vy = SWIM; if (p->vy < -SWIM) p->vy = -SWIM; }
     else { p->vy -= GRAV; if (in->jump && p->ground) p->vy = JUMP; if (p->vy < -TERM) p->vy = -TERM; }
+    int was_ground = p->ground;
     move_y(p, p->vy);
+    /* Falling (v0.60.221): a heart a block past P_SAFE, counted from the
+     * highest the feet were; broth breaks a fall, so it starts it again. */
+    p->hurt = 0;
+    if (wet || world_get(p->x >> 16, (p->y + FX_ONE / 2) >> 16, p->z >> 16) == B_BROTH) p->fall_top = p->y;
+    else if (!p->ground) { if (p->y > p->fall_top) p->fall_top = p->y; }
+    else {
+        if (!was_ground) {
+            int d = (p->fall_top - p->y) >> 16;
+            if (d > P_SAFE) { p->hurt = d - P_SAFE; p->hp = p->hp > p->hurt ? p->hp - p->hurt : 0; }
+        }
+        p->fall_top = p->y;
+    }
     return broke;
 }
 /* The hotbar's block on the face the crosshair is on (v0.60.195): never

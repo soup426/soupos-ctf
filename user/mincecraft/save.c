@@ -1,6 +1,6 @@
 /* save.c - the world file (v0.60.197), little-endian:
- *   "MINC", version 3, seed, time of day, x y z yaw pitch, B_COUNT counts
- *   (32 bits each), the grid as (count 1..255, id) pairs, then the CRC-32
+ *   "MINC", version 4, seed, time of day, x y z yaw pitch, B_COUNT counts,
+ *   the hearts (32 bits each; version 3 had no hearts), the grid as (count 1..255, id) pairs, then the CRC-32
  *   of every byte before it (v0.60.209; version 1 files, with a byte sum
  *   there instead, are still read). Written and read through 4 KB, never whole: the
  *   worst run-length encoding is 2 MB. A file that is short, long, of
@@ -8,7 +8,7 @@
 #include "../ulib.h"
 #include "save.h"
 #include "world.h"
-#define VERSION 3                    /* (v0.60.215) B_COUNT counts; 1 and 2 had B_FOUND */
+#define VERSION 4                    /* (v0.60.221) the hearts after the counts; 3 had none (v0.60.215: B_COUNT counts; 1 and 2 had B_FOUND) */
 static unsigned char io[4096];
 /* CRC-32 (the zlib one: reflected, 0xEDB88320, starting and ending all ones), a byte at a time. */
 static unsigned crc_table[256];
@@ -31,6 +31,7 @@ int save_world(const char *path, const player_t *p, unsigned seed, int tod, unsi
     put32(VERSION); put32(seed); put32((unsigned)tod);
     put32((unsigned)p->x); put32((unsigned)p->y); put32((unsigned)p->z); put32((unsigned)p->yaw); put32((unsigned)p->pitch);
     for (int i = 0; i < B_COUNT; i++) put32(p->inv[i]);
+    put32((unsigned)p->hp);
     for (int i = 0; i < WCELLS; ) {
         int b = world[i], n = 1;
         while (i + n < WCELLS && n < 255 && world[i + n] == b) n++;
@@ -68,6 +69,8 @@ int load_world(const char *path, player_t *p, unsigned *seed, int *tod) {
     int counts = v[0] >= 3 ? B_COUNT : B_FOUND;          /* crafted blocks came in version 3 */
     for (int i = 0; i < B_COUNT; i++) inv[i] = 0;
     for (int i = 0; i < counts && !bad; i++) if (get32(&inv[i]) < 0 || inv[i] > 999) bad = 1;
+    unsigned hp = P_HEARTS;
+    if (!bad && v[0] >= 4 && (get32(&hp) < 0 || hp < 1 || hp > P_HEARTS)) bad = 1;   /* the hearts came in version 4 */
     for (int i = 0; i < WCELLS && !bad; ) {
         int n = get(), b = get();
         if (n <= 0 || b < 0 || b >= B_COUNT || i + n > WCELLS) { bad = 1; break; }
@@ -87,6 +90,6 @@ int load_world(const char *path, player_t *p, unsigned *seed, int *tod) {
     p->x = x; p->y = y; p->z = z; p->yaw = (int)v[6] & 1023; p->pitch = (int)v[7];
     if (p->pitch > 227 || p->pitch < -227) p->pitch = 0;
     for (int i = 0; i < B_COUNT; i++) p->inv[i] = (unsigned short)inv[i];
-    p->ground = 0;
+    p->ground = 0; p->fall_top = y; p->hp = (int)hp;
     return 0;
 }
