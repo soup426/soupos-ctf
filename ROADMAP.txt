@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.230
+Current version: v0.60.231
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,17 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.231 (2026-10-12)  — NEOSIM: MARKS
+  - m and a letter sets a mark; ' and the letter goes to its line's first
+    non-blank, ` to its place; as motions, d'a whole lines and d`a not.
+    Marks move with lines put in or taken out above them (text.c tells
+    of every line through text_lines_hook); a mark on a line taken out
+    is gone (E20 if used), one on a line joined goes along. Opening a
+    file clears them. Listed on :help.
+  - scripts/neosim-marks-test.sh: 20 cases against neovim 0.12.5.
+  - qemu_keys.py could not type ` (no entry in its map: the run of keys
+    stopped there); it types grave_accent now.
 
 v0.60.230 (2026-10-12)  — DOOM: THE WHOLE STATUS BAR
   - The right of the bar, as st_stuff.c draws it in a game that is not

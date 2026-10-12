@@ -11,7 +11,7 @@
  * % to the matching bracket; Enter, o and O keep the indent (v0.60.218);
  * :help, a read-only page of all this (v0.60.219); f t F T ; , r ~ (v0.60.222);
  * Ctrl-D Ctrl-U Ctrl-F Ctrl-B, zz zt zb (v0.60.223); * # (v0.60.226);
- * text objects iw aw i" a" i( a( i{ a{ ... (v0.60.227)
+ * text objects iw aw i" a" i( a( i{ a{ ... (v0.60.227); marks m ' ` (v0.60.231)
  * (v0.60.206); i a A I o O into insert mode; : for a command. Insert mode:
  * typing, Enter, Backspace (joining lines at the start of one), Tab as four
  * spaces, the arrows, Esc back. Commands: :w [FILE], :q, :q!, :wq, :x,
@@ -59,6 +59,7 @@ static int len(void) { return E.t.len[E.cy]; }
 static int lenof(int y) { return E.t.len[y]; }
 static int imin(int a, int b) { return a < b ? a : b; }
 static int imax(int a, int b) { return a > b ? a : b; }
+static struct { int y, x, set; } marks[26];      /* (v0.60.231) m a .. m z */
 static void clamp(void) {
     if (E.cy >= E.t.n) E.cy = E.t.n - 1;
     if (E.cy < 0) E.cy = 0;
@@ -227,6 +228,7 @@ static void open_file(const char *path) {
     int r = text_load(&E.t, path);
     E.cy = E.cx = E.want = E.top = E.left = 0; E.changed = 0;
     undo_reset(); E.seq = E.saved = E.idgen = 0;
+    for (int i = 0; i < 26; i++) marks[i].set = 0;   /* (v0.60.231) a file's marks are its own */
     if (r == -1) { eprint("[neosim] new "); eprint(path); eprint("\n"); msg("\"", path, "\" [New]"); return; }
     eprint("[neosim] open "); eprint(path); eprint(" lines="); eprint_u((unsigned)E.t.n); eprint("\n");
     if (r == -2) msg("\"", path, "\" too long: only the first lines");
@@ -331,6 +333,17 @@ static void insert_key(unsigned k) {
 
 /* ---- motions ---- */
 typedef struct { int ok, y, x, line, incl; } mv_t;
+/* Marks (v0.60.231): m and a letter; ' to its line's first non-blank, `
+ * to its place. They move with lines put in or taken out above them; a
+ * mark on a line taken out is gone, on a line joined it goes along. */
+static void marks_lines(int at, int delta, int join_col) {
+    for (int i = 0; i < 26; i++) {
+        if (!marks[i].set) continue;
+        if (delta > 0) { if (marks[i].y >= at) marks[i].y++; }
+        else if (marks[i].y == at) { if (join_col >= 0) { marks[i].y = at - 1; marks[i].x += join_col; } else marks[i].set = 0; }
+        else if (marks[i].y > at) marks[i].y--;
+    }
+}
 /* f t F T and a character, ; and , (v0.60.222): on the cursor's line. */
 static int find_ch, last_find, last_find_ch;         /* the character just typed; the last f t F T and its */
 static int find_on_line(int cmd, int ch, int cnt, int again) {   /* the column it lands on, or -1 */
@@ -350,6 +363,14 @@ static int find_on_line(int cmd, int ch, int cnt, int again) {   /* the column i
 static mv_t motion(unsigned k, int cnt, int had, int op) {
     mv_t m = { 1, E.cy, E.cx, 0, 0 };
     switch (k) {
+    case '\'': case '`': {                          /* a mark (v0.60.231) */
+        int i = find_ch >= 'a' && find_ch <= 'z' ? find_ch - 'a' : -1;
+        if (i < 0 || !marks[i].set) { msg("E20: Mark not set", 0, 0); m.ok = 0; break; }
+        m.y = imin(marks[i].y, E.t.n - 1);
+        if (k == '\'') { m.line = 1; m.x = first_nonblank(&E.t, m.y); }
+        else m.x = imin(marks[i].x, imax(lenof(m.y) - (op ? 0 : 1), 0));
+        break;
+    }
     case 'f': case 't': case 'F': case 'T': case ';': case ',': {
         int cmd = (int)k, ch = find_ch, again = 0;
         if (k == ';' || k == ',') {
@@ -635,6 +656,7 @@ static void normal_key(unsigned k) {
         P.wait = 0;
         if (k == 27 || k >= 256) { P.op = 0; return; }
         if (w == 'r') { if (!P.op) replace_chars((int)k, cnt); P.op = 0; return; }
+        if (w == 'm') { if (k >= 'a' && k <= 'z') { marks[k - 'a'].y = E.cy; marks[k - 'a'].x = E.cx; marks[k - 'a'].set = 1; } return; }
         if (w == 'i' || w == 'a') {                  /* an operator on a text object (v0.60.227) */
             int op = P.op, ay, ax, by, bx, line;
             int total = cnt * P.opcount;
@@ -655,7 +677,7 @@ static void normal_key(unsigned k) {
             return;
         }
         mv_t m = motion((unsigned)w, cnt, had, 0);
-        if (m.ok) { E.cx = m.x; clamp(); E.want = E.cx; }
+        if (m.ok) { E.cy = m.y; E.cx = m.x; clamp(); E.want = E.cx; }
         return;
     }
     if (k == 27) { P.count = P.op = P.g = 0; return; }
@@ -676,7 +698,8 @@ static void normal_key(unsigned k) {
         if (k != 'g') { P.op = 0; return; }
         k = 'g' + 256; cnt = P.gcount; had = P.ghad;
     } else if (k == 'g') { P.g = 1; P.gcount = cnt; P.ghad = had; return; }
-    if (k == 'f' || k == 't' || k == 'F' || k == 'T' || (k == 'r' && !P.op) || (P.op && (k == 'i' || k == 'a'))) { P.wait = (int)k; P.wcount = cnt; P.whad = had; return; }
+    if (k == 'f' || k == 't' || k == 'F' || k == 'T' || (k == 'r' && !P.op) || (P.op && (k == 'i' || k == 'a'))
+            || (k == 'm' && !P.op) || k == '\'' || k == '`') { P.wait = (int)k; P.wcount = cnt; P.whad = had; return; }
     if (P.op) {                                     /* an operator waiting for its motion */
         int op = P.op, total = cnt * P.opcount, thad = had || P.ophad;
         P.op = 0;
@@ -841,6 +864,7 @@ int main(void) {
         else if (!file) file = argv[i];
     }
     if (text_init() < 0 || undo_init() < 0) { print("neosim: no memory\n"); return 1; }
+    text_lines_hook = marks_lines;
     E.t.n = 0;
     text_clear(&E.t);
     if (file) open_file(file);

@@ -15,6 +15,7 @@ const char *const help_text[] = {
     "  Ctrl-D Ctrl-U      half a screen down, up (a count: that many, kept)",
     "  Ctrl-F Ctrl-B      a screen down, up",
     "  zz zt zb           this line to the middle, top, bottom",
+    "  ma  'a  `a         set mark a; to its line; to its place (d'a, d`a)",
     "",
     "CHANGING",
     "  i a I A o O        insert: before, after, line start, line end, below, above",

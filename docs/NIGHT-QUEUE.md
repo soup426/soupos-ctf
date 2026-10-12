@@ -60,7 +60,7 @@ ST_MAXAMMO0X.., and the arms 2-7 in STGNUM (owned) or STYSNUM grey.
 Test: the opening frame's panel drawn from the WAD by those rules, every
 pixel compared, as doom-places-test.
 
-## 2. neosim: marks
+## 2. neosim: marks — DONE v0.60.231
 
 m and a letter sets a mark; ' and the letter goes to its line's first
 non-blank, ` to its place; as motions (d'a linewise, d`a not). Marks
@@ -123,3 +123,7 @@ the column whole on the ground after.
 - 2026-10-12 (queue 60 item 3): toast (crafted from a stalk) is not food
   yet; the queue named only sugar, butter and florets. Making it the best
   food (four hearts, say) would give crafting a reason; a later item.
+
+- 2026-10-12 (queue 62 item 2): neosim does not repeat an insert by its
+  count (3ihi<Esc>, 2Onew<Esc> insert once; neovim three and two times).
+  Found by a marks case; a later item.

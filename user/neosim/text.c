@@ -69,10 +69,14 @@ int text_save(const text_t *t, const char *path, unsigned *bytes) {
     if (bytes) *bytes = total;
     return bad ? -1 : 0;
 }
+/* (v0.60.231) told of every line put in or taken out, so marks can move */
+void (*text_lines_hook)(int at, int delta, int join_col);
+static int joining = -1;                         /* text_join: the column line + 1 lands at */
 int text_insert_line(text_t *t, int at) {
     if (t->n == T_MAXL || !nfree) return -1;
     for (int i = t->n; i > at; i--) { t->s[i] = t->s[i - 1]; t->len[i] = t->len[i - 1]; }
     t->s[at] = blk(); t->len[at] = 0; t->n++;
+    if (text_lines_hook) text_lines_hook(at, 1, -1);
     return 0;
 }
 void text_delete_line(text_t *t, int at) {
@@ -80,6 +84,7 @@ void text_delete_line(text_t *t, int at) {
     unblk(t->s[at]);
     for (int i = at; i < t->n - 1; i++) { t->s[i] = t->s[i + 1]; t->len[i] = t->len[i + 1]; }
     t->n--;
+    if (text_lines_hook) text_lines_hook(at, -1, joining);
 }
 int text_insert_char(text_t *t, int line, int col, char c) {
     if (t->len[line] >= T_COLS) return -1;
@@ -104,7 +109,9 @@ int text_split(text_t *t, int line, int col) {
 void text_join(text_t *t, int line) {
     if (line + 1 >= t->n) return;
     int room = T_COLS - t->len[line], take = t->len[line + 1] < room ? t->len[line + 1] : room;
+    joining = t->len[line];
     for (int i = 0; i < take; i++) t->s[line][t->len[line] + i] = t->s[line + 1][i];
     t->len[line] += take;
     text_delete_line(t, line + 1);
+    joining = -1;
 }

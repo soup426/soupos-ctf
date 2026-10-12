@@ -20,3 +20,7 @@ int  text_insert_char(text_t *t, int line, int col, char c);          /* 0, or -
 void text_delete_char(text_t *t, int line, int col);
 int  text_split(text_t *t, int line, int col);          /* the rest of the line to a new one below */
 void text_join(text_t *t, int line);                    /* line + 1 onto the end of line */
+/* (v0.60.231) called after a line is put in (delta 1) or taken out (-1) at
+ * 'at'; join_col >= 0 when the line taken out was joined onto the one above
+ * at that column. */
+extern void (*text_lines_hook)(int at, int delta, int join_col);
