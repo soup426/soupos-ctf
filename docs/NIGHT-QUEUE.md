@@ -591,13 +591,43 @@ Mincecraft; neosim and rx.c; Doom; tests, build and docs.)
   register, a file over 2048 lines written back cut, a redo arena smaller
   than a full snapshot. Fix: refuse or warn.
 
+## Area review findings (2026-10-12, began at e8bc3b7)
+
+### The desktop (reviewer confirmed 1 and the apostrophe paths in QEMU on copies)
+
+- **R-C10 (medium-high).** A program left running from an earlier shift
+  keeps its window slots and their kernel-heap pixels into later shifts:
+  the desktop's start frees only slots of dead programs (:2606), Leave
+  only marks them gone, and APP_MAX is 8 for the whole machine with no cap
+  per program. One program's 8 small windows shut every later cook out of
+  program windows (neosim, frost, Mincecraft) until a reboot; 7 at 640x480
+  held 7.2 MB of heap. Fix: free every gone slot (or every slot not of the
+  new ct_uid) at the start; a cap per pid and per cook; px against a budget.
+- **R-C11 (low-medium, regression of v0.60.250).** The double click passes
+  the quoted path as a program's arguments, capped at PROC_ARGS_MAX 128,
+  where jot had a whole input line: a path near FAT_PATH_MAX, or shorter
+  with apostrophes (4 bytes each quoted), is refused. Fix: arguments past
+  FAT_PATH_MAX plus quoting.
+- **R-C12 (low).** ct_admits is read before app_mtx is taken (:545,
+  :2041): a call between ct_running 0 and 1 gets a slot unchecked. Fix:
+  the test inside the mutex.
+- **R-C13 (low).** chef cook of a windowed program from the desktop's own
+  terminal runs it as the headchef, and it is refused (owner 0 is not
+  ct_uid). Fix: admit programs started from this desktop's sessions (a
+  session tag on proc_t), or say so in the docs.
+- **R-C14 (low).** The refusal is logged once for one pid only: two
+  foreign pollers alternate and log every call. Fix: a told flag in proc_t.
+- **R-C15 (nit).** `cook neosim.elf` finds ~/neosim.elf first (the cook's
+  own, no gain); `static int ct_uid;` declared twice.
+
 ## The order to work the review in
 
 0. Item 0 first (the user asked for it directly: a text file's double
    click opens neosim).
 1. The test harness (R-T1, R-T2, R-T3, R-T4, R-T5, R-T6), so the fixes
    after it are measured by tests that can fail.
-2. Security: R-K1, R-K2, R-C1, R-C2.
+2. Security: R-K1, R-K2, R-C1, R-C2, then R-C10 and R-C12 (the area
+   review's, 2026-10-12).
 3. Kernel crashes any cook can cause: R-K5, R-K4, R-K3.
 4. Data loss: R-M1, R-M4, R-N3, R-N4, R-N5, R-N1, R-N2.
 5. Item 0b, Doom, from R-D3, R-D2, R-D4, R-D1 down.
