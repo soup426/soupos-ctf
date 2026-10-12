@@ -22,6 +22,10 @@
  * the close box saves and ends it (a kill does not save); if that save
  * fails it says so and a second Esc ends it unsaved (v0.60.202).
  *
+ * Sounds (v0.60.210, through SYS_TONE; none with no sound card): a tick
+ * every fourth tick a block is held, its break lower the harder it is, a
+ * plop on a place, a splash going into broth.
+ *
  * Markers on stderr, [mincecraft] ...: window up, fps=N every 5 s, bye;
  * with -script "p x y z yaw pitch ground" each tick (16.16, angle units),
  * and "mark" on m, so tests can split the log into phases; "broke x y z id",
@@ -185,7 +189,7 @@ int main(void) {
             else if (ev.type == WEV_WHEEL) pl.slot = ((pl.slot + (int)ev.key) % 9 + 9) % 9;
             else if (ev.type == WEV_KEY && (ev.key == 'r' || ev.key == 'q')) {
                 int ids[9], n = hotbar(&pl, ids);
-                if (pl.slot < n && player_place(&pl, &tg, ids[pl.slot])) cell_marker("placed", tg.px, tg.py, tg.pz, ids[pl.slot]);
+                if (pl.slot < n && player_place(&pl, &tg, ids[pl.slot])) { cell_marker("placed", tg.px, tg.py, tg.pz, ids[pl.slot]); sys_tone(523, 60); }
                 else eprint("[mincecraft] place refused\n");
                 inv_marker(&pl, inv_last);
             }
@@ -210,8 +214,14 @@ int main(void) {
             cam_forward(&cam, &dx, &dy, &dz);
             ray_cast(cam.x, cam.y, cam.z, dx, dy, dz, 5 << 16, &tg);
             if (!hold_time && ++tt % 20 == 0) tod = (tod + 1) % 1200;
+            int was_wet = pl.wet;
             int broke = player_tick(&pl, &in, &tg);
-            if (broke) { cell_marker("broke", tg.x, tg.y, tg.z, broke); inv_marker(&pl, inv_last); }
+            if (broke) {
+                cell_marker("broke", tg.x, tg.y, tg.z, broke); inv_marker(&pl, inv_last);
+                int hz = 220 - 4 * blocks[broke].hardness;
+                sys_tone((unsigned)(hz < 60 ? 60 : hz), 80);       /* the crunch: lower for harder */
+            } else if (pl.bn && pl.bn % 4 == 0) sys_tone(330, 20);  /* breaking: a soft tick */
+            if (pl.wet && !was_wet) sys_tone(300, 120);           /* into the broth */
             if (script) {
                 char b[96]; int n2 = 0;
                 const int v[6] = { pl.x, pl.y, pl.z, pl.yaw, pl.pitch, pl.ground };

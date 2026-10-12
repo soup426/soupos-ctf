@@ -15,6 +15,7 @@ typedef struct {
     unsigned short inv[B_COUNT];
     int slot;                /* the hotbar's chosen slot, 0..8 */
     int bx, by, bz, bn;      /* the block being broken, and ticks so far */
+    int wet;                 /* in broth this tick (v0.60.210: the splash) */
 } player_t;
 typedef struct { int fwd, side, turn, tilt, jump, brk; } input_t;   /* -1, 0, 1; jump and brk 0/1 */
 void player_spawn(player_t *p);

@@ -66,6 +66,7 @@ int player_tick(player_t *p, const input_t *in, const ray_t *tg) {
     if (p->pitch > 227) p->pitch = 227;
     if (p->pitch < -227) p->pitch = -227;
     int wet = world_get(p->x >> 16, (p->y + FX_ONE / 2) >> 16, p->z >> 16) == B_BROTH;
+    p->wet = wet;
     fx sp = wet ? WALK / 2 : WALK, s = fx_sin(p->yaw), c = fx_cos(p->yaw);
     move_x(p, fx_mul(s, in->fwd * sp) + fx_mul(c, in->side * sp));
     move_z(p, fx_mul(c, in->fwd * sp) - fx_mul(s, in->side * sp));

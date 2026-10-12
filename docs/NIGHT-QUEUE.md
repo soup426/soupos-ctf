@@ -102,7 +102,7 @@ itself (one long hold spanning an Alt+Tab, z stops within two ticks); the
 save's byte sum becomes a CRC-32 (version 2 files, version 1 still read);
 a HOME over 140 characters is refused with a message, not cut.
 
-## 6. Mincecraft: sounds
+## 6. Mincecraft: sounds — DONE v0.60.210
 
 SYS_TONE (the mixer): a short low crunch on a break (lower for harder
 blocks), a plop on a place, a soft tick while breaking, splash entering
