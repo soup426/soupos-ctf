@@ -80,3 +80,25 @@ int world_top(int x, int z) {
     for (int y = WY - 1; y >= 0; y--) if (blocks[world_get(x, y, z)].solid) return y;
     return -1;
 }
+
+#define FQ 512
+static short fq[FQ][3];
+static int fqn;
+void world_fall_queue(int x, int y, int z) {
+    if (fqn < FQ && x >= 0 && x < WX && y >= 1 && y < WY && z >= 0 && z < WZ) { fq[fqn][0] = (short)x; fq[fqn][1] = (short)y; fq[fqn][2] = (short)z; fqn++; }
+}
+void world_fall_step(void (*fell)(int x, int y, int z)) {
+    static short cur[FQ][3];
+    int n = fqn;
+    for (int i = 0; i < n; i++) { cur[i][0] = fq[i][0]; cur[i][1] = fq[i][1]; cur[i][2] = fq[i][2]; }
+    fqn = 0;
+    for (int i = 0; i < n; i++) {
+        int x = cur[i][0], y = cur[i][1], z = cur[i][2], below = world_get(x, y - 1, z);
+        if (world_get(x, y, z) != B_SUGAR || (below != B_AIR && below != B_BROTH)) continue;
+        world_set(x, y - 1, z, B_SUGAR);
+        world_set(x, y, z, B_AIR);
+        if (fell) fell(x, y - 1, z);
+        world_fall_queue(x, y - 1, z);                    /* on down, next step */
+        world_fall_queue(x, y + 1, z);                    /* and what stood on it */
+    }
+}

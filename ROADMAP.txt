@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.232
+Current version: v0.60.233
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,21 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.233 (2026-10-12)  — MINCECRAFT: SUGAR FALLS
+  - Sugar is sand: a block broken queues the one above it, a block placed
+    queues itself, and each game tick every queued sugar with air or
+    broth under it moves down one and queues itself and the one above
+    again, so a column comes down a block at a time, bottom first.
+    Generation and loading do not queue anything: sugar the world made
+    hanging stays until something near it changes, as Minecraft's sand.
+    Each move is a marker ([mincecraft] fell X Y Z 6).
+  - scripts/mincecraft-fall-test.sh: a saved flat world given a crumb
+    with three sugar on it on the host; F held long enough for the crumb
+    only (450 ms: 300 for it, and the sugar landing in its place would
+    need 250 more); the markers 11, 12, 13 in order and only the crumb
+    broken; the save on the host: sugar at 11-13, air at 14. Six wide,
+    six passes.
 
 v0.60.232 (2026-10-12)  — NEOSIM: gu gU g~
   - The case operators: gu lower, gU upper, g~ swap, with any motion or

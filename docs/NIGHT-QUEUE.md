@@ -72,7 +72,7 @@ neovim's.
 The case operators with motions, text objects, visual mode and their
 doubled forms (guu gUU g~~), counts and . Test: cases against neovim's.
 
-## 4. Mincecraft: sugar falls
+## 4. Mincecraft: sugar falls — DONE v0.60.233
 
 Sugar is sand: with air (or broth) under it, it falls, a block a tick or
 so, until it lands. Breaking the block under a column of sugar brings

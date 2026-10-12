@@ -21,3 +21,8 @@ void     world_gen(unsigned seed);
 void     world_flat(void);                   /* for the tests: crust at y 10, a broth pool ahead, a stalk to the left */
 unsigned world_hash(void);                   /* FNV-1a 32 over the grid */
 int      world_top(int x, int z);            /* highest solid y, or -1 */
+/* Falling sugar (v0.60.233): a cell to look at after a change near it; each
+ * step moves every sugar queued that has air or broth under it down one,
+ * calling fell() with where it landed, and queues it and the cell above. */
+void world_fall_queue(int x, int y, int z);
+void world_fall_step(void (*fell)(int x, int y, int z));

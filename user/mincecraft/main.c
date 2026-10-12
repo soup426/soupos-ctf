@@ -63,6 +63,7 @@ static void cell_marker(const char *what, int x, int y, int z, int id) {
     eprint("[mincecraft] "); eprint(what); eprint(" "); eprint_u((unsigned)x); eprint(" "); eprint_u((unsigned)y);
     eprint(" "); eprint_u((unsigned)z); eprint(" "); eprint_u((unsigned)id); eprint("\n");
 }
+static void fell_marker(int x, int y, int z) { cell_marker("fell", x, y, z, B_SUGAR); }
 /* Day and night (v0.60.196): 1200 steps a day, one every 20 ticks (a
  * 20-minute day). The light is 256 at noon and 77 (30%) at midnight;
  * the sky goes from 0x87BEEB to 0x0F142D with it. */
@@ -248,7 +249,7 @@ int main(void) {
             else if (ev.type == WEV_WHEEL) pl.slot = ((pl.slot + (int)ev.key) % 9 + 9) % 9;
             else if (ev.type == WEV_KEY && (ev.key == 'r' || ev.key == 'q')) {
                 int ids[9], n = hotbar(&pl, ids);
-                if (pl.slot < n && player_place(&pl, &tg, ids[pl.slot])) { cell_marker("placed", tg.px, tg.py, tg.pz, ids[pl.slot]); sys_tone(523, 60); if (ids[pl.slot] == B_TEALIGHT) lamps_scan(); }
+                if (pl.slot < n && player_place(&pl, &tg, ids[pl.slot])) { cell_marker("placed", tg.px, tg.py, tg.pz, ids[pl.slot]); world_fall_queue(tg.px, tg.py, tg.pz); sys_tone(523, 60); if (ids[pl.slot] == B_TEALIGHT) lamps_scan(); }
                 else eprint("[mincecraft] place refused\n");
                 inv_marker(&pl, inv_last);
             }
@@ -281,10 +282,12 @@ int main(void) {
             cam_forward(&cam, &dx, &dy, &dz);
             ray_cast(cam.x, cam.y, cam.z, dx, dy, dz, 5 << 16, &tg);
             if (!hold_time && ++tt % 20 == 0) tod = (tod + 1) % 1200;
+            world_fall_step(fell_marker);                          /* (v0.60.233) sugar a block a tick */
             int was_wet = pl.wet;
             int broke = player_tick(&pl, &in, &tg);
             if (broke) {
                 cell_marker("broke", tg.x, tg.y, tg.z, broke); inv_marker(&pl, inv_last);
+                world_fall_queue(tg.x, tg.y + 1, tg.z);             /* (v0.60.233) what stood on it may fall */
                 if (broke == B_TEALIGHT) lamps_scan();
                 int hz = 220 - 4 * blocks[broke].hardness;
                 sys_tone((unsigned)(hz < 60 ? 60 : hz), 80);       /* the crunch: lower for harder */
