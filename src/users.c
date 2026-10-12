@@ -411,6 +411,25 @@ int users_may(const char *path, char need) {
     return mode_allows(path, need);
 }
 
+/* May the cook open this path, to read or to write (v0.60.262)? Reading
+ * asks 'r' of it; writing asks 'w' of it when it is there, else of the
+ * bowl it would be made in. SYS_OPEN's rule since v0.51, moved here so
+ * soupyc's open(), lines(), write_lines() and include ask it too (review
+ * R-K12: they asked nothing, and any cook read /etc/kitchen). */
+int users_may_open(const char *path, int writing) {
+    if (!writing) return users_may(path, 'r');
+    if (fat_exists(path)) return users_may(path, 'w');
+    char parent[FAT_PATH_MAX];
+    int n = (int)strlen(path);
+    while (n > 1 && path[n - 1] != '/') n--;
+    if (n > 1) n--;
+    if (n < 1) n = 1;
+    if (n >= FAT_PATH_MAX) return 0;
+    memcpy(parent, path, (uint32_t)n); parent[n] = '\0';
+    if (path[0] != '/') strcpy(parent, "/");
+    return users_may(parent, 'w');
+}
+
 int users_set_secret(const char *name, const char *secret) {
     for (int i = 0; i < n_users; i++)
         if (strcmp(roster[i].name, name) == 0) {

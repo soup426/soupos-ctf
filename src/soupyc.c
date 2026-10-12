@@ -64,6 +64,19 @@
 #include "ai.h"
 #include "soupyc_types.h"
 #include "task.h"
+#include "users.h"
+
+/* Every file soupyc opens (v0.60.262, review R-K12): open(), lines(),
+ * write_lines() and include. soupyc runs in ring 0 on the shell's task, so
+ * nothing below it asks whose file it is; the cook's rights are asked here,
+ * as SYS_OPEN asks a program's (users_may_open). The CHALLENGE build keeps
+ * the unchecked open: reading a file the shell refuses is its stage 1. */
+static vfs_node_t *sc_open(const char *path, int flags) {
+#ifdef NO_CHALLENGE
+    if (!users_may_open(path, (flags & VFS_WRONLY) != 0)) return 0;
+#endif
+    return vfs_open(path, flags);
+}
 
 /* ============================================================
  * Per-invocation context
@@ -735,7 +748,7 @@ static node_t *parse_stmt(void) {
 
         if (inc_depth >= MAX_INCLUDE_DEPTH) { set_err("include nested too deep"); return (void *)0; }
 
-        vfs_node_t *nd = vfs_open(fname, VFS_RDONLY);
+        vfs_node_t *nd = sc_open(fname, VFS_RDONLY);
         if (!nd) { set_err("include: file not found"); return (void *)0; }
         uint32_t sz = vfs_size(nd);
         char *buf = (char *)kmalloc(sz + 1);
@@ -1631,7 +1644,7 @@ static int call_builtin(node_t *n, val_t *out) {
         const char *path = val_str(&a[0], scratch, SVAL_LEN);
         int h = arr_alloc();
         if (h < 0) { set_err("lines: no free array"); return 1; }
-        vfs_node_t *nd = vfs_open(path, VFS_RDONLY);
+        vfs_node_t *nd = sc_open(path, VFS_RDONLY);
         if (!nd) { *out = mkaval(h); return 1; }
         uint32_t size = vfs_size(nd);
         char *buf = str_alloc(size);
@@ -1671,7 +1684,7 @@ static int call_builtin(node_t *n, val_t *out) {
         if (err_flag) return 1;
         const char *path = val_str(&a[0], scratch, SVAL_LEN);
         if (a[1].type != VAL_ARR || !arr_valid(a[1].ival)) { set_err("write_lines: second arg is not an array"); return 1; }
-        vfs_node_t *nd = vfs_open(path, VFS_WRONLY | VFS_CREATE);
+        vfs_node_t *nd = sc_open(path, VFS_WRONLY | VFS_CREATE);
         if (!nd) { *out = mkival(-1); return 1; }
         arr_t *arr = &arrays[a[1].ival];
         int written = 0;
@@ -1701,7 +1714,7 @@ static int call_builtin(node_t *n, val_t *out) {
         for (int i = 0; i < MAX_SC_FILES; i++)
             if (!sc_files[i]) { slot = i; break; }
         if (slot < 0) { set_err("open: too many open files"); return 1; }
-        vfs_node_t *nd = vfs_open(a[0].sval, flags);
+        vfs_node_t *nd = sc_open(a[0].sval, flags);
         if (!nd) { *out = mkival(-1); return 1; }   /* missing file -> -1 */
         sc_files[slot] = nd;
         *out = mkival(slot);

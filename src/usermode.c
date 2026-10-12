@@ -491,19 +491,8 @@ void syscall_dispatch(registers_t *r) {
              * in the ordinary build: in the CHALLENGE build an unchecked open
              * is part of what the challenge teaches, and stays. */
             {
-                int writing = (r->ecx == O_WRITE || r->ecx == O_APPEND), ok;
-                if (!writing)                 ok = users_may(path, 'r');
-                else if (fat_exists(path))    ok = users_may(path, 'w');
-                else {
-                    char parent[FAT_PATH_MAX];
-                    int n = (int)strlen(path);
-                    while (n > 1 && path[n - 1] != '/') n--;
-                    if (n > 1) n--;
-                    if (n < 1) n = 1;
-                    memcpy(parent, path, (uint32_t)n); parent[n] = '\0';
-                    if (path[0] != '/') strcpy(parent, "/");
-                    ok = users_may(parent, 'w');
-                }
+                int writing = (r->ecx == O_WRITE || r->ecx == O_APPEND);
+                int ok = users_may_open(path, writing);   /* (v0.60.262) shared with soupyc */
                 if (!ok) {
                     klog("[user] %s: open %s for %s refused\n", pr->name, path, writing ? "writing" : "reading");
                     r->eax = (uint32_t)-1; break;

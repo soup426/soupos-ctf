@@ -62,3 +62,4 @@ int         users_is_headchef(void);          /* 1 if current uid == 0 */
  * allowed (the operation fails on its own). One rule for the shell and for
  * programs' syscalls (v0.48.0). */
 int         users_may(const char *path, char need);
+int         users_may_open(const char *path, int writing);   /* SYS_OPEN's rule, soupyc's too (v0.60.262) */

@@ -618,7 +618,7 @@ Mincecraft; neosim and rx.c; Doom; tests, build and docs.)
 
 ### Kernel and shell (reviewer confirmed K12 in QEMU on a copy)
 
-- **R-K12 (critical, security).** soupyc's open(), read(), write() and its
+- **R-K12 (critical, security) — DONE v0.60.262 (soupyc-perms-test).** soupyc's open(), read(), write() and its
   file loads call vfs_open with no users_may in the ordinary build
   (soupyc.c :738 :1634 :1674 :1704). soupyc runs in ring 0 on the shell's
   task, so `soup -c` as any cook reads /etc/kitchen (reproduced: the
