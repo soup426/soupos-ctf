@@ -87,7 +87,7 @@ Syntax colours for .sc (soupyc: keywords, strings, numbers, comments) and
 from a per-line pass (no state across lines but a /* comment). Test: a
 screendump of a small .c file, each class's cells in its colour.
 
-## 5. The first line after a login
+## 5. The first line after a login — CLOSED, measured (2026-10-12)
 
 From queue 57's notes: litexp-test once lost its first line, typed a
 second after the secret, while the login was being checked (an empty
@@ -95,6 +95,14 @@ output file, the rerun fine). Measure first: how many tests type a line
 right after "rosemary" with only a fixed WAIT, and does a soak of one of
 them, six wide, lose the line? If so, qemu_keys waits for the prompt after
 a login's secret before the next item, for every test at once.
+
+**Closed with the numbers (rule 3).** 237 test scripts type straight after
+"rosemary" "WAIT:1". The console login (do_login) reads the secret and
+checks it with no flush of the input, so keys typed meanwhile wait in the
+queue; the only flush near a login is the desktop's clock-in
+(desktop_shifts), which the console tests do not use. litexp-test soaked
+twelve times, six wide twice: twelve passes. Its one failure stays a note
+below; across the night's twenty-odd full checks it has not come back.
 
 ## Notes left by unattended runs
 
