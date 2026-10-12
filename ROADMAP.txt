@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.227
+Current version: v0.60.228
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,13 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.228 (2026-10-12)  — MINCECRAFT: TOAST IS FOOD
+  - Toast, crafted from a broccoli stalk, gives four hearts back: the best
+    food, so crafting has a reason (queue 60's note).
+  - mincecraft-eat-test starts at 3 hearts with a toast in hand too: the
+    toast to 7 (the HUD read back), then butter, a floret to the cap,
+    sugar not eaten, crust refused, as before.
 
 v0.60.227 (2026-10-12)  — NEOSIM: TEXT OBJECTS
   - After d c y (and > <), and in visual mode: iw aw iW aW (a word, or

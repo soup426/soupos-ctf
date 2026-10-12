@@ -26,5 +26,5 @@ void player_spawn(player_t *p);
 int  player_tick(player_t *p, const input_t *in, const ray_t *target);   /* the id it broke, or 0 */
 int  player_place(player_t *p, const ray_t *target, int id);             /* 1 placed, 0 refused */
 int  hotbar(const player_t *p, int ids[9]);                              /* how many kinds held */
-int  player_eat(player_t *p, int id);    /* (v0.60.224) hearts back; 0 not hungry, -1 not food */
+int  player_eat(player_t *p, int id);    /* (v0.60.224) hearts back (sugar 1, butter 2, floret 3, toast 4); 0 not hungry, -1 not food */
 void player_eye(const player_t *p, cam_t *c);

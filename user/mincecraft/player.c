@@ -107,10 +107,11 @@ int hotbar(const player_t *p, int ids[9]) {                       /* the kinds h
     for (int id = 1; id < B_COUNT && n < 9; id++) if (p->inv[id]) ids[n++] = id;
     return n;
 }
-/* Eating (v0.60.224): sugar a heart, butter two, a floret three; never
- * past ten, and nothing eaten at ten. */
+/* Eating (v0.60.224): sugar a heart, butter two, a floret three, toast
+ * (made from a stalk) four (v0.60.228); never past ten, and nothing eaten
+ * at ten. */
 int player_eat(player_t *p, int id) {
-    int h = id == B_SUGAR ? 1 : id == B_BUTTER ? 2 : id == B_FLORET ? 3 : 0;
+    int h = id == B_SUGAR ? 1 : id == B_BUTTER ? 2 : id == B_FLORET ? 3 : id == B_TOAST ? 4 : 0;
     if (!h || id >= B_COUNT || p->inv[id] == 0) return -1;
     if (p->hp >= P_HEARTS) return 0;
     p->inv[id]--;

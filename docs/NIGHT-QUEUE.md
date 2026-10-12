@@ -64,7 +64,7 @@ After an operator or in visual mode: iw aw (a word, and its space), i" a"
 i' a' (the quotes on the line around or after the cursor), i( a( ib ab, i[
 a[, i{ a{ iB aB (across lines, nested). Test: cases against neovim's.
 
-## 3. Mincecraft: toast is food
+## 3. Mincecraft: toast is food — DONE v0.60.228
 
 The note from queue 60: toast (crafted from a stalk) gives four hearts,
 the best food, so crafting has a reason. Test: the eat test's world given

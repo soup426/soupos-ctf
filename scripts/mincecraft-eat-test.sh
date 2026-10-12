@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
-# mincecraft-eat-test.sh - eating (v0.60.224). Boot 1 saves the flat world;
-# on the host it is given 4 hearts and in hand 7 crust, 2 sugar, 2 florets
-# and a butter (the hotbar in id order: crust, sugar, floret, butter). Boot
-# 2, e on each in turn: a floret 4 to 7 (the HUD's hearts read back), the
-# butter 7 to 9, a floret 9 to 10 (not past ten; still eaten), sugar at ten
-# not eaten ("not hungry"), crust refused ("not food"); the counts in the
-# markers as they went.
+# mincecraft-eat-test.sh - eating (v0.60.224; toast v0.60.228). Boot 1 saves
+# the flat world; on the host it is given 3 hearts and in hand 7 crust, 2
+# sugar, 2 florets, a butter and a toast (the hotbar in id order: crust,
+# sugar, floret, butter, toast). Boot 2, e on each in turn: the toast 3 to 7
+# (the best food; the HUD's hearts read back), the butter 7 to 9, a floret 9
+# to 10 (not past ten; still eaten), sugar at ten not eaten ("not hungry"),
+# crust refused ("not food"); the counts in the markers as they went.
 set -uo pipefail
 cd "$(dirname "$0")/.."
 fail=0
@@ -31,14 +31,14 @@ python3 -I - "$WORK/e.wld" <<'EDIT' || { echo "  FAIL  could not make the hungry
 import struct, sys, zlib
 p = sys.argv[1]; b = bytearray(open(p, 'rb').read())
 assert b[:4] == b'MINC' and struct.unpack('<I', b[4:8])[0] == 4
-for bid, n in ((1, 7), (6, 2), (8, 2), (10, 1)):      # crust, sugar, florets, butter
+for bid, n in ((1, 7), (6, 2), (8, 2), (10, 1), (11, 1)):   # crust, sugar, florets, butter, toast
     b[36 + 4 * bid:40 + 4 * bid] = struct.pack('<I', n)
-b[92:96] = struct.pack('<I', 4)                       # four hearts
+b[92:96] = struct.pack('<I', 3)                       # three hearts
 b[-4:] = struct.pack('<I', zlib.crc32(bytes(b[:-4])))
 open(p, 'wb').write(b)
 EDIT
 mcopy -o -i "$WORK/disk.img" "$WORK/e.wld" ::E.WLD
-boot eat "" "TYPE:3" "TYPE:e" "WAIT:1" "MON:screendump $WORK/seven.ppm" "WAIT:1" "TYPE:4" "TYPE:e" "WAIT:1" \
+boot eat "" "TYPE:5" "TYPE:e" "WAIT:1" "MON:screendump $WORK/seven.ppm" "WAIT:1" "TYPE:4" "TYPE:e" "WAIT:1" \
             "TYPE:3" "TYPE:e" "WAIT:1" "TYPE:2" "TYPE:e" "WAIT:1" "TYPE:1" "TYPE:e" "WAIT:1"
 python3 - "$WORK" <<'PY' || fail=1
 import re, sys
@@ -50,8 +50,8 @@ def check(cond, what):
     ok &= bool(cond)
 log = open(f'{work}/serial-eat.log', 'rb').read().decode('latin-1')
 ev = re.findall(r'\[mincecraft\] (ate \w+ hearts=\d+|not hungry|not food|inv [^\n]*)', log)
-want = ['inv 1=7 6=2 8=2 10=1', 'ate floret hearts=7', 'inv 8=1', 'ate butter hearts=9', 'inv 10=0',
-        'ate floret hearts=10', 'inv 8=0', 'not hungry', 'not food']
+want = ['inv 1=7 6=2 8=2 10=1 11=1', 'ate toast hearts=7', 'inv 11=0', 'ate butter hearts=9', 'inv 10=0',
+        'ate floret hearts=10', 'inv 8=1', 'not hungry', 'not food']
 check(ev == want, 'the eating, in order: %r' % ev)
 def ppm(n):
     d = open(f'{work}/{n}.ppm', 'rb').read(); i = 0; words = []
@@ -65,7 +65,7 @@ def ppm(n):
 img = ppm('seven')
 cells = [img(241 + 122 + k * 16 + 7, 93 + 416 + 5) for k in range(10)]
 red = [r > 180 and g < 90 and bl < 110 for r, g, bl in cells]
-check(red == [True] * 7 + [False] * 3, "after a floret the HUD shows 7 hearts: %r" % red)
+check(red == [True] * 7 + [False] * 3, "after the toast the HUD shows 7 hearts: %r" % red)
 sys.exit(0 if ok else 1)
 PY
 [ "$fail" = 0 ] && echo "mincecraft-eat-test: PASS" || echo "mincecraft-eat-test: FAIL"
