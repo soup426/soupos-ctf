@@ -1,10 +1,10 @@
 # Night queue
 
-Sixty-third queue. The first sixty-two are in `docs/queue-archive-2026-10-*.md`;
-queue 62 (`-12f`) gave Doom its whole status bar, neosim marks and gu gU g~,
-and Mincecraft falling sugar. This one: two gaps those found in neosim
-(counts on inserts, paragraphs), its line-number settings, and clouds over
-Mincecraft. Written by an unattended run when queue 62 ran out, as the user
+Sixty-fourth queue. The first sixty-three are in `docs/queue-archive-2026-10-*.md`;
+queue 63 (`-12g`) gave neosim counts on inserts, paragraphs and :set nu rnu,
+and Mincecraft clouds. This one starts with the risk its notes raised (the
+full check's time), then neosim registers and macros, and a Mincecraft F3
+screen. Written by an unattended run when queue 63 ran out, as the user
 asked on 2026-10-11; the user has not seen it.
 
 ## Standing rules
@@ -51,33 +51,37 @@ asked on 2026-10-11; the user has not seen it.
 
 ---
 
-## 1. neosim: counts on inserts — DONE v0.60.234
+## 1. The full check's time
 
-A count before i a I A o O repeats what was typed when Esc ends it
-(3ihi<Esc> hihihi, 2onew<Esc> two lines); . repeats it with the count.
-Test: cases against neovim's.
+422 s under timeout 590, 5-10 s more a test. Measure first: each test's
+time from check.sh's own output, and where it goes (boots, waits). Then
+cut it without weakening a test: share a boot between tests of one
+program where they can, shorter fixed waits where an UNTIL can stand in.
+The number before and after; every test still fails when its feature is
+taken away (spot-check two).
 
-## 2. neosim: paragraphs — DONE v0.60.235
+## 2. neosim: registers
 
-{ and } to the blank line before and after (counts; as motions, d} and
-y{), ip and ap (the lines of the paragraph, ap with the blank lines after
-or before). Test: cases against neovim's.
+"a to "z before y d c p P x (and their doubled forms), "A to "Z adding
+to the register; "" the unnamed one; "0 the last yank; "1 the last
+delete of lines. :reg lists them. Test: cases against neovim's (the text,
+and :reg's lines read back).
 
-## 3. neosim: :set number and relativenumber — DONE v0.60.236
+## 3. neosim: macros
 
-:set nu / nonu / rnu / nornu (and number, relativenumber): with rnu the
-other lines show their distance from the cursor's, the cursor's line its
-own number when nu is on too (0 when not), as neovim's. Test: a screen read
-back after each, the numbers worked out from neovim's rule.
+q and a letter records the keys typed until q; @ and the letter plays
+them (a count: that many times), @@ the last again; the macro is the
+register's text, so "ap shows it. Test: cases against neovim's.
 
-## 4. Mincecraft: clouds — DONE v0.60.237
+## 4. Mincecraft: F3
 
-A layer of flat cream clouds high up (y 52), a fixed noise pattern that
-drifts with the time of day, drawn in the sky before the terrain and
-faded with the fog. Test: two screendumps a while apart looking up: cloud
-pixels in the sky in both, and moved; the frame rate still at its cap.
+F3 shows the cook's place (x y z to a tenth), the way it faces (N E S W
+and the yaw), the frame rate, the block aimed at and its place, and the
+time; F3 again hides it. Shadowed text at the left. Test: the screen read
+back against the font after F3, the numbers as the markers have them.
 
 ## Notes left by unattended runs
+
 
 
 
