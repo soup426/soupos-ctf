@@ -70,7 +70,7 @@ under the standing rules (a test that fails first, then the fix).
       check.sh; every claim checked before it is queued; findings into the
       review section, most severe first, worked by the order there. The
       tree is not rebuilt while they run.
-    **Last review began at 7647649** (2026-10-12, full).
+    **Last review began at e8bc3b7** (2026-10-12, by area: kernel and shell, the desktop, tests build and docs).
     **Last full review began at 7647649** (2026-10-12).
     Move the first line at each review, both at a full one.
 ---
