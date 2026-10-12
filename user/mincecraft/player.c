@@ -38,8 +38,13 @@ static void move_y(player_t *p, fx d) {
     p->vy = 0;
 }
 void player_spawn(player_t *p) {
-    int x = WX / 2, z = WZ / 2;
-    while (x < WX - 2 && world_get(x, world_top(x, z) + 1, z) == B_BROTH) x++;   /* a dry column */
+    int x = WX / 2, z = WZ / 2;                                   /* the dry column nearest the centre (v0.60.198) */
+    for (int r = 0; r < WX / 2 - 2 && world_get(x, world_top(x, z) + 1, z) == B_BROTH; r++)
+        for (int dz = -r; dz <= r; dz++) for (int dx = -r; dx <= r; dx++) {
+            int cx = WX / 2 + dx, cz = WZ / 2 + dz;
+            if ((dx == -r || dx == r || dz == -r || dz == r) && world_get(x, world_top(x, z) + 1, z) == B_BROTH
+                    && world_get(cx, world_top(cx, cz) + 1, cz) != B_BROTH) { x = cx; z = cz; }
+        }
     for (int i = 0; i < (int)sizeof(*p); i++) ((char *)p)[i] = 0;
     p->x = (x << 16) + FX_ONE / 2; p->z = (z << 16) + FX_ONE / 2;
     p->y = (world_top(x, z) + 1) << 16;

@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.197
+Current version: v0.60.198
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,20 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.198 (2026-10-11)  — MINCECRAFT: LAKES AND HILLS
+  - Played, the first world was a white sugar plain with puddles: two
+    octaves of value noise piled the heights up between 26 and 36, so 2
+    to 5% of columns were under broth and a tenth was beach. Now three
+    octaves (32, 16, 8; 3:2:1) spread from the middle (d|d|/640 + d/16
+    around 29), held to 5..50: 12 to 16% under broth, real lakes, a beach
+    only at the broth's edge (about 4%), hills into the 40s.
+  - The spawn is the dry column nearest the centre, found ring by ring,
+    now that the centre is often a lake.
+  - mincecraft_gen.py follows (C's division toward zero for the negative
+    half). mincecraft-gen-test also checks the terrain's shape for its
+    seeds: 8% or more under broth, 15% beach at most, hills to 40 or more
+    (the old generator fails all three).
 
 v0.60.197 (2026-10-11)  — MINCECRAFT: KEEPING THE WORLD
   - P saves, and Esc, the close box and the desktop going all save

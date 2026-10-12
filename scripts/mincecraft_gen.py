@@ -17,15 +17,21 @@ def noise(x, z, s, seed):
     v01 = hash2(x0, z0 + 1, seed) & 255; v11 = hash2(x0 + 1, z0 + 1, seed) & 255
     a = v00 * (s - fx) + v10 * fx; b = v01 * (s - fx) + v11 * fx
     return (a * (s - fz) + b * fz) // (s * s)
+def cdiv(a, b):                                   # C's division: toward zero
+    q = abs(a) // abs(b)
+    return q if (a >= 0) == (b > 0) else -q
 def height(x, z, seed):
-    return 20 + (noise(x, z, 32, seed) * 16 + noise(x, z, 8, seed ^ 0x9e3779b9) * 8) // 255
+    n = (noise(x, z, 32, seed) * 3 + noise(x, z, 16, seed ^ 0x85ebca6b) * 2 + noise(x, z, 8, seed ^ 0x9e3779b9) * 1) // 6
+    d = n - 128
+    h = 29 + cdiv(d * abs(d), 640) + cdiv(d, 16)
+    return 5 if h < 5 else 50 if h > 50 else h
 def gen(seed):
     w = bytearray(WX * WZ * WY)
     for z in range(WZ):
         for x in range(WX):
             edge = x == 0 or z == 0 or x == WX - 1 or z == WZ - 1
             h = height(x, z, seed)
-            top = SUGAR if h < SEA + 2 else CRUST
+            top = SUGAR if h <= SEA else CRUST
             for y in range(WY):
                 if edge or y == 0: b = IRON
                 elif y < h - 4:
@@ -43,7 +49,7 @@ def gen(seed):
     for z in range(3, WZ - 3):
         for x in range(3, WX - 3):
             h = height(x, z, seed)
-            if h < SEA + 2: continue
+            if h <= SEA: continue
             r = hash2(x, z, seed ^ 0x7f4a7c15)
             if r % 60: continue
             t = 4 + (r >> 8) % 3

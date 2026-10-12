@@ -21,14 +21,21 @@ static int noise(int x, int z, int s, unsigned seed) {           /* 0..255, x an
     int a = v00 * (s - fx) + v10 * fx, b = v01 * (s - fx) + v11 * fx;
     return (a * (s - fz) + b * fz) / (s * s);
 }
-int world_height(int x, int z, unsigned seed) {                  /* 20..44 solid blocks */
-    return 20 + (noise(x, z, 32, seed) * 16 + noise(x, z, 8, seed ^ 0x9e3779b9u) * 8) / 255;
+/* Three octaves (32, 16, 8), weighted 3:2:1, then spread from the middle
+ * (v0.60.198): value noise piles up around 128, which gave puddles for
+ * lakes and a tenth of the world in beach; d|d| pushes the ends out into
+ * lakes and hills. Held to 5..50 solid blocks, so a broccoli on a peak
+ * still fits under the ceiling. */
+int world_height(int x, int z, unsigned seed) {
+    int n = (noise(x, z, 32, seed) * 3 + noise(x, z, 16, seed ^ 0x85ebca6bu) * 2 + noise(x, z, 8, seed ^ 0x9e3779b9u)) / 6;
+    int d = n - 128, h = 29 + d * (d < 0 ? -d : d) / 640 + d / 16;
+    return h < 5 ? 5 : h > 50 ? 50 : h;
 }
 void world_gen(unsigned seed) {
     for (int z = 0; z < WZ; z++) for (int x = 0; x < WX; x++) {
         int edge = x == 0 || z == 0 || x == WX - 1 || z == WZ - 1;
         int h = world_height(x, z, seed);
-        int top = h < SEA + 2 ? B_SUGAR : B_CRUST;
+        int top = h <= SEA ? B_SUGAR : B_CRUST;          /* sugar under the broth and at its edge */
         for (int y = 0; y < WY; y++) {
             int b;
             if (edge || y == 0) b = B_CASTIRON;
@@ -45,7 +52,7 @@ void world_gen(unsigned seed) {
     }
     for (int z = 3; z < WZ - 3; z++) for (int x = 3; x < WX - 3; x++) {   /* broccoli */
         int h = world_height(x, z, seed);
-        if (h < SEA + 2) continue;
+        if (h <= SEA) continue;
         unsigned r = hash2(x, z, seed ^ 0x7f4a7c15u);
         if (r % 60) continue;
         int t = 4 + (int)((r >> 8) % 3), cy;

@@ -24,5 +24,19 @@ for s in $SEEDS; do
     got=$(command grep -a -o "\[mincecraft\] world seed=$s hash=[0-9]* top=[0-9]*" "$WORK/serial.log" | head -1 | sed 's/\[mincecraft\] world //')
     if [ "$got" = "$want" ]; then echo "  ok    seed $s: $got"; else echo "  FAIL  seed $s: got '$got', want '$want'"; fail=1; fi
 done
+# The terrain itself (v0.60.198): real lakes, a narrow beach, hills. The
+# first generator piled heights up between 26 and 36 (2 to 5% under broth).
+python3 -I - "$PWD/scripts" <<'TERRAIN' || fail=1
+import sys
+sys.path.insert(0, sys.argv[1]); import mincecraft_gen as g
+ok = True
+for seed in (1, 42, 3000000000):
+    hs = [g.height(x, z, seed) for x in range(1, 127) for z in range(1, 127)]
+    n = len(hs); water = sum(h < g.SEA for h in hs) / n; beach = sum(h == g.SEA for h in hs) / n
+    good = water >= 0.08 and beach <= 0.15 and max(hs) >= 40
+    print(('  ok    ' if good else '  FAIL  ') + 'seed %d terrain: %.0f%% under broth (8+), %.0f%% beach (15 at most), hills to %d (40+)' % (seed, 100 * water, 100 * beach, max(hs)))
+    ok &= good
+sys.exit(0 if ok else 1)
+TERRAIN
 [ "$fail" = 0 ] && echo "mincecraft-gen-test: PASS" || echo "mincecraft-gen-test: FAIL"
 exit "$fail"
