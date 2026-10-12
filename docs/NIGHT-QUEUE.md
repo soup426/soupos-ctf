@@ -312,6 +312,39 @@ Mincecraft; neosim and rx.c; Doom; tests, build and docs.)
 - **R-K11 (low).** 16 open files machine-wide, 13 for one process: one
   program starves every redirect. Fix: a per-cook share or a bigger table.
 
+### The desktop (reviewer reproduced 1-3 in QEMU on copies)
+
+- **R-C1 (high, security).** Any cook's program, from anywhere (an SSH
+  session too), can open a window on another cook's desktop: it goes on
+  top, takes the focus and gets their keys (WEV_KEY and SYS_WIN_KEYS);
+  under the clock-in screen it waits and has the focus once they clock in.
+  SYS_NOTE writes on their bar the same way. No check compares the
+  caller with ct_uid (countertop_win_open :526, countertop_note :2023).
+  Fix: refuse a caller not owned by the desktop's cook (or not started
+  from its sessions); no focus for a window not yet clicked.
+- **R-C2 (medium, security).** Removing a file from a files window copies
+  it into the cook's own compost with only 'w' checked: a write-only file
+  becomes readable (ctx_remove :1460, compost_add :1590). Fix: 'r' too, or
+  delete it outright when it cannot be read.
+- **R-C3 (medium).** Leave leaks every open picture and files window's
+  memory (3 MB a full-screen picture, a shift each time in clock-in mode;
+  :2761). Fix: close every window through close_window on the way out.
+- **R-C4 (medium).** A secret of 32 characters or more never lifts the
+  cloche or clocks in (lock_buf[32]; hire takes 63): the only way out is a
+  reboot. Fix: 64 bytes, as the login buffer.
+- **R-C5 (test).** ctcloche-test cannot tell the 3-second wait from none.
+  Fix: a screendump inside the wait, or the gap between its lines.
+- **R-C6 (low).** The wheel during a terminal's drag select copies the wrong
+  text, reading one byte out of bounds (sel_a -1). Fix: end the selection
+  on scroll; sel_copy refuses sel_a < 0.
+- **R-C7 (low).** The cloche comes down the moment a long Doom session ends
+  (last_input not reset in ct_doom). Fix: reset it.
+- **R-C8 (low).** The wheel still reaches windows under the cloche. Fix:
+  && !locked.
+- **R-C9 (low, suspected).** A title-bar drag outlives its window's close
+  and can move the next window in that slot. Fix: clear drag in
+  close_window.
+
 ### Mincecraft (reviewer reproduced 1-3 on the host with the game's own C)
 
 - **R-M1 (high).** Flying has no ceiling (player.c fly branch); a save with
