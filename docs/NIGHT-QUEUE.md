@@ -216,6 +216,70 @@ working (a queue of cells, a step a few ticks). Test: a world from the
 host, broth placed on a ledge: the cells it reaches in the markers, the
 save on the host.
 
+## 10. SinkedIn, and every lone modifier opens it (the user, 2026-10-12)
+
+A desktop program, sinkedin.elf (the user's name: it stays, as neosim
+did), a LinkedIn parody that runs offline: a feed of posts ("I'm humbled
+to announce I have been promoted to Senior Sous Chef"), endorsements
+for kitchen skills (Whisking, Mise en place), a profile from the
+logged-in user's name, connection requests from the other accounts on
+the box. The posts come from templates and the entropy pool, so the
+feed differs each boot.
+
+Then the keyboard: Shift, Ctrl or Alt (either side) pressed and released
+with no other key between opens SinkedIn. Measure first where the
+release is seen (keyboard.c's break codes already track alt_tabbed the
+same way: a flag set on press, cleared by any other key, read on
+release) and what the text console does with it (the desktop only, or
+the shell too: the user's words are "every modifier key", so both, the
+console running it as a cook). A mouse click while the modifier is
+held counts as another key (Shift-click selects). Tests: a scancode
+stream through the driver with lone and chorded modifiers, the launch
+marker only for the lone ones; Alt-Tab, Ctrl-C and shifted typing
+untouched (the existing tests stay green).
+
+## 11. Roux: a web engine of soupOS's own, and a browser (the user, 2026-10-12)
+
+"Completely independent from Gecko, V8, everything", and the finish
+line is the user's: navigate to Anthropic's website and go full circle.
+Everything below is from scratch, as the TCP stack and the SSH client
+were. Engine: roux (the base the sauce is built on); the program:
+tureen.elf. Split into commits as the stages land:
+
+- **11a. Sockets for cooks.** There are no TCP syscalls; the SSH client
+  lives in the kernel. Add connect/send/recv/close on tcp.c's handles,
+  and DNS through the existing resolver. Test: a cook fetches from a
+  host-side server, bytes checked.
+- **11b. HTTP/1.1 GET** over 11a: Host, Content-Length and chunked
+  bodies, redirects (3 at most). Test: a host python server with
+  chunked and redirected pages.
+- **11c. TLS 1.3 client** (RFC 8446): x25519 and
+  TLS_CHACHA20_POLY1305_SHA256 from the SSH client's chacha.c,
+  curve25519.c and sha256.c, with HKDF on top; SNI. Rule 7: RFC 8448's
+  trace as the published vectors, then a handshake against a host
+  `openssl s_server`. Certificates are parsed but not yet verified, and
+  the address bar says so in red until 11d.
+- **11d. Certificate checks**: X.509 chains to a handful of bundled roots,
+  ECDSA P-256 and RSA-PSS/PKCS#1 signatures, names and dates. Vectors
+  from Wycheproof. Measure first which roots and algorithms
+  anthropic.com's chain actually uses.
+- **11e. Parser**: an HTML tokenizer (the spec's states that real pages
+  hit), a tree with implied tags, entities. Test: pages on the host,
+  the tree dumped to serial.
+- **11f. Layout and paint**: block and inline flow, the font8x16
+  glyphs at a couple of sizes, headings, lists, links, a little CSS
+  (display, color, margin, font-weight from style blocks and
+  attributes; the rest ignored), scrolling, clickable links, Back.
+  Images are a later item. Test: a page rendered in QEMU, screenshot
+  compared with a stored one.
+- **11g. Full circle**: tureen opens https://www.anthropic.com through
+  QEMU's user network. There is no JavaScript engine, so what shows is
+  the server-rendered HTML; measure how much of the page that is before
+  promising more. A JS engine of its own is a queue of its own if the
+  user wants one. The test cannot depend on the internet: a saved copy
+  of the page served locally over 11c; the live fetch is a manual check
+  noted in ROADMAP.
+
 ## Review findings (2026-10-12)
 
 (Added as the six reviewers report: kernel and shell; the desktop;
@@ -445,6 +509,8 @@ Mincecraft; neosim and rx.c; Doom; tests, build and docs.)
 5. Item 0b, Doom, from R-D3, R-D2, R-D4, R-D1 down.
 6. The rest by severity, the area's mediums before the lows; items 1-9
    where they fit.
+7. Items 10 and 11 (the user's ideas, 2026-10-12) after the review;
+   11 is a long one, its stages one commit each.
 
 ## Notes left by unattended runs
 
