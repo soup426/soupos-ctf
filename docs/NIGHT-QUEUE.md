@@ -52,7 +52,7 @@ seen it.
 
 ---
 
-## 1. neosim: * and #
+## 1. neosim: * and # — DONE v0.60.226
 
 * and # search for the word under the cursor (or the next word on the
 line), whole words only, forward and back, a count the nth; n and N go on

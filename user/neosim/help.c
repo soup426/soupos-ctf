@@ -32,6 +32,7 @@ const char *const help_text[] = {
     "SEARCHING",
     "  / ?  then text     search forward, back (plain text)",
     "  n N                the next match, the one before",
+    "  * #                the word under the cursor, forward, back (whole words)",
     "  :s/a/b/ :%s/a/b/ substitute on the line, everywhere (a g after: every one)",
     "",
     "FILES",

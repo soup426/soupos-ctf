@@ -10,7 +10,7 @@
  * Ctrl-R; > < (four spaces); / ? n N (plain text); v V with d y c > <; .;
  * % to the matching bracket; Enter, o and O keep the indent (v0.60.218);
  * :help, a read-only page of all this (v0.60.219); f t F T ; , r ~ (v0.60.222);
- * Ctrl-D Ctrl-U Ctrl-F Ctrl-B, zz zt zb (v0.60.223)
+ * Ctrl-D Ctrl-U Ctrl-F Ctrl-B, zz zt zb (v0.60.223); * # (v0.60.226)
  * (v0.60.206); i a A I o O into insert mode; : for a command. Insert mode:
  * typing, Enter, Backspace (joining lines at the start of one), Tab as four
  * spaces, the arrows, Esc back. Commands: :w [FILE], :q, :q!, :wq, :x,
@@ -122,10 +122,18 @@ static void insert_text(int *y, int *x, const char *s, int n) {
 /* ---- search and substitute: plain text (v0.60.206) ---- */
 static char last_pat[80];
 static int last_dir = 1;
+static int last_whole;                               /* (v0.60.226) the last search was * or #: whole words */
+static int kw(char c) { return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '_' || (unsigned char)c >= 192; }
 static int match_at(int y, int x, const char *p, int pl) {
     if (x + pl > lenof(y)) return 0;
     for (int i = 0; i < pl; i++) if (E.t.s[y][x + i] != p[i]) return 0;
     return 1;
+}
+static int search_whole;                             /* find() wants whole words */
+static int match_find(int y, int x, const char *p, int pl) {
+    if (!match_at(y, x, p, pl)) return 0;
+    if (!search_whole) return 1;
+    return (x == 0 || !kw(E.t.s[y][x - 1])) && (x + pl >= lenof(y) || !kw(E.t.s[y][x + pl]));
 }
 /* The next match from just after (or before) the cursor, round the end of
  * the text once; 1 found (at *oy,*ox), 0 none. *wrapped: it went round. */
@@ -137,11 +145,11 @@ static int find(int dir, const char *p, int *oy, int *ox, int *wrapped) {
     for (int step = 0; step <= E.t.n; step++) {
         if (dir > 0) {
             int from = step == 0 ? x + 1 : 0;
-            for (int i = from; i + pl <= lenof(y); i++) if (match_at(y, i, p, pl)) { *oy = y; *ox = i; return 1; }
+            for (int i = from; i + pl <= lenof(y); i++) if (match_find(y, i, p, pl)) { *oy = y; *ox = i; return 1; }
             if (++y >= E.t.n) { y = 0; *wrapped = 1; }
         } else {
             int from = step == 0 ? x - 1 : lenof(y) - pl;
-            for (int i = from; i >= 0; i--) if (match_at(y, i, p, pl)) { *oy = y; *ox = i; return 1; }
+            for (int i = from; i >= 0; i--) if (match_find(y, i, p, pl)) { *oy = y; *ox = i; return 1; }
             if (--y < 0) { y = E.t.n - 1; *wrapped = 1; }
         }
     }
@@ -149,10 +157,29 @@ static int find(int dir, const char *p, int *oy, int *ox, int *wrapped) {
 }
 static void search(int dir, const char *p) {
     int y, x, w;
-    if (!find(dir, p, &y, &x, &w)) { msg("E486: Pattern not found: ", p, 0); return; }
+    search_whole = last_whole;
+    int got = find(dir, p, &y, &x, &w);
+    search_whole = 0;
+    if (!got) { msg("E486: Pattern not found: ", p, 0); return; }
     E.cy = y; E.cx = x; E.want = x;
     if (w) msg(dir > 0 ? "search hit BOTTOM, continuing at TOP" : "search hit TOP, continuing at BOTTOM", 0, 0);
+    else if (last_whole) msg(dir > 0 ? "/\\<" : "?\\<", p, "\\>");
     else { msg(dir > 0 ? "/" : "?", p, 0); }
+}
+/* * and # (v0.60.226): the keyword under the cursor, or the next on the
+ * line, as a whole word, from that word's own start, forward or back. */
+static void star(int dir, int cnt) {
+    int n = lenof(E.cy), x = E.cx;
+    const char *t = E.t.s[E.cy];
+    while (x < n && !kw(t[x])) x++;
+    if (x >= n) { msg("E348: No string under cursor", 0, 0); return; }
+    while (x > 0 && kw(t[x - 1])) x--;
+    int e = x, k = 0;
+    while (e < n && kw(t[e]) && k < (int)sizeof(last_pat) - 1) last_pat[k++] = t[e++];
+    last_pat[k] = 0;
+    last_dir = dir; last_whole = 1;
+    E.cx = x;
+    for (int i = 0; i < cnt; i++) search(dir, last_pat);
 }
 /* :s/PAT/REP/[g] on line a..b; the whole job one undo step. */
 static void substitute(int a, int b, char *spec) {
@@ -559,6 +586,8 @@ static void normal_key(unsigned k) {
     if (m.ok == 0 && (k == 'h' || k == 'l' || k == 'j' || k == 'k' || k >= 256)) return;
     switch (k) {
     case 'd': case 'c': case 'y': case '>': case '<': P.op = (int)k; P.opcount = cnt; P.ophad = had; break;
+    case '*': star(1, cnt); break;
+    case '#': star(-1, cnt); break;
     case 'n': for (int i = 0; i < cnt; i++) search(last_dir, last_pat); break;
     case 'N': for (int i = 0; i < cnt; i++) search(-last_dir, last_pat); break;
     case '/': case '?': E.mode = M_COMMAND; E.cmdch = (char)k; E.cmdn = 0; break;
@@ -662,6 +691,7 @@ static int key_inner(unsigned k) {
             E.cmd[E.cmdn] = 0; E.mode = M_NORMAL; E.msg[0] = 0; cur_change = -1;
             if (E.cmdch == '/' || E.cmdch == '?') {
                 last_dir = E.cmdch == '/' ? 1 : -1;
+                if (E.cmdn) last_whole = 0;                 /* a typed pattern is plain text */
                 if (E.cmdn) scopy(last_pat, E.cmd, sizeof(last_pat));
                 if (!last_pat[0]) { msg("E35: No previous regular expression", 0, 0); return 0; }
                 search(last_dir, last_pat);

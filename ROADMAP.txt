@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.225
+Current version: v0.60.226
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,16 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.226 (2026-10-12)  — NEOSIM: * AND #
+  - * and # search forward and back for the keyword under the cursor (or
+    the next on the line), whole words only (letters, digits and _, as
+    vim's iskeyword), from that word's own start, round the end; a count
+    the nth. n and N go on with whole words; a typed / or ? is plain text
+    again. The message shows the pattern as vim's does (/\<soup\>).
+  - scripts/neosim-star-test.sh: 20 cases against neovim 0.12.5, among
+    them soups and soupy not matching soup, salt_soup one word, * from
+    leading spaces taking the next word.
 
 v0.60.225 (2026-10-12)  — DOOM: THE PISTOL, AT LAST ON SCREEN
   - Fixed: the gun was never seen. Weapons were drawn from (160, 168),
