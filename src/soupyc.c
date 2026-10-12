@@ -75,7 +75,12 @@ static vfs_node_t *sc_open(const char *path, int flags) {
 #ifdef NO_CHALLENGE
     if (!users_may_open(path, (flags & VFS_WRONLY) != 0)) return 0;
 #endif
-    return vfs_open(path, flags);
+    vfs_node_t *nd = vfs_open(path, flags);
+    /* Not the keyboard, in any build (v0.60.264, review R-K13): read here it
+     * has no foreground rule, and a spawn()ed script outlives a shift, so it
+     * would have the next cook's keys. input() is soupyc's keyboard. */
+    if (nd && vfs_is_kbd(nd)) { vfs_close(nd); return 0; }
+    return nd;
 }
 
 /* ============================================================

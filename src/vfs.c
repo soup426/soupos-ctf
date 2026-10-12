@@ -20,6 +20,7 @@
 #include "serial.h"
 #include "task.h"
 #include "proc.h"
+#include "term.h"
 
 /* ---- open-handle table ---- */
 static vfs_node_t nodes[VFS_MAX_OPEN];
@@ -316,6 +317,12 @@ static int dev_serial_write(vfs_node_t *n, const void *buf, uint32_t count) {
 }
 /* Line-oriented blocking read: returns at `count` bytes or after '\n'. */
 static int dev_kbd_read(vfs_node_t *n, void *buf, uint32_t count) {
+    /* The console's keyboard, for the console's tasks only (v0.60.264): a
+     * task on another terminal (an SSH session) reads EOF, never the keys
+     * typed at the console. Programs never get here (SYS_READ's stdin rule,
+     * v0.60.257), nor soupyc (sc_open). */
+    task_t *me = task_current();
+    if (me && me->term && me->term != &term_vga) return 0;
     uint8_t *b = (uint8_t *)buf;
     uint32_t i = 0;
     while (i < count) {

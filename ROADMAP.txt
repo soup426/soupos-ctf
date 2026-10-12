@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.263
+Current version: v0.60.264
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,17 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.264 (2026-10-12)  — /DEV/KBD IS NOT SOUPYC'S
+  - v0.60.257 sent a program's /dev/kbd reads through the stdin rule, but
+    soupyc's open("/dev/kbd") still reached dev_kbd_read, with no
+    foreground rule, and a spawn()ed soupyc task outlives a shift: the
+    next cook's keys, secrets typed at the login included (review R-K13).
+    soupyc may not open the keyboard now, in any build (input() is its
+    keyboard), and dev_kbd_read gives EOF to a task on any terminal but
+    the console's.
+  - scripts/kbdtap-test.sh: soupyc's open("/dev/kbd") gives -1 (0 before
+    the fix), and pour /dev/kbd in an SSH session ends at once.
 
 v0.60.263 (2026-10-12)  — NO COMPOST FOR A FILE THE COOK MAY NOT READ
   - Removing a file in the files window copies it into the cook's own

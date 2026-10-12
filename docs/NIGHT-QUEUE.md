@@ -626,7 +626,7 @@ Mincecraft; neosim and rx.c; Doom; tests, build and docs.)
   anywhere (a file made in /). The unchecked open is the CHALLENGE build's
   taught stage 1 (challenge.c), not the ordinary build's. Fix: users_may
   ('r' or 'w', as SYS_OPEN asks) on every soupyc open under NO_CHALLENGE.
-- **R-K13 (high, security, suspected).** soupyc can still read /dev/kbd
+- **R-K13 (high, security, suspected) — DONE v0.60.264 (kbdtap-test).** soupyc can still read /dev/kbd
   through dev_kbd_read: no freeze (interrupts are on there) but no
   foreground check, and a spawn()ed soupyc task outlives clockout, so it
   could read keys typed at the next login. Fix: refuse /dev/kbd to all but
