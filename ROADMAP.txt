@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.256
+Current version: v0.60.257
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,21 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.257 (2026-10-12)  — /DEV/KBD NO LONGER FREEZES THE MACHINE
+  - A program's read of /dev/kbd ran dev_kbd_read inside the syscall,
+    where interrupts are off: keyboard_getchar's hlt never woke, and any
+    cook could freeze the whole machine (cook spoon.elf /dev/kbd, then a
+    key). It had no foreground check either, so a background or SSH
+    program would have read the console's keys, secrets typed at the
+    login and at chef included (review R-K1, critical). SYS_READ now reads
+    /dev/kbd by stdin's rule: interrupts on, only the foreground program
+    (an SSH program its own terminal), a kill heard, a line at most. The
+    shell's own reads of it (pour /dev/kbd) are unchanged.
+  - scripts/devkbd-test.sh: a foreground spoon on /dev/kbd gets its
+    typed line and Ctrl-C ends it; a background one writing /KEYS.TXT
+    gets nothing typed at the shell after it; the shell answers after
+    both. Before the fix the machine stopped at the first read.
 
 v0.60.256 (2026-10-12)  — MINCECRAFT TESTS FAIL ON A MISSING STRETCH
   - mincecraft-play-test skipped its walk, jump and focus checks when no

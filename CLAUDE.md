@@ -3,7 +3,7 @@
 ## What this is
 
 soupOS is a 32-bit x86 hobby OS written in C and NASM assembly (currently
-**v0.60.256**; ROADMAP.txt is the authority on the version). It boots via GRUB and runs in protected mode with paging, a
+**v0.60.257**; ROADMAP.txt is the authority on the version). It boots via GRUB and runs in protected mode with paging, a
 physical/heap allocator, and a cooperative scheduler. On top of that:
 
 - **Filesystem**: FAT16 read/write with subdirectories ("bowls") and a VFS shim
@@ -291,7 +291,9 @@ not need rewriting. `vfs_init()` is called once at boot after `fat_init()`.
   `fat.c` has no streaming write, so writes accumulate in a heap buffer
   that grows by doubling and is flushed with `fat_write()` on `vfs_close`.
 - **Char devices** — `/dev/null`, `/dev/zero`, `/dev/serial` (writes to
-  COM1), `/dev/kbd` (line-oriented blocking read via `keyboard_getchar`).
+  COM1), `/dev/kbd` (line-oriented blocking read via `keyboard_getchar`; a
+  program's read goes through SYS_READ's stdin rule instead, v0.60.257:
+  interrupts on, the foreground program only, kills heard).
   `vfs_eof` always returns 0 for char devices.
 
 ### Surface

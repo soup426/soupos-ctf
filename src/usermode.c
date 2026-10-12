@@ -447,7 +447,22 @@ void syscall_dispatch(registers_t *r) {
             uint32_t fd = r->ebx, max = r->edx;
             char *p = (char *)r->ecx;
             if (!user_ok(r->ecx, max)) { r->eax = (uint32_t)-1; break; }
-            if (pr && fd < PROC_UFD_MAX && pr->ufds[fd]) {
+            if (pr && fd < PROC_UFD_MAX && pr->ufds[fd] && vfs_is_kbd(pr->ufds[fd])) {
+                /* /dev/kbd (v0.60.257, review R-K1): by stdin's rule, a line
+                 * at most, as dev_kbd_read gave. Read in here through
+                 * dev_kbd_read it hlted with interrupts off and froze the
+                 * machine, and any program, in the background or on an
+                 * SSH session, would have had the console's keys. */
+                uint32_t n = 0;
+                while (n < max) {
+                    int c = user_stdin_getchar(pr);
+                    if (c < 0) break;
+                    if (c > 0xFF) continue;
+                    p[n++] = (char)c;
+                    if (c == '\n') break;
+                }
+                r->eax = n;
+            } else if (pr && fd < PROC_UFD_MAX && pr->ufds[fd]) {
                 int got = vfs_read(pr->ufds[fd], p, max);
                 r->eax = (uint32_t)(got < 0 ? 0 : got);
             } else if (fd == FD_STDIN) {

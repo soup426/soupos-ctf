@@ -343,6 +343,12 @@ static const struct { const char *path; const vfs_ops_t *ops; } devices[] = {
 };
 #define N_DEVICES ((int)(sizeof(devices) / sizeof(devices[0])))
 
+/* Is n the keyboard (v0.60.257)? A program's read of it must go through
+ * the syscall's stdin rule (interrupts on, the foreground only, kills
+ * heard): dev_kbd_read's keyboard_getchar inside a syscall hlts with
+ * interrupts off and the machine never wakes. */
+int vfs_is_kbd(const vfs_node_t *n) { return n && n->ops == &kbd_ops; }
+
 /* ---- public API ---- */
 void vfs_init(void) {
     memset(nodes, 0, sizeof(nodes));

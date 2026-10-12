@@ -82,6 +82,7 @@ vfs_node_t *vfs_open(const char *path, int flags);
 /* Stream I/O. read/write return bytes transferred, or -1 on error.
  * read returns 0 at end-of-file. */
 int      vfs_read (vfs_node_t *n, void *buf, uint32_t count);
+int      vfs_is_kbd(const vfs_node_t *n);   /* (v0.60.257) the keyboard device */
 int      vfs_write(vfs_node_t *n, const void *buf, uint32_t count);
 int      vfs_seek (vfs_node_t *n, int32_t off, int whence);
 int32_t  vfs_tell (vfs_node_t *n);

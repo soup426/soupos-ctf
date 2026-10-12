@@ -430,7 +430,7 @@ Mincecraft; neosim and rx.c; Doom; tests, build and docs.)
 
 ### Kernel and shell (reviewer reproduced 1-6 in QEMU on copies)
 
-- **R-K1 (critical, security).** /dev/kbd: any cook's read freezes the
+- **R-K1 (critical, security) — DONE v0.60.257 (devkbd-test).** /dev/kbd: any cook's read freezes the
   machine (keyboard_getchar's hlt with interrupts off inside the syscall),
   and it has no foreground check, so a background or SSH program would
   read the console's keys, secrets typed at login and at chef included
