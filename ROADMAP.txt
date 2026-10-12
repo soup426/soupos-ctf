@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.196
+Current version: v0.60.197
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,24 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.197 (2026-10-11)  — MINCECRAFT: KEEPING THE WORLD
+  - P saves, and Esc, the close box and the desktop going all save
+    before it ends, to $HOME/mincecraft.wld or -world PATH (save.c): a
+    header ("MINC", version 1, seed, time of day, place, the eleven
+    counts), the grid as (count, id) runs, and the sum of every byte
+    before it, written and read through 4 KB (the worst encoding is 2 MB).
+    The flat world saves in 32 KB.
+  - The next start loads it: place, view, inventory, time and every
+    block. A file that is short, long, of another version or with a bad
+    sum is refused, said on the bar, and a new world is played; the file
+    is left as it was until a save writes over it.
+  - -check: load, say what came of it, end (no desktop needed).
+  - scripts/mincecraft-save-test.sh: four boots: saved twice and loaded
+    back (hash, place, the crust in hand), a byte flipped, ten bytes short
+    and four too many all refused, a game refusing 3 MB of zeros playing
+    on and a small save over it loading (so O_WRITE truncates), and with
+    no -world the headchef's /mincecraft.wld looked for.
 
 v0.60.196 (2026-10-11)  — MINCECRAFT: SERVICE AND AFTER HOURS
   - A 20-minute day: 1200 steps, one every 20 game ticks, a new world

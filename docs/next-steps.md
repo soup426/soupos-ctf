@@ -5,6 +5,16 @@ the work: the event, keeping the project safe, and where soupOS goes next.
 
 ---
 
+## Mincecraft, later (2026-10-11)
+
+The first version (v0.60.192 to v0.60.197) is a sandbox with light survival.
+The spec's "Later" list: crafting (stalk to planks of "toast"), health and
+hunger, mobs, torches and light per block, worlds larger than 128x128, a menu
+of saved worlds, sound through SYS_TONE when breaking, mouse look (needs the
+desktop to pass right-button drags, or to capture the pointer).
+
+---
+
 ## 1. Do these regardless
 
 ### ~~The deliberately planted vulnerabilities are in mainline~~ DONE 2026-08-26

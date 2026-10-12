@@ -3,7 +3,7 @@
 ## What this is
 
 soupOS is a 32-bit x86 hobby OS written in C and NASM assembly (currently
-**v0.60.196**; ROADMAP.txt is the authority on the version). It boots via GRUB and runs in protected mode with paging, a
+**v0.60.197**; ROADMAP.txt is the authority on the version). It boots via GRUB and runs in protected mode with paging, a
 physical/heap allocator, and a cooperative scheduler. On top of that:
 
 - **Filesystem**: FAT16 read/write with subdirectories ("bowls") and a VFS shim
@@ -953,7 +953,19 @@ throughout (no FPU). `world.c` and `scripts/mincecraft_gen.py` are the same
 generator: change both together, `scripts/mincecraft-gen-test.sh` compares
 them. Its `[mincecraft]` serial markers reach the log only when it runs at the
 console (a desktop terminal takes a program's stderr), so tests start it in
-the background before `countertop`.
+the background before `countertop` with `-wait`.
+
+Controls: W A S D walk, arrows look, space jumps (held keys come from
+`SYS_WIN_KEYS`, so only while its window has the focus); F or the left button
+held breaks, r or q places, 1-9 or the wheel pick the slot; P saves, Esc or the
+close box saves and quits. A kill does NOT save. Flags: `-seed N -flat -gen
+-wait -script -time T -world PATH -check`. The world file is `$HOME/mincecraft.wld`
+(HOME since v0.60.191) unless `-world`: "MINC", version 1, seed, time, x y z
+yaw pitch, 11 counts (32 bits each, little-endian), the grid as (count, id)
+runs, then the sum of every byte before it; a short, long, other-version or
+bad-sum file is refused (a new world, the file kept until a save). Memory:
+grid 1 MB + 640x480 body 1.2 MB + 320x240 buffer 0.3 MB stays under the
+4 MB `PROC_PAGE_CAP`. Tests: `mincecraft-{gen,view,play,save}-test.sh`.
 
 ## Homes (v0.52.2)
 

@@ -10,24 +10,31 @@
  *   cook mincecraft.elf -time T         (v0.60.196) start at time of day T (0
  *                                       midnight, 600 noon, of 1200) and hold it
  *   cook mincecraft.elf -script         (v0.60.194) the player after every tick
- *   cook mincecraft.elf -world PATH     (v0.60.194) taken, used from v0.60.197
+ *   cook mincecraft.elf -world PATH     (v0.60.197) the world file; HOME's
+ *                                       mincecraft.wld otherwise
+ *   cook mincecraft.elf -check          (v0.60.197) load the world file, say
+ *                                       what came of it, end (for the tests)
  *
  * W A S D walk, the arrows look, space jumps (all held, read through
  * SYS_WIN_KEYS at a fixed 20 ticks a second); F or the left button held
  * breaks what the crosshair is on (v0.60.195), r or q places the hotbar's
- * block on that face, 1 to 9 or the wheel choose the slot; Esc or the
- * close box ends it.
+ * block on that face, 1 to 9 or the wheel choose the slot; P saves, Esc or
+ * the close box saves and ends it (a kill does not save).
  *
  * Markers on stderr, [mincecraft] ...: window up, fps=N every 5 s, bye;
  * with -script "p x y z yaw pitch ground" each tick (16.16, angle units),
  * and "mark" on m, so tests can split the log into phases; "broke x y z id",
- * "placed x y z id" or "place refused", and "inv id=n ..." for each change.
+ * "placed x y z id" or "place refused", and "inv id=n ..." for each change;
+ * "saved PATH bytes= hash= x= y= z=", "loaded PATH hash= x= y= z=",
+ * "refused PATH" (a damaged file: a new world, the file left until a
+ * save), "no world at PATH".
  */
 #include "../ulib.h"
 #include "world.h"
 #include "render.h"
 #include "player.h"
 #include "hud.h"
+#include "save.h"
 
 static void eprint_u(unsigned v) {
     char b[12]; int n = 11; b[n] = 0;
@@ -61,11 +68,21 @@ static unsigned sky_at(int tod) {
     int r = 0x87 + ((0x0F - 0x87) * k >> 8), g = 0xBE + ((0x14 - 0xBE) * k >> 8), b = 0xEB + ((0x2D - 0xEB) * k >> 8);
     return (unsigned)r << 16 | (unsigned)g << 8 | (unsigned)b;
 }
+static void pos_marker(const player_t *p) {
+    eprint(" x="); eprint_int(p->x); eprint(" y="); eprint_int(p->y); eprint(" z="); eprint_int(p->z);
+}
+static void do_save(const char *path, const player_t *p, unsigned seed, int tod) {
+    unsigned n = 0;
+    if (save_world(path, p, seed, tod, &n) < 0) { sys_note("Mincecraft: could not save"); eprint("[mincecraft] save failed\n"); return; }
+    eprint("[mincecraft] saved "); eprint(path); eprint(" bytes="); eprint_u(n); eprint(" hash="); eprint_u(world_hash());
+    pos_marker(p); eprint("\n");
+}
 static int same(const char *a, const char *b) { while (*a && *a == *b) { a++; b++; } return *a == *b; }
 
 int main(void) {
     char *argv[12];
-    int argc = uargv(argv, 12), gen_only = 0, flat = 0, seeded = 0, wait = 0, script = 0, tod = 300, hold_time = 0;
+    int argc = uargv(argv, 12), gen_only = 0, flat = 0, seeded = 0, wait = 0, script = 0, tod = 300, hold_time = 0, check = 0, tset = -1;
+    const char *wpath = 0;
     unsigned seed = 0;
     for (int i = 0; i < argc; i++) {
         if (same(argv[i], "-gen")) gen_only = 1;
@@ -73,19 +90,44 @@ int main(void) {
         else if (same(argv[i], "-wait")) wait = 1;
         else if (same(argv[i], "-seed") && i + 1 < argc) { seed = parse_u(argv[++i]); seeded = 1; }
         else if (same(argv[i], "-script")) script = 1;
-        else if (same(argv[i], "-time") && i + 1 < argc) { tod = (int)(parse_u(argv[++i]) % 1200); hold_time = 1; }
-        else if (same(argv[i], "-world") && i + 1 < argc) i++;
+        else if (same(argv[i], "-time") && i + 1 < argc) { tset = (int)(parse_u(argv[++i]) % 1200); hold_time = 1; }
+        else if (same(argv[i], "-world") && i + 1 < argc) wpath = argv[++i];
+        else if (same(argv[i], "-check")) check = 1;
     }
     if (world_alloc() < 0) { print("Mincecraft: no memory for the world\n"); return 1; }
     if (!seeded) sys_random(&seed, 4);
-    if (flat) world_flat(); else world_gen(seed);
     if (gen_only) {
+        if (flat) world_flat(); else world_gen(seed);
         eprint("[mincecraft] world seed="); eprint_u(seed);
         eprint(" hash="); eprint_u(world_hash());
         eprint(" top="); eprint_u((unsigned)world_top(64, 64));
         eprint("\n");
         return 0;
     }
+    /* The world file: -world, or HOME's mincecraft.wld. */
+    static char pbuf[160];
+    if (!wpath) {
+        const char *home = getenv("HOME");
+        if (!home) { print("Mincecraft: no HOME; give -world PATH\n"); return 1; }
+        int n = 0;
+        while (home[n] && n < 140) { pbuf[n] = home[n]; n++; }
+        if (n == 0 || pbuf[n - 1] != '/') pbuf[n++] = '/';
+        for (const char *t = "mincecraft.wld"; *t; t++) pbuf[n++] = *t;
+        pbuf[n] = 0;
+        wpath = pbuf;
+    }
+    player_t pl;
+    int got = load_world(wpath, &pl, &seed, &tod);
+    if (got == 0) { eprint("[mincecraft] loaded "); eprint(wpath); eprint(" hash="); eprint_u(world_hash()); pos_marker(&pl); eprint("\n"); }
+    else {
+        if (got == -2) { sys_note("Mincecraft: that world is damaged; a new one"); eprint("[mincecraft] refused "); eprint(wpath); eprint("\n"); }
+        else { eprint("[mincecraft] no world at "); eprint(wpath); eprint("\n"); }
+        if (flat) world_flat(); else world_gen(seed);
+        player_spawn(&pl);
+        eprint("[mincecraft] world seed="); eprint_u(seed); eprint(" hash="); eprint_u(world_hash()); eprint("\n");
+    }
+    if (check) return got == 0 ? 0 : 1;
+    if (tset >= 0) tod = tset;
 
     int win = sys_win_open(BODY_W, BODY_H, "Mincecraft");
     for (int i = 0; wait && win < 0 && i < 600; i++) { sys_sleep(100); win = sys_win_open(BODY_W, BODY_H, "Mincecraft"); }
@@ -93,14 +135,13 @@ int main(void) {
     unsigned *body = (unsigned *)sys_sbrk(BODY_W * BODY_H * 4);
     if (body == (unsigned *)-1 || render_alloc() < 0) { print("Mincecraft: no memory for the screen\n"); return 1; }
     eprint("[mincecraft] window up\n");
-    player_t pl;
-    player_spawn(&pl);
     cam_t cam;
     ray_t tg = { 0 };
     fx dx, dy, dz;
     unsigned last = sys_ticks(), fps_t = last;
     int frames = 0, lbtn = 0;
     unsigned short inv_last[B_COUNT] = { 0 };
+    inv_marker(&pl, inv_last);                                   /* what a loaded world has in hand */
     unsigned tt = 0;                                             /* game ticks, for the clock */
     for (;;) {
         uwinev_t ev;
@@ -108,6 +149,7 @@ int main(void) {
         while ((g = sys_win_event(win, &ev, 0)) == 1) {
             if (ev.type == WEV_CLOSE || (ev.type == WEV_KEY && ev.key == 27)) quit = 1;
             else if (ev.type == WEV_KEY && ev.key == 'm') eprint("[mincecraft] mark\n");
+            else if (ev.type == WEV_KEY && ev.key == 'p') do_save(wpath, &pl, seed, tod);
             else if (ev.type == WEV_KEY && ev.key >= '1' && ev.key <= '9') pl.slot = (int)ev.key - '1';
             else if (ev.type == WEV_WHEEL) pl.slot = ((pl.slot + (int)ev.key) % 9 + 9) % 9;
             else if (ev.type == WEV_KEY && (ev.key == 'r' || ev.key == 'q')) {
@@ -119,7 +161,7 @@ int main(void) {
             else if (ev.type == WEV_DOWN) lbtn = 1;
             else if (ev.type == WEV_UP) lbtn = 0;
         }
-        if (g < 0 || quit) break;
+        if (g < 0 || quit) { do_save(wpath, &pl, seed, tod); break; }
         unsigned char k[32];
         if (sys_win_keys(win, k) < 0) for (int i = 0; i < 32; i++) k[i] = 0;
         input_t in = { key_held(k, SC_W) - key_held(k, SC_S), key_held(k, SC_D) - key_held(k, SC_A),
