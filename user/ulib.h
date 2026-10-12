@@ -47,6 +47,7 @@ int  sys_win_keys(int id, unsigned char *out);   /* 32 bytes of held keys; 0, or
 #define SC_D     0x20
 #define SC_F     0x21
 #define SC_SPACE 0x39
+#define SC_LSHIFT 0x2A                 /* (v0.60.249) */
 #define SC_UP    0xC8
 #define SC_DOWN  0xD0
 #define SC_LEFT  0xCB

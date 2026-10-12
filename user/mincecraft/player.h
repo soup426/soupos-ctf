@@ -20,8 +20,9 @@ typedef struct {
     int wet;                 /* in broth this tick (v0.60.210: the splash) */
     int hp, hurt;            /* (v0.60.221) hearts, 0..10; hearts taken this tick */
     fx fall_top;             /* the highest feet since last on the ground or in broth */
+    int fly;                 /* (v0.60.249) flying: no fall, Space up, Shift down */
 } player_t;
-typedef struct { int fwd, side, turn, tilt, jump, brk; } input_t;   /* -1, 0, 1; jump and brk 0/1 */
+typedef struct { int fwd, side, turn, tilt, jump, brk, down; } input_t;   /* -1, 0, 1; jump, brk, down (Shift) 0/1 */
 void player_spawn(player_t *p);
 int  player_tick(player_t *p, const input_t *in, const ray_t *target);   /* the id it broke, or 0 */
 int  player_place(player_t *p, const ray_t *target, int id);             /* 1 placed, 0 refused */

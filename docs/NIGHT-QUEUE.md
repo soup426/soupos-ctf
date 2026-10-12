@@ -73,7 +73,7 @@ The number under or after the cursor on the line, plus or minus the
 count; negative numbers, 0x hex, the cursor to its last digit; . repeats.
 Test: cases against neovim's.
 
-## 4. Mincecraft: flying
+## 4. Mincecraft: flying — DONE v0.60.249
 
 Space twice quickly toggles flying: no fall, Space up and Shift down,
 walking as before; landing ends it. Saved in the world file (version 5).

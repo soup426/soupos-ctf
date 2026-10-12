@@ -30,10 +30,10 @@ mcopy -n -i "$WORK/disk.img" ::L.WLD "$WORK/l.wld" 2>/dev/null || { echo "  FAIL
 python3 -I - "$WORK/l.wld" <<'EDIT' || { echo "  FAIL  could not put the tealight in"; fail=1; }
 import struct, sys, zlib
 p = sys.argv[1]; b = open(p, 'rb').read()
-assert b[:4] == b'MINC' and struct.unpack('<I', b[4:8])[0] == 4
-head = b[:96]                                     # "MINC", eight words, fourteen counts, the hearts (v0.60.221)
+assert b[:4] == b'MINC' and struct.unpack('<I', b[4:8])[0] == 5
+head = b[:100]                                    # "MINC", eight words, fourteen counts, the hearts, flying (v0.60.249)
 grid = bytearray()
-i = 96
+i = 100
 while len(grid) < 128 * 128 * 64:
     grid += bytes([b[i + 1]]) * b[i]; i += 2
 x, y, z = 64, 11, 68

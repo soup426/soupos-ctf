@@ -27,8 +27,8 @@ boot() {   # $1: name, $2: arguments, then the keys after the window
 grid() {   # $1 in, $2 out (or -), the edit as python: g is the grid, head the header
 python3 -I - "$@" <<'PY'
 import struct, sys, zlib
-b = open(sys.argv[1], 'rb').read(); H = 96
-assert b[:4] == b'MINC' and struct.unpack('<I', b[4:8])[0] == 4
+b = open(sys.argv[1], 'rb').read(); H = 100
+assert b[:4] == b'MINC' and struct.unpack('<I', b[4:8])[0] == 5
 g = bytearray(); i = H
 while len(g) < 128 * 128 * 64: g += bytes([b[i + 1]]) * b[i]; i += 2
 at = lambda x, y, z: (y * 128 + z) * 128 + x

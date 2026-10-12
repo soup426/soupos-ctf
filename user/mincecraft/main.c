@@ -277,7 +277,7 @@ int main(void) {
         if (sys_win_keys(win, k) < 0) for (int i = 0; i < 32; i++) k[i] = 0;
         input_t in = { key_held(k, SC_W) - key_held(k, SC_S), key_held(k, SC_D) - key_held(k, SC_A),
                        key_held(k, SC_RIGHT) - key_held(k, SC_LEFT), key_held(k, SC_UP) - key_held(k, SC_DOWN),
-                       key_held(k, SC_SPACE), key_held(k, SC_F) | lbtn };
+                       key_held(k, SC_SPACE), key_held(k, SC_F) | lbtn, key_held(k, SC_LSHIFT) };
         unsigned now = sys_ticks();
         for (int n = 0; now - last >= 5 && n < 4; n++, last += 5) {
             player_eye(&pl, &cam);
@@ -287,6 +287,18 @@ int main(void) {
             world_fall_step(fell_marker);                          /* (v0.60.233) sugar a block a tick */
             render_cloud_drift += 65536 / 40;                     /* (v0.60.237) half a block a second, whatever the clock */
             int was_wet = pl.wet;
+            {                                                    /* (v0.60.249) Space twice quickly: flying on or off */
+                static int space_was, last_tap = -100, gt;
+                gt++;
+                if (in.jump && !space_was) {
+                    if (gt - last_tap <= 7) {
+                        pl.fly = !pl.fly; pl.vy = 0; last_tap = -100;
+                        eprint(pl.fly ? "[mincecraft] fly on\n" : "[mincecraft] fly off\n");
+                    } else last_tap = gt;
+                }
+                space_was = in.jump;
+            }
+            int fly_was = pl.fly;
             int broke = player_tick(&pl, &in, &tg);
             if (broke) {
                 cell_marker("broke", tg.x, tg.y, tg.z, broke); inv_marker(&pl, inv_last);
@@ -296,6 +308,7 @@ int main(void) {
                 sys_tone((unsigned)(hz < 60 ? 60 : hz), 80);       /* the crunch: lower for harder */
             } else if (pl.bn && pl.bn % 4 == 0) sys_tone(330, 20);  /* breaking: a soft tick */
             if (pl.wet && !was_wet) sys_tone(300, 120);           /* into the broth */
+            if (fly_was && !pl.fly) eprint("[mincecraft] fly off (landed)\n");
             if (pl.hurt) {                                        /* (v0.60.221) a fall */
                 eprint("[mincecraft] hurt "); eprint_u((unsigned)pl.hurt); eprint(" hearts="); eprint_u((unsigned)pl.hp); eprint("\n");
                 sys_tone(110, 150);

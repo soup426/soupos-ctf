@@ -3,7 +3,7 @@
 ## What this is
 
 soupOS is a 32-bit x86 hobby OS written in C and NASM assembly (currently
-**v0.60.248**; ROADMAP.txt is the authority on the version). It boots via GRUB and runs in protected mode with paging, a
+**v0.60.249**; ROADMAP.txt is the authority on the version). It boots via GRUB and runs in protected mode with paging, a
 physical/heap allocator, and a cooperative scheduler. On top of that:
 
 - **Filesystem**: FAT16 read/write with subdirectories ("bowls") and a VFS shim
@@ -962,11 +962,11 @@ held breaks, r or q places, 1-9 or the wheel pick the slot; P saves, Esc or the
 close box saves and quits, c crafts (stalk to toast, parmesan to a grater,
 butter to tealights), e eats (sugar 1 heart, butter 2, a floret 3; v0.60.224; toast 4, v0.60.228), F3 the debug rows (place, facing, fps, the block aimed at, the time; v0.60.242);
 ten hearts, a fall past 3 blocks takes one a block (broth breaks it), at none the
-cook wakes at the spawn (v0.60.221). Sugar falls like sand when what is under it goes (v0.60.233). Clouds at y 52 drift by the game ticks (v0.60.237). A square sun and moon cross the sky by the time of day (v0.60.244). A kill does NOT save. Flags: `-seed N -flat -clear -gen
+cook wakes at the spawn (v0.60.221). Sugar falls like sand when what is under it goes (v0.60.233). Clouds at y 52 drift by the game ticks (v0.60.237). A square sun and moon cross the sky by the time of day (v0.60.244). Space twice quickly flies (Space up, Shift down; v0.60.249). A kill does NOT save. Flags: `-seed N -flat -clear -gen
 -wait -script -time T -world PATH -check`. The world file is `$HOME/mincecraft.wld`
-(HOME since v0.60.191) unless `-world`: "MINC", version 4, seed, time, x y z
+(HOME since v0.60.191) unless `-world`: "MINC", version 5, seed, time, x y z
 yaw pitch, 14 counts (11 in versions 1 and 2), the hearts 1..10 (v0.60.221; none
-before version 4; 32 bits each, little-endian), the grid as (count, id)
+before version 4), flying 0/1 (v0.60.249; none before 5; 32 bits each, little-endian), the grid as (count, id)
 runs, then the CRC-32 (zlib's) of every byte before it (version 1: a byte sum,
 still read); a short, long, other-version or bad-check file is refused (a new world; the file copied to PATH.bad first). SYS_CLOSE returns the
 close's result since v0.60.202: a file is written at its close, so check it. Memory:

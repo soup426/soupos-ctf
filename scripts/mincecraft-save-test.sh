@@ -50,10 +50,12 @@ if [ -f "$WORK/good.wld" ]; then
     cat > "$WORK/craft.py" <<'CRAFT'
 import struct, sys, zlib
 def check_of(b): return zlib.crc32(bytes(b[:-4])) if struct.unpack('<I', b[4:8])[0] >= 2 else sum(b[:-4]) & 0xFFFFFFFF
-def older(b, version):            # a version 4 file as 1 or 2 had it: 11 counts, not 14 (v0.60.215), no hearts
-    b = bytearray(b[:80] + b[96:]); b[4:8] = struct.pack('<I', version); b[-4:] = struct.pack('<I', check_of(b)); return b
+def older(b, version):            # a version 5 file as 1 or 2 had it: 11 counts, not 14 (v0.60.215), no hearts, no flying
+    b = bytearray(b[:80] + b[100:]); b[4:8] = struct.pack('<I', version); b[-4:] = struct.pack('<I', check_of(b)); return b
+def four(b):                      # as version 4 had it (v0.60.249): the hearts, no flying
+    b = bytearray(b[:96] + b[100:]); b[4:8] = struct.pack('<I', 4); b[-4:] = struct.pack('<I', check_of(b)); return b
 def three(b):                     # as version 3 had it (v0.60.221): 14 counts, no hearts
-    b = bytearray(b[:92] + b[96:]); b[4:8] = struct.pack('<I', 3); b[-4:] = struct.pack('<I', check_of(b)); return b
+    b = bytearray(b[:92] + b[100:]); b[4:8] = struct.pack('<I', 3); b[-4:] = struct.pack('<I', check_of(b)); return b
 good = bytearray(open(sys.argv[1], 'rb').read()); out = sys.argv[2]
 print('version', struct.unpack('<I', good[4:8])[0], 'check ok', struct.unpack('<I', good[-4:])[0] == check_of(good))
 # the feet at y 64.3, a jump off the ceiling's top block: play can write it, so it loads
@@ -63,19 +65,20 @@ open(out + '/high.wld', 'wb').write(b)
 open(out + '/v1.wld', 'wb').write(older(good, 1))
 open(out + '/v2.wld', 'wb').write(older(good, 2))
 open(out + '/v3.wld', 'wb').write(three(good))
+open(out + '/v4.wld', 'wb').write(four(good))
 # no hearts left (v0.60.221): a cook is never saved dead, so refused
 b = bytearray(good); b[92:96] = struct.pack('<I', 0); b[-4:] = struct.pack('<I', check_of(b))
 open(out + '/dead.wld', 'wb').write(b)
-# two different (count, id) runs of the grid swapped (it starts at 96: "MINC",
-# eight words, fourteen counts, the hearts): a valid grid, the same byte sum, another
+# two different (count, id) runs of the grid swapped (it starts at 100: "MINC",
+# eight words, fourteen counts, the hearts, flying): a valid grid, the same byte sum, another
 # CRC; refused only by the CRC
 b = bytearray(good)
-i = next(i for i in range(96, len(b) - 8, 2) if b[i:i + 2] != b[i + 2:i + 4])
+i = next(i for i in range(100, len(b) - 8, 2) if b[i:i + 2] != b[i + 2:i + 4])
 b[i:i + 2], b[i + 2:i + 4] = b[i + 2:i + 4], b[i:i + 2]
 open(out + '/swap.wld', 'wb').write(b)
 CRAFT
     python3 -I "$WORK/craft.py" "$WORK/good.wld" "$WORK" > "$WORK/craft.out"
-    for f in bad short long t high v1 v2 v3 dead swap; do mcopy -o -i "$WORK/disk.img" "$WORK/$f.wld" "::${f^^}.WLD"; done
+    for f in bad short long t high v1 v2 v3 v4 dead swap; do mcopy -o -i "$WORK/disk.img" "$WORK/$f.wld" "::${f^^}.WLD"; done
 fi
 boot check "cook mincecraft.elf -check -world /BAD.WLD" "UNTIL:@soupOS:" \
            "cook mincecraft.elf -check -world /SHORT.WLD" "UNTIL:@soupOS:" \
@@ -83,6 +86,7 @@ boot check "cook mincecraft.elf -check -world /BAD.WLD" "UNTIL:@soupOS:" \
            "cook mincecraft.elf -check -world /V1.WLD" "UNTIL:@soupOS:" \
            "cook mincecraft.elf -check -world /V2.WLD" "UNTIL:@soupOS:" \
            "cook mincecraft.elf -check -world /V3.WLD" "UNTIL:@soupOS:" \
+           "cook mincecraft.elf -check -world /V4.WLD" "UNTIL:@soupOS:" \
            "cook mincecraft.elf -check -world /DEAD.WLD" "UNTIL:@soupOS:" \
            "cook mincecraft.elf -check -world /SWAP.WLD" "UNTIL:@soupOS:" \
            "cook mincecraft.elf -flat -script -wait -world /T.WLD &" "UNTIL:[mincecraft] world seed" "countertop" "UNTIL:[mincecraft] window up" "UNTIL:[mincecraft] fps=" \
@@ -149,10 +153,11 @@ check('[mincecraft] no world at /mincecraft.wld' in a, 'again: no -world looks f
 import os
 check('[mincecraft] loaded /HIGH.WLD' in a, 'again: a save with the feet at y 64.3 (off the top block) loads')
 cr = open(f'{work}/craft.out').read() if os.path.exists(f'{work}/craft.out') else ''
-check('version 4 check ok True' in cr, 'saves are version 4, their CRC-32 right by zlib: %r' % cr.strip())
+check('version 5 check ok True' in cr, 'saves are version 5, their CRC-32 right by zlib: %r' % cr.strip())
 check('[mincecraft] loaded /V1.WLD' in c, 'a version 1 file (a byte sum, 11 counts) still loads')
 check('[mincecraft] loaded /V2.WLD' in c, 'a version 2 file (a CRC, 11 counts) still loads')
 check('[mincecraft] loaded /V3.WLD' in c, 'a version 3 file (14 counts, no hearts) still loads')
+check('[mincecraft] loaded /V4.WLD' in c, 'a version 4 file (the hearts, no flying) still loads')
 check('[mincecraft] refused /DEAD.WLD' in c, 'a save with no hearts left refused')
 check('[mincecraft] refused /SWAP.WLD' in c, 'two runs of the grid swapped (a valid grid, the same sum) refused')
 check('[mincecraft] HOME is too long' in a, 'a HOME of 151 characters refused, not cut')

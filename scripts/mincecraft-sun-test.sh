@@ -29,7 +29,7 @@ aim() {   # $1 yaw, $2 pitch: the saved world's cook turned so
     python3 -I - "$WORK/base.wld" "$WORK/s.wld" "$1" "$2" <<'PY'
 import struct, sys, zlib
 b = bytearray(open(sys.argv[1], 'rb').read())
-assert b[:4] == b'MINC' and struct.unpack('<I', b[4:8])[0] == 4
+assert b[:4] == b'MINC' and struct.unpack('<I', b[4:8])[0] == 5
 b[28:36] = struct.pack('<ii', int(sys.argv[3]), int(sys.argv[4]))
 b[-4:] = struct.pack('<I', zlib.crc32(bytes(b[:-4])))
 open(sys.argv[2], 'wb').write(b)

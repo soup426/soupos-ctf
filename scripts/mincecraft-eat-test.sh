@@ -30,7 +30,7 @@ mcopy -n -i "$WORK/disk.img" ::E.WLD "$WORK/e.wld" 2>/dev/null || { echo "  FAIL
 python3 -I - "$WORK/e.wld" <<'EDIT' || { echo "  FAIL  could not make the hungry world"; fail=1; }
 import struct, sys, zlib
 p = sys.argv[1]; b = bytearray(open(p, 'rb').read())
-assert b[:4] == b'MINC' and struct.unpack('<I', b[4:8])[0] == 4
+assert b[:4] == b'MINC' and struct.unpack('<I', b[4:8])[0] == 5
 for bid, n in ((1, 7), (6, 2), (8, 2), (10, 1), (11, 1)):   # crust, sugar, florets, butter, toast
     b[36 + 4 * bid:40 + 4 * bid] = struct.pack('<I', n)
 b[92:96] = struct.pack('<I', 3)                       # three hearts

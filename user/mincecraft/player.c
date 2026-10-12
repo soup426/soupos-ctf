@@ -5,6 +5,7 @@
 #include "player.h"
 #include "world.h"
 #define WALK  14090          /* 0.215 blocks a tick, 4.3 a second */
+#define FLY 16384                      /* (v0.60.249) a quarter of a block a tick, flying up or down */
 #define GRAV  5243           /* 0.08 a tick, each tick */
 #define JUMP  27525          /* 0.42: about 1.3 blocks up */
 #define TERM  58982          /* 0.9 a tick at most, falling */
@@ -74,6 +75,13 @@ int player_tick(player_t *p, const input_t *in, const ray_t *tg) {
     if (wet) { p->vy -= GRAV / 2; if (in->jump) p->vy = SWIM; if (p->vy < -SWIM) p->vy = -SWIM; }
     else { p->vy -= GRAV; if (in->jump && p->ground) p->vy = JUMP; if (p->vy < -TERM) p->vy = -TERM; }
     int was_ground = p->ground;
+    if (p->fly) {                                     /* (v0.60.249) no fall; Space up, Shift down; landing ends it */
+        p->vy = in->jump ? FLY : in->down ? -FLY : 0;
+        move_y(p, p->vy);
+        if (p->ground && p->vy < 0) p->fly = 0;
+        p->vy = 0; p->hurt = 0; p->fall_top = p->y;
+        return broke;
+    }
     move_y(p, p->vy);
     /* Falling (v0.60.221): a heart a block past P_SAFE, counted from the
      * highest the feet were; broth breaks a fall, so it starts it again. */

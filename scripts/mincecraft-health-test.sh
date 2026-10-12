@@ -35,8 +35,8 @@ python3 -I - "$WORK/base.wld" "$WORK/$who.wld" "$who" <<'EDIT' || { echo "  FAIL
 import struct, sys, zlib
 src, dst, who = sys.argv[1:]
 b = open(src, 'rb').read()
-assert b[:4] == b'MINC' and struct.unpack('<I', b[4:8])[0] == 4, 'a version 4 save'
-H = 96                                           # "MINC", eight words, fourteen counts, the hearts
+assert b[:4] == b'MINC' and struct.unpack('<I', b[4:8])[0] == 5, 'a version 5 save'
+H = 100                                          # "MINC", eight words, fourteen counts, the hearts, flying (v0.60.249)
 grid = bytearray(); i = H
 while len(grid) < 128 * 128 * 64:
     grid += bytes([b[i + 1]]) * b[i]; i += 2
