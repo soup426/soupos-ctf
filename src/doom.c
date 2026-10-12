@@ -18,6 +18,7 @@
 #include "vga.h"
 #include "vga13h.h"
 #include "keyboard.h"
+#include "mouse.h"
 #include "timer.h"
 #include "klog.h"
 #include "speaker.h"
@@ -492,6 +493,7 @@ static const int sin128[8] = {   0,  91, 128,  91,    0, -91, -128, -91 };
  *
  * Tables are cosine/sine x1024, index 0 = East, increasing counter-clockwise. */
 #define ANG_N        128            /* angles in a full turn            */
+#define MOUSE_COUNTS 5              /* mouse counts to an angle step (v0.60.220) */
 #define ANG_MASK     (ANG_N - 1)
 #define ANG_90       (ANG_N / 4)    /* quarter turn, for strafing       */
 #define ANG_270      (ANG_N * 3 / 4)
@@ -2140,6 +2142,7 @@ static void fire_weapon(void) {
      * "ammo goes down but the gun does nothing". */
     if (!lv_things || !lv_thing_ai) return;
     pl_ammo--;
+    klog("[doom] fire ammo=%d tick=%u\n", pl_ammo, (unsigned)timer_get_ticks());
     pl_fire_cd = FIRE_CD_TICKS;
     doomsnd_play("DSPISTOL");       /* non-blocking: the frame carries on */
     int32_t px   = pl_x >> 8, py = pl_y >> 8;
@@ -2889,6 +2892,9 @@ void doom_play_level(int ep, int skill) {
 
         uint32_t last_draw = timer_get_ticks();
         uint32_t turn_last = last_draw;
+        uint32_t cd_last = last_draw;            /* (v0.60.220) when the fire cooldown last went down */
+        int m_last = 0, m_left = 0;              /* (v0.60.220) the mouse: counts seen, the left button */
+        mouse_raw(&m_last, 0);
         uint32_t zoom_last = last_draw;
         uint32_t move_last = last_draw;
         uint32_t use_last  = last_draw;
@@ -2941,6 +2947,21 @@ void doom_play_level(int ep, int skill) {
                 }
             }
 
+            /* ── Turn with the mouse (v0.60.220): MOUSE_COUNTS to a step, right
+             * turns right; counts short of a step wait for the next. ── */
+            {
+                int mx; mouse_raw(&mx, 0);
+                int steps = (mx - m_last) / MOUSE_COUNTS;
+                if (steps) {
+                    m_last += steps * MOUSE_COUNTS;
+                    pl_angle = (pl_angle - steps) & ANG_MASK;
+                    pl_dir   = pl_angle / ANG_PER_DIR;
+                    moved = 1;
+                }
+                int mb; mouse_get(0, 0, &mb);
+                m_left = (mb & 1) != 0;
+            }
+
             /* ── Automap zoom ─────────────────────────────────────────────── */
             if (!view3d && now - zoom_last >= ZOOM_DELAY) {
                 if (keyboard_key_pressed(KEY_SC_COMMA)) {
@@ -2966,10 +2987,14 @@ void doom_play_level(int ep, int skill) {
             }
 
             /* ── Fire (Ctrl) ─────────────────────────────────────────────── */
-            if (view3d && keyboard_key_pressed(KEY_SC_LCTRL)) {
+            if (view3d && (keyboard_key_pressed(KEY_SC_LCTRL) || m_left)) {   /* or the left button (v0.60.220) */
                 if (pl_fire_cd == 0) { fire_weapon(); moved = 1; }
             }
-            if (pl_fire_cd > 0) pl_fire_cd--;
+            /* The cooldown is in ticks (v0.60.220): it went down one a pass of
+             * this loop, which spins, so a held trigger emptied the clip in a
+             * second (50 shots) and the pistol's flash was gone at once. */
+            if (pl_fire_cd > 0) { pl_fire_cd -= (int)(now - cd_last); if (pl_fire_cd < 0) pl_fire_cd = 0; }
+            cd_last = now;
 
             /* ── Level exit ───────────────────────────────────────────────── */
             if (g_level_exit) break;

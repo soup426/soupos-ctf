@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.219
+Current version: v0.60.220
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,22 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.220 (2026-10-12)  — DOOM WITH THE MOUSE
+  - The mouse turns the view: five counts to an angle step (2.8 degrees),
+    right turns right; counts short of a step wait for the next. The
+    left button fires, as Ctrl does. The keyboard does all it did.
+    mouse.c keeps every count since boot unclamped (mouse_raw), since the
+    pointer's pixels stop at the screen's edge and would stop the turn.
+  - Fixed: a held trigger emptied the clip in a second. The fire cooldown
+    is in ticks (0.15 s) but went down one a pass of the game loop, which
+    spins: a second of Ctrl fired 50 shots, and the pistol's flash, drawn
+    while the cooldown is high, was gone at once. It counts ticks now.
+  - Each shot is logged ([doom] fire ammo=N tick=T).
+  - scripts/doom-mouse-test.sh: in E1M1, 200 counts right change most of
+    the 3D view, 200 back left give the opening frame again exactly (a
+    turn, nothing moved); the left button held fires a shot each 15 ticks,
+    the ammo down one a shot.
 
 v0.60.219 (2026-10-12)  — NEOSIM: :help
   - :help (and :h) shows a read-only page of neosim's keys and commands

@@ -67,7 +67,7 @@ has, grouped (moving, changing, searching, files), :q back to the file.
 Test: the page read back against the font, its first lines; :q returns to
 the file unchanged; a :w on the help page refused.
 
-## 3. Doom: turn with the mouse
+## 3. Doom: turn with the mouse — DONE v0.60.220
 
 Doom runs on the console screen, not in a window, so it can read the mouse
 itself (mouse.c): its x movement turns the view (so many counts a step),

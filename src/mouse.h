@@ -23,5 +23,9 @@ uint32_t mouse_presses(uint32_t *last, uint32_t *prev);
  * always without a wheel (v0.60.151). Take the difference between looks. */
 int mouse_wheel(void);
 
+/* Every count the mouse has sent since boot, x right and y up, never
+ * clamped to the screen (v0.60.220): Doom turns by the difference. */
+void mouse_raw(int *x, int *y);
+
 /* Packets accepted, and packets dropped because the stream had slipped. */
 void mouse_stats(uint32_t *moves, uint32_t *resyncs);

@@ -62,6 +62,7 @@ static int      pkt_idx;
 static int      cur_x, cur_y;        /* cell coordinates          */
 static int      px_x, px_y;          /* pixels, a count each (v0.60.140) */
 static int      acc_x, acc_y;        /* leftover raw counts       */
+static int      raw_x, raw_y;        /* (v0.60.220) every count since boot, unclamped */
 static int      buttons;
 static volatile uint32_t press_last, press_prev; /* ticks of the last two left presses */
 static volatile uint32_t press_count;             /* and how many there have been */
@@ -156,6 +157,8 @@ static void mouse_irq(registers_t *regs) {
     if (px_x >= px_w()) px_x = px_w() - 1;
     if (px_y >= px_h()) px_y = px_h() - 1;
 
+    raw_x += dx;
+    raw_y += dy;
     acc_x += dx;
     acc_y += dy;                        /* positive is up, screen y grows down */
 
@@ -227,4 +230,9 @@ int mouse_init(void) {
     present = 1;
     klog("[mouse] ps/2 mouse ready at %d,%d\n", cur_x, cur_y);
     return 0;
+}
+
+void mouse_raw(int *x, int *y) {
+    if (x) *x = raw_x;
+    if (y) *y = raw_y;
 }
