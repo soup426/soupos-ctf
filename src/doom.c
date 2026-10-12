@@ -294,6 +294,11 @@ static const mitem_t main_items[N_MAIN] = {
 };
 
 #define N_EP      4
+/* The episodes the WAD has (v0.60.229): Doom's m_menu.c shows four only
+ * for Ultimate Doom's M_EPI4; DOOM1.WAD's menu had a blank fourth line. */
+static int n_episodes(void) { return wad_find_lump("M_EPI4") >= 0 ? N_EP : N_EP - 1; }
+/* Doom's SKULLXOFF (v0.60.229): it was 43, the skull 11 pixels too far left. */
+#define SKULL_X_OFF 32
 static const mitem_t ep_items[N_EP] = {
     {"M_EPI1", SUB_X, 63},
     {"M_EPI2", SUB_X, 63 + LH},
@@ -334,18 +339,18 @@ static void draw_frame(void) {
     default:
     case MS_MAIN:
         items = main_items; nitems = N_MAIN;
-        skull_x = MAIN_X - 43;         /* 54 */
+        skull_x = MAIN_X - SKULL_X_OFF;    /* 65 */
         break;
     case MS_EPISODE:
         draw_lump("M_EPISOD", 54, 38);
-        items = ep_items; nitems = N_EP;
-        skull_x = SUB_X - 43;          /* 5  */
+        items = ep_items; nitems = n_episodes();
+        skull_x = SUB_X - SKULL_X_OFF;     /* 16 */
         break;
     case MS_SKILL:
         draw_lump("M_NEWG",  96, 14);
         draw_lump("M_SKILL", 54, 38);
         items = skill_items; nitems = N_SKILL;
-        skull_x = SUB_X - 43;
+        skull_x = SUB_X - SKULL_X_OFF;
         break;
     }
 
@@ -1822,18 +1827,21 @@ static void st_cache_free(void) {
     if (st_face)    { kfree(st_face);    st_face    = NULL; }
 }
 
-/* Draw integer n right-justified in a 'digits'-wide field ending at (rx,y). */
+/* A number right-justified to end at (rx,y), as Doom's STlib_drawNum
+ * (v0.60.229): every digit a cell as wide as STTNUM0, no leading zeros
+ * (0 is one 0). It drew each digit at its own width and always 'digits'
+ * of them: "049" ammo, "000%" armor, a 1 three pixels out. */
 static void st_number(int n, int rx, int y, int digits) {
     if (n < 0)   n = 0;
     if (n > 999) n = 999;
-    int x = rx;
-    for (int d = 0; d < digits; d++) {
-        uint8_t *buf = st_digit[n % 10];
+    if (!st_digit[0]) return;
+    int w = *(const int16_t *)st_digit[0], x = rx;
+    if (w <= 0 || w >= 64) return;
+    if (n == 0) { draw_patch(st_digit[0], x - w, y); return; }
+    for (int d = 0; d < digits && n; d++) {
+        x -= w;
+        if (st_digit[n % 10]) draw_patch(st_digit[n % 10], x, y);
         n /= 10;
-        if (!buf) break;
-        int16_t w = *(const int16_t *)buf;
-        if (w > 0 && w < 64) x -= (int)w;
-        draw_patch(buf, x, y);
     }
 }
 
@@ -1845,8 +1853,8 @@ static void draw_statusbar(void) {
     st_number(pl_armor,  ST_ARMORX,  ST_ARMORY,  3);
     st_number(pl_ammo,   ST_AMMOX,   ST_AMMOY,   3);
     if (st_percent) {
-        draw_patch(st_percent, ST_HEALTHX+1, ST_HEALTHY);
-        draw_patch(st_percent, ST_ARMORX+1,  ST_ARMORY);
+        draw_patch(st_percent, ST_HEALTHX, ST_HEALTHY);   /* at the field's end, as Doom's (v0.60.229: was +1) */
+        draw_patch(st_percent, ST_ARMORX,  ST_ARMORY);
     }
 }
 
@@ -3131,7 +3139,7 @@ void doom_menu_run(void) {
 
         /* How many items in the current menu? */
         int nitems = (ms == MS_MAIN) ? N_MAIN :
-                     (ms == MS_EPISODE) ? N_EP : N_SKILL;
+                     (ms == MS_EPISODE) ? n_episodes() : N_SKILL;
 
         /* ── Navigation ───────────────────────────────────────────────── */
         if (key == KEY_UP) {

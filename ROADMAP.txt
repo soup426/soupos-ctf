@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.228
+Current version: v0.60.229
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,27 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.229 (2026-10-12)  — DOOM: THE PICTURES WHERE DOOM PUTS THEM
+  - Measured, as the pistol should have been: every lump name the code
+    asks for, and every picture's place against Doom's own source.
+    Right already: the status bar, face and field positions (st_stuff.c),
+    the menu's items and titles (m_menu.c), the title and help screens,
+    and the sprites (x less the left offset, the top the floor plus the
+    top offset). The names not in DOOM1.WAD are registered and Doom II
+    things E1 never has, and HELP, whose fallback to HELP1/HELP2 works.
+  - Fixed: the status bar's numbers. Doom's STlib_drawNum steps every
+    digit by STTNUM0's width and draws no leading zeros; these used each
+    digit's own width and always three digits: "049" ammo, "000%" armor,
+    a 1 three pixels out. The percent signs were a pixel right of the
+    field's end.
+  - Fixed: the menu's skull was 43 left of the items; Doom's SKULLXOFF is
+    32. The episode menu had a blank fourth line (DOOM1.WAD has no
+    M_EPI4, Ultimate Doom's) the skull could stop on: three now.
+  - scripts/doom-places-test.sh: the status bar but the face drawn from
+    the WAD by Doom's rules, every pixel compared (0 of 9312 differ); the
+    skull at Doom's place on the main and episode menus; three downs
+    round to the first episode. Pictures: docs/doom/statusbar.png, menu.png.
 
 v0.60.228 (2026-10-12)  — MINCECRAFT: TOAST IS FOOD
   - Toast, crafted from a broccoli stalk, gives four hearts back: the best

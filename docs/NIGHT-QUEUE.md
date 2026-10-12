@@ -70,7 +70,7 @@ The note from queue 60: toast (crafted from a stalk) gives four hearts,
 the best food, so crafting has a reason. Test: the eat test's world given
 toast too, e on it: four back.
 
-## 4. Doom: the other pictures, placed by Doom's rules
+## 4. Doom: the other pictures, placed by Doom's rules — DONE v0.60.229
 
 The pistol had never been seen: drawn from the wrong origin, a lump name
 that is not in the WAD. Measure first, the same way, every other patch
