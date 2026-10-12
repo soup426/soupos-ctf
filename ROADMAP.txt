@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.252
+Current version: v0.60.253
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,15 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.253 (2026-10-12)  — DOOM-FB-TEST NEEDS DOOM
+  - doom-fb-test compared the two builds' screens after a fixed wait with
+    the serial thrown away, so two cleared consoles passed (99.81% with
+    wash typed in place of doom; review R-T3). Each run's serial log is
+    kept now: the screendump waits for "[doom] drawing at", which must say
+    320x200 in mode 13h and 960x600 on the framebuffer, and the title must
+    be at least half lit (it measures 93.2%). DOOM_FB_CMD types something
+    else in place of doom; with wash the test fails.
 
 v0.60.252 (2026-10-12)  — THE FULL CHECK REFUSES A STALE DISK
   - The tests boot copies of disk.img, and make never rebuilds it, so a

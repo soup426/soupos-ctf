@@ -377,7 +377,7 @@ Mincecraft; neosim and rx.c; Doom; tests, build and docs.)
 - **R-T1 (high) — DONE v0.60.251 (gate-patterns-test).** The gate's "preempt_disable works" matches 'PASS'
   anywhere ([vmtest] PASS satisfies it, [pt] FAIL would not stop it). Fix:
   '^\[pt\] PASS'.
-- **R-T3 (high).** doom-fb-test passes when Doom never runs (a cleared
+- **R-T3 (high) — DONE v0.60.253.** doom-fb-test passes when Doom never runs (a cleared
   screen agrees 99.8%). Fix: a Doom serial marker, a share of non-black
   pixels, a serial log for the login wait.
 - **R-T4 (medium-high).** Gate checks that accept failure: drop.elf's
