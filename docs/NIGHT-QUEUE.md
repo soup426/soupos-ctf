@@ -472,7 +472,7 @@ Mincecraft; neosim and rx.c; Doom; tests, build and docs.)
 
 ### The desktop (reviewer reproduced 1-3 in QEMU on copies)
 
-- **R-C1 (high, security).** Any cook's program, from anywhere (an SSH
+- **R-C1 (high, security) — DONE v0.60.259 (ctforeign-test; the focus-on-open half not taken).** Any cook's program, from anywhere (an SSH
   session too), can open a window on another cook's desktop: it goes on
   top, takes the focus and gets their keys (WEV_KEY and SYS_WIN_KEYS);
   under the clock-in screen it waits and has the focus once they clock in.

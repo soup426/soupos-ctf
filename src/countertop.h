@@ -18,10 +18,10 @@ int countertop_clock_in(int (*avail)(void), int (*getch)(void), int (*check)(con
  * that draws, so these only fill a table it reads under a mutex. -1 when
  * the desktop is not up, the id is not the caller's, or the window has
  * gone (the desktop left). */
-int countertop_win_open(uint32_t pid, int w, int h, const char *title);
+int countertop_win_open(uint32_t pid, uint8_t owner, int w, int h, const char *title);   /* owner: the caller's cook (v0.60.259) */
 int countertop_win_size(uint32_t pid, int id, int *w, int *h);
 int countertop_win_put(uint32_t pid, int id, const uint32_t *px);   /* px: w*h, checked by the caller */
 int countertop_win_event(uint32_t pid, int id, void *ev);           /* a uwinev_t: 1, 0 none, -1 */
 int countertop_win_close(uint32_t pid, int id);
 int countertop_win_keys(uint32_t pid, int id, uint8_t *out);   /* 32 bytes of held keys: 0, or -1 (v0.60.190) */
-int countertop_note(uint32_t pid, const char *line);               /* SYS_NOTE (v0.60.170) */
+int countertop_note(uint32_t pid, uint8_t owner, const char *line);               /* SYS_NOTE (v0.60.170) */

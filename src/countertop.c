@@ -523,8 +523,26 @@ static app_t *app_mine(uint32_t pid, int id) {    /* app_mtx held */
     return a->used && !a->gone && a->pid == pid && ct_running ? a : 0;
 }
 
-int countertop_win_open(uint32_t pid, int w, int h, const char *title) {
+/* May a program of this cook's draw here (v0.60.259, review R-C1)? A window
+ * goes on top and takes the focus, so it has the desktop's keys: another
+ * cook's program, from anywhere (an SSH session, or one left running from
+ * an earlier shift), could log this cook's typing and write on the bar.
+ * Only the desktop's own cook's programs; none before a clock-in. The
+ * refusal is logged once a pid (prod.elf asks ten times a second). */
+static int ct_uid;                                 /* below: whose desktop */
+static int ct_admits(uint32_t pid, uint8_t owner) {
+    static uint32_t told = 0xFFFFFFFFu;
+    if (ct_uid >= 0 && owner == (uint8_t)ct_uid) return 1;
+    if (told != pid) {
+        told = pid;
+        klog("[countertop] pid %u (%s) refused: not this desktop's cook\n", pid, users_name_of(owner));
+    }
+    return 0;
+}
+
+int countertop_win_open(uint32_t pid, uint8_t owner, int w, int h, const char *title) {
     if (w < 1 || h < 1 || w > APP_MAXW || h > APP_MAXH) return -1;
+    if (ct_running && !ct_admits(pid, owner)) return -1;
     mutex_lock(&app_mtx);
     int id = -1;
     if (ct_running) for (int i = 0; i < APP_MAX; i++) if (!app[i].used) { id = i; break; }
@@ -2019,7 +2037,8 @@ static void bar_note(const char *msg) {          /* msg 0 clears it */
 static char note_q[NOTE_Q][48];
 static int note_h, note_t, note_showing;
 static uint32_t note_at;
-int countertop_note(uint32_t pid, const char *line) {
+int countertop_note(uint32_t pid, uint8_t owner, const char *line) {
+    if (ct_running && !ct_admits(pid, owner)) return -1;
     mutex_lock(&app_mtx);
     int r = -1;
     if (ct_running && (note_t + 1) % NOTE_Q != note_h) {

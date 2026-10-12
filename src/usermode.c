@@ -711,7 +711,7 @@ void syscall_dispatch(registers_t *r) {
         case SYS_WIN_OPEN: {              /* (v0.60.146) a window on the desktop */
             char title[FAT_PATH_MAX];
             if (!pr || copy_user_path(r->edx, title) < 0) { r->eax = (uint32_t)-1; break; }
-            r->eax = (uint32_t)countertop_win_open(pr->pid, (int)r->ebx, (int)r->ecx, title);
+            r->eax = (uint32_t)countertop_win_open(pr->pid, pr->owner, (int)r->ebx, (int)r->ecx, title);
             break;
         }
         case SYS_WIN_PUT: {               /* its whole body, copied in: the desktop draws from the copy */
@@ -777,7 +777,7 @@ void syscall_dispatch(registers_t *r) {
         case SYS_NOTE: {                  /* (v0.60.170) a line on the desktop's bar */
             char line[FAT_PATH_MAX];
             if (!pr || copy_user_path(r->ebx, line) < 0) { r->eax = (uint32_t)-1; break; }
-            r->eax = (uint32_t)countertop_note(pr->pid, line);
+            r->eax = (uint32_t)countertop_note(pr->pid, pr->owner, line);
             break;
         }
         case SYS_WIN_CLOSE:

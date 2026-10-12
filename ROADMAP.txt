@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.258
+Current version: v0.60.259
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,18 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.259 (2026-10-12)  — NO WINDOWS FROM ANOTHER COOK'S PROGRAMS
+  - A program's window goes on top and takes the focus, so it gets the
+    desktop's keys, and nothing asked whose program it was: any cook's,
+    from an SSH session or left running from an earlier shift, could open
+    one on another cook's desktop and log their typing, and SYS_NOTE wrote
+    on their bar (review R-C1). SYS_WIN_OPEN and SYS_NOTE now pass the
+    caller's cook, and the desktop takes only its own cook's programs
+    (none before a clock-in); a refusal is logged once a pid.
+  - scripts/ctforeign-test.sh: saucier's background prod.elf keys, left
+    waiting for a desktop, is refused on the headchef's; the headchef's
+    own still gets its window. Before the fix saucier's got one.
 
 v0.60.258 (2026-10-12)  — A PROGRAM HAS ITS OWN COOK'S RIGHTS
   - A program's open, unlink, mkdir, readdir, stat and kill were decided
