@@ -381,6 +381,70 @@ Mincecraft; neosim and rx.c; Doom; tests, build and docs.)
   files, not the hearts and flying they should load with. Fix: -check
   prints hearts= fly=; check them.
 
+### neosim and rx.c (reviewer: 401 existing cases replayed faithfully on a host harness with ASan; 1-2 also in QEMU)
+
+- **R-N1 (high).** A 79-character : or / command crashes neosim (the
+  cursor drawn at column 80, past the body; screen.c:114, :67). Fix: clamp.
+- **R-N2 (high).** A linewise p on the last line of a full 2048-line buffer
+  crashes it (paste_from after a failed insert). Fix: return when nothing
+  was put in; audit the cy++ after failed inserts.
+- **R-N3 (high, data).** :w OTHER renames the buffer and clears [+]: the
+  original is never written, :q then quits losing it. Fix: rename only a
+  nameless buffer; saved/changed only for its own path.
+- **R-N4 (high, data).** Tabs become spaces and CRs vanish on load, so a
+  saved Makefile is broken (text.c:41). Fix: keep tabs (expand when drawn),
+  keep or report CRLF.
+- **R-N5 (high, data).** Joins over 255 columns drop text (J, multi-line
+  deletes, Backspace at column 0). Fix: refuse before changing anything.
+- **R-N6 (high).** cw on a one-letter word or a word's last letter changes
+  the next word too, across lines. Fix: vim's stay-at-end rule.
+- **R-N7 (high).** Undo and redo wreck every mark (pop rebuilds through the
+  lines hook). Fix: suspend the hook in pop; marks in the snapshot.
+- **R-N8 (medium-high).** At 1000 lines the number column writes before the
+  body and the numbers wrap. Fix: numberwidth max(4, digits+1); clamp put.
+- **R-N9 (medium).** A failing motion or command does not stop a macro or
+  :normal (10@a past the end, :%normal fzx deletes where there is no z).
+  Fix: a failure flag the players check.
+- **R-N10 (medium).** Counted motions that cannot be met still act (5}x,
+  G2dd, 3>ap); the para test's counts are weak (a count-blind findpar
+  passes all 32). Fix: fail as vim; a text where each count lands apart.
+- **R-N11..N13 (medium).** op_delete's linewise rule (2D 3d$ leave a blank
+  line); nostartofline (dd >> << :N keep the column); autoindent edges
+  (Enter keeps the moved text's blanks; cc S lose the indent).
+- **R-N14..N18 (medium).** . repeat gaps (a register prefix lost; an insert
+  over 256 keys repeats the change before it; N. keeps the old count;
+  visual . ends at the cursor's column); macro recording (:normal keys
+  recorded twice, arrows dropped, linewise registers played without their
+  newline); :normal reads its keys from E.cmd, which a nested : overwrites;
+  visual mode (f t F T ' ` do not take their character, text objects
+  replace the selection, " registers, v$ without the line break); z and g
+  pending state survive Esc.
+- **R-N19..N27 (low-medium).** 2"a3dd deletes 23; r<CR> puts a \n inside a
+  line; Ctrl-A on 0b binary, 64-bit hex, leading zeros and the hex case;
+  :s///g matches its own output, :s/a with no replacement, :99; vim
+  patterns (\{n} literal, [\]], ^*, n onto overlapping matches); block
+  objects do not search past the line; "1-"9 for named and } ` deletes;
+  an empty buffer saved as one newline; undo steps with arrows, and the
+  cursor after undo.
+- **R-N28 (low, rx.c).** Over 64 top-level alternatives turn into literal
+  | silently; {,n}, a{1,2}{3}, a{256}, ^*a, [z-a], [[:foo:]], empty groups'
+  places. Fix: grow or refuse; GNU's readings.
+- **R-N29 (low).** Caps that lose data quietly: the 64 KB unnamed
+  register, a file over 2048 lines written back cut, a redo arena smaller
+  than a full snapshot. Fix: refuse or warn.
+
+## The order to work the review in
+
+1. The test harness first (R-T1, R-T2, R-T3, R-T4, R-T5, R-T6), so the
+   fixes after it are measured by tests that can fail.
+2. Security: R-K1, R-K2, R-C1, R-C2.
+3. Kernel crashes any cook can cause: R-K5, R-K4, R-K3.
+4. Data loss: R-M1, R-M4, R-N3, R-N4, R-N5, R-N1, R-N2.
+5. Item 0 (neosim on a double click, the user's), then 0b Doom from R-D3,
+   R-D2, R-D4, R-D1 down.
+6. The rest by severity, the area's mediums before the lows; items 1-9
+   where they fit.
+
 ## Notes left by unattended runs
 
 
