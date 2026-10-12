@@ -76,7 +76,7 @@ square moon by night (as Minecraft's), drawn behind the clouds and the
 terrain. Test: dumps at three times of day, the sun's square where its
 angle puts it (low east in the morning, high at noon), the moon at night.
 
-## 4. neosim on the desktop
+## 4. neosim on the desktop — DONE v0.60.245
 
 An icon and a Kitchen entry: a double click opens neosim with no file
 ([No Name]), a :w NAME writes it. Test as ctgames-test: the icon named,

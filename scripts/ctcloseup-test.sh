@@ -15,7 +15,7 @@ trap cleanup EXIT
 L="MON:mouse_move -120 -120"
 CLICK=("MON:mouse_button 1" "WAIT:1" "MON:mouse_button 0" "WAIT:2")
 TOP=("$L" "$L" "$L" "$L" "$L")
-# the Kitchen button at 392-464; its rows from y 26, 24 apart: close up the 11th (y 278), reheat the 12th (y 302) (v0.60.239: mincecraft and doom above it, two rows more)
+# the Kitchen button at 392-464; its rows from y 26, 24 apart: close up the 12th (y 302), reheat the 13th (y 326) (v0.60.245: neosim too, one row more) (v0.60.239: mincecraft and doom above it, two rows more)
 boot() {                                  # boot <name> <qemu args...>
     local n=$1; shift
     cp disk.img "$WORK/$n.img"
@@ -28,7 +28,7 @@ boot() {                                  # boot <name> <qemu args...>
 boot a -no-reboot
 python3 scripts/qemu_keys.py "$WORK/a.sock" "headchef" "rosemary" "WAIT:1" "countertop" "WAIT:2" \
     "${TOP[@]}" "MON:mouse_move 200 12" "WAIT:1" "${CLICK[@]}" "whoami" "WAIT:2" \
-    "MON:mouse_move 220 0" "WAIT:1" "${CLICK[@]}" "MON:mouse_move 0 266" "WAIT:1" "MON:mouse_button 1" "WAIT:1" "MON:mouse_button 0" \
+    "MON:mouse_move 220 0" "WAIT:1" "${CLICK[@]}" "MON:mouse_move 0 290" "WAIT:1" "MON:mouse_button 1" "WAIT:1" "MON:mouse_button 0" \
     >/dev/null 2>&1                       # QEMU may be gone before the driver lets go: what follows decides
 for i in $(seq 1 100); do kill -0 "$PID" 2>/dev/null || break; sleep 0.1; done
 if kill -0 "$PID" 2>/dev/null; then echo "        a: QEMU still running 10 s after close up"; fail=1; kill "$PID"; fi
@@ -39,7 +39,7 @@ grep -qx 'whoami' "$WORK/a.left" 2>/dev/null || { echo "        a: whoami not in
 boot b -no-reboot -no-shutdown
 python3 scripts/qemu_keys.py "$WORK/b.sock" "headchef" "rosemary" "WAIT:1" "hire saucier" "WAIT:1" "basil" "WAIT:1" "basil" "WAIT:1" "clockout" "WAIT:2" \
     "saucier" "basil" "WAIT:2" "countertop" "WAIT:2" \
-    "${TOP[@]}" "MON:mouse_move 420 12" "WAIT:1" "${CLICK[@]}" "MON:mouse_move 0 266" "WAIT:1" \
+    "${TOP[@]}" "MON:mouse_move 420 12" "WAIT:1" "${CLICK[@]}" "MON:mouse_move 0 290" "WAIT:1" \
     "MON:mouse_button 1" "WAIT:1" "MON:mouse_button 0" "WAIT:1" "MON:screendump $WORK/b.ppm" "WAIT:1" \
     >/dev/null 2>&1 || { echo "  FAIL  could not drive QEMU (b)"; fail=1; }
 kill -0 "$PID" 2>/dev/null || { echo "        b: QEMU went"; fail=1; }
@@ -65,7 +65,7 @@ PY
 # C
 boot c -no-shutdown
 python3 scripts/qemu_keys.py "$WORK/c.sock" "headchef" "rosemary" "WAIT:1" "countertop" "WAIT:2" \
-    "${TOP[@]}" "MON:mouse_move 420 12" "WAIT:1" "${CLICK[@]}" "MON:mouse_move 0 290" "WAIT:1" "${CLICK[@]}" "WAIT:8" \
+    "${TOP[@]}" "MON:mouse_move 420 12" "WAIT:1" "${CLICK[@]}" "MON:mouse_move 0 314" "WAIT:1" "${CLICK[@]}" "WAIT:8" \
     >/dev/null 2>&1 || { echo "  FAIL  could not drive QEMU (c)"; fail=1; }
 kill "$PID" 2>/dev/null; wait "$PID" 2>/dev/null; PID=""
 for n in a b c; do tr -d '\r' < "$WORK/$n.log" > "$WORK/$n.txt"; done

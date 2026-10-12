@@ -708,6 +708,7 @@ static const char *const menu_item[][3] = {      /* name, what it is, what to co
     { "scale", "a calculator", "scale.elf" },               /* (v0.60.173) */
     { "mincecraft", "a world of food", "mincecraft.elf" },  /* (v0.60.238) */
     { "doom", "the shareware episode", "@doom" },           /* (v0.60.238) the desktop runs it itself */
+    { "neosim", "the editor", "neosim.elf" },               /* (v0.60.245) [No Name] until :w NAME */
     { "backdrop", "the next one", "@backdrop" },            /* (v0.60.169) not programs: '@' an action */
     { "cloche", "lock the desktop", "@cloche" },            /* (v0.60.176) */
     { "spice rack", "the settings", "@rack" },              /* (v0.60.188) */
@@ -826,19 +827,29 @@ static void big_char(int x, int y, char ch, uint32_t fg) {   /* the font, twice 
         for (int i = 0; i < 16; i++)
             if ((g[j / 2] >> (7 - i / 2)) & 1) fill(x + i, y + j, 1, 1, fg);
 }
+/* Down the left, and on into another column when the screen is too short
+ * for them all over the taskbar (v0.60.245: eight now; 768 rows hold nine). */
+#define ICON_COLW 84
+static void icon_place(int i, int *x, int *y) {
+    int rows = (H - TASK_H - ICON_Y0) / ICON_DY;
+    if (rows < 1) rows = 1;
+    *x = ICON_X + (i / rows) * ICON_COLW; *y = ICON_Y0 + (i % rows) * ICON_DY;
+}
 static void draw_icons(void) {                     /* within the clip */
     for (int i = 0; i < icon_count(); i++) {
-        int y = ICON_Y0 + i * ICON_DY;
-        fill(ICON_X, y, ICON_SZ, ICON_SZ, icon_rgb[i % 5]);
-        big_char(ICON_X + (ICON_SZ - 16) / 2, y + (ICON_SZ - 32) / 2, (char)(menu_item[i][0][0] - 32), TEXT_RGB);
+        int x, y;
+        icon_place(i, &x, &y);
+        fill(x, y, ICON_SZ, ICON_SZ, icon_rgb[i % 5]);
+        big_char(x + (ICON_SZ - 16) / 2, y + (ICON_SZ - 32) / 2, (char)(menu_item[i][0][0] - 32), TEXT_RGB);
         int l = (int)strlen(menu_item[i][0]);
-        text(ICON_X + ICON_SZ / 2 - 4 * l, y + ICON_SZ + 4, menu_item[i][0], TEXT_RGB);
+        text(x + ICON_SZ / 2 - 4 * l, y + ICON_SZ + 4, menu_item[i][0], TEXT_RGB);
     }
 }
 static int icon_at(int px, int py) {               /* the icon (its square or its name) under a point, or -1 */
     for (int i = 0; i < icon_count(); i++) {
-        int y = ICON_Y0 + i * ICON_DY;
-        if (px >= ICON_X - 12 && px < ICON_X + ICON_SZ + 12 && py >= y && py < y + ICON_SZ + 22) return i;
+        int x, y;
+        icon_place(i, &x, &y);
+        if (px >= x - 12 && px < x + ICON_SZ + 12 && py >= y && py < y + ICON_SZ + 22) return i;
     }
     return -1;
 }

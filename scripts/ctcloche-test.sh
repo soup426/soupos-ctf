@@ -15,12 +15,12 @@ trap cleanup EXIT
 cp disk.img "$WORK/disk.img"
 L="MON:mouse_move -120 -120"
 CLICK=("MON:mouse_button 1" "WAIT:1" "MON:mouse_button 0" "WAIT:2")
-# the Kitchen menu at 420,12; its ninth row (cloche) at y 230 (v0.60.239: mincecraft and doom above it, two rows more); Leave at 288,12
+# the Kitchen menu at 420,12; its tenth row (cloche) at y 254 (v0.60.245: neosim too, one row more) (v0.60.239: mincecraft and doom above it, two rows more); Leave at 288,12
 keys=("headchef" "rosemary" "WAIT:1" "countertop" "WAIT:2"
-      "$L" "$L" "$L" "$L" "$L" "MON:mouse_move 420 12" "WAIT:1" "${CLICK[@]}" "MON:mouse_move 0 218" "WAIT:1" "${CLICK[@]}"
+      "$L" "$L" "$L" "$L" "$L" "MON:mouse_move 420 12" "WAIT:1" "${CLICK[@]}" "MON:mouse_move 0 242" "WAIT:1" "${CLICK[@]}"
       "MON:screendump $WORK/s1.ppm" "WAIT:1" "KEY:esc" "WAIT:1" "basil" "WAIT:1" "MON:screendump $WORK/s2.ppm" "WAIT:1"
       "rosemary" "WAIT:2" "MON:screendump $WORK/s3.ppm" "WAIT:1"
-      "MON:mouse_move -132 -218" "WAIT:1" "${CLICK[@]}" "WAIT:1"
+      "MON:mouse_move -132 -242" "WAIT:1" "${CLICK[@]}" "WAIT:1"
       "stir /countertop idle 3" "WAIT:1" "countertop" "WAIT:6" "MON:screendump $WORK/s4.ppm" "WAIT:1"
       "one" "WAIT:1" "two" "WAIT:1" "three" "WAIT:1" "rosemary" "WAIT:5" "rosemary" "WAIT:2"
       "MON:mouse_button 1" "WAIT:1" "MON:mouse_button 0" "WAIT:3")

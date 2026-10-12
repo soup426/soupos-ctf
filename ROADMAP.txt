@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.244
+Current version: v0.60.245
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,18 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.245 (2026-10-12)  — NEOSIM ON THE DESKTOP
+  - An eighth icon and a Kitchen entry: neosim, opened with no file
+    ([No Name]; :w NAME writes it), cooked in a hidden terminal as the
+    other programs are, so only its window shows.
+  - The icons go on into another column when the screen is too short for
+    them all above the taskbar (icon_place, for drawing and for clicks);
+    768 rows hold nine, so the desktop here is as it was. No test sees a
+    second column yet: the test machines are all 1024x768.
+  - ctgames-test: neosim's icon named, its window up, no terminal. The
+    menu has one row more above its actions, so ctcloche, ctcloseup,
+    ctrack and ctsettings click them 24 pixels lower again.
 
 v0.60.244 (2026-10-12)  — MINCECRAFT: A SUN AND A MOON
   - A square sun crosses the sky from the east (+x) at 06:00 to overhead

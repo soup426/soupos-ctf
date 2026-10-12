@@ -7,6 +7,8 @@
 # the machine to itself and the real screen, so not from a terminal); its
 # menu's Quit Game brings the desktop back, the icons as they were. With
 # Mincecraft open, Doom's icon is refused with a note: another task is alive.
+# (v0.60.245) neosim's icon, the 8th, opens it with no file ([No Name]) and no
+# terminal on show.
 set -uo pipefail
 cd "$(dirname "$0")/.."
 [ -f DOOM1.WAD ] || { echo "  skip  no DOOM1.WAD"; exit 0; }
@@ -26,7 +28,8 @@ keys=("headchef" "rosemary" "WAIT:1" "countertop" "WAIT:3" "MON:screendump $WORK
       "MON:mouse_move 0 76" "WAIT:1" "$TWICE" "UNTIL:[doom] drawing at" "WAIT:4" "MON:screendump $WORK/doom.ppm" "WAIT:1"
       "KEY:up" "WAIT:1" "KEY:ret" "UNTIL:[countertop] doom over" "WAIT:2" "MON:mouse_move 200 0" "WAIT:1" "MON:screendump $WORK/back.ppm" "WAIT:1" "MON:mouse_move -200 0" "WAIT:1"
       "MON:mouse_move 0 -76" "WAIT:1" "$TWICE" "WAIT:5"
-      "MON:mouse_move 0 76" "WAIT:1" "$TWICE" "UNTIL:[countertop] doom refused" "WAIT:1" "MON:screendump $WORK/refused.ppm" "WAIT:1")
+      "MON:mouse_move 0 76" "WAIT:1" "$TWICE" "UNTIL:[countertop] doom refused" "WAIT:1" "MON:screendump $WORK/refused.ppm" "WAIT:1"
+      "MON:mouse_move 0 76" "WAIT:1" "$TWICE" "UNTIL:[countertop] open neosim for pid" "WAIT:2" "MON:screendump $WORK/neosim.ppm" "WAIT:1")
 qemu-system-i386 -accel kvm -cpu host -drive "file=$WORK/disk.img,format=raw,if=ide,index=0" \
     -cdrom soupOS.iso -boot d -m 128M -no-reboot -no-shutdown -display none \
     -serial "file:$WORK/serial.log" -monitor "unix:$WORK/mon.sock,server,nowait" >/dev/null 2>&1 &
@@ -67,6 +70,9 @@ d, b = ppm('desk'), ppm('back')
 same = d and b and all(d(x, y) == b(x, y) for y in range(40, 40 + 76 * 7) for x in range(0, 110, 3))
 check(same, 'Quit Game: the desktop again, its icons as they were')
 check(re.search(r'\[countertop\] doom refused: \d+ tasks', log), 'with Mincecraft open, Doom refused (another task alive)')
+check(desk and label(desk, 7, 'neosim') == 'neosim', "neosim's icon, named: %r" % (label(desk, 7, 'neosim') if desk else None))
+check('[countertop] kitchen: neosim' in log and '[countertop] open neosim for pid' in log and not re.search(r'\[countertop\] open Terminal', log),
+      "neosim's icon opened it, no terminal on show")
 sys.exit(0 if ok else 1)
 PY
 [ "$fail" = 0 ] && echo "ctgames-test: PASS" || echo "ctgames-test: FAIL"
