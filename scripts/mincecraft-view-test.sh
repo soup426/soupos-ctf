@@ -5,6 +5,7 @@
 # (nothing above the eye), the bottom rows are crust (the ground three
 # blocks ahead), and the fps marker is there, 5 or more (check.sh runs
 # tests side by side; the 15 fps goal is measured idle, in the changelog).
+# Also the HUD: the crosshair and the hotbar's nine slots.
 # Boot 2, seed 42: a real world is drawn (several block colours, not all
 # sky), kept as view.ppm for a look. Esc ends each (bye).
 # It starts at the console with -wait, in the background, before the
@@ -57,6 +58,14 @@ for n in ('flat', 'view'):
 f = ppm('flat')
 top = [body(f, x, y) for y in range(4) for x in range(0, 640, 8)]
 check(all(c == SKY for c in top), 'flat: the top rows are the noon sky, %06x' % SKY)
+# The HUD (v0.60.195): the crosshair XORs what is under it; above the
+# horizon that is the sky, so its upper stroke is exactly sky ^ 0xFFFFFF.
+# The hotbar: nine 40x40 slots 44 apart from x 122, y 432; the first is the
+# chosen one (white frame), the rest grey, dark inside, empty at the start.
+cross = [body(f, x, y) for x in (319, 320) for y in range(232, 239)]
+check(all(c == SKY ^ 0xFFFFFF for c in cross), 'flat: the crosshair over the sky: %s' % sorted({'%06x' % c for c in cross}))
+check(body(f, 122, 432) == 0xFFFFFF and body(f, 124, 434) == 0x202020, 'flat: the first hotbar slot, chosen (white frame, dark inside)')
+check(all(body(f, 122 + 44 * k, 432) == 0x808080 for k in range(1, 9)), 'flat: the other eight slots, grey frames')
 # blocks.c's colours, base and alt, as render.c shades each face at noon
 BLOCKS = {'crust': (0xC8873A, 0x8A5A22), 'crumb': (0xEAD9B0, 0xC9B489), 'parmesan': (0xEFE8C8, 0xD4C99A),
           'cast iron': (0x2A2A2E, 0x18181B), 'sugar': (0xFAFAF5, 0xDCDCE6), 'stalk': (0xA9C77A, 0x86A65A),
@@ -66,7 +75,7 @@ pal = {}
 for name, cs in BLOCKS.items():
     for c in cs:
         for k in (256, 128, 205, 166): pal.setdefault(shade(c, k), name)
-low = {body(f, x, 476) for x in range(0, 640, 4)}
+low = {body(f, x, 476) for x in list(range(0, 120, 4)) + list(range(520, 640, 4))}   # beside the hotbar
 check(low <= {0xC8873A, 0x8A5A22}, 'flat: the bottom row is crust tops, exactly: %s' % sorted('%06x' % c for c in low)[:6])
 v = ppm('view')
 seen = {}

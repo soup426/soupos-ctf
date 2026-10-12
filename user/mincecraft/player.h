@@ -18,5 +18,7 @@ typedef struct {
 } player_t;
 typedef struct { int fwd, side, turn, tilt, jump, brk; } input_t;   /* -1, 0, 1; jump and brk 0/1 */
 void player_spawn(player_t *p);
-int  player_tick(player_t *p, const input_t *in, const ray_t *target);
+int  player_tick(player_t *p, const input_t *in, const ray_t *target);   /* the id it broke, or 0 */
+int  player_place(player_t *p, const ray_t *target, int id);             /* 1 placed, 0 refused */
+int  hotbar(const player_t *p, int ids[9]);                              /* how many kinds held */
 void player_eye(const player_t *p, cam_t *c);

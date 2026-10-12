@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.194
+Current version: v0.60.195
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,23 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.195 (2026-10-11)  — MINCECRAFT: MINING AND BUILDING
+  - F, or the left button held in the window, breaks what the crosshair
+    is on (5 blocks of reach) after its hardness in ticks held on the
+    same block (crumb and crust 6, parmesan 20, peppercorn 24, cast iron
+    never), into the inventory (999 of a kind at most). A new world
+    starts empty-handed. r or q places the hotbar's block on the face
+    looked at: never into the cook's own box, never with none in hand.
+  - The hotbar is the kinds held, in id order, nine slots; 1 to 9 or the
+    wheel choose. The HUD (hud.c, the kernel's 8x16 font): the crosshair
+    (inverted over what is under it), the slots with counts, the name of
+    the block looked at, the time of day.
+  - Markers: broke, placed, place refused, inv id=n for each change.
+  - mincecraft-play-test gains a second boot from the spawn: the crust
+    underfoot broken into the inventory and the cook dropped into the
+    hole, r at their own cell refused, then placed on the next block
+    over. mincecraft-view-test checks the crosshair and the nine slots.
 
 v0.60.194 (2026-10-11)  — MINCECRAFT: WALKING
   - The player (player.c): a 0.6 x 1.8 box, the eye at 1.6, moved at a

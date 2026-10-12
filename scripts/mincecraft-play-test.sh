@@ -8,6 +8,12 @@
 #   3. Alt+Tab elsewhere, W held: nothing moves (the bitmap is zeros);
 #      two more Alt+Tabs bring it back (Mincecraft, Pantry, Welcome)
 #   4. Esc: bye
+# A second boot (v0.60.195) mines and builds from the spawn, where the
+# 0.6-wide box sits inside one cell: looking down (pitch -227), F held a
+# second breaks the crust underfoot (hardness 6 ticks) into the inventory
+# and the cook drops into the hole; r then aims at their own cell and is
+# refused; looking up a little, r places it back on top of the next
+# block over (tried three times, a little higher each, exactly one lands).
 # It opens on top, so it has the focus without a click. It starts at the
 # console with -wait, in the background, before the desktop, so its
 # markers reach the serial log.
@@ -18,21 +24,29 @@ WORK=$(mktemp -d /tmp/soupos-mcplay.XXXXXX)
 PID=""
 cleanup() { [ -n "$PID" ] && kill "$PID" 2>/dev/null; if [ "$fail" != 0 ] || [ "${KEEP:-0}" = 1 ]; then echo "  kept $WORK"; else rm -rf "$WORK"; fi; }
 trap cleanup EXIT
-cp disk.img "$WORK/disk.img"
-keys=("headchef" "rosemary" "WAIT:1" "cook mincecraft.elf -flat -script -wait -world /PLAY.WLD &" "WAIT:1" "countertop" "WAIT:5"
-      "TYPE:m" "KEY:w 1000" "WAIT:2"
-      "TYPE:m" "KEY:spc 100" "WAIT:3"
-      "TYPE:m" "KEY:alt-tab" "WAIT:1" "KEY:w 1000" "WAIT:2" "KEY:alt-tab" "WAIT:1" "KEY:alt-tab" "WAIT:1"
-      "TYPE:m" "WAIT:1" "KEY:esc" "WAIT:3")
-qemu-system-i386 -accel kvm -cpu host -drive "file=$WORK/disk.img,format=raw,if=ide,index=0" \
-    -cdrom soupOS.iso -boot d -m 128M -no-reboot -no-shutdown -display none \
-    -serial "file:$WORK/serial.log" -monitor "unix:$WORK/mon.sock,server,nowait" >/dev/null 2>&1 &
-PID=$!
-python3 scripts/qemu_keys.py "$WORK/mon.sock" "${keys[@]}" >/dev/null 2>&1 || { echo "  FAIL  could not drive QEMU"; fail=1; }
-kill "$PID" 2>/dev/null; wait "$PID" 2>/dev/null; PID=""
-python3 - "$WORK/serial.log" <<'PY' || fail=1
+boot() {   # $1: name, then the keys after the desktop is up
+    local n=$1; shift
+    cp disk.img "$WORK/disk-$n.img"
+    local keys=("headchef" "rosemary" "WAIT:1" "cook mincecraft.elf -flat -script -wait -world /PLAY.WLD &" "WAIT:1" "countertop" "WAIT:5" "$@")
+    qemu-system-i386 -accel kvm -cpu host -drive "file=$WORK/disk-$n.img,format=raw,if=ide,index=0" \
+        -cdrom soupOS.iso -boot d -m 128M -no-reboot -no-shutdown -display none \
+        -serial "file:$WORK/serial-$n.log" -monitor "unix:$WORK/mon-$n.sock,server,nowait" >/dev/null 2>&1 &
+    PID=$!
+    python3 scripts/qemu_keys.py "$WORK/mon-$n.sock" "${keys[@]}" >/dev/null 2>&1 || { echo "  FAIL  could not drive QEMU ($n)"; fail=1; }
+    kill "$PID" 2>/dev/null; wait "$PID" 2>/dev/null; PID=""
+}
+boot walk "TYPE:m" "KEY:w 1000" "WAIT:2" \
+          "TYPE:m" "KEY:spc 100" "WAIT:3" \
+          "TYPE:m" "KEY:alt-tab" "WAIT:1" "KEY:w 1000" "WAIT:2" "KEY:alt-tab" "WAIT:1" "KEY:alt-tab" "WAIT:1" \
+          "TYPE:m" "WAIT:1" "KEY:esc" "WAIT:3"
+boot build "TYPE:m" "KEY:down 2000" "WAIT:1" \
+           "TYPE:m" "KEY:f 1000" "WAIT:2" \
+           "TYPE:m" "TYPE:r" "WAIT:1" \
+           "TYPE:m" "KEY:up 1000" "WAIT:1" "TYPE:r" "WAIT:1" "KEY:up 200" "WAIT:1" "TYPE:r" "WAIT:1" "KEY:up 200" "WAIT:1" "TYPE:r" "WAIT:1" \
+           "TYPE:m" "WAIT:1" "KEY:esc" "WAIT:3"
+python3 - "$WORK" <<'PY' || fail=1
 import re, sys
-log = open(sys.argv[1], 'rb').read().decode('latin-1')
+log = open(sys.argv[1] + '/serial-walk.log', 'rb').read().decode('latin-1')
 ok = True
 def check(cond, what):
     global ok
@@ -61,6 +75,24 @@ if len(phases) == 5:
     if away:
         check(away[0][2] == away[-1][2], 'W with the focus elsewhere: not a step (%d to %d)' % (away[0][2], away[-1][2]))
 check('[mincecraft] bye' in log, 'Esc ended it')
+# The second boot, mining and building.
+blog = open(sys.argv[1] + '/serial-build.log', 'rb').read().decode('latin-1')
+parts = re.split(r'\[mincecraft\] mark\n', blog)
+check(len(parts) == 6, 'build: five marks, six stretches: %d' % len(parts))
+def ps(t): return [tuple(int(v) for v in m.groups()) for m in re.finditer(r'\[mincecraft\] p (-?\d+) (-?\d+) (-?\d+) (-?\d+) (-?\d+) (\d+)', t)]
+if len(parts) == 6:
+    _, look, brk, mine, place, end = parts
+    check(ps(look) and ps(look)[-1][4] == -227, 'looking down, pitch held at -227: %r' % (ps(look)[-1:],))
+    check('[mincecraft] broke 64 10 64 1' in brk, 'F broke the crust underfoot (64 10 64, crust)')
+    check(re.search(r'\[mincecraft\] inv 1=1\b', brk), 'into the inventory: inv 1=1')
+    check(ps(brk) and ps(brk)[-1][1] == 10 << 16 and ps(brk)[-1][5] == 1, 'and the cook dropped into the hole, on y 10')
+    check('[mincecraft] place refused' in mine and 'placed' not in mine, 'r at their own cell: refused')
+    pl = re.findall(r'\[mincecraft\] placed (\d+) (\d+) (\d+) (\d+)', place)
+    check(len(pl) == 1, 'looking up a little: exactly one placed of three tries: %r' % pl)
+    if pl:
+        x, y, z, b = map(int, pl[0])
+        check(x == 64 and y == 11 and z in (65, 66) and b == 1, 'on top of the next block over: %r' % (pl[0],))
+    check(re.search(r'\[mincecraft\] inv 1=0\b', place), 'out of the inventory: inv 1=0')
 sys.exit(0 if ok else 1)
 PY
 [ "$fail" = 0 ] && echo "mincecraft-play-test: PASS" || echo "mincecraft-play-test: FAIL"

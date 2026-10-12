@@ -1,4 +1,5 @@
 /* player.c - movement at a fixed 20 ticks a second (v0.60.194): walking,
+ * breaking by hardness and placing (v0.60.195),
  * gravity, jumping, broth, and collision one axis at a time. No move is a
  * block or more in a tick, so the box can only newly touch its edge cells. */
 #include "player.h"
@@ -46,7 +47,15 @@ void player_spawn(player_t *p) {
 }
 void player_eye(const player_t *p, cam_t *c) { c->x = p->x; c->y = p->y + P_EYE; c->z = p->z; c->yaw = p->yaw; c->pitch = p->pitch; }
 int player_tick(player_t *p, const input_t *in, const ray_t *tg) {
-    (void)tg;                                                     /* breaking: Task 6 */
+    int broke = 0, b;                                             /* breaking (v0.60.195), first: */
+    if (in->brk && tg->hit && blocks[b = world_get(tg->x, tg->y, tg->z)].hardness) {   /* a fall starts this tick */
+        if (tg->x != p->bx || tg->y != p->by || tg->z != p->bz) { p->bx = tg->x; p->by = tg->y; p->bz = tg->z; p->bn = 0; }
+        if (++p->bn >= blocks[b].hardness) {
+            world_set(tg->x, tg->y, tg->z, B_AIR);
+            if (p->inv[b] < 999) p->inv[b]++;
+            p->bn = 0; broke = b;
+        }
+    } else p->bn = 0;
     p->yaw = (p->yaw + in->turn * LOOK) & 1023;
     p->pitch += in->tilt * LOOK;
     if (p->pitch > 227) p->pitch = 227;
@@ -58,5 +67,23 @@ int player_tick(player_t *p, const input_t *in, const ray_t *tg) {
     if (wet) { p->vy -= GRAV / 2; if (in->jump) p->vy = SWIM; if (p->vy < -SWIM) p->vy = -SWIM; }
     else { p->vy -= GRAV; if (in->jump && p->ground) p->vy = JUMP; if (p->vy < -TERM) p->vy = -TERM; }
     move_y(p, p->vy);
-    return 0;
+    return broke;
+}
+/* The hotbar's block on the face the crosshair is on (v0.60.195): never
+ * into the cook's own box, never without one in hand. */
+int player_place(player_t *p, const ray_t *tg, int id) {
+    if (!tg->hit || id <= 0 || id >= B_COUNT || p->inv[id] == 0 || tg->py >= WY) return 0;
+    int c = world_get(tg->px, tg->py, tg->pz);
+    if (c != B_AIR && c != B_BROTH) return 0;
+    int x0 = (p->x - P_HW) >> 16, x1 = (p->x + P_HW - 1) >> 16, y0 = p->y >> 16, y1 = (p->y + P_H - 1) >> 16;
+    int z0 = (p->z - P_HW) >> 16, z1 = (p->z + P_HW - 1) >> 16;
+    if (tg->px >= x0 && tg->px <= x1 && tg->py >= y0 && tg->py <= y1 && tg->pz >= z0 && tg->pz <= z1) return 0;
+    world_set(tg->px, tg->py, tg->pz, id);
+    p->inv[id]--;
+    return 1;
+}
+int hotbar(const player_t *p, int ids[9]) {                       /* the kinds held, in id order */
+    int n = 0;
+    for (int id = 1; id < B_COUNT && n < 9; id++) if (p->inv[id]) ids[n++] = id;
+    return n;
 }
