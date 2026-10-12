@@ -542,8 +542,11 @@ static int ct_admits(uint32_t pid, uint8_t owner) {
 
 int countertop_win_open(uint32_t pid, uint8_t owner, int w, int h, const char *title) {
     if (w < 1 || h < 1 || w > APP_MAXW || h > APP_MAXH) return -1;
-    if (ct_running && !ct_admits(pid, owner)) return -1;
     mutex_lock(&app_mtx);
+    /* Under the mutex (v0.60.267, review R-C12): asked before it, a call made
+     * as the desktop came up could find ct_running 0, wait on app_mtx while
+     * the start set it to 1, and take a slot no one had checked. */
+    if (ct_running && !ct_admits(pid, owner)) { mutex_unlock(&app_mtx); return -1; }
     int id = -1;
     if (ct_running) for (int i = 0; i < APP_MAX; i++) if (!app[i].used) { id = i; break; }
     if (id >= 0) {
@@ -2047,10 +2050,9 @@ static char note_q[NOTE_Q][48];
 static int note_h, note_t, note_showing;
 static uint32_t note_at;
 int countertop_note(uint32_t pid, uint8_t owner, const char *line) {
-    if (ct_running && !ct_admits(pid, owner)) return -1;
     mutex_lock(&app_mtx);
     int r = -1;
-    if (ct_running && (note_t + 1) % NOTE_Q != note_h) {
+    if (ct_running && ct_admits(pid, owner) && (note_t + 1) % NOTE_Q != note_h) {
         scopy(note_q[note_t], line, (int)sizeof(note_q[0]));
         for (char *c = note_q[note_t]; *c; c++) if ((unsigned char)*c < ' ' || (unsigned char)*c > 126) *c = ' ';
         note_t = (note_t + 1) % NOTE_Q;

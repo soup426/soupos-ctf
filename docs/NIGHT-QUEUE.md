@@ -199,6 +199,9 @@ check five times; every test that ever fails is a finding: its log read,
 the cause found (a fixed WAIT a window outran, a race), fixed with an
 UNTIL or what it needs, soaked six wide. The numbers in the notes.
 
+Seen 2026-10-12 (v0.60.267's run): doom-mouse-test, "a shot each 0.15 s":
+gaps [14, 15, ...], one a tick under its 15 floor; three runs alone passed.
+
 ## 6. Doom: the face
 
 The status bar's face is always STFST00. Doom's (st_stuff.c,
@@ -652,7 +655,7 @@ Mincecraft; neosim and rx.c; Doom; tests, build and docs.)
   where jot had a whole input line: a path near FAT_PATH_MAX, or shorter
   with apostrophes (4 bytes each quoted), is refused. Fix: arguments past
   FAT_PATH_MAX plus quoting.
-- **R-C12 (low).** ct_admits is read before app_mtx is taken (:545,
+- **R-C12 (low) — DONE v0.60.267 (no test can make the race; ctforeign-test still passes).** ct_admits is read before app_mtx is taken (:545,
   :2041): a call between ct_running 0 and 1 gets a slot unchecked. Fix:
   the test inside the mutex.
 - **R-C13 (low).** chef cook of a windowed program from the desktop's own
