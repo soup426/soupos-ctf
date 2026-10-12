@@ -453,7 +453,7 @@ Mincecraft; neosim and rx.c; Doom; tests, build and docs.)
   ~97 top frames the identity map never covered (it maps a count, not the
   highest frame): writing 113 MB panics (paging.c:90, vfs.c:215). Fix: map
   to the highest usable frame; cap or charge write buffers.
-- **R-K5 (high).** Hostile ELF headers panic the kernel: e_phoff/e_phnum not
+- **R-K5 (high) — SET ASIDE 2026-10-12: left for the user; the loop skips it.** Hostile ELF headers panic the kernel: e_phoff/e_phnum not
   checked against the size, p_filesz > p_memsz not refused (usermode.c:303,
   247). Fix: both checks, e_phentsize 32.
 - **R-K6 (medium).** A pipeline whose later stage cannot start leaks zombie
@@ -676,7 +676,7 @@ Mincecraft; neosim and rx.c; Doom; tests, build and docs.)
 2. Security: R-K1, R-K2, R-C1, then R-T19 and R-T20 (the tests of
    K2 and K1, which can pass broken), R-K12 (critical), R-C2, R-K13,
    R-C10, R-K14, R-C12 (the area review's, 2026-10-12).
-3. Kernel crashes any cook can cause: R-K5, R-K4, R-K3.
+3. Kernel crashes any cook can cause: R-K4, R-K3 (R-K5 set aside for the user).
 4. Data loss: R-M1, R-M4, R-N3, R-N4, R-N5, R-N1, R-N2.
 5. Item 0b, Doom, from R-D3, R-D2, R-D4, R-D1 down.
 6. The rest by severity, the area's mediums before the lows; items 1-9
