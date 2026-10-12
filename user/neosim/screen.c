@@ -5,6 +5,7 @@
  * empty bottom rows, so it never hides a character. */
 #include "../ulib.h"
 #include "ed.h"
+#include "highlight.h"
 #include "../../src/font8x16.h"
 
 #define PAGE   0x1A1B26u
@@ -16,6 +17,8 @@
 #define CURSOR 0xFF9E64u
 #define BODY_W 640
 #define SELECT 0x33467Cu               /* visual mode's selection (v0.60.206) */
+/* The syntax colours (v0.60.217), tokyonight's: plain, keyword, string, number, comment, # line */
+static const unsigned hl_colour[] = { INK, 0xBB9AF7u, 0x9ECE6Au, 0xFF9E64u, 0x565F89u, 0x7DCFFFu };
 static int selected(const ed_t *e, int y, int x) {
     if (e->mode != M_VISUAL && e->mode != M_VLINE) return 0;
     int ay = e->vy, ax = e->vx, by = e->cy, bx = e->cx;
@@ -45,15 +48,19 @@ static int num(char *o, int v) {               /* decimal, no padding; its lengt
 }
 void screen_draw(const ed_t *e, unsigned *b) {
     for (int r = 0; r < SCR_ROWS; r++) for (int c = 0; c < SCR_COLS; c++) cell(b, c, r, ' ', INK, r == TEXT_ROWS ? BAR : PAGE);
+    int kind = hl_kind(e->path), state = 0;
+    static unsigned char cls[T_COLS + 1];
+    for (int l = 0; l < e->top && l < e->t.n; l++) hl_line(kind, e->t.s[l], e->t.len[l], &state, cls);   /* the state at the top */
     for (int r = 0; r < TEXT_ROWS; r++) {
         int l = e->top + r;
+        if (l < e->t.n) hl_line(kind, e->t.s[l], e->t.len[l], &state, cls);
         if (l >= e->t.n) { cell(b, 0, r, '~', NUMBER, PAGE); continue; }   /* past the end, as vim */
         char n[12]; int k = num(n, l + 1);
         put(b, NUM_W - 1 - k, r, n, l == e->cy ? CURNUM : NUMBER, PAGE);
         for (int c = 0; c < SCR_COLS - NUM_W; c++) {
             int x = e->left + c;
             if (x >= e->t.len[l]) break;
-            cell(b, NUM_W + c, r, e->t.s[l][x], INK, selected(e, l, x) ? SELECT : PAGE);
+            cell(b, NUM_W + c, r, e->t.s[l][x], hl_colour[cls[x]], selected(e, l, x) ? SELECT : PAGE);
         }
     }
     /* The cursor: rows 14 and 15 of its cell (two for normal, one for insert). */

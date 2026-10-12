@@ -80,7 +80,7 @@ distance, the light added to the day's. render() takes a light field
 midnight, a tealight placed ahead: the floor around it brighter than the
 same floor without; the frame rate still at the cap (measure first).
 
-## 4. neosim: colour
+## 4. neosim: colour — DONE v0.60.217
 
 Syntax colours for .sc (soupyc: keywords, strings, numbers, comments) and
 .c (the same, and #lines), chosen by the file's name, drawn by screen.c

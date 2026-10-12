@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.216
+Current version: v0.60.217
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,21 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.217 (2026-10-12)  — NEOSIM IN COLOUR
+  - Syntax colours by the file's name (highlight.c), tokyonight's: .c and
+    .h (C's keywords, strings and characters, numbers, // and /* */
+    comments, # lines) and .sc (soupyc's own thirteen keywords from
+    soupyc.c, strings, numbers, # comments, and its triple-quoted strings
+    across lines). Anything else stays plain. One piece of state is
+    carried from line to line (inside a /* comment or a soupyc """
+    string), worked out from the top of the file each frame.
+  - scripts/neosim-colour-test.sh: a small .c, .sc and .txt opened in
+    turn, each token's cells in its class's colour (the cursor's underline
+    rows left out), the .txt all plain. Picture in docs/neosim/colour.png.
+  - mincecraft-save-test's load boot waits for "[mincecraft] window up"
+    instead of five seconds: under check.sh's load the run once ended
+    before the window, and with it the inventory marker, came.
 
 v0.60.216 (2026-10-12)  — MINCECRAFT: TEALIGHTS
   - A tealight (four from a butter, v0.60.215) lights the night: every

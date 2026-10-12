@@ -38,7 +38,7 @@ boot() {   # $1: name, then the keys after the login
 boot save "cook mincecraft.elf -flat -script -wait -world /SAVE.WLD &" "WAIT:1" "countertop" "WAIT:5" \
           "KEY:w 600" "WAIT:1" "KEY:down 2000" "WAIT:1" "KEY:f 1000" "WAIT:2" "TYPE:p" "WAIT:2" \
           "KEY:right 500" "WAIT:1" "KEY:esc" "WAIT:4"
-boot load "cook mincecraft.elf -script -wait -world /SAVE.WLD &" "WAIT:1" "countertop" "WAIT:5" "KEY:esc" "WAIT:4"
+boot load "cook mincecraft.elf -script -wait -world /SAVE.WLD &" "WAIT:1" "countertop" "UNTIL:[mincecraft] window up" "WAIT:2" "KEY:esc" "WAIT:4"   # (v0.60.217) the window, not a fixed time: the hand is said after it opens
 mcopy -n -i "$WORK/disk.img" ::SAVE.WLD "$WORK/good.wld" || { echo "  FAIL  no /SAVE.WLD on the disk"; fail=1; }
 if [ -f "$WORK/good.wld" ]; then
     python3 -c "import sys;b=bytearray(open(sys.argv[1],'rb').read());b[100]^=1;open(sys.argv[2],'wb').write(b)" "$WORK/good.wld" "$WORK/bad.wld"
