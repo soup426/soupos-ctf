@@ -53,6 +53,15 @@ under the standing rules (a test that fails first, then the fix).
 
 ---
 
+## 0. A text file's double click opens neosim (the user's call, 2026-10-12)
+
+The files window opens a text file in jot on a double click; the user
+asked for neosim. Measure first where the double click decides (the files
+window's open, ctx_text's "open in neosim" beside it) and which tests
+expect jot there (ctjot-test, ctfiles*). Then neosim for text files, jot
+still in the right-click menu; those tests changed to say neosim. Done
+first, once the review's six reviewers are finished with the tree.
+
 ## 1. Mincecraft: the moon's top rows
 
 Looking straight up at midnight, the moon's top rows are two pixels wider
@@ -127,11 +136,6 @@ shallow; a source block stays. Through the falling-sugar queue's way of
 working (a queue of cells, a step a few ticks). Test: a world from the
 host, broth placed on a ledge: the cells it reaches in the markers, the
 save on the host.
-
-## For the user (not to be done unattended)
-
-- A double click on a text file in the files window opens jot; neosim is
-  there now (and on the desktop since v0.60.245). Which should it open?
 
 ## Review findings (2026-10-12)
 
