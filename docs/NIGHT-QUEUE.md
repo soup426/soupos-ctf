@@ -1,12 +1,13 @@
 # Night queue
 
-Sixty-sixth queue. The first sixty-five are in `docs/queue-archive-2026-10-*.md`;
-queue 65 (`-12i`) closed the lost keys with the numbers, gave neosim vim's
-patterns (and fixed rx.c's search), Mincecraft a sun and a moon, and the
-desktop a neosim icon. This one: the full check's time again; neosim :g
-:sort and Ctrl-A Ctrl-X; flying in Mincecraft. Written by an unattended
-run when queue 65 ran out, as the user asked on 2026-10-11; the user has
-not seen it.
+Sixty-seventh queue. The first sixty-six are in `docs/queue-archive-2026-10-*.md`;
+queue 66 (`-12j`) made the full check 418 s to 292 s, gave neosim ranges,
+:g :v :normal :sort and Ctrl-A Ctrl-X, and Mincecraft flying. On
+2026-10-12 the user asked for a review of the whole project (six reviewers,
+one an area) and then for the queue to be worked with what needs doing
+added: this queue holds the known loose ends first, and the review's
+findings are added below as they come in, most severe first, each fixed
+under the standing rules (a test that fails first, then the fix).
 
 ## Standing rules
 
@@ -52,42 +53,45 @@ not seen it.
 
 ---
 
-## 1. The full check's time, the desktop tests — DONE v0.60.246 (another way: 418 s to 292 s)
+## 1. Mincecraft: the moon's top rows
 
-418 s under timeout 590 again. The ct*-test scripts are 40 tests and the
-biggest share of the sum (2403 s of 12123 at queue 64). Measure first:
-their fixed WAITs (after countertop, after each click), and which could
-wait for a [countertop] line instead (open, close, kitchen, ...). Change
-those, the same keys and checks; the numbers before and after; every
-changed test still fails when its feature is taken away (spot-check two).
+Looking straight up at midnight, the moon's top rows are two pixels wider
+than the rest of its square (v0.60.244 left it). Measure first: which rows,
+and the pu/pv values there; the sun's square the same way. Fix the
+projection so both are squares. Test: the moon's and the sun's widths
+row by row in a dump, all alike.
 
-## 2. neosim: :g and :sort — DONE v0.60.247
+## 2. Doom: the keys on the status bar
 
-:g/pat/cmd and :v/pat/cmd over the lines matching (or not) with d, s,
-normal-mode keys after :normal; :sort (and :sort!, :sort n, :sort u) over
-a range or the whole text. Test: cases against neovim's.
+v0.60.230 draws the keys held (STKEYS0-2 at 239, 171 + 10 a key) by
+st_stuff.c's rule, and no test sees one. Measure first how the test could
+hold a key (a level with a key near the start, a cheat the port has, or a
+debug flag); then doom-places-test with a key held, its pixels against the
+WAD.
 
-## 3. neosim: Ctrl-A and Ctrl-X — DONE v0.60.248
+## 3. Doom: one ammo pool
 
-The number under or after the cursor on the line, plus or minus the
-count; negative numbers, 0x hex, the cursor to its last digit; . repeats.
-Test: cases against neovim's.
+Every pickup adds to bullets (shells, rockets and cells too), so the panel
+shows 0 for the others and a shotgun-guy's shells feed the pistol. Doom
+has four (P_GiveAmmo, clipammo[], maxammo[]). Measure first which ammo
+things E1 has; then four pools as Doom's, the pistol using bullets; the
+panel reads them. Test: the counts after picking up a clip and shells.
 
-## 4. Mincecraft: flying — DONE v0.60.249
+## 4. The desktop icons' second column
 
-Space twice quickly toggles flying: no fall, Space up and Shift down,
-walking as before; landing ends it. Saved in the world file (version 5).
-Test: the markers' y across a double space, a held space, a held Shift;
-a save and load keeps it.
+v0.60.245's icon_place wraps the icons into another column on a short
+screen; every test machine is 1024x768, so nothing sees it. Measure first
+whether QEMU can give soupOS a shorter framebuffer (the FB request, a
+fw_cfg). Then a test that reads the second column, or the numbers for why
+none can.
 
-**Ruling (item 1):** the waits were not the lever. Measured, the CPU sat
-75% idle through a full check and the desktop tests' waits were worth some
-30 s of the total; running more tests at once was worth 126 s and changes
-no test, so that is what was done. The waits stay as they are. Cost if
-wrong: heavier load could bring out timing flakes the old pace hid; three
-full checks at 48 passed.
+## Review findings (2026-10-12)
+
+(Added as the six reviewers report: kernel and shell; the desktop;
+Mincecraft; neosim and rx.c; Doom; tests, build and docs.)
 
 ## Notes left by unattended runs
+
 
 
 
