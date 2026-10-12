@@ -183,6 +183,11 @@ int mouse_init(void) {
      * Read and write it with interrupts off. */
     uint32_t fl;
     __asm__ volatile ("pushfl; popl %0; cli" : "=r"(fl) :: "memory");
+    /* A key pressed during boot may already be waiting in the buffer, and
+     * would be read below as the config byte and written back as it
+     * (v0.60.208, from the Mincecraft review): drop what is there first.
+     * The keystroke is lost; the keyboard's own settings are not. */
+    for (int i = 0; i < 16 && (inb_(PS2_STATUS) & ST_OUTPUT_FULL); i++) (void)inb_(PS2_DATA);
     wait_write(); outb_(PS2_CMD, CMD_READ_CONFIG);
     wait_read();
     uint8_t cfg = inb_(PS2_DATA);

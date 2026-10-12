@@ -725,7 +725,7 @@ static const char *const desk_item[] = { "Terminal", "Files", "Kitchen", "backdr
 #define DESK_N 6
 #define DESK_W 150
 #define DESK_IH 24
-static int desk_open, desk_x, desk_y;
+static int desk_open, desk_x, desk_y, desk_focus = -1;   /* desk_focus: the window with the focus when it opened (v0.60.208) */
 /* Alt+Tab you can see (v0.60.203): while Alt is held after a Tab, a panel
  * in the middle lists the windows, the top one first, and marks where
  * letting go will land; each Tab moves the mark. Letting go turns the
@@ -1400,6 +1400,7 @@ static void desk_set(int open, int x, int y) {
     desk_x = x + DESK_W > W ? W - DESK_W : x;
     desk_y = y + DESK_N * DESK_IH + 4 > H - TASK_H ? H - TASK_H - DESK_N * DESK_IH - 4 : y;
     desk_open = 1;
+    desk_focus = topmost();
     repaint(desk_x, desk_y, DESK_W, DESK_N * DESK_IH + 4);
     klog("[countertop] background menu at %d,%d\n", desk_x, desk_y);
 }
@@ -2618,7 +2619,11 @@ int countertop_run(int (*avail)(void), int (*getch)(void), int uid) {
             int c = getch(), k = topmost();
             last_input = timer_get_ticks();
             if (locked) { cloche_key(c); continue; }   /* under the cloche: keys are for it alone */
-            if (c == 27 && desk_open) { desk_set(0, 0, 0); continue; }   /* Esc puts the background's menu up first */
+            if (c == 27 && desk_open) {                        /* Esc puts the background's menu up first */
+                int moved = topmost() != desk_focus;             /* (v0.60.208) and if the focus has moved since */
+                desk_set(0, 0, 0);                               /* it opened, goes on to that window too */
+                if (!moved) continue;
+            }
             if (c == KEY_PRINT) { plate(); continue; }       /* a picture of the screen (v0.60.185) */
             if (c == KEY_CTRL_ALT_T) {                         /* Ctrl+Alt+T: a terminal (v0.60.171) */
                 klog("[countertop] ctrl-alt-t\n");
