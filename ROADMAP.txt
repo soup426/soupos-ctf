@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.254
+Current version: v0.60.255
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,18 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.255 (2026-10-12)  — UNTIL AFTER KEYS WAITS FOR WHAT THE KEYS DO
+  - qemu_keys' UNTIL searched the log from the last plain line typed, so
+    after KEY: or TYPE: items a prompt printed before the keys satisfied
+    it at once (bigdir-test's Tab, cont-test's up arrow; review R-T5).
+    KEY: and TYPE: move its start now: what counts is what the log gets
+    after them.
+  - scripts/keys-until-test.sh, no QEMU: a fake monitor, found through its
+    -serial file: argument as QEMU is, prints a prompt for a typed line at
+    once and one for Tab (or a typed x) 2 s later; UNTIL after the keys
+    must wait for the second. Before the fix it returned in 1.2-1.7 s.
+    Every test in the full check still passes with the change.
 
 v0.60.254 (2026-10-12)  — TWO MORE GATE CHECKS CAN FAIL
   - "ring3 sbrk syscall" took any TESTOUT heap= line, mise's own

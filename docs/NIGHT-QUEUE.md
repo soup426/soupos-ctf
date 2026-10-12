@@ -395,7 +395,7 @@ Mincecraft; neosim and rx.c; Doom; tests, build and docs.)
 - **R-T4 (medium-high) — DONE v0.60.254.** Gate checks that accept failure: drop.elf's
   "exited with code" takes code 0 ("STILL ALIVE"); 'TESTOUT heap=' takes
   "heap=FAIL". Fix: exact patterns.
-- **R-T5 (medium).** qemu_keys' UNTIL after TYPE:/KEY: items anchors on the
+- **R-T5 (medium) — DONE v0.60.255 (keys-until-test).** qemu_keys' UNTIL after TYPE:/KEY: items anchors on the
   last plain line, so a prompt already printed satisfies it at once
   (bigdir-test's Tab, cont-test's up-arrow). Fix: anchor on each item.
 - **R-T6 (medium).** Mincecraft checks skipped when their markers are

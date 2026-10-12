@@ -118,13 +118,22 @@ for item in SCRIPT:
         continue
     # KEY:<qemu keyname> sends one raw sendkey, for keys the typing map has no
     # character for (KEY:ctrl-c, KEY:esc, ...).
+    # KEY: and TYPE: move UNTIL's start too (v0.60.255, review R-T5): before,
+    # an UNTIL after them searched from the last plain line, so a prompt
+    # printed before the keys (bigdir-test's Tab, cont-test's up arrow)
+    # satisfied it at once. They have no echo to find; what counts is
+    # everything the log gets after them.
     if item.startswith('KEY:'):
+        if log_path: typed_at = log_size()
+        typed_line = b''
         cmd('sendkey ' + item[4:])
         continue
     # MON:<command> sends a raw monitor command (screendump, info, ...).
     # TYPE:<text> types the text WITHOUT a trailing Enter, for the editor and
     # for leaving a half-finished line at the prompt.
     if item.startswith('TYPE:'):
+        if log_path: typed_at = log_size()
+        typed_line = b''
         for ch in item[5:]:
             for k in keys_for(ch):
                 cmd('sendkey ' + k)
