@@ -726,6 +726,32 @@ static const char *const desk_item[] = { "Terminal", "Files", "Kitchen", "backdr
 #define DESK_W 150
 #define DESK_IH 24
 static int desk_open, desk_x, desk_y;
+/* Alt+Tab you can see (v0.60.203): while Alt is held after a Tab, a panel
+ * in the middle lists the windows, the top one first, and marks where
+ * letting go will land; each Tab moves the mark. Letting go turns the
+ * windows over that many times, as that many Alt+Tabs always have (the
+ * top to the bottom), so one Alt+Tab is what it was. */
+static int tab_on, tab_mark;
+#define TAB_W 300
+#define TAB_IH 24
+#define TAB_HEAD 20
+static int tab_list(int *out) {                    /* the windows, the top first; how many */
+    int n = 0;
+    for (int i = nwin - 1; i >= 0 && n < 16; i--) if (!win[order[i]].min) out[n++] = order[i];
+    return n;
+}
+static int tab_h(void) { int l[16]; return TAB_HEAD + tab_list(l) * TAB_IH + 8; }
+static void draw_tab(void) {                       /* within the clip */
+    int l[16], n = tab_list(l), h = TAB_HEAD + n * TAB_IH + 8, x = W / 2 - TAB_W / 2, y = H / 2 - h / 2;
+    fill(x, y, TAB_W, h, EDGE_RGB);
+    fill(x + 1, y + 1, TAB_W - 2, h - 2, 0x00F4F1EAu);
+    text(x + 10, y + 3, "windows", 0x00707070u);
+    for (int i = 0; i < n; i++) {
+        int ry = y + TAB_HEAD + 4 + i * TAB_IH;
+        if (i == tab_mark % n) fill(x + 4, ry, TAB_W - 8, TAB_IH, 0x003A6EA5u);
+        text(x + 12, ry + (TAB_IH - 16) / 2, win[l[i]].title, i == tab_mark % n ? 0x00FFFFFFu : 0x00202020u);
+    }
+}
 static void draw_desk(void) {                      /* within the clip */
     int h = DESK_N * DESK_IH + 4;
     fill(desk_x, desk_y, DESK_W, h, EDGE_RGB);
@@ -1025,6 +1051,7 @@ static void repaint(int x, int y, int w, int h) {
         if (ctx_win >= 0) draw_ctx();
         if (desk_open) draw_desk();
         if (cal_open) draw_cal();
+        if (tab_on) draw_tab();
         if (locked) draw_lock();                       /* the cloche over everything (v0.60.176) */
     }
     clip_all();
@@ -2586,7 +2613,21 @@ int countertop_run(int (*avail)(void), int (*getch)(void), int uid) {
                 continue;
             }
             if (c == KEY_ALT_TAB && k >= 0) {                  /* Alt+Tab (v0.60.155; decided in the IRQ, v0.60.171) */
-                lower_window(k);
+                int l[16], n = tab_list(l);                    /* the panel, the mark one on (v0.60.203) */
+                int was = tab_on ? tab_h() : 0;
+                tab_mark = tab_on ? (tab_mark + 1) % n : (n > 1 ? 1 : 0);
+                tab_on = 1;
+                int h = tab_h() > was ? tab_h() : was;
+                repaint(W / 2 - TAB_W / 2, H / 2 - h / 2, TAB_W, h);
+                klog("[countertop] tab panel marks %s\n", win[l[tab_mark]].title);
+                continue;
+            }
+            if (c == KEY_ALT_UP) {                             /* Alt let go: turn over to the mark */
+                if (!tab_on) continue;
+                int h = tab_h(), times = tab_mark;
+                tab_on = 0; tab_mark = 0;
+                repaint(W / 2 - TAB_W / 2, H / 2 - h / 2, TAB_W, h);
+                for (int i = 0; i < times; i++) if (topmost() >= 0) lower_window(topmost());
                 continue;
             }
             if (k >= 0 && win[k].term) {

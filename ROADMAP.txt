@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.202
+Current version: v0.60.203
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,22 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.203 (2026-10-11)  — ALT+TAB YOU CAN SEE
+  - While Alt is held after a Tab, a panel in the middle of the screen
+    lists the windows, the top one first (minimised ones left out), the
+    one letting go will land on marked in blue; each Tab moves the mark,
+    round again after the last. Letting go of Alt takes the panel down and
+    turns the windows over that many times (the top to the bottom, as each
+    Alt+Tab always did), so a quick Alt+Tab is what it was.
+  - The keyboard IRQ, which already decides Alt+Tab, sends KEY_ALT_UP when
+    Alt is let go after one; the shell and the editor ignore it outside the
+    desktop, as they did KEY_ALT_TAB. Logged "tab panel marks NAME".
+  - scripts/ctalttabpanel-test.sh: Welcome, Pantry and a terminal; Alt held
+    through two Tabs (key down and up events over a QMP socket: HMP's
+    sendkey releases a held key before what comes after it), the mark on
+    Pantry then Welcome in screendumps and the log, Alt let go, Welcome on
+    top and the panel gone. ctalttab-test unchanged and passing.
 
 v0.60.202 (2026-10-11)  — MINCECRAFT: A WORLD IS NOT LOST
   - From the branch's review. A save with the feet above y 64 (standing

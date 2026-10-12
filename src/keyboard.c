@@ -53,6 +53,7 @@ static uint32_t kb_write = 0;
 static int shift_held = 0;
 static int ctrl_held  = 0;
 static int alt_held;          /* either Alt (v0.60.171) */
+static int alt_tabbed;        /* a Tab came while it was held (v0.60.203) */
 static int e0_prefix  = 0;   /* set when 0xE0 escape byte is received */
 
 /* Live key-state table - 1 = currently pressed, indexed by set-1 scancode.
@@ -103,8 +104,10 @@ static void keyboard_irq_handler(registers_t *regs) {
             shift_held = 0;
         if (code == 0x1D)  /* left ctrl, or right ctrl (0xE0 0x1D) */
             ctrl_held = 0;
-        if (code == 0x38)  /* left alt, or right alt (0xE0 0x38) */
+        if (code == 0x38) {  /* left alt, or right alt (0xE0 0x38) */
             alt_held = 0;
+            if (alt_tabbed) { alt_tabbed = 0; kb_push(KEY_ALT_UP); }   /* the Alt+Tab panel's end */
+        }
         e0_prefix = 0;
         return;
     }
@@ -137,7 +140,7 @@ static void keyboard_irq_handler(registers_t *regs) {
     if (sc == 0x1D) { ctrl_held = 1; return; }
     if (sc == 0x38) { alt_held = 1; return; }
     if (sc >= 128) return;
-    if (alt_held && sc == 0x0F) { kb_push(KEY_ALT_TAB); return; }                 /* the desktop's (v0.60.171) */
+    if (alt_held && sc == 0x0F) { alt_tabbed = 1; kb_push(KEY_ALT_TAB); return; }  /* the desktop's (v0.60.171) */
     if (alt_held && sc == 0x3E) { kb_push(KEY_ALT_F4); return; }
     if (alt_held && ctrl_held && sc == 0x14) { kb_push(KEY_CTRL_ALT_T); return; }
     if (sc >= 0x3B && sc <= 0x44) { kb_push(KEY_F1 + (sc - 0x3B)); return; }   /* F1-F10 (v0.60.171) */

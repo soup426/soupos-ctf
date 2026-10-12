@@ -77,7 +77,7 @@ and "empty the compost" (asked twice, then really gone). Test: a file
 removed and put back byte for byte; removed again and emptied, gone
 from the disk.
 
-## 4. Alt+Tab you can see
+## 4. Alt+Tab you can see — DONE v0.60.203
 
 While Alt is held after a Tab, a panel in the middle of the screen
 lists the windows (title, the focused one marked); each Tab moves the
