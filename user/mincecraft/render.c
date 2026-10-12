@@ -33,7 +33,20 @@ void cam_forward(const cam_t *c, fx *dx, fx *dy, fx *dz) {
     fx sy = fx_sin(c->yaw), cy = fx_cos(c->yaw), sp = fx_sin(c->pitch), cp = fx_cos(c->pitch);
     *dx = fx_mul(sy, cp); *dy = sp; *dz = fx_mul(cy, cp);
 }
-void render(const cam_t *c, unsigned *body, int light, unsigned sky, const ray_t *tg, int crack) {
+/* A tealight's light by the squared distance in cells (v0.60.216): 230 at
+ * its own cell to 0 at LAMP_REACH, falling off with the distance. */
+static int lampk[LAMP_REACH * LAMP_REACH];
+static void lamp_table(void) {
+    if (lampk[0]) return;
+    for (int d2 = 0; d2 < LAMP_REACH * LAMP_REACH; d2++) {
+        int r = 0; while ((r + 1) * (r + 1) <= d2 * 256) r++;       /* sqrt(d2) in 16ths */
+        int k = 230 * (LAMP_REACH * 16 - r) / (LAMP_REACH * 16);
+        lampk[d2] = k < 0 ? 0 : k;
+    }
+}
+void render(const cam_t *c, unsigned *body, int light, unsigned sky, const ray_t *tg, int crack,
+            const lamp_t *lamps, int nlamps) {
+    lamp_table();
     fx sy = fx_sin(c->yaw), cy = fx_cos(c->yaw), sp = fx_sin(c->pitch), cp = fx_cos(c->pitch);
     fx fx_ = fx_mul(sy, cp), fy = sp, fz = fx_mul(cy, cp);       /* forward */
     fx rx = cy, rz = -sy;                                         /* right (ry 0) */
@@ -70,7 +83,15 @@ void render(const cam_t *c, unsigned *body, int light, unsigned sky, const ray_t
                 int face = r.axis == 1 ? (r.step < 0 ? FACE_TOP : FACE_BOTTOM) : FACE_SIDE;
                 int tx = r.u >> 13, ty = face == FACE_SIDE ? 7 - (r.v >> 13) : r.v >> 13;
                 int k = face == FACE_TOP ? 256 : face == FACE_BOTTOM ? 128 : r.axis == 0 ? 205 : 166;
-                col = shade(block_texel(b, face, tx, ty), k * light >> 8);
+                int lit = light, warm = 0;
+                if (b == B_TEALIGHT) lit = 256;                   /* it shines (v0.60.216) */
+                else for (int i = 0; i < nlamps; i++) {           /* the air in front of the face, by the lamps */
+                    int ex = r.px - lamps[i].x, ey = r.py - lamps[i].y, ez = r.pz - lamps[i].z, d2 = ex * ex + ey * ey + ez * ez;
+                    if (d2 < LAMP_REACH * LAMP_REACH) warm += lampk[d2];
+                }
+                lit += warm; if (lit > 256) lit = 256;
+                col = shade(block_texel(b, face, tx, ty), k * lit >> 8);
+                if (warm) col = mix(col, shade(0xFFB050, k), warm > 256 ? 64 : warm / 4);   /* candlelight is warm */
                 if (tg->hit && r.x == tg->x && r.y == tg->y && r.z == tg->z) {   /* the block aimed at (v0.60.200) */
                     if (r.u < 0x0C00 || r.u > 0xF400 || r.v < 0x0C00 || r.v > 0xF400) col = shade(OUTLINE, light);
                     else if (crack) {                             /* cracks: scattered texels darken as it gives */

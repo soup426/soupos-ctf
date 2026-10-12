@@ -71,7 +71,7 @@ four of a new block, toast (golden, crisp), and c on parmesan two into a
 cheese grater block (grey, holes)... kept small: a recipe a key, said on
 the bar, each a test (inventory before and after, in the markers).
 
-## 3. Mincecraft: tealights
+## 3. Mincecraft: tealights — DONE v0.60.216
 
 A placeable light (the night is dark): a block, tealight, crafted from
 butter (one makes four), that lights the cells within 6 blocks by

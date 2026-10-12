@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.215
+Current version: v0.60.216
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,22 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.216 (2026-10-12)  — MINCECRAFT: TEALIGHTS
+  - A tealight (four from a butter, v0.60.215) lights the night: every
+    face takes the light of the air in front of it, the day's plus each
+    tealight's within 6 blocks (230/256 at its own cell, falling off with
+    the distance, a precomputed table by the squared distance), a warm
+    tint with it; the tealight itself shines whole. The world's tealights
+    are found by a scan when a world comes and when one is placed or
+    broken; the 16 nearest the eye within 30 blocks go to render() each
+    frame, so there is no light grid and no more memory.
+  - Measured: still at the 33 fps cap with one lit.
+  - scripts/mincecraft-light-test.sh: the flat world saved at midnight, a
+    tealight put into its grid on the host (the run-length grid decoded
+    and made again, the CRC too), loaded: the crust beside it 267 against
+    101 without, far crust the same, the tealight's face lit, 33 fps.
+    Picture in docs/mincecraft/tealight.png.
 
 v0.60.215 (2026-10-12)  — MINCECRAFT: CRAFTING
   - c makes something from the hotbar's block: a broccoli stalk into four

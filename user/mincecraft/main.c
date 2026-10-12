@@ -128,6 +128,25 @@ static void craft(player_t *p, int id, unsigned short *inv_last) {
     eprint("[mincecraft] craft: nothing to make from "); eprint(blocks[id].name); eprint("\n");
     sys_note("Mincecraft: nothing to make from that");
 }
+/* The tealights (v0.60.216): every one in the world, found by a scan when
+ * a world comes and when one is placed or broken; the 16 nearest the eye,
+ * within 30 blocks, go to render() each frame. */
+#define MAX_LAMPS 256
+static lamp_t lamps[MAX_LAMPS], near_lamps[16];
+static int nlamps;
+static void lamps_scan(void) {
+    nlamps = 0;
+    for (int y = 0; y < WY; y++) for (int z = 0; z < WZ; z++) for (int x = 0; x < WX; x++)
+        if (world[(y * WZ + z) * WX + x] == B_TEALIGHT && nlamps < MAX_LAMPS) { lamps[nlamps].x = x; lamps[nlamps].y = y; lamps[nlamps].z = z; nlamps++; }
+}
+static int lamps_near(const cam_t *c) {
+    int n = 0, ex = c->x >> 16, ey = c->y >> 16, ez = c->z >> 16;
+    for (int i = 0; i < nlamps && n < 16; i++) {
+        int dx = lamps[i].x - ex, dy = lamps[i].y - ey, dz = lamps[i].z - ez;
+        if (dx * dx + dy * dy + dz * dz <= 30 * 30) near_lamps[n++] = lamps[i];
+    }
+    return n;
+}
 static int same(const char *a, const char *b) { while (*a && *a == *b) { a++; b++; } return *a == *b; }
 
 int main(void) {
@@ -189,6 +208,7 @@ int main(void) {
         eprint("[mincecraft] world seed="); eprint_u(seed); eprint(" hash="); eprint_u(world_hash()); eprint("\n");
     }
     if (check) return got == 0 ? 0 : 1;
+    lamps_scan();
     if (tset >= 0) tod = tset;
 
     int win = sys_win_open(BODY_W, BODY_H, "Mincecraft");
@@ -218,7 +238,7 @@ int main(void) {
             else if (ev.type == WEV_WHEEL) pl.slot = ((pl.slot + (int)ev.key) % 9 + 9) % 9;
             else if (ev.type == WEV_KEY && (ev.key == 'r' || ev.key == 'q')) {
                 int ids[9], n = hotbar(&pl, ids);
-                if (pl.slot < n && player_place(&pl, &tg, ids[pl.slot])) { cell_marker("placed", tg.px, tg.py, tg.pz, ids[pl.slot]); sys_tone(523, 60); }
+                if (pl.slot < n && player_place(&pl, &tg, ids[pl.slot])) { cell_marker("placed", tg.px, tg.py, tg.pz, ids[pl.slot]); sys_tone(523, 60); if (ids[pl.slot] == B_TEALIGHT) lamps_scan(); }
                 else eprint("[mincecraft] place refused\n");
                 inv_marker(&pl, inv_last);
             }
@@ -255,6 +275,7 @@ int main(void) {
             int broke = player_tick(&pl, &in, &tg);
             if (broke) {
                 cell_marker("broke", tg.x, tg.y, tg.z, broke); inv_marker(&pl, inv_last);
+                if (broke == B_TEALIGHT) lamps_scan();
                 int hz = 220 - 4 * blocks[broke].hardness;
                 sys_tone((unsigned)(hz < 60 ? 60 : hz), 80);       /* the crunch: lower for harder */
             } else if (pl.bn && pl.bn % 4 == 0) sys_tone(330, 20);  /* breaking: a soft tick */
@@ -284,7 +305,7 @@ int main(void) {
             int hd = blocks[world_get(tg.x, tg.y, tg.z)].hardness;
             if (hd) crack = pl.bn * 256 / hd;
         }
-        render(&cam, body, light_at(tod), sky_at(tod), &tg, crack);
+        render(&cam, body, light_at(tod), sky_at(tod), &tg, crack, near_lamps, lamps_near(&cam));
         hud_draw(body, &pl, &tg, tod);
         sys_win_put(win, body);
         frames++;
