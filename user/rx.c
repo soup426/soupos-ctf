@@ -385,7 +385,11 @@ static int rx_exec(const rx_t *r, const char *s, int n, int from, int *sub) {
             for (int k = 0; k < RX_NCAP; k++) cap[k] = -1;
             rx_add(r, &cl, mark, gen, stk, 0, cap, s, n, i);
         }
-        if (!cl.n) break;
+        if (!cl.n) {                                    /* (v0.60.243) nothing alive: a start that */
+            if (have || i >= n) break;                  /* failed here (\< mid-word, $ before the */
+            gen++;                                      /* end) may hold later; it stopped the search */
+            continue;
+        }
         int c = i < n ? (unsigned char)s[i] : -1;
         if (r->icase && c >= 0) c = rx_lower(c);
         gen++;

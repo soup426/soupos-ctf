@@ -32,7 +32,8 @@ TXT
 PATS=('soup|cat' '^s' 't$' 'o+' 'so?up' 'x{2}' 'x{2,}' 'x{1,2}' '[aeiou]{2}' '[^a-z ]+'
       '(ab)+c' 'a.c' '\bcat\b' '[[:digit:]]+' '\w+' '^$' 'colou?r' '(foo|bar)baz' '*star'
       'a{' 'b)' '[]x]+' '\.' '(soup){2}' '[0-9]{3}-[0-9]{4}' 'ab|abab'
-      '(a*)*b' '(a|aa)+$' '(a+)+c')
+      '(a*)*b' '(a|aa)+$' '(a+)+c'
+      '\<b' 'z$' 'p\>' '\Ba')   # (v0.60.243) an assertion first, false where the search starts: rx.c stopped there
 {
   k=0
   for p in "${PATS[@]}"; do
@@ -57,6 +58,6 @@ kill "$PID" 2>/dev/null; wait "$PID" 2>/dev/null; PID=""
 mcopy -n -i "$WORK/disk.img" ::/out.txt "$WORK/got" 2>/dev/null || { echo "  FAIL  the recipe wrote nothing"; fail=1; exit 1; }
 sed "s/^cook sift.elf/\/usr\/bin\/grep/; s/^slurp/echo/; s/ \/t.txt$/ t.txt/" "$H/r.sh" > "$H/r.bash"
 (cd "$H" && LC_ALL=C bash r.bash 2>/dev/null) > "$WORK/want"
-if cmp -s "$WORK/got" "$WORK/want"; then echo "  ok    sift -E is GNU grep -E ($(grep -c '^==' "$WORK/want") runs: 29 patterns with -o, -c, -v, -in, 3 bad; $(wc -l < "$WORK/want") lines alike)"
+if cmp -s "$WORK/got" "$WORK/want"; then echo "  ok    sift -E is GNU grep -E ($(grep -c '^==' "$WORK/want") runs: 33 patterns with -o, -c, -v, -in, 3 bad; $(wc -l < "$WORK/want") lines alike)"
 else echo "  FAIL  sift -E differs from grep -E:"; diff "$WORK/want" "$WORK/got" | head -40 | sed 's/^/        /'; fail=1; fi
 exit $fail

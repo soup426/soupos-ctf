@@ -62,7 +62,7 @@ through the ATA writes (cli, polling), or the key buffer overflows, or the
 echo is lost and the keys are not. Fix what it is; a test that types
 during a big write and gets every key.
 
-## 2. neosim: patterns
+## 2. neosim: patterns — DONE v0.60.243 (and an rx.c bug)
 
 / ? n N * and :s with vim's basic patterns: . * ^ $ [abc] [^a-z] \< \>
 \. (the magic ones, as 'magic' is on), plus \| ? Measure what neosim's

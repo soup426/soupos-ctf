@@ -162,37 +162,82 @@ static void insert_text(int *y, int *x, const char *s, int n) {
     }
 }
 
-/* ---- search and substitute: plain text (v0.60.206) ---- */
+/* ---- search and substitute: vim's patterns (v0.60.243; plain text v0.60.206) ----
+ * A pattern is vim's with 'magic' on, turned into the POSIX ERE that
+ * user/rx.c runs: \+ \? \= \| \( \) \{ \} are its operators and a bare + ? |
+ * ( ) { } is a character; ^ and $ are anchors only at the ends (or by \( \|
+ * \)); \< \> \w \s as they are, \d [0-9]; [...] as written. */
+static unsigned char rx_mem[192 * 1024];             /* rx.c's lists, made again for each line */
+static unsigned rx_used;
+static void *rx_take(unsigned n) {
+    n = (n + 7) & ~7u;
+    if (rx_used + n > sizeof rx_mem) return 0;
+    void *p = rx_mem + rx_used; rx_used += n; return p;
+}
+#define RX_ALLOC(n) rx_take(n)
+#define RX_FREE(p)  ((void)(p))
+#include "../rx.c"
 static char last_pat[80];
 static int last_dir = 1;
-static int last_whole;                               /* (v0.60.226) the last search was * or #: whole words */
 static int kw(char c) { return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '_' || (unsigned char)c >= 192; }
-static int match_at(int y, int x, const char *p, int pl) {
-    if (x + pl > lenof(y)) return 0;
-    for (int i = 0; i < pl; i++) if (E.t.s[y][x + i] != p[i]) return 0;
-    return 1;
+static int vim2ere(const char *v, char *o, int cap) {
+    int n = 0, k = 0, start = 1;
+    while (v[n]) n++;
+#define PUT(c) do { if (k >= cap - 1) return -1; o[k++] = (char)(c); } while (0)
+    for (int i = 0; i < n; i++) {
+        char c = v[i];
+        int was_start = start; start = 0;
+        if (c == '\\' && i + 1 < n) {
+            char d = v[++i];
+            if (d == '+' || d == '?' || d == '|' || d == '(' || d == ')' || d == '{' || d == '}') { PUT(d); start = d == '|' || d == '('; }
+            else if (d == '=') PUT('?');
+            else if (d == 'd' || d == 'D') { const char *q = d == 'd' ? "[0-9]" : "[^0-9]"; while (*q) PUT(*q++); }
+            else { PUT('\\'); PUT(d); }               /* \< \> \w \s, and the rest literal */
+        } else if (c == '[') {                       /* a class as written, if it closes */
+            int j = i + 1;
+            if (j < n && v[j] == '^') j++;
+            if (j < n && v[j] == ']') j++;
+            while (j < n && v[j] != ']') j++;
+            if (j >= n) { PUT('\\'); PUT('['); }
+            else { for (; i <= j; i++) PUT(v[i]); i = j; }
+        } else if (c == '+' || c == '?' || c == '|' || c == '(' || c == ')' || c == '{' || c == '}' || c == '~') { PUT('\\'); PUT(c); }
+        else if (c == '^' && !was_start) { PUT('\\'); PUT('^'); }
+        else if (c == '$' && !(i == n - 1 || (v[i + 1] == '\\' && i + 2 < n && (v[i + 2] == '|' || v[i + 2] == ')')))) { PUT('\\'); PUT('$'); }
+        else if (c == '*' && was_start) { PUT('\\'); PUT('*'); }
+        else PUT(c);
+    }
+#undef PUT
+    o[k] = 0;
+    return 0;
 }
-static int search_whole;                             /* find() wants whole words */
-static int match_find(int y, int x, const char *p, int pl) {
-    if (!match_at(y, x, p, pl)) return 0;
-    if (!search_whole) return 1;
-    return (x == 0 || !kw(E.t.s[y][x - 1])) && (x + pl >= lenof(y) || !kw(E.t.s[y][x + pl]));
+static rx_t RX;
+static int rx_sub[2 * (RX_MAXGRP + 1)];
+static int pat_compile(const char *p) {             /* 0, or -1 a pattern rx cannot take */
+    char e[512];
+    if (vim2ere(p, e, sizeof e) < 0) return -1;
+    return rx_compile(&RX, e, 0) < 0 ? -1 : 0;
+}
+static int rx_at(int y, int from, int *s, int *e) { /* the first match on line y starting at or after from */
+    if (from > lenof(y)) return 0;
+    rx_used = 0;
+    if (rx_exec(&RX, E.t.s[y], lenof(y), from, rx_sub) <= 0) return 0;
+    *s = rx_sub[0]; *e = rx_sub[1];
+    return 1;
 }
 /* The next match from just after (or before) the cursor, round the end of
  * the text once; 1 found (at *oy,*ox), 0 none. *wrapped: it went round. */
 static int find(int dir, const char *p, int *oy, int *ox, int *wrapped) {
-    int pl = 0; while (p[pl]) pl++;
     *wrapped = 0;
-    if (!pl) return 0;
-    int y = E.cy, x = E.cx;
+    if (!p[0] || pat_compile(p) < 0) return 0;
+    int y = E.cy, x = E.cx, s, e;
     for (int step = 0; step <= E.t.n; step++) {
         if (dir > 0) {
-            int from = step == 0 ? x + 1 : 0;
-            for (int i = from; i + pl <= lenof(y); i++) if (match_find(y, i, p, pl)) { *oy = y; *ox = i; return 1; }
+            if (rx_at(y, step == 0 ? x + 1 : 0, &s, &e)) { *oy = y; *ox = s; return 1; }
             if (++y >= E.t.n) { y = 0; *wrapped = 1; }
         } else {
-            int from = step == 0 ? x - 1 : lenof(y) - pl;
-            for (int i = from; i >= 0; i--) if (match_find(y, i, p, pl)) { *oy = y; *ox = i; return 1; }
+            int limit = step == 0 ? x : lenof(y) + 1, best = -1, f = 0;   /* the last that starts before limit */
+            while (rx_at(y, f, &s, &e) && s < limit) { best = s; f = s + 1; }
+            if (best >= 0) { *oy = y; *ox = best; return 1; }
             if (--y < 0) { y = E.t.n - 1; *wrapped = 1; }
         }
     }
@@ -200,13 +245,9 @@ static int find(int dir, const char *p, int *oy, int *ox, int *wrapped) {
 }
 static void search(int dir, const char *p) {
     int y, x, w;
-    search_whole = last_whole;
-    int got = find(dir, p, &y, &x, &w);
-    search_whole = 0;
-    if (!got) { msg("E486: Pattern not found: ", p, 0); return; }
+    if (!find(dir, p, &y, &x, &w)) { msg("E486: Pattern not found: ", p, 0); return; }
     E.cy = y; E.cx = x; E.want = x;
     if (w) msg(dir > 0 ? "search hit BOTTOM, continuing at TOP" : "search hit TOP, continuing at BOTTOM", 0, 0);
-    else if (last_whole) msg(dir > 0 ? "/\\<" : "?\\<", p, "\\>");
     else { msg(dir > 0 ? "/" : "?", p, 0); }
 }
 /* * and # (v0.60.226): the keyword under the cursor, or the next on the
@@ -218,35 +259,45 @@ static void star(int dir, int cnt) {
     if (x >= n) { msg("E348: No string under cursor", 0, 0); return; }
     while (x > 0 && kw(t[x - 1])) x--;
     int e = x, k = 0;
-    while (e < n && kw(t[e]) && k < (int)sizeof(last_pat) - 1) last_pat[k++] = t[e++];
-    last_pat[k] = 0;
-    last_dir = dir; last_whole = 1;
+    last_pat[k++] = '\\'; last_pat[k++] = '<';         /* (v0.60.243) as neovim's: \<word\> */
+    while (e < n && kw(t[e]) && k < (int)sizeof(last_pat) - 3) last_pat[k++] = t[e++];
+    last_pat[k++] = '\\'; last_pat[k++] = '>'; last_pat[k] = 0;
+    last_dir = dir;
     E.cx = x;
     for (int i = 0; i < cnt; i++) search(dir, last_pat);
 }
 /* :s/PAT/REP/[g] on line a..b; the whole job one undo step. */
 static void substitute(int a, int b, char *spec) {
     char *pat = spec, *rep, *fl;
-    rep = pat; while (*rep && *rep != '/') rep++;
+    rep = pat; while (*rep && *rep != '/') { if (*rep == '\\' && rep[1]) rep++; rep++; }   /* \/ is not the end */
     if (!*rep) { msg("E486: Pattern not found: ", pat, 0); return; }
     *rep++ = 0;
-    fl = rep; while (*fl && *fl != '/') fl++;
+    fl = rep; while (*fl && *fl != '/') { if (*fl == '\\' && fl[1]) fl++; fl++; }
     if (*fl) *fl++ = 0;
     int all = 0; for (char *f = fl; *f; f++) if (*f == 'g') all = 1;
-    int pl = 0; while (pat[pl]) pl++;
-    int rl = 0; while (rep[rl]) rl++;
-    if (!pl) { if (!last_pat[0]) { msg("E35: No previous regular expression", 0, 0); return; } pat = last_pat; pl = 0; while (pat[pl]) pl++; }
+    if (!pat[0]) { if (!last_pat[0]) { msg("E35: No previous regular expression", 0, 0); return; } pat = last_pat; }
     else scopy(last_pat, pat, sizeof(last_pat));
+    if (pat_compile(pat) < 0) { msg("E486: Pattern not found: ", pat, 0); return; }
     int subs = 0, lines = 0, last = -1, begun = 0;
     for (int y = a; y <= b; y++) {
-        int did = 0;
-        for (int x = 0; x + pl <= lenof(y); ) {
-            if (!match_at(y, x, pat, pl)) { x++; continue; }
-            if (lenof(y) - pl + rl > T_COLS) break;       /* it would not fit */
+        int did = 0, x = 0, ms, me;
+        while (rx_at(y, x, &ms, &me)) {
+            char out[T_COLS + 1]; int rl = 0;               /* the replacement: & the match, \1-\9 its groups */
+            for (const char *q = rep; *q && rl < T_COLS; q++) {
+                int g = -1;
+                if (*q == '&') g = 0;
+                else if (*q == '\\' && q[1] >= '0' && q[1] <= '9') g = *++q - '0';
+                else if (*q == '\\' && q[1]) { out[rl++] = *++q; continue; }
+                if (g < 0) { out[rl++] = *q; continue; }
+                int gs = rx_sub[2 * g], ge = rx_sub[2 * g + 1];
+                for (int i = gs; gs >= 0 && i < ge && rl < T_COLS; i++) out[rl++] = E.t.s[y][i];
+            }
+            if (lenof(y) - (me - ms) + rl > T_COLS) break;  /* it would not fit */
             if (!begun) { change_begin(); begun = 1; }
-            for (int i = 0; i < pl; i++) text_delete_char(&E.t, y, x);
-            for (int i = 0; i < rl; i++) text_insert_char(&E.t, y, x + i, rep[i]);
-            x += rl; subs++; did = 1;
+            for (int i = ms; i < me; i++) text_delete_char(&E.t, y, ms);
+            for (int i = 0; i < rl; i++) text_insert_char(&E.t, y, ms + i, out[i]);
+            subs++; did = 1;
+            x = ms + rl + (me == ms);                        /* past an empty match, on */
             if (!all) break;
         }
         if (did) { lines++; last = y; }
@@ -1076,7 +1127,6 @@ static int key_inner(unsigned k) {
             E.cmd[E.cmdn] = 0; E.mode = M_NORMAL; E.msg[0] = 0; cur_change = -1;
             if (E.cmdch == '/' || E.cmdch == '?') {
                 last_dir = E.cmdch == '/' ? 1 : -1;
-                if (E.cmdn) last_whole = 0;                 /* a typed pattern is plain text */
                 if (E.cmdn) scopy(last_pat, E.cmd, sizeof(last_pat));
                 if (!last_pat[0]) { msg("E35: No previous regular expression", 0, 0); return 0; }
                 search(last_dir, last_pat);
