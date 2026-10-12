@@ -1,13 +1,11 @@
 # Night queue
 
-Fifty-eighth queue. The first fifty-seven are in `docs/queue-archive-2026-10-*.md`;
-queue 57 (`-12a`) built neosim (normal and insert modes, operators, undo,
-search, :s, visual, ., from the files window), Mincecraft's review leftovers
-and sounds, check.sh under load, and Doom at 960x600. This one: Mincecraft
-with the mouse, crafting and light; neosim in colour; typing after a login
-in the tests. Written by an unattended run when queue 57 ran out, as the
-user asked on 2026-10-11 ("if the queue is empty, add stuff to the queue");
-the user has not seen it.
+Fifty-ninth queue. The first fifty-eight are in `docs/queue-archive-2026-10-*.md`;
+queue 58 (`-12b`) gave Mincecraft mouse look, crafting and tealights and
+neosim its colours, and closed the "first line after a login" item with the
+numbers. This one: neosim's indent, % and :help; Doom with the mouse;
+Mincecraft's health. Written by an unattended run when queue 58 ran out, as
+the user asked on 2026-10-11; the user has not seen it.
 
 ## Standing rules
 
@@ -53,58 +51,42 @@ the user has not seen it.
 
 ---
 
-## 1. Mincecraft: look with the mouse — DONE v0.60.214
+## 1. neosim: auto-indent and %
 
-Arrows only, today: the desktop passes left-button presses and drags to a
-program's window, and a right press in a body is not handed on
-(countertop.c, the background-menu path takes btn & 2 only where there is
-no window). Hand right-button presses and drags to programs too (WEV_DOWN /
-MOVE / UP with buttons bit 1), then Mincecraft turns and tilts by the drag
-(so many pixels a step). Test: a right-button drag across the body turns the
-cook (the yaw in the -script markers) and a left one still breaks; frost
-and the other window programs unchanged (their tests).
+Enter, o and O keep the line's indent (neovim with `set autoindent`, the
+indent being the leading spaces); % jumps to the matching ( [ { or ) ] }
+(the first bracket on the line at or after the cursor, then its match,
+across lines), and works as a motion (d%). Test: cases against neovim's
+(nvim --clean --headless, set autoindent, feedkeys "tx"), as
+neosim-ops-test.
 
-## 2. Mincecraft: crafting — DONE v0.60.215
+## 2. neosim: :help
 
-The spec's first "later": c on the hotbar's broccoli stalk turns one into
-four of a new block, toast (golden, crisp), and c on parmesan two into a
-cheese grater block (grey, holes)... kept small: a recipe a key, said on
-the bar, each a test (inventory before and after, in the markers).
+:help (and :h) opens a read-only page listing the keys and commands neosim
+has, grouped (moving, changing, searching, files), :q back to the file.
+Test: the page read back against the font, its first lines; :q returns to
+the file unchanged; a :w on the help page refused.
 
-## 3. Mincecraft: tealights — DONE v0.60.216
+## 3. Doom: turn with the mouse
 
-A placeable light (the night is dark): a block, tealight, crafted from
-butter (one makes four), that lights the cells within 6 blocks by
-distance, the light added to the day's. render() takes a light field
-(rebuilt in the region when one is placed or broken). Test: a screendump at
-midnight, a tealight placed ahead: the floor around it brighter than the
-same floor without; the frame rate still at the cap (measure first).
+Doom runs on the console screen, not in a window, so it can read the mouse
+itself (mouse.c): its x movement turns the view (so many counts a step),
+the left button fires. The keyboard still does all it did. Measure first:
+how mouse.c gives counts (moves since boot, a wheel total), and that a
+QEMU mouse_move reaches it while Doom runs. Test: a mouse_move in a level
+turns the view (the picture changes as an arrow key would change it).
 
-## 4. neosim: colour — DONE v0.60.217
+## 4. Mincecraft: health
 
-Syntax colours for .sc (soupyc: keywords, strings, numbers, comments) and
-.c (the same, and #lines), chosen by the file's name, drawn by screen.c
-from a per-line pass (no state across lines but a /* comment). Test: a
-screendump of a small .c file, each class's cells in its colour.
-
-## 5. The first line after a login — CLOSED, measured (2026-10-12)
-
-From queue 57's notes: litexp-test once lost its first line, typed a
-second after the secret, while the login was being checked (an empty
-output file, the rerun fine). Measure first: how many tests type a line
-right after "rosemary" with only a fixed WAIT, and does a soak of one of
-them, six wide, lose the line? If so, qemu_keys waits for the prompt after
-a login's secret before the next item, for every test at once.
-
-**Closed with the numbers (rule 3).** 237 test scripts type straight after
-"rosemary" "WAIT:1". The console login (do_login) reads the secret and
-checks it with no flush of the input, so keys typed meanwhile wait in the
-queue; the only flush near a login is the desktop's clock-in
-(desktop_shifts), which the console tests do not use. litexp-test soaked
-twelve times, six wide twice: twelve passes. Its one failure stays a note
-below; across the night's twenty-odd full checks it has not come back.
+Ten hearts on the HUD. A fall of more than three blocks takes a heart a
+block past three (broth breaks the fall, none taken); at none the cook
+wakes at the spawn with the inventory kept, the world as it was. Saved
+(version 4). Test: a world file made on the host with the cook on a
+pillar 9 high, a step off: hearts 10 to 4 in the markers; the HUD's hearts
+read from a screendump; a step into broth from the same height takes none.
 
 ## Notes left by unattended runs
+
 
 
 (Carried from queue 56, still open.)
