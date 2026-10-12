@@ -760,10 +760,11 @@ static void draw_desk(void) {                      /* within the clip */
 }
 static int ctx_win = -1, ctx_row = -1, ctx_x, ctx_y, ctx_armed;
 static int ctx_bmp(void);
+static int ctx_text(void);                        /* the row is a text file: "open in neosim" (v0.60.207) */
 static int ctx_compost(void);                     /* the window shows the cook's compost (v0.60.189) */
 static int ctx_items(void) {
     if (ctx_compost()) return ctx_row >= 0 ? 2 : 1;   /* empty the compost; put back */
-    return ctx_row < 0 ? 1 : ctx_bmp() ? 3 : 2;
+    return ctx_row < 0 ? 1 : (ctx_bmp() || ctx_text()) ? 3 : 2;
 }
 static void ctx_label(int i, char *line, int n) {
     if (ctx_compost()) {
@@ -772,7 +773,7 @@ static void ctx_label(int i, char *line, int n) {
         return;
     }
     if (i == 0) { scopy(line, "new bowl", n); return; }
-    if (i == 2) { scopy(line, "use as background", n); return; }
+    if (i == 2) { scopy(line, ctx_text() ? "open in neosim" : "use as background", n); return; }
     scopy(line, ctx_armed ? "really remove " : "remove ", n);
     int l = (int)strlen(line);
     scopy(line + l, win[ctx_win].files->name[ctx_row], n - l - 2);
@@ -1467,6 +1468,20 @@ static int ctx_click(int px, int py) {
         char path[FAT_PATH_MAX];
         if (files_path(f, ctx_row, path) == 0) set_picture(path);
     }
+    else if (i == 2 && ctx_text()) {                   /* (v0.60.207) a terminal types cook neosim.elf PATH */
+        char path[FAT_PATH_MAX];
+        if (files_path(f, ctx_row, path) == 0) {
+            ctx_close();
+            int t = open_terminal(0);
+            if (t >= 0) {
+                for (const char *c = "cook neosim.elf "; *c; c++) wt_key(win[t].term, *c);
+                type_path(win[t].term, path);
+                wt_key(win[t].term, '\n');
+                klog("[countertop] neosim %s\n", path);
+            }
+            return 1;
+        }
+    }
     ctx_close();
     files_load(f);
     repaint_win(k);
@@ -1635,6 +1650,10 @@ static uint32_t note_at;
 static int is_bmp(const char *p) {
     int l = (int)strlen(p);
     return l > 4 && p[l - 4] == '.' && (p[l - 3] | 0x20) == 'b' && (p[l - 2] | 0x20) == 'm' && (p[l - 1] | 0x20) == 'p';
+}
+static int is_text(const char *p);
+static int ctx_text(void) {                        /* the files menu's row is a text file (v0.60.207) */
+    return ctx_win >= 0 && ctx_row >= 0 && win[ctx_win].files && !win[ctx_win].files->dir[ctx_row] && is_text(win[ctx_win].files->name[ctx_row]);
 }
 static int ctx_bmp(void) {                         /* the files menu's row is a picture */
     return ctx_win >= 0 && ctx_row >= 0 && win[ctx_win].files && !win[ctx_win].files->dir[ctx_row] && is_bmp(win[ctx_win].files->name[ctx_row]);

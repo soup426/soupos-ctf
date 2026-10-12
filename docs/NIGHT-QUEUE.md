@@ -85,7 +85,7 @@ written by hand from vim on the host and kept in the test.
 (plain text, no regex), v and V with d y c > <, and . repeating the last
 change. Test: each, as item 2.
 
-## 4. neosim from the files window
+## 4. neosim from the files window — DONE v0.60.207 (the menu entry; the double click left as jot)
 
 The files window's menu gains "open in neosim" for a file (as "use as
 background" is for a picture), and a double click on a .txt, .md, .sc or
@@ -156,3 +156,7 @@ roadmap, fix whichever is wrong.
   about ten check.sh runs today. Worth an item: run check.sh several
   times, count, and give the gate's segments what they wait for rather
   than fixed time under load.
+- From queue 57 item 4 (v0.60.207): the double click on a text file still
+  opens jot, as it has since v0.60.154; only the menu's "open in neosim" was
+  added. Moving the double click to neosim is the user's call: one line in
+  files_open (countertop.c), and ctfiles-test's double-click checks follow.
