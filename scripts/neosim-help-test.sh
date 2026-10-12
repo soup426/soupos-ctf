@@ -54,7 +54,7 @@ def row(at, r, ink):
 light = lambda c: lum(c) > 380
 dark = lambda c: lum(c) < 240
 hp = ppm('help')
-page = [row(hp, r, light) for r in range(10)]
+page = [row(hp, r, light) for r in range(28)]   # all the text rows (v0.60.222: the groups move as the page grows)
 check('neosim' in page[0] and ':q' in page[0], 'the page\'s title: %r' % page[0])
 check(any(l.strip().startswith('MOVING') for l in page) and any(l.strip().startswith('CHANGING') for l in page), 'its groups (MOVING, CHANGING): %r' % page[:6])
 check('help' in row(hp, 28, dark), 'the status line says help: %r' % row(hp, 28, dark))

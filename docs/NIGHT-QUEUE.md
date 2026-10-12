@@ -51,7 +51,7 @@ Written by an unattended run when queue 59 ran out, as the user asked on
 
 ---
 
-## 1. neosim: f t F T ; , r ~
+## 1. neosim: f t F T ; , r ~ — DONE v0.60.222
 
 f t F T and a character (a count before them too), ; and , to repeat or
 reverse the last; as motions (dt, cf); r and a character replaces (a count

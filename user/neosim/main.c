@@ -9,7 +9,7 @@
  * the operators d c y with a motion, dd cc yy, D C; x X, p P, J; u and
  * Ctrl-R; > < (four spaces); / ? n N (plain text); v V with d y c > <; .;
  * % to the matching bracket; Enter, o and O keep the indent (v0.60.218);
- * :help, a read-only page of all this (v0.60.219)
+ * :help, a read-only page of all this (v0.60.219); f t F T ; , r ~ (v0.60.222)
  * (v0.60.206); i a A I o O into insert mode; : for a command. Insert mode:
  * typing, Enter, Backspace (joining lines at the start of one), Tab as four
  * spaces, the arrows, Esc back. Commands: :w [FILE], :q, :q!, :wq, :x,
@@ -302,9 +302,37 @@ static void insert_key(unsigned k) {
 
 /* ---- motions ---- */
 typedef struct { int ok, y, x, line, incl; } mv_t;
+/* f t F T and a character, ; and , (v0.60.222): on the cursor's line. */
+static int find_ch, last_find, last_find_ch;         /* the character just typed; the last f t F T and its */
+static int find_on_line(int cmd, int ch, int cnt, int again) {   /* the column it lands on, or -1 */
+    int fwd = cmd == 'f' || cmd == 't', x = E.cx;
+    const char *t = E.t.s[E.cy]; int n = len();
+    if (fwd) {
+        int at = x + 1;
+        if (again && cmd == 't' && at < n && t[at] == ch) at++;   /* ; after t: past the one it stands before */
+        for (; at < n; at++) if (t[at] == ch && --cnt == 0) return cmd == 't' ? at - 1 : at;
+    } else {
+        int at = x - 1;
+        if (again && cmd == 'T' && at >= 0 && t[at] == ch) at--;
+        for (; at >= 0; at--) if (t[at] == ch && --cnt == 0) return cmd == 'T' ? at + 1 : at;
+    }
+    return -1;
+}
 static mv_t motion(unsigned k, int cnt, int had, int op) {
     mv_t m = { 1, E.cy, E.cx, 0, 0 };
     switch (k) {
+    case 'f': case 't': case 'F': case 'T': case ';': case ',': {
+        int cmd = (int)k, ch = find_ch, again = 0;
+        if (k == ';' || k == ',') {
+            if (!last_find) { m.ok = 0; break; }
+            cmd = last_find; ch = last_find_ch; again = 1;
+            if (k == ',') cmd = cmd == 'f' ? 'F' : cmd == 'F' ? 'f' : cmd == 't' ? 'T' : 't';
+        } else { last_find = cmd; last_find_ch = ch; }
+        int x = find_on_line(cmd, ch, cnt, again);
+        if (x < 0) { m.ok = 0; break; }
+        m.x = x; m.incl = cmd == 'f' || cmd == 't';
+        break;
+    }
     case 'h': case KEY_LEFT: m.x = imax(E.cx - cnt, 0); m.ok = m.x != E.cx; break;
     case 'l': case KEY_RIGHT: m.x = imin(E.cx + cnt, op ? len() : imax(len() - 1, 0)); m.ok = m.x != E.cx; break;
     case 'j': case KEY_DOWN: m.y = imin(E.cy + cnt, E.t.n - 1); m.line = 1; m.ok = m.y != E.cy; break;
@@ -425,8 +453,42 @@ static void join(int cnt) {
 }
 
 /* ---- normal mode: a count, an operator waiting, a g waiting ---- */
-static struct { int count, op, opcount, ophad, g, gcount, ghad; } P;
+static struct { int count, op, opcount, ophad, g, gcount, ghad, wait, wcount, whad; } P;   /* wait: f t F T r for a character */
+static void replace_chars(int ch, int cnt) {        /* r (v0.60.222): none if the line is too short */
+    if (E.cx + cnt > len()) return;
+    change_begin();
+    for (int i = 0; i < cnt; i++) E.t.s[E.cy][E.cx + i] = (char)ch;
+    E.cx += cnt - 1; E.want = E.cx;
+}
+static void toggle_case(int cnt) {                   /* ~ (v0.60.222), on to the line's end at most */
+    if (!len()) return;
+    change_begin();
+    int end = imin(E.cx + cnt, len());
+    for (int i = E.cx; i < end; i++) {
+        char c = E.t.s[E.cy][i];
+        if (c >= 'a' && c <= 'z') c = (char)(c - 32); else if (c >= 'A' && c <= 'Z') c = (char)(c + 32);
+        E.t.s[E.cy][i] = c;
+    }
+    E.cx = imin(end, len() - 1); E.want = E.cx;
+}
 static void normal_key(unsigned k) {
+    if (P.wait) {                                   /* the character after f t F T r */
+        int w = P.wait, cnt = P.wcount, had = P.whad;
+        P.wait = 0;
+        if (k == 27 || k >= 256) { P.op = 0; return; }
+        if (w == 'r') { if (!P.op) replace_chars((int)k, cnt); P.op = 0; return; }
+        find_ch = (int)k;
+        if (P.op) {
+            int op = P.op, total = cnt * P.opcount;
+            P.op = 0;
+            mv_t m = motion((unsigned)w, total, had || P.ophad, 1);
+            if (m.ok) op_apply(op, m);
+            return;
+        }
+        mv_t m = motion((unsigned)w, cnt, had, 0);
+        if (m.ok) { E.cx = m.x; clamp(); E.want = E.cx; }
+        return;
+    }
     if (k == 27) { P.count = P.op = P.g = 0; return; }
     if ((k >= '1' && k <= '9') || (k == '0' && P.count)) { P.count = P.count * 10 + (int)(k - '0'); if (P.count > 99999) P.count = 99999; return; }
     int had = P.count > 0, cnt = had ? P.count : 1;
@@ -436,6 +498,7 @@ static void normal_key(unsigned k) {
         if (k != 'g') { P.op = 0; return; }
         k = 'g' + 256; cnt = P.gcount; had = P.ghad;
     } else if (k == 'g') { P.g = 1; P.gcount = cnt; P.ghad = had; return; }
+    if (k == 'f' || k == 't' || k == 'F' || k == 'T' || (k == 'r' && !P.op)) { P.wait = (int)k; P.wcount = cnt; P.whad = had; return; }
     if (P.op) {                                     /* an operator waiting for its motion */
         int op = P.op, total = cnt * P.opcount, thad = had || P.ophad;
         P.op = 0;
@@ -468,6 +531,7 @@ static void normal_key(unsigned k) {
     case 'p': paste(1, cnt); break;
     case 'P': paste(0, cnt); break;
     case 'J': join(had ? cnt : 2); break;
+    case '~': toggle_case(cnt); break;
     case 'u': { int n = 0; for (int i = 0; i < cnt; i++) n += undo_undo(&E.t, &E.cy, &E.cx, &E.seq); after_undo(); if (!n) msg("Already at oldest change", 0, 0); break; }
     case 0x12: { int n = 0; for (int i = 0; i < cnt; i++) n += undo_redo(&E.t, &E.cy, &E.cx, &E.seq); after_undo(); if (!n) msg("Already at newest change", 0, 0); break; }
     case 'i': insert_mode(E.cx, 1); break;
@@ -537,7 +601,7 @@ static void help_key(unsigned k) {                  /* (v0.60.219) the help page
     else if (k == 'q') E.help = 0;
     else if (k != 27) msg(E21, 0, 0);
 }
-static int idle(void) { return E.mode == M_NORMAL && !P.count && !P.op && !P.g; }
+static int idle(void) { return E.mode == M_NORMAL && !P.count && !P.op && !P.g && !P.wait; }
 static int key(unsigned k) {                        /* 1: end neosim */
     if (!replaying) {                               /* the keys of a change, for . */
         if (idle() && k == '.') { E.msg[0] = 0; dot(); return 0; }
