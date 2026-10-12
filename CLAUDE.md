@@ -3,7 +3,7 @@
 ## What this is
 
 soupOS is a 32-bit x86 hobby OS written in C and NASM assembly (currently
-**v0.60.191**; ROADMAP.txt is the authority on the version). It boots via GRUB and runs in protected mode with paging, a
+**v0.60.192**; ROADMAP.txt is the authority on the version). It boots via GRUB and runs in protected mode with paging, a
 physical/heap allocator, and a cooperative scheduler. On top of that:
 
 - **Filesystem**: FAT16 read/write with subdirectories ("bowls") and a VFS shim
@@ -941,6 +941,19 @@ Every new command gets a kitchen name: shell builtins AND ring-3 programs
 (sift.elf, not grep.elf; spoon.elf, not cat.elf). Tests compare behaviour with the host tool under
 its real name; only the soupOS side is kitchen-named. sh syntax keywords
 (for, if, while, ...) stay as sh has them.
+
+## Mincecraft (v0.60.192)
+
+A voxel sandbox in a food world, `user/mincecraft/` (several files, so its own
+Makefile rule; `make user` builds it as `user/mincecraft.elf`, and the disk
+rule copies it under its long name, the first program to have one). Spec and
+plan: `docs/superpowers/specs/2026-10-11-mincecraft-design.md`,
+`docs/superpowers/plans/2026-10-11-mincecraft.md`. 16.16 fixed point
+throughout (no FPU). `world.c` and `scripts/mincecraft_gen.py` are the same
+generator: change both together, `scripts/mincecraft-gen-test.sh` compares
+them. Its `[mincecraft]` serial markers reach the log only when it runs at the
+console (a desktop terminal takes a program's stderr), so tests start it in
+the background before `countertop`.
 
 ## Homes (v0.52.2)
 

@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.191
+Current version: v0.60.192
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,24 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.192 (2026-10-11)  — MINCECRAFT: A WORLD OF FOOD
+  - user/mincecraft/, the start of a voxel sandbox (the spec and plan are
+    in docs/superpowers/): 16.16 fixed point and a quarter-wave sine
+    table (fix.c, sintab.h from gen_sintab.py), the block table with 8x8
+    textures made from a hash (blocks.c: crust, crumb, parmesan, cast
+    iron, broth, sugar, broccoli stalk, floret, peppercorn, butter), and
+    a 128x128x64 grid generated from a seed (world.c): two octaves of
+    value noise give heights 20 to 44, crust over crumb over parmesan on
+    cast iron, broth below 26 with sugar shores, broccoli, peppercorn
+    veins and butter deep down, walled in cast iron. -flat is a test
+    world, crust at y 10.
+  - cook mincecraft.elf -gen -seed N prints the grid's FNV-1a hash;
+    scripts/mincecraft_gen.py is the generator again, integer for
+    integer, and scripts/mincecraft-gen-test.sh compares the two for
+    three seeds (one past 2^31).
+  - Its own Makefile rule (several files); copied to the disk as
+    mincecraft.elf, the first long name among the programs.
 
 v0.60.191 (2026-10-11)  — HOME FOR EVERY PROGRAM
   - build_env hands HOME, the cook's home bowl (/ for the headchef,
