@@ -91,6 +91,56 @@ Each problem found becomes a line here: what is wrong, Doom's rule, the
 fix, the test (a screendump or the log against the rule). Ask the user for
 the ones they saw first if they are around.
 
+The Doom reviewer's findings (2026-10-12, confirmed against the WAD and
+linuxdoom; most visible in play first):
+- **R-D3 (high).** The game runs at the frame rate: thinkers, doors, lifts
+  and projectiles advance once a frame (50 Hz idle, up to 100 while a key
+  is held, more with the mouse), so monsters speed up as you move; the
+  automap freezes the world. Fix: game logic on a fixed 35 Hz tick
+  accumulator, apart from drawing.
+- **R-D2 (high).** The skill is ignored and every thing spawns: E1M1 has
+  29 monsters where Hurt Me Plenty has 6 (E1M3: 131 for 74), multiplayer-
+  only things too. Fix: P_SpawnMapThing's skill bits and the 0x10 flag.
+- **R-D4 (medium-high).** Monster sprites use only rotations 1 and 5: the
+  WAD's side views are paired lumps (TROOA2A8) that an exact 6-letter
+  lookup never finds, so anything not facing you or away is a frozen front
+  view. Fix: R_InitSprites's frame/rotation table with the flip flag, and
+  R_ProjectSprite's half-sector offset.
+- **R-D1 (high).** A door used from the front opens the sector you stand
+  in (the side test is backwards); doors open only by luck through their
+  back face, and switch doors (29 61 63 103) never open. Fix: side < 0 is
+  the front, use only from the front, switches through a tag search.
+- **R-D7 (medium).** Fireballs and monsters go through walls: projectiles
+  never test lines, chasing monsters move straight with no collision.
+  Fix: lines block projectiles; monsters move through a try_move.
+- **R-D6 (medium).** The player shoots monsters through walls (no line of
+  sight in fire_weapon). Fix: los_clear, as P_AimLineAttack.
+- **R-D8 (medium).** Walls clipped at the screen's left edge take depth
+  and texture from the off-screen end: smeared, stretched near walls
+  (about 13% of left-clipped walls, edges up to 188 px out). Fix:
+  interpolate from the unclamped ends; move u1/u2 with the near clip.
+- **R-D5 (medium).** Death frames are the gib frames, and the demon's
+  stand upright for 40 frames; corpses vanish. Fix: a death table from
+  info.c, the last frame held, corpses kept.
+- **R-D9 (medium).** Wrong sprites and pickups: green armor drawn as the
+  helmet bonus and gives +1; armor bonuses invisible and unpickable (25
+  in E1M1); ammo boxes and torches mixed up; lamps missing; ammo taken at
+  the cap; the shotgun gives 4, not 8. Fix: the table and
+  P_TouchSpecialThing's rules.
+- **R-D10 (medium-low).** Doors and lifts wait in Doom's 35 Hz tics at
+  100 Hz (1.5 s, not 4.3); a closing door shuts on the player instead of
+  going back up, boxing them in. Fix: the waits in ticks; reverse on the
+  player.
+- **R-D11 (medium-low).** No step height: the player walks up any ledge.
+  Fix: P_TryMove's 24-unit step and the head room.
+- **R-D12 (low).** The secret exit (51) does nothing, E1M8 cannot be
+  finished (no tag-666 lower on the barons' death), the map order after
+  E1M8 is wrong. Fix: G_DoCompleted's order and A_BossDeath.
+- **R-D13 (low).** The main menu draws M_NEWG, not M_NGAME.
+- Suspected (to measure): lost soul and cacodemon HP default to 50; the
+  64-sprite cap fills in thing order, not by distance; patch and texture
+  decoders trust the WAD's offsets; an int32 overflow in the near clip.
+
 ## 1. Mincecraft: the moon's top rows
 
 Looking straight up at midnight, the moon's top rows are two pixels wider
