@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.259
+Current version: v0.60.260
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,15 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.260 (2026-10-12)  — CLOCKOUT-RIGHTS-TEST CANNOT PASS BY TIMING
+  - infuse.elf waited a fixed 12 s, so on a slow login it woke at the
+    login screen, was refused there, and the test passed on a kernel
+    without the v0.60.258 fix (review R-T19). It is infuse.elf GOPATH PATH
+    now: it waits for GOPATH to exist, and the test makes /GO only once
+    the headchef has clocked in (after a deliberate pause before the
+    secret); a refusal before the headchef's Welcome is a FAIL of its own.
+    With the resolver fix taken out the test fails; with it, it passes.
 
 v0.60.259 (2026-10-12)  — NO WINDOWS FROM ANOTHER COOK'S PROGRAMS
   - A program's window goes on top and takes the focus, so it gets the

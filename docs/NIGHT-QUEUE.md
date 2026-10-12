@@ -595,7 +595,7 @@ Mincecraft; neosim and rx.c; Doom; tests, build and docs.)
 
 ### Tests, build and docs (reviewer confirmed 1-3 on copies, with mutations)
 
-- **R-T19 (high).** clockout-rights-test passes on the unfixed kernel when
+- **R-T19 (high) — DONE v0.60.260 (fails with the R-K2 fix reverted).** clockout-rights-test passes on the unfixed kernel when
   the login is slow: infuse waits a fixed 12 s, and woken before the
   headchef's Welcome it is refused by the login screen, not by the fix
   (shown: WAIT:3 before rosemary, the resolver fix reverted, PASS). Fix:
