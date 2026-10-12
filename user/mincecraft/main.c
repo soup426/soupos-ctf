@@ -8,12 +8,20 @@
  *                                       the desktop, for tests that start it
  *                                       at the console before countertop
  *   cook mincecraft.elf -time T         (v0.60.193) taken, used from v0.60.196
+ *   cook mincecraft.elf -script         (v0.60.194) the player after every tick
+ *   cook mincecraft.elf -world PATH     (v0.60.194) taken, used from v0.60.197
  *
- * Markers on stderr, [mincecraft] ...: window up, fps=N every 5 s, bye.
+ * W A S D walk, the arrows look, space jumps (all held, read through
+ * SYS_WIN_KEYS at a fixed 20 ticks a second); Esc or the close box ends it.
+ *
+ * Markers on stderr, [mincecraft] ...: window up, fps=N every 5 s, bye;
+ * with -script "p x y z yaw pitch ground" each tick (16.16, angle units),
+ * and "mark" on m, so tests can split the log into phases.
  */
 #include "../ulib.h"
 #include "world.h"
 #include "render.h"
+#include "player.h"
 
 static void eprint_u(unsigned v) {
     char b[12]; int n = 11; b[n] = 0;
@@ -25,14 +33,16 @@ static int same(const char *a, const char *b) { while (*a && *a == *b) { a++; b+
 
 int main(void) {
     char *argv[12];
-    int argc = uargv(argv, 12), gen_only = 0, flat = 0, seeded = 0, wait = 0;
+    int argc = uargv(argv, 12), gen_only = 0, flat = 0, seeded = 0, wait = 0, script = 0;
     unsigned seed = 0;
     for (int i = 0; i < argc; i++) {
         if (same(argv[i], "-gen")) gen_only = 1;
         else if (same(argv[i], "-flat")) flat = 1;
         else if (same(argv[i], "-wait")) wait = 1;
         else if (same(argv[i], "-seed") && i + 1 < argc) { seed = parse_u(argv[++i]); seeded = 1; }
+        else if (same(argv[i], "-script")) script = 1;
         else if (same(argv[i], "-time") && i + 1 < argc) i++;
+        else if (same(argv[i], "-world") && i + 1 < argc) i++;
     }
     if (world_alloc() < 0) { print("Mincecraft: no memory for the world\n"); return 1; }
     if (!seeded) sys_random(&seed, 4);
@@ -51,19 +61,55 @@ int main(void) {
     unsigned *body = (unsigned *)sys_sbrk(BODY_W * BODY_H * 4);
     if (body == (unsigned *)-1 || render_alloc() < 0) { print("Mincecraft: no memory for the screen\n"); return 1; }
     eprint("[mincecraft] window up\n");
-    cam_t cam = { (64 << 16) + FX_ONE / 2, ((world_top(64, 64) + 1) << 16) + 104858, (64 << 16) + FX_ONE / 2, 0, 0 };
-    unsigned fps_t = sys_ticks();
-    int frames = 0;
+    player_t pl;
+    player_spawn(&pl);
+    cam_t cam;
+    ray_t tg = { 0 };
+    fx dx, dy, dz;
+    unsigned last = sys_ticks(), fps_t = last;
+    int frames = 0, lbtn = 0;
     for (;;) {
         uwinev_t ev;
         int g, quit = 0;
-        while ((g = sys_win_event(win, &ev, 0)) == 1)
+        while ((g = sys_win_event(win, &ev, 0)) == 1) {
             if (ev.type == WEV_CLOSE || (ev.type == WEV_KEY && ev.key == 27)) quit = 1;
+            else if (ev.type == WEV_KEY && ev.key == 'm') eprint("[mincecraft] mark\n");
+            else if (ev.type == WEV_DOWN) lbtn = 1;
+            else if (ev.type == WEV_UP) lbtn = 0;
+        }
         if (g < 0 || quit) break;
+        unsigned char k[32];
+        if (sys_win_keys(win, k) < 0) for (int i = 0; i < 32; i++) k[i] = 0;
+        input_t in = { key_held(k, SC_W) - key_held(k, SC_S), key_held(k, SC_D) - key_held(k, SC_A),
+                       key_held(k, SC_RIGHT) - key_held(k, SC_LEFT), key_held(k, SC_UP) - key_held(k, SC_DOWN),
+                       key_held(k, SC_SPACE), key_held(k, SC_F) | lbtn };
+        unsigned now = sys_ticks();
+        for (int n = 0; now - last >= 5 && n < 4; n++, last += 5) {
+            player_eye(&pl, &cam);
+            cam_forward(&cam, &dx, &dy, &dz);
+            ray_cast(cam.x, cam.y, cam.z, dx, dy, dz, 5 << 16, &tg);
+            player_tick(&pl, &in, &tg);
+            if (script) {
+                char b[96]; int n2 = 0;
+                const int v[6] = { pl.x, pl.y, pl.z, pl.yaw, pl.pitch, pl.ground };
+                for (const char *t = "[mincecraft] p"; *t; t++) b[n2++] = *t;
+                for (int i = 0; i < 6; i++) {
+                    unsigned u = v[i] < 0 ? (unsigned)-v[i] : (unsigned)v[i];
+                    char d[12]; int m = 0;
+                    b[n2++] = ' ';
+                    if (v[i] < 0) b[n2++] = '-';
+                    do { d[m++] = (char)('0' + u % 10); u /= 10; } while (u);
+                    while (m) b[n2++] = d[--m];
+                }
+                b[n2++] = '\n';
+                sys_write(FD_STDERR, b, n2);                      /* one write a line */
+            }
+        }
+        if (now - last >= 5) last = now;                         /* too far behind: let it go */
+        player_eye(&pl, &cam);
         render(&cam, body, 256, 0x87BEEB);
         sys_win_put(win, body);
         frames++;
-        unsigned now = sys_ticks();
         if (now - fps_t >= 500) { eprint("[mincecraft] fps="); eprint_u((unsigned)(frames * 100 / (int)(now - fps_t))); eprint("\n"); frames = 0; fps_t = now; }
     }
     eprint("[mincecraft] bye\n");

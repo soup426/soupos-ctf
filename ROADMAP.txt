@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.193
+Current version: v0.60.194
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,21 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.194 (2026-10-11)  — MINCECRAFT: WALKING
+  - The player (player.c): a 0.6 x 1.8 box, the eye at 1.6, moved at a
+    fixed 20 ticks a second from the 100 Hz clock (at most four owed
+    ticks run, the rest are let go). W A S D walk (4.3 blocks a second),
+    the arrows look (pitch held to 80 degrees), space jumps (about 1.3
+    blocks), gravity to a terminal 0.9 blocks a tick, broth halves speed
+    and gravity and space swims; collision one axis at a time, never a
+    block or more a tick. All held keys come from SYS_WIN_KEYS, so
+    nothing moves while another window has the focus. Spawns on the
+    centre column, or the first dry one east of it.
+  - -script prints "p x y z yaw pitch ground" every tick; m prints a mark.
+  - scripts/mincecraft-play-test.sh, the flat world: a second of W goes
+    4.3 blocks straight on, on the ground; a jump peaks at 1.32 blocks and
+    lands; W with the focus on another window moves nothing; Esc ends it.
 
 v0.60.193 (2026-10-11)  — MINCECRAFT: THE VIEW
   - A ray a pixel through the grid (ray.c, Amanatides and Woo in 16.16;
