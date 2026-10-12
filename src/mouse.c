@@ -177,6 +177,12 @@ int mouse_init(void) {
      * raise IRQ 12 and keep the mouse clock running. */
     wait_write(); outb_(PS2_CMD, CMD_ENABLE_AUX);
 
+    /* The config byte comes back through the data port like a key would,
+     * so with IRQ 1 live the keyboard's handler took it first: a 0x41 left
+     * F7 held in key_state for good, which SYS_WIN_KEYS showed (v0.60.190).
+     * Read and write it with interrupts off. */
+    uint32_t fl;
+    __asm__ volatile ("pushfl; popl %0; cli" : "=r"(fl) :: "memory");
     wait_write(); outb_(PS2_CMD, CMD_READ_CONFIG);
     wait_read();
     uint8_t cfg = inb_(PS2_DATA);
@@ -184,6 +190,7 @@ int mouse_init(void) {
     cfg &= ~(1u << 5);                  /* un-gate the aux clock     */
     wait_write(); outb_(PS2_CMD,  CMD_WRITE_CONFIG);
     wait_write(); outb_(PS2_DATA, cfg);
+    if (fl & 0x200) __asm__ volatile ("sti" ::: "memory");
 
     if (aux_command(MOUSE_SET_DEFAULTS) != MOUSE_ACK) {
         klog("[mouse] no acknowledgement for set-defaults\n");

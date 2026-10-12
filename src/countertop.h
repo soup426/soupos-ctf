@@ -23,4 +23,5 @@ int countertop_win_size(uint32_t pid, int id, int *w, int *h);
 int countertop_win_put(uint32_t pid, int id, const uint32_t *px);   /* px: w*h, checked by the caller */
 int countertop_win_event(uint32_t pid, int id, void *ev);           /* a uwinev_t: 1, 0 none, -1 */
 int countertop_win_close(uint32_t pid, int id);
+int countertop_win_keys(uint32_t pid, int id, uint8_t *out);   /* 32 bytes of held keys: 0, or -1 (v0.60.190) */
 int countertop_note(uint32_t pid, const char *line);               /* SYS_NOTE (v0.60.170) */

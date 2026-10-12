@@ -766,6 +766,14 @@ void syscall_dispatch(registers_t *r) {
         case SYS_WIN_CLOSE:
             r->eax = (uint32_t)(pr ? countertop_win_close(pr->pid, (int)r->ebx) : -1);
             break;
+        case SYS_WIN_KEYS: {              /* (v0.60.190) the held keys, for mincecraft.elf */
+            uint8_t k[32];
+            if (!pr || !user_ok(r->ecx, 32)) { r->eax = (uint32_t)-1; break; }
+            int got = countertop_win_keys(pr->pid, (int)r->ebx, k);
+            if (got == 0) memcpy((void *)r->ecx, k, 32);
+            r->eax = (uint32_t)got;
+            break;
+        }
 
         default:
             r->eax = (uint32_t)-1;

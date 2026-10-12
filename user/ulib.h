@@ -39,6 +39,19 @@ int  sys_tone(unsigned hz, unsigned ms);      /* a beep, not waited for; -1 with
 int  sys_procs(uproc_t *out, int max);         /* the live processes; how many (v0.60.168) */
 int  sys_kill(unsigned pid);                   /* 0, -1 no such process, -2 not yours (v0.60.168) */
 int  sys_note(const char *line);               /* a line on the desktop's bar for 4 s (v0.60.170) */
+int  sys_win_keys(int id, unsigned char *out);   /* 32 bytes of held keys; 0, or -1 (v0.60.190) */
+/* Scancodes for sys_win_keys (set 1; extended keys 0x80 | code). */
+#define SC_W     0x11
+#define SC_A     0x1E
+#define SC_S     0x1F
+#define SC_D     0x20
+#define SC_F     0x21
+#define SC_SPACE 0x39
+#define SC_UP    0xC8
+#define SC_DOWN  0xD0
+#define SC_LEFT  0xCB
+#define SC_RIGHT 0xCD
+static inline int key_held(const unsigned char *k, int sc) { return (k[sc >> 3] >> (sc & 7)) & 1; }
 __attribute__((noreturn)) void sys_exit(int code);
 
 /* conveniences */

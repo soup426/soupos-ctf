@@ -82,6 +82,12 @@ void keyboard_inject(int c) { kb_push(c); }
 
 static void keyboard_irq_handler(registers_t *regs) {
     (void)regs;
+    /* Only a byte the keyboard sent (v0.60.190): an IRQ 1 latched while the
+     * buffer was being emptied by someone else (mouse_init reading the
+     * controller's config) finds it empty, and port 0x60 then still gives
+     * its last byte, which was taken for a key; a mouse byte is IRQ 12's. */
+    uint8_t st = inb(0x64);
+    if (!(st & 0x01) || (st & 0x20)) return;
     uint8_t sc = inb(0x60);
     random_stir(sc);        /* keystroke timing feeds the pool */
 
@@ -225,6 +231,13 @@ int keyboard_getchar(void) {
  * KEY_SC_* constants in keyboard.h cover the Doom-relevant ones.     */
 int keyboard_key_pressed(uint8_t sc) {
     return (int)key_state[sc];  /* sc is uint8_t, always < KEY_STATE_SIZE(256) */
+}
+
+/* The keys held now as bits, scancode n at out[n >> 3] bit (n & 7),
+ * extended keys at 0x80 | code (v0.60.190, for SYS_WIN_KEYS). */
+void keyboard_key_bitmap(uint8_t out[32]) {
+    for (int i = 0; i < 32; i++) out[i] = 0;
+    for (int n = 0; n < KEY_STATE_SIZE; n++) if (key_state[n]) out[n >> 3] |= (uint8_t)(1u << (n & 7));
 }
 
 /* Drain the ASCII queue without blocking */

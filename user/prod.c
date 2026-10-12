@@ -10,6 +10,8 @@
  *   cook prod.elf limits    (v0.60.150) the window calls, attacked: sizes,
  *                           a title running off its memory, pixel and event
  *                           pointers it never had, ids that are not its own
+ *   cook prod.elf keys      (v0.60.190) SYS_WIN_KEYS: its limits, then the
+ *                           held keys whenever they change (winkeys-test)
  *
  * Both wait up to a minute for the desktop. prodwin-test starts victim at
  * the console in the background before countertop (what it prints goes
@@ -114,10 +116,42 @@ static int limits(void) {
     return 0;
 }
 
+/* (v0.60.190) keys: SYS_WIN_KEYS. Its limits first, then, until q, the held
+ * scancodes in hex whenever they change ("none" for none), to the serial log. */
+static int keys_mode(void) {
+    unsigned char k[32], last[32];
+    int id = open_when_up(160, 80, "keys");
+    if (id < 0) { print("prod: no desktop\n"); return 1; }
+    eprint("[prod] keys bad-id ");   eprint_int(sys_win_keys(99, k));   eprint("\n");
+    eprint("[prod] keys not-mine "); eprint_int(sys_win_keys(id ^ 1, k)); eprint("\n");   /* the victim's: 0 and 1 are the two */
+    eprint("[prod] keys bad-buf ");  eprint_int(sys_win_keys(id, (unsigned char *)ABOVE_BRK)); eprint("\n");
+    for (int i = 0; i < 32; i++) last[i] = 0;
+    for (;;) {
+        uwinev_t e;
+        int g = sys_win_event(id, &e, 50);
+        if (g < 0 || (g == 1 && (e.type == WEV_CLOSE || (e.type == WEV_KEY && e.key == 'q')))) break;
+        if (sys_win_keys(id, k) < 0) continue;
+        int same_ = 1;
+        for (int i = 0; i < 32; i++) if (k[i] != last[i]) same_ = 0;
+        if (same_) continue;
+        for (int i = 0; i < 32; i++) last[i] = k[i];
+        char line[200];
+        int n = 0, any = 0;
+        static const char hx[] = "0123456789abcdef";
+        for (const char *s = "[prod] keys"; *s; s++) line[n++] = *s;
+        for (int sc = 0; sc < 256 && n < 190; sc++) if (key_held(k, sc)) { line[n++] = ' '; line[n++] = hx[sc >> 4]; line[n++] = hx[sc & 15]; any = 1; }
+        if (!any) for (const char *s = " none"; *s; s++) line[n++] = *s;
+        line[n++] = '\n';
+        sys_write(2, line, n);                              /* one write a line */
+    }
+    sys_win_close(id);
+    return 0;
+}
+
 int main(void) {
     char *argv[4];
     int argc = uargv(argv, 4);
-    if (argc < 1) { print("usage: prod.elf write|gap|read|stat|victim|limits\n"); return 2; }
+    if (argc < 1) { print("usage: prod.elf write|gap|read|stat|victim|limits|keys\n"); return 2; }
     const char *m = argv[0];
     if (same(m, "write")) said("write", sys_write(FD_STDOUT, (const char *)ABOVE_BRK, 16));
     else if (same(m, "gap")) said("write", sys_write(FD_STDOUT, (const char *)GAP, 16));
@@ -128,6 +162,7 @@ int main(void) {
     } else if (same(m, "stat")) said("stat", sys_stat("/HELLO.TXT", (ustat_t *)ABOVE_BRK));
     else if (same(m, "victim")) return victim();
     else if (same(m, "limits")) return limits();
-    else { print("usage: prod.elf write|gap|read|stat|victim|limits\n"); return 2; }
+    else if (same(m, "keys")) return keys_mode();
+    else { print("usage: prod.elf write|gap|read|stat|victim|limits|keys\n"); return 2; }
     return 0;
 }

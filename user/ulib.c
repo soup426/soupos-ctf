@@ -142,6 +142,11 @@ int sys_note(const char *line) {
     __asm__ volatile ("int $0x80" : "=a"(ret) : "a"(SYS_NOTE), "b"(line) : "memory");
     return ret;
 }
+int sys_win_keys(int id, unsigned char *out) {
+    int ret;
+    __asm__ volatile ("int $0x80" : "=a"(ret) : "a"(SYS_WIN_KEYS), "b"(id), "c"(out) : "memory");
+    return ret;
+}
 int sys_win_close(int id) {
     int ret;
     __asm__ volatile ("int $0x80" : "=a"(ret) : "a"(SYS_WIN_CLOSE), "b"(id) : "memory");

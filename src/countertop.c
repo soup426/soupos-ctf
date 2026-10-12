@@ -886,6 +886,20 @@ static void draw_cal(void) {                       /* within the clip */
  * checked by users_check, lifts it. Programs go on under it. Wrong secrets
  * are logged; after three it waits 3 s before listening again. */
 static int locked, lock_len, lock_fails;
+/* SYS_WIN_KEYS (v0.60.190): the held keys for a program's window, only
+ * while it is placed, the focus and the cloche is up. The lock check
+ * matters: key_state sees what is typed at the cloche too, and the
+ * secret must never reach a program. */
+int countertop_win_keys(uint32_t pid, int id, uint8_t *out) {
+    mutex_lock(&app_mtx);
+    app_t *a = app_mine(pid, id);
+    int ok = a != 0, live = a && a->win >= 0 && a->win == topmost() && !locked;
+    mutex_unlock(&app_mtx);
+    if (!ok) return -1;
+    if (live) keyboard_key_bitmap(out);
+    else for (int i = 0; i < 32; i++) out[i] = 0;
+    return 0;
+}
 /* Clocking in on the desktop (v0.60.179): the cloche's screen with two
  * fields, the cook's name and then their secret, checked by the shell's
  * callback, which does what a login does; until then nobody's desktop. */

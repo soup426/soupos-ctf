@@ -37,6 +37,10 @@
 #define SYS_NOTE   23  /* ebx = a line (47 characters are kept): shown on the desktop's bar
                         * for 4 s, queued behind others; -> 0, or -1 with no desktop or a
                         * full queue (v0.60.170)                                         */
+#define SYS_WIN_KEYS 24 /* ebx = id, ecx = 32 bytes: the keys held, scancode n at bit n
+                         * (extended keys at 0x80|code), if the window is the caller's,
+                         * placed, the focus and the desktop not locked; else all zeros.
+                         * -> 0, or -1 (not its window, a bad buffer) (v0.60.190)      */
 
 /* One directory entry for SYS_READDIR (v0.44.0): the long name when the
  * entry has one, else the 8.3 name. Shared by the kernel and ulib. */

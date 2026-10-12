@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.189
+Current version: v0.60.190
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,26 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.190 (2026-10-11)  — HELD KEYS FOR A PROGRAM'S WINDOW
+  - SYS_WIN_KEYS (24): the keys held now, as a 32-byte bitmap (scancode
+    n at bit n, extended keys at 0x80|code), for the caller's own window
+    only while it is placed, the focus and the cloche is up; otherwise
+    all zeros. The lock check matters: key_state sees what is typed at
+    the cloche too, so without it a program could read the secret. For
+    Mincecraft, which walks while W is held; windows only get presses.
+    ulib: sys_win_keys, key_held, SC_* scancodes.
+  - Found by its test: key_state held F7 (0x41) from boot on, forever.
+    mouse_init read the controller's config byte (0x41) with IRQ 1 live,
+    and the latched IRQ 1 then read port 0x60, empty but still giving
+    its last byte. mouse_init now talks to the controller with
+    interrupts off, and the keyboard's handler reads only a byte the
+    status says is there and the keyboard's (not the mouse's).
+  - prod.elf keys: the limits (a bad id, another program's, a pointer it
+    never had), then the held keys whenever they change.
+  - scripts/winkeys-test.sh: W held a second with prod keys on top (seen),
+    after Alt+Tab elsewhere (not), at the cloche with the secret typed
+    (neither), and on top again (seen); no key nobody pressed.
 
 v0.60.189 (2026-10-09)  — COMPOST: REMOVING A FILE CAN BE UNDONE
   - The files menu's remove (still asked twice) moves a file into the
