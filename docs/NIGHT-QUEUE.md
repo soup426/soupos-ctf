@@ -221,6 +221,55 @@ save on the host.
 (Added as the six reviewers report: kernel and shell; the desktop;
 Mincecraft; neosim and rx.c; Doom; tests, build and docs.)
 
+### Tests, build and docs (do these first: the other fixes lean on them)
+
+- **R-T2 (high).** check.sh never rebuilds the user programs or disk.img
+  (`all: iso`, `$(DISK):` has no prerequisites), so a change under user/
+  is tested only if someone ran `rm disk.img && make disk` by hand. Fix:
+  check.sh builds the programs and fails if any differs from the copy
+  inside disk.img (or builds its own disk in a copy).
+- **R-T1 (high).** The gate's "preempt_disable works" matches 'PASS'
+  anywhere ([vmtest] PASS satisfies it, [pt] FAIL would not stop it). Fix:
+  '^\[pt\] PASS'.
+- **R-T3 (high).** doom-fb-test passes when Doom never runs (a cleared
+  screen agrees 99.8%). Fix: a Doom serial marker, a share of non-black
+  pixels, a serial log for the login wait.
+- **R-T4 (medium-high).** Gate checks that accept failure: drop.elf's
+  "exited with code" takes code 0 ("STILL ALIVE"); 'TESTOUT heap=' takes
+  "heap=FAIL". Fix: exact patterns.
+- **R-T5 (medium).** qemu_keys' UNTIL after TYPE:/KEY: items anchors on the
+  last plain line, so a prompt already printed satisfies it at once
+  (bigdir-test's Tab, cont-test's up-arrow). Fix: anchor on each item.
+- **R-T6 (medium).** Mincecraft checks skipped when their markers are
+  missing: fly-test's after-load check, play-test's walk/jump/focus. Fix:
+  check the stretches exist before reading them.
+- **R-T7 (medium).** gate/vga.sh's long-name check matches the typed echo;
+  its interleave check passes when vgastress never ran. Fix: anchor both.
+- **R-T8 (medium).** lint-test's "every script is run" uses grep -w, which
+  "-" defeats (sound-test hides inside mincecraft-sound-test), and misses
+  indented run lines. Fix: compare against the parsed TESTS list.
+- **R-T9 (medium, suspected).** The 2 GB /tmp guard is below what 48 jobs
+  hold (about 4 GB), and /tmp is RAM the memory cap does not count. Fix:
+  JOBS x 80 MB + 1 GB, and /tmp in the memory budget.
+- **R-T10 (medium).** challenge-test (run by hand) and make run/run-ai/
+  run-console/run-tcp boot the tree's own disk.img (rule 16). Fix: boot a
+  copy unless asked otherwise.
+- **R-T11 (low-medium).** Cases expecting no output pass when the program
+  crashes (headtail case 9, seq's empty cases). Fix: check the exit codes.
+- **R-T12 (low).** A missing DOOM1.WAD shows eight tests as "ok". Fix: a
+  skip code and SKIP in the summary.
+- **R-T13 (low).** No time limit on a hung test or monitor socket. Fix:
+  timeout per job, a socket timeout.
+- **R-T14 (low).** gate.sh prints "no kernel panic" before it checks.
+- **R-T15 (low).** qemu_keys drops QEMU's error replies (a mistyped key is
+  silently lost). Fix: read the reply.
+- **R-T16 (low).** random-test has no EXIT trap.
+- **R-T17 (medium, docs).** CLAUDE.md's check section: remote-check called
+  THE pre-commit check (rule 2 says local), "twice the cores", "exits on
+  the first missing marker": all stale. **R-T18 (low, docs).** Five
+  Mincecraft tests listed where there are 14; save.c's header comment says
+  version 4.
+
 ### Mincecraft (reviewer reproduced 1-3 on the host with the game's own C)
 
 - **R-M1 (high).** Flying has no ceiling (player.c fly branch); a save with
