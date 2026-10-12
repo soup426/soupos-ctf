@@ -92,7 +92,7 @@ background" is for a picture), and a double click on a .txt, .md, .sc or
 .c opens it there. Test: the menu entry and the double click, the window
 up with the file's first line read back.
 
-## 5. Mincecraft's review leftovers
+## 5. Mincecraft's review leftovers — DONE v0.60.208, v0.60.209
 
 From the branch review (minors, deferred): Esc first closes a desktop menu
 that is up (close desk_open when the focus goes to a program window);

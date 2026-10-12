@@ -45,27 +45,43 @@ if [ -f "$WORK/good.wld" ]; then
     head -c -10 "$WORK/good.wld" > "$WORK/short.wld"
     { cat "$WORK/good.wld"; printf 'JUNK'; } > "$WORK/long.wld"
     head -c 3000000 /dev/zero > "$WORK/t.wld"
-    # (v0.60.202) the feet at y 64.3, a jump off the ceiling's top block: a
-    # file play can write, so it must load (the header's y at offset 20,
-    # the sum of every byte before the last four rewritten to match)
-    python3 -c "
-import struct, sys
-b = bytearray(open(sys.argv[1], 'rb').read())
-b[20:24] = struct.pack('<i', (64 << 16) + 21000)
-b[-4:] = struct.pack('<I', sum(b[:-4]) & 0xFFFFFFFF)
-open(sys.argv[2], 'wb').write(b)" "$WORK/good.wld" "$WORK/high.wld"
-    for f in bad short long t high; do mcopy -o -i "$WORK/disk.img" "$WORK/$f.wld" "::${f^^}.WLD"; done
+    # Files made here (v0.60.202, v0.60.209): the sum or the CRC-32 at the end
+    # is rewritten for the version in the header (1: a byte sum, 2: CRC-32).
+    cat > "$WORK/craft.py" <<'CRAFT'
+import struct, sys, zlib
+def check_of(b): return zlib.crc32(bytes(b[:-4])) if struct.unpack('<I', b[4:8])[0] == 2 else sum(b[:-4]) & 0xFFFFFFFF
+good = bytearray(open(sys.argv[1], 'rb').read()); out = sys.argv[2]
+print('version', struct.unpack('<I', good[4:8])[0], 'check ok', struct.unpack('<I', good[-4:])[0] == check_of(good))
+# the feet at y 64.3, a jump off the ceiling's top block: play can write it, so it loads
+b = bytearray(good); b[20:24] = struct.pack('<i', (64 << 16) + 21000); b[-4:] = struct.pack('<I', check_of(b))
+open(out + '/high.wld', 'wb').write(b)
+# a version 1 file (the byte sum): still read
+b = bytearray(good); b[4:8] = struct.pack('<I', 1); b[-4:] = struct.pack('<I', check_of(b))
+open(out + '/v1.wld', 'wb').write(b)
+# two different (count, id) runs of the grid swapped (it starts at 80: "MINC",
+# eight words, eleven counts): a valid grid, the same byte sum, another
+# CRC; refused only by the CRC
+b = bytearray(good)
+i = next(i for i in range(80, len(b) - 8, 2) if b[i:i + 2] != b[i + 2:i + 4])
+b[i:i + 2], b[i + 2:i + 4] = b[i + 2:i + 4], b[i:i + 2]
+open(out + '/swap.wld', 'wb').write(b)
+CRAFT
+    python3 -I "$WORK/craft.py" "$WORK/good.wld" "$WORK" > "$WORK/craft.out"
+    for f in bad short long t high v1 swap; do mcopy -o -i "$WORK/disk.img" "$WORK/$f.wld" "::${f^^}.WLD"; done
 fi
 boot check "cook mincecraft.elf -check -world /BAD.WLD" "UNTIL:@soupOS:" \
            "cook mincecraft.elf -check -world /SHORT.WLD" "UNTIL:@soupOS:" \
            "cook mincecraft.elf -check -world /LONG.WLD" "UNTIL:@soupOS:" \
+           "cook mincecraft.elf -check -world /V1.WLD" "UNTIL:@soupOS:" \
+           "cook mincecraft.elf -check -world /SWAP.WLD" "UNTIL:@soupOS:" \
            "cook mincecraft.elf -flat -script -wait -world /T.WLD &" "WAIT:1" "countertop" "WAIT:5" \
            "TYPE:p" "WAIT:2" "KEY:esc" "WAIT:4"
 mcopy -n -i "$WORK/disk.img" ::T.WLD.bad "$WORK/t.bad" 2>/dev/null
 mdir -i "$WORK/disk.img" ::BAD.WLD.bad >/dev/null 2>&1 && echo yes > "$WORK/bad-aside"
 boot again "cook mincecraft.elf -check -world /T.WLD" "UNTIL:@soupOS:" \
            "cook mincecraft.elf -check -world /HIGH.WLD" "UNTIL:@soupOS:" \
-           "cook mincecraft.elf -check" "UNTIL:@soupOS:"
+           "cook mincecraft.elf -check" "UNTIL:@soupOS:" \
+           "hand HOME=/$(printf 'a%.0s' $(seq 150))" "UNTIL:@soupOS:" "cook mincecraft.elf -check" "UNTIL:@soupOS:"
 # (v0.60.202) a disk with room for less than a save: P fails at the write
 # (the close), said so; Esc then does not quit (a note), a second one does.
 cp disk.img "$WORK/full.img"
@@ -119,7 +135,13 @@ if tsave:
 else:
     check(False, 'check: P saved over /T.WLD')
 check('[mincecraft] no world at /mincecraft.wld' in a, 'again: no -world looks for HOME\'s /mincecraft.wld')
+import os
 check('[mincecraft] loaded /HIGH.WLD' in a, 'again: a save with the feet at y 64.3 (off the top block) loads')
+cr = open(f'{work}/craft.out').read() if os.path.exists(f'{work}/craft.out') else ''
+check('version 2 check ok True' in cr, 'saves are version 2, their CRC-32 right by zlib: %r' % cr.strip())
+check('[mincecraft] loaded /V1.WLD' in c, 'a version 1 file (a byte sum) still loads')
+check('[mincecraft] refused /SWAP.WLD' in c, 'two runs of the grid swapped (a valid grid, the same sum) refused')
+check('[mincecraft] HOME is too long' in a, 'a HOME of 151 characters refused, not cut')
 import os
 check(os.path.exists(f'{work}/t.bad') and open(f'{work}/t.bad', 'rb').read() == open(f'{work}/t.wld', 'rb').read(),
       'the refused /T.WLD was kept, whole, as /T.WLD.bad before the save over it')

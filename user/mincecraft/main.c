@@ -129,7 +129,14 @@ int main(void) {
         const char *home = getenv("HOME");
         if (!home) { print("Mincecraft: no HOME; give -world PATH\n"); return 1; }
         int n = 0;
-        while (home[n] && n < 140) { pbuf[n] = home[n]; n++; }
+        while (home[n]) n++;
+        if (n > 140) {                                /* (v0.60.209) refused, not cut to another path */
+            print("Mincecraft: HOME is too long (140 characters at most); give -world PATH\n");
+            eprint("[mincecraft] HOME is too long\n");
+            return 1;
+        }
+        n = 0;
+        while (home[n]) { pbuf[n] = home[n]; n++; }
         if (n == 0 || pbuf[n - 1] != '/') pbuf[n++] = '/';
         for (const char *t = "mincecraft.wld"; *t; t++) pbuf[n++] = *t;
         pbuf[n] = 0;

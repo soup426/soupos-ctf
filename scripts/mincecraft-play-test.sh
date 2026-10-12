@@ -47,6 +47,32 @@ boot build "TYPE:m" "KEY:down 2000" "WAIT:1" "MON:screendump $WORK/look.ppm" "WA
            "TYPE:m" "TYPE:r" "WAIT:1" \
            "TYPE:m" "KEY:up 1000" "WAIT:1" "TYPE:r" "WAIT:1" "KEY:up 200" "WAIT:1" "TYPE:r" "WAIT:1" "KEY:up 200" "WAIT:1" "TYPE:r" "WAIT:1" \
            "TYPE:m" "WAIT:1" "KEY:esc" "WAIT:3"
+# (v0.60.209) W held down across an Alt+Tab: key down and up events over a
+# QMP socket (HMP's sendkey would let W go before the Alt+Tab).
+cp disk.img "$WORK/disk-hold.img"
+qemu-system-i386 -accel kvm -cpu host -drive "file=$WORK/disk-hold.img,format=raw,if=ide,index=0" \
+    -cdrom soupOS.iso -boot d -m 128M -no-reboot -no-shutdown -display none \
+    -serial "file:$WORK/serial-hold.log" -monitor "unix:$WORK/mon-hold.sock,server,nowait" \
+    -qmp "unix:$WORK/qmp-hold.sock,server,nowait" >/dev/null 2>&1 &
+PID=$!
+python3 scripts/qemu_keys.py "$WORK/mon-hold.sock" "headchef" "rosemary" "WAIT:1" "cook mincecraft.elf -flat -script -wait -time 600 -world /PLAY.WLD &" "WAIT:1" "countertop" "WAIT:5" >/dev/null 2>&1 \
+    || { echo "  FAIL  could not drive QEMU (hold)"; fail=1; }
+python3 - "$WORK/qmp-hold.sock" <<'QMP' || { echo "  FAIL  could not drive QMP (hold)"; fail=1; }
+import json, socket, sys, time
+s = socket.socket(socket.AF_UNIX); s.connect(sys.argv[1]); f = s.makefile('rw')
+f.readline()
+def q(cmd, **a):
+    f.write(json.dumps({'execute': cmd, 'arguments': a} if a else {'execute': cmd}) + '\n'); f.flush()
+    while True:
+        m = json.loads(f.readline())
+        if 'return' in m or 'error' in m: return m
+def key(n, d): q('input-send-event', events=[{'type': 'key', 'data': {'down': d, 'key': {'type': 'qcode', 'data': n}}}])
+q('qmp_capabilities')
+key('w', True); time.sleep(1.0)
+key('alt', True); time.sleep(0.1); key('tab', True); time.sleep(0.1); key('tab', False); time.sleep(0.1); key('alt', False)
+time.sleep(1.0); key('w', False); time.sleep(0.5)
+QMP
+kill "$PID" 2>/dev/null; wait "$PID" 2>/dev/null; PID=""
 python3 - "$WORK" <<'PY' || fail=1
 import re, sys
 log = open(sys.argv[1] + '/serial-walk.log', 'rb').read().decode('latin-1')
@@ -111,6 +137,12 @@ check(edge >= 50, 'looking down, the block aimed at is outlined: %d outline pixe
 br = ppm('broke')
 slot = [br(x, y) for x in range(124, 160) for y in range(434, 470)]
 check(0xFFFFFF in slot and 0x000000 in slot, 'the count in the first slot: white over a black shadow')
+hl = open(sys.argv[1] + '/serial-hold.log', 'rb').read().decode('latin-1')
+cut = hl.find('alt-tab to')
+zs = lambda t: [int(m.group(1)) for m in re.finditer(r'\[mincecraft\] p -?\d+ -?\d+ (-?\d+)', t)]
+before, after = (zs(hl[:cut]), zs(hl[cut:])) if cut > 0 else ([], [])
+check(cut > 0 and before and before[-1] - before[0] > 2 * 65536, 'W held: walking before the Alt+Tab (%.1f blocks)' % ((before[-1] - before[0]) / 65536 if before else 0))
+check(len(after) > 10 and len(set(after[2:])) == 1, 'and still held after it: stopped within two ticks (%d ticks after, %d places)' % (len(after), len(set(after[2:])) if after else 0))
 sys.exit(0 if ok else 1)
 PY
 [ "$fail" = 0 ] && echo "mincecraft-play-test: PASS" || echo "mincecraft-play-test: FAIL"
