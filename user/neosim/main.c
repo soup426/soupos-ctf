@@ -7,7 +7,8 @@
  *
  * Normal mode: counts; h j k l and the arrows, w b e 0 ^ $ gg G (v0.60.205);
  * the operators d c y with a motion, dd cc yy, D C; x X, p P, J; u and
- * Ctrl-R; > < (four spaces); / ? n N (plain text); v V with d y c > <; .
+ * Ctrl-R; > < (four spaces); / ? n N (plain text); v V with d y c > <; .;
+ * % to the matching bracket; Enter, o and O keep the indent (v0.60.218)
  * (v0.60.206); i a A I o O into insert mode; : for a command. Insert mode:
  * typing, Enter, Backspace (joining lines at the start of one), Tab as four
  * spaces, the arrows, Esc back. Commands: :w [FILE], :q, :q!, :wq, :x,
@@ -243,6 +244,12 @@ static int command(char *c) {                        /* 1: end neosim */
     return 0;
 }
 
+/* ---- auto-indent (v0.60.218): as vim's autoindent ---- */
+static int ai_pending;                               /* spaces put at this line's start, nothing typed after */
+static int indent_of(int y) { int i = 0; while (i < lenof(y) && E.t.s[y][i] == ' ') i++; return i; }
+static int only_spaces(int y) { return indent_of(y) == lenof(y); }
+static void put_indent(int y, int n) { for (int i = 0; i < n; i++) text_insert_char(&E.t, y, 0, ' '); }
+
 /* ---- insert mode ---- */
 static void insert_mode(int x, int push) {
     if (push) change_begin();
@@ -251,6 +258,8 @@ static void insert_mode(int x, int push) {
 }
 static void insert_key(unsigned k) {
     if (k == 27) {
+        if (ai_pending && only_spaces(E.cy)) { while (lenof(E.cy)) text_delete_char(&E.t, E.cy, 0); E.cx = 0; }   /* an indent nothing came after */
+        ai_pending = 0;
         E.mode = M_NORMAL;
         if (!E.ins_dirty) { undo_discard(&E.seq); E.changed = E.seq != E.saved; }   /* nothing typed: no step */
         E.cx--; clamp(); E.want = E.cx;
@@ -259,7 +268,14 @@ static void insert_key(unsigned k) {
     if (k == KEY_LEFT) { E.cx--; clamp(); E.want = E.cx; return; }
     if (k == KEY_RIGHT) { E.cx++; clamp(); E.want = E.cx; return; }
     if (k == KEY_UP || k == KEY_DOWN) { E.cy += k == KEY_UP ? -1 : 1; E.cx = E.want; clamp(); return; }
-    if (k == '\n') { if (text_split(&E.t, E.cy, E.cx) == 0) { E.cy++; E.cx = E.want = 0; E.ins_dirty = 1; } return; }
+    if (k == '\n') {                                /* the new line keeps this one's indent (v0.60.218) */
+        int ind = indent_of(E.cy);
+        if (ai_pending && only_spaces(E.cy)) { while (lenof(E.cy)) text_delete_char(&E.t, E.cy, 0); E.cx = 0; }
+        if (text_split(&E.t, E.cy, E.cx) == 0) {
+            E.cy++; put_indent(E.cy, ind); E.cx = E.want = ind; E.ins_dirty = 1; ai_pending = ind;
+        }
+        return;
+    }
     if (k == '\b') {
         if (E.cx > 0) { text_delete_char(&E.t, E.cy, E.cx - 1); E.cx--; E.want = E.cx; E.ins_dirty = 1; }
         else if (E.cy > 0) { int at = lenof(E.cy - 1); text_join(&E.t, E.cy - 1); E.cy--; E.cx = E.want = at; E.ins_dirty = 1; }
@@ -267,6 +283,7 @@ static void insert_key(unsigned k) {
     }
     if (k == '\t') { for (int i = 0; i < 4; i++) if (text_insert_char(&E.t, E.cy, E.cx, ' ') == 0) E.cx++; E.want = E.cx; E.ins_dirty = 1; return; }
     if (k >= ' ' && k < 127) {
+        ai_pending = 0;
         if (text_insert_char(&E.t, E.cy, E.cx, (char)k) == 0) { E.cx++; E.want = E.cx; E.ins_dirty = 1; }
         else msg("the line is full (255)", 0, 0);
     }
@@ -293,6 +310,29 @@ static mv_t motion(unsigned k, int cnt, int had, int op) {
     }
     case 'b': for (int i = 0; i < cnt; i++) word_back(&E.t, &m.y, &m.x); break;
     case 'e': for (int i = 0; i < cnt; i++) word_end(&E.t, &m.y, &m.x); m.incl = 1; break;
+    case '%': {                                     /* (v0.60.218) the bracket at or after the cursor, to its match */
+        static const char open_[] = "([{", close_[] = ")]}";
+        int x = E.cx, y = E.cy;
+        while (x < lenof(y)) { char c = E.t.s[y][x]; int k2 = 0; while (k2 < 3 && c != open_[k2] && c != close_[k2]) k2++; if (k2 < 3) break; x++; }
+        if (x >= lenof(y)) { m.ok = 0; break; }
+        char c = E.t.s[y][x];
+        int k2 = 0; while (c != open_[k2] && c != close_[k2]) k2++;
+        char o = open_[k2], cl = close_[k2];
+        int fwd = c == o, depth = 0, found = 0;
+        while (y >= 0 && y < E.t.n) {
+            if (x >= 0 && x < lenof(y)) {
+                char d = E.t.s[y][x];
+                if (d == o) depth += fwd ? 1 : -1;
+                else if (d == cl) depth += fwd ? -1 : 1;
+                if (depth == 0) { found = 1; break; }
+            }
+            if (fwd) { if (++x >= lenof(y)) { y++; x = -1; } }
+            else { if (--x < 0) { y--; x = y >= 0 ? lenof(y) : 0; } }
+        }
+        if (!found) { m.ok = 0; break; }
+        m.y = y; m.x = x; m.incl = 1;
+        break;
+    }
     case 'G': m.y = had ? imin(imax(cnt - 1, 0), E.t.n - 1) : E.t.n - 1; m.x = E.want; m.line = 1; break;
     case 'g' + 256: m.y = had ? imin(imax(cnt - 1, 0), E.t.n - 1) : 0; m.x = E.want; m.line = 1; break;   /* gg */
     default: m.ok = 0;
@@ -423,8 +463,8 @@ static void normal_key(unsigned k) {
     case 'a': insert_mode(len() ? E.cx + 1 : 0, 1); break;
     case 'A': insert_mode(len(), 1); break;
     case 'I': insert_mode(len() ? first_nonblank(&E.t, E.cy) : 0, 1); break;
-    case 'o': change_begin(); if (text_insert_line(&E.t, E.cy + 1) == 0) { E.cy++; insert_mode(0, 0); } break;
-    case 'O': change_begin(); if (text_insert_line(&E.t, E.cy) == 0) insert_mode(0, 0); break;
+    case 'o': { int ind = indent_of(E.cy); change_begin(); if (text_insert_line(&E.t, E.cy + 1) == 0) { E.cy++; put_indent(E.cy, ind); insert_mode(ind, 0); ai_pending = ind; } break; }
+    case 'O': { int ind = indent_of(E.cy); change_begin(); if (text_insert_line(&E.t, E.cy) == 0) { put_indent(E.cy, ind); insert_mode(ind, 0); ai_pending = ind; } break; }
     case ':': E.mode = M_COMMAND; E.cmdch = ':'; E.cmdn = 0; break;
     }
 }

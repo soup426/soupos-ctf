@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.217
+Current version: v0.60.218
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,18 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.218 (2026-10-12)  — NEOSIM: AUTO-INDENT AND %
+  - Enter, o and O keep the line's indent (its leading spaces), as vim's
+    autoindent; an indent nothing was typed after is taken back at Esc,
+    and Enter on a line holding only its indent empties it and carries the
+    indent on (the case neovim showed).
+  - % goes to the matching ( [ { or ) ] }: the first bracket at or after
+    the cursor on its line, then its match, nesting counted, across lines;
+    a motion too (d%), inclusive.
+  - scripts/neosim-indent-test.sh: 13 cases against neovim 0.12.5 (set
+    autoindent expandtab: neovim's default would have made eight spaces a
+    tab, neosim indents with spaces).
 
 v0.60.217 (2026-10-12)  — NEOSIM IN COLOUR
   - Syntax colours by the file's name (highlight.c), tokyonight's: .c and

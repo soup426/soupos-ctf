@@ -51,7 +51,7 @@ the user asked on 2026-10-11; the user has not seen it.
 
 ---
 
-## 1. neosim: auto-indent and %
+## 1. neosim: auto-indent and % — DONE v0.60.218
 
 Enter, o and O keep the line's indent (neovim with `set autoindent`, the
 indent being the leading spaces); % jumps to the matching ( [ { or ) ] }
