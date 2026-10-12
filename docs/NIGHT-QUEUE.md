@@ -1,12 +1,11 @@
 # Night queue
 
-Sixty-first queue. The first sixty are in `docs/queue-archive-2026-10-*.md`;
-queue 60 (`-12d`) gave neosim f t F T ; , r ~ and paging, Mincecraft eating,
-and found Doom's pistol (and flash) had never been on screen. This one:
-neosim's * # and text objects; toast as food; the rest of Doom's pictures
-checked the way the pistol should have been. Written by an unattended run
-when queue 60 ran out, as the user asked on 2026-10-11; the user has not
-seen it.
+Sixty-second queue. The first sixty-one are in `docs/queue-archive-2026-10-*.md`;
+queue 61 (`-12e`) gave neosim * # and text objects, toast as food, and put
+Doom's status numbers and menu skull where Doom puts them. This one: the
+status bar's right-hand panel; neosim marks and case operators; sugar that
+falls. Written by an unattended run when queue 61 ran out, as the user
+asked on 2026-10-11; the user has not seen it.
 
 ## Standing rules
 
@@ -52,35 +51,37 @@ seen it.
 
 ---
 
-## 1. neosim: * and # — DONE v0.60.226
+## 1. Doom: the status bar's arms and ammo panel
 
-* and # search for the word under the cursor (or the next word on the
-line), whole words only, forward and back, a count the nth; n and N go on
-from there. Test: cases against neovim's, as neosim-ops-test.
+The right of the status bar shows BULL SHEL RCKT CELL with slashes and
+no numbers; the ARMS box no digits. Doom draws (st_stuff.c) the ammo
+held and the most it can hold in STYSNUM digits at ST_AMMO0X.. and
+ST_MAXAMMO0X.., and the arms 2-7 in STGNUM (owned) or STYSNUM grey.
+Test: the opening frame's panel drawn from the WAD by those rules, every
+pixel compared, as doom-places-test.
 
-## 2. neosim: text objects — DONE v0.60.227
+## 2. neosim: marks
 
-After an operator or in visual mode: iw aw (a word, and its space), i" a"
-i' a' (the quotes on the line around or after the cursor), i( a( ib ab, i[
-a[, i{ a{ iB aB (across lines, nested). Test: cases against neovim's.
+m and a letter sets a mark; ' and the letter goes to its line's first
+non-blank, ` to its place; as motions (d'a linewise, d`a not). Marks
+move with lines put in or taken out above them. Test: cases against
+neovim's.
 
-## 3. Mincecraft: toast is food — DONE v0.60.228
+## 3. neosim: gu gU g~
 
-The note from queue 60: toast (crafted from a stalk) gives four hearts,
-the best food, so crafting has a reason. Test: the eat test's world given
-toast too, e on it: four back.
+The case operators with motions, text objects, visual mode and their
+doubled forms (guu gUU g~~), counts and . Test: cases against neovim's.
 
-## 4. Doom: the other pictures, placed by Doom's rules — DONE v0.60.229
+## 4. Mincecraft: sugar falls
 
-The pistol had never been seen: drawn from the wrong origin, a lump name
-that is not in the WAD. Measure first, the same way, every other patch
-drawn: the status bar's numbers, face, keys and arms; the menu and the
-title; the intermission; the sprites' offsets (things standing on the
-floor, not in it). Each against its rule in Doom's source and its pixels
-decoded from the WAD. A test for each fixed; the numbers for the ones
-found right.
+Sugar is sand: with air (or broth) under it, it falls, a block a tick or
+so, until it lands. Breaking the block under a column of sugar brings
+the column down. Test: a world from the host with a sugar column on a
+crumb; the crumb broken: the sugar's cells in the markers as it falls,
+the column whole on the ground after.
 
 ## Notes left by unattended runs
+
 
 
 
