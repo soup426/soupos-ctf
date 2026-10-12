@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.250
+Current version: v0.60.251
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,15 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.251 (2026-10-12)  — THE GATE'S PREEMPT CHECK CAN FAIL
+  - "preempt_disable works" matched PASS anywhere in its log, so
+    "[vmtest] PASS" satisfied it and "[pt] FAIL" did not stop it (review
+    R-T1). It reads '^\[pt\] PASS' now, preempttest's own verdict.
+  - scripts/gate-patterns-test.sh: a gate check, taken from its segment
+    as written, runs against a log of the failure it is there to catch
+    and must FAIL, and against the real success line and must pass. No
+    QEMU. The next gate fixes add their cases to it.
 
 v0.60.250 (2026-10-12)  — A TEXT FILE'S DOUBLE CLICK OPENS NEOSIM
   - In the files window a double click (or Enter) on a text file opens it

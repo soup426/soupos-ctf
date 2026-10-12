@@ -374,7 +374,7 @@ Mincecraft; neosim and rx.c; Doom; tests, build and docs.)
   is tested only if someone ran `rm disk.img && make disk` by hand. Fix:
   check.sh builds the programs and fails if any differs from the copy
   inside disk.img (or builds its own disk in a copy).
-- **R-T1 (high).** The gate's "preempt_disable works" matches 'PASS'
+- **R-T1 (high) — DONE v0.60.251 (gate-patterns-test).** The gate's "preempt_disable works" matches 'PASS'
   anywhere ([vmtest] PASS satisfies it, [pt] FAIL would not stop it). Fix:
   '^\[pt\] PASS'.
 - **R-T3 (high).** doom-fb-test passes when Doom never runs (a cleared
