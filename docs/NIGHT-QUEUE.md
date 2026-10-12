@@ -67,7 +67,7 @@ non-blank, ` to its place; as motions (d'a linewise, d`a not). Marks
 move with lines put in or taken out above them. Test: cases against
 neovim's.
 
-## 3. neosim: gu gU g~
+## 3. neosim: gu gU g~ — DONE v0.60.232
 
 The case operators with motions, text objects, visual mode and their
 doubled forms (guu gUU g~~), counts and . Test: cases against neovim's.
@@ -127,3 +127,6 @@ the column whole on the ground after.
 - 2026-10-12 (queue 62 item 2): neosim does not repeat an insert by its
   count (3ihi<Esc>, 2Onew<Esc> insert once; neovim three and two times).
   Found by a marks case; a later item.
+
+- 2026-10-12 (queue 62 item 3): neosim has no paragraphs: no { } motions
+  and no ip ap objects. A later item.

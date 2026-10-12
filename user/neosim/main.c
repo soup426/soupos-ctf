@@ -11,7 +11,8 @@
  * % to the matching bracket; Enter, o and O keep the indent (v0.60.218);
  * :help, a read-only page of all this (v0.60.219); f t F T ; , r ~ (v0.60.222);
  * Ctrl-D Ctrl-U Ctrl-F Ctrl-B, zz zt zb (v0.60.223); * # (v0.60.226);
- * text objects iw aw i" a" i( a( i{ a{ ... (v0.60.227); marks m ' ` (v0.60.231)
+ * text objects iw aw i" a" i( a( i{ a{ ... (v0.60.227); marks m ' ` (v0.60.231);
+ * gu gU g~ and in visual u U ~ (v0.60.232)
  * (v0.60.206); i a A I o O into insert mode; : for a command. Insert mode:
  * typing, Enter, Backspace (joining lines at the start of one), Tab as four
  * spaces, the arrows, Esc back. Commands: :w [FILE], :q, :q!, :wq, :x,
@@ -431,9 +432,27 @@ static mv_t motion(unsigned k, int cnt, int had, int op) {
 
 /* ---- operators ---- */
 static void shift_lines(int a, int b, int dir);
+/* gu gU g~ (v0.60.232): the case of every letter from (ay,ax) up to (by,bx),
+ * bx not included; the cursor to the start, the register left alone. */
+static int case_op(int op) { return op == 'u' || op == 'U' || op == '~'; }
+static void change_case(int op, int ay, int ax, int by, int bx) {
+    change_begin();
+    for (int y = ay; y <= by; y++) {
+        int x0 = y == ay ? ax : 0, x1 = y == by ? imin(bx, lenof(y)) : lenof(y);
+        for (int x = x0; x < x1; x++) {
+            char c = E.t.s[y][x];
+            int lo = c >= 'a' && c <= 'z', up = c >= 'A' && c <= 'Z';
+            if ((op == 'U' || op == '~') && lo) c = (char)(c - 32);
+            else if ((op == 'u' || op == '~') && up) c = (char)(c + 32);
+            E.t.s[y][x] = c;
+        }
+    }
+    E.cy = ay; E.cx = ax; clamp(); E.want = E.cx;
+}
 static void op_lines(int op, int a, int b) {
     if (op == '>' || op == '<') { shift_lines(a, b, op == '>' ? 1 : -1); return; }
     a = imax(a, 0); b = imin(b, E.t.n - 1);
+    if (case_op(op)) { int x = E.cx; change_case(op, a, 0, b, T_COLS + 1); E.cx = x; clamp(); E.want = E.cx; return; }   /* the column kept */
     reg_take_lines(a, b);
     if (op == 'y') { E.cy = a; clamp(); return; }
     change_begin();
@@ -557,6 +576,7 @@ static void op_apply(int op, mv_t m) {
     if (by < ay || (by == ay && bx < ax)) { int t = ay; ay = by; by = t; t = ax; ax = bx; bx = t; }
     if (m.incl) bx++;
     if (by == ay) bx = imin(bx, lenof(ay));
+    if (case_op(op)) { change_case(op, ay, ax, by, bx); return; }
     reg_take_chars(ay, ax, by, bx);
     if (op == 'y') { E.cy = ay; E.cx = ax; clamp(); E.want = E.cx; return; }
     change_begin();
@@ -693,8 +713,14 @@ static void normal_key(unsigned k) {
     }
     if (!P.op && (k == 4 || k == 0x15 || k == 6 || k == 2)) { page((int)k, cnt, had); return; }
     if (!P.op && !P.g && k == 'z') { P.z = 1; return; }
-    if (P.g) {                                      /* g then: only gg */
+    if (P.g) {                                      /* g then: gg, or gu gU g~ (v0.60.232) */
         P.g = 0;
+        if (k == 'u' || k == 'U' || k == '~') {
+            if (P.op == (int)k) { int op = P.op, total = P.gcount * P.opcount; P.op = 0; op_lines(op, E.cy, E.cy + total - 1); return; }   /* gugu gUgU g~g~ */
+            if (P.op) { P.op = 0; return; }
+            P.op = (int)k; P.opcount = P.gcount; P.ophad = P.ghad;
+            return;
+        }
         if (k != 'g') { P.op = 0; return; }
         k = 'g' + 256; cnt = P.gcount; had = P.ghad;
     } else if (k == 'g') { P.g = 1; P.gcount = cnt; P.ghad = had; return; }
@@ -764,12 +790,16 @@ static void visual_key(unsigned k) {
     if ((k >= '1' && k <= '9') || (k == '0' && P.count)) { P.count = P.count * 10 + (int)(k - '0'); return; }
     int had = P.count > 0, cnt = had ? P.count : 1;
     P.count = 0;
-    if (P.g) { P.g = 0; if (k == 'g') { mv_t m = motion('g' + 256, cnt, had, 0); E.cy = m.y; E.cx = E.want; clamp(); } return; }
+    if (P.g) {
+        P.g = 0;
+        if (k == 'g') { mv_t m = motion('g' + 256, cnt, had, 0); E.cy = m.y; E.cx = E.want; clamp(); return; }
+        if (k != 'u' && k != 'U' && k != '~') return;  /* gu gU g~ there: as u U ~ (v0.60.232) */
+    }
     if (k == 'g') { P.g = 1; return; }
     if (k == 'i' || k == 'a') { P.wait = (int)k; P.wcount = cnt; return; }
     if (k == 'v' || k == 'V') { int want = k == 'v' ? M_VISUAL : M_VLINE; E.mode = E.mode == want ? M_NORMAL : want; return; }
     int op = k == 'x' ? 'd' : (int)k;
-    if (op == 'd' || op == 'y' || op == 'c' || op == '>' || op == '<') {
+    if (op == 'd' || op == 'y' || op == 'c' || op == '>' || op == '<' || case_op(op)) {
         int line = E.mode == M_VLINE, dy = E.cy - E.vy, dx = E.cx - E.vx;
         if (dy < 0) dy = -dy;
         /* What . does again: as many lines (or characters on one line) from the cursor. */

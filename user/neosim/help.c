@@ -22,6 +22,7 @@ const char *const help_text[] = {
     "  Esc                back to normal mode   (Enter, o, O keep the indent)",
     "  x X  J             a character under, before; join the next line",
     "  r + a char  ~      replace the character (3rx: three); swap its case",
+    "  gu gU g~ + motion  lower, upper, swap case (guu gUU g~~ the line; v: u U ~)",
     "  d c y  + a motion  delete, change, copy (dw, c$, y%); dd cc yy the line",
     "  D C                delete, change to the line's end",
     "  > <  >> <<         four spaces in or out",

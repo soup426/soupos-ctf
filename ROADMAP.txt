@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.231
+Current version: v0.60.232
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,16 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.232 (2026-10-12)  — NEOSIM: gu gU g~
+  - The case operators: gu lower, gU upper, g~ swap, with any motion or
+    text object (gUw, gu$, gUi(, g~iw), counts either side, the doubled
+    forms for lines (guu gUU g~~, gugu gUgU g~g~, 3g~~); in visual mode u
+    U ~ (and gu gU g~). The cursor goes to the start, the register is left
+    alone; . repeats them. Listed on :help.
+  - scripts/neosim-case-test.sh: 34 cases against neovim 0.12.5 (two that
+    used ap and } left out: neosim has neither the paragraph object nor
+    the paragraph motion yet).
 
 v0.60.231 (2026-10-12)  — NEOSIM: MARKS
   - m and a letter sets a mark; ' and the letter goes to its line's first
