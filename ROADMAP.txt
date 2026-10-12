@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.212
+Current version: v0.60.213
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,25 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.213 (2026-10-12)  — DOOM AT 960X600
+  - Queue 57 item 10, the second half. When the framebuffer has room
+    (1024x768 here), Doom draws at 960x600: the same picture the 3x scaler
+    made, more finely drawn (the floor's edges, the walls, the sprites at
+    three times the detail), centred, the 2D pictures (the status bar, the
+    weapon, the menus, the title) still placed in 320x200 coordinates and
+    drawn three times over. A mode 13h boot, or a framebuffer too small,
+    stays 320x200. "[doom] drawing at WxH" in the log.
+  - doom-profile: the framebuffer frame is 9.5M cycles (flats 6.5M, the
+    copy out 0.85M), mode 13h 1.9M; both still at the 50 fps cap.
+  - Found on the way: on a framebuffer boot TAB never showed the automap.
+    draw_automap draws into mode 13h's RAM shadow and never handed it to
+    the scaler, so the last 3D frame stayed on the screen. It does now.
+  - scripts/doom-hires-test.sh: E1M1's opening frame: 960x600 in the log;
+    the 3D view has 35,747 of 53,760 3x3 cells not of one colour (0 at the
+    old scale, which the test was shown to fail on); the status bar is
+    exact 3x3 cells; TAB shows the automap (21 of 7,560 samples left as
+    the 3D view, every one before the fix). Pictures in docs/doom/.
 
 v0.60.212 (2026-10-12)  — DOOM: ITS SIZE AS RUNTIME VALUES
   - Queue 57 item 10, the first half: generalise, change nothing. Doom

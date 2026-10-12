@@ -144,7 +144,7 @@ CLAUDE.md's Doom section says "the enemy AI regression noted in ROADMAP.txt
 is still open"; ROADMAP has it RESOLVED in v0.7.6. Read the code and the
 roadmap, fix whichever is wrong.
 
-## 10. Doom drawn at 640x400
+## 10. Doom drawn at 640x400 — DONE at 960x600, v0.60.212 and v0.60.213 (640x400 would have been smaller on the screen than the 3x picture)
 
 From queue 52's survey (docs/queue-archive-2026-10-07c.md item 2): render
 at 640x400 natively, 2x the original geometry, and blit it 1:1 centred, so

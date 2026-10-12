@@ -115,6 +115,14 @@ static void pf_maybe_report(void) {
 #define DMAX_W (VGA13_W * DS_MAX)
 #define DMAX_H (VGA13_H * DS_MAX)
 static int ds = 1, dw = VGA13_W, dh = VGA13_H;
+/* Each time Doom takes the screen (v0.60.213): drawn at 960x600 when the
+ * framebuffer has room (the same picture the 3x scaler made, more finely
+ * drawn), else 320x200 (mode 13h boots, or a framebuffer too small). */
+static void doom_size(void) {
+    ds = fb_present() && fb_width() >= (uint32_t)DMAX_W && fb_height() >= (uint32_t)DMAX_H ? DS_MAX : 1;
+    dw = VGA13_W * ds; dh = VGA13_H * ds;
+    klog("[doom] drawing at %dx%d\n", dw, dh);
+}
 static uint8_t g_backbuf[DMAX_W * DMAX_H];
 
 static inline uint8_t vga_inb(uint16_t port) {
@@ -748,6 +756,10 @@ static void draw_automap(void) {
     int ay = py - (sin128[pl_dir] * 6 >> 7);  /* screen Y is flipped */
     vga13h_line(px, py, ax, ay, AM_ARRL);
     vga13h_fill_circle(px, py, 2, AM_PLAY);
+    /* On a framebuffer the map is drawn into mode 13h's RAM shadow, which
+     * only the scaler puts on the screen (v0.60.213): without this, TAB
+     * left the last 3D frame frozen there. In mode 13h a no-op. */
+    vga13h_present();
 }
 
 /* ══════════════════════════════════════════════════════════════════════════
@@ -2850,7 +2862,7 @@ void doom_play_level(int ep, int skill) {
             vga_set_color(VGA_LIGHT_GREY, VGA_BLACK);
             vga_puts("  Press any key.\n");
             keyboard_flush(); keyboard_getchar();
-            vga13h_enter(); set_doom_palette();
+            vga13h_enter(); doom_size(); set_doom_palette();
             break;
         }
 
@@ -2994,7 +3006,7 @@ void doom_play_level(int ep, int skill) {
                 vga_puts("  No more maps in this episode.\n");
                 vga_puts("  Press any key.\n");
                 keyboard_flush(); keyboard_getchar();
-                vga13h_enter(); set_doom_palette();
+                vga13h_enter(); doom_size(); set_doom_palette();
                 break;
             }
             vga_set_color(VGA_LIGHT_GREY, VGA_BLACK);
@@ -3003,6 +3015,7 @@ void doom_play_level(int ep, int skill) {
             uint32_t tt = timer_get_ticks();
             while (timer_get_ticks() - tt < 150) __asm__ volatile ("pause");
             vga13h_enter();
+    doom_size();
             set_doom_palette();
             continue;
         }
@@ -3017,7 +3030,7 @@ void doom_play_level(int ep, int skill) {
             vga_set_color(VGA_LIGHT_GREY, VGA_BLACK);
             vga_puts("  Press any key.\n");
             keyboard_flush(); keyboard_getchar();
-            vga13h_enter(); set_doom_palette();
+            vga13h_enter(); doom_size(); set_doom_palette();
         }
 
         break;  /* ESC or death — return to menu */
@@ -3040,6 +3053,7 @@ void doom_menu_run(void) {
     load_bg();   /* decode TITLEPIC into bg_pixels once */
 
     vga13h_enter();
+    doom_size();
     set_doom_palette();
 
     /* Reset state */
@@ -3175,6 +3189,7 @@ void doom_titlescreen(void) {
     if (wad_read_lump(idx, patch, sz) != (int)sz) { kfree(patch); return; }
 
     vga13h_enter();
+    doom_size();
     set_doom_palette();
     memset(g_backbuf, 0, sizeof(g_backbuf));
     draw_patch(patch, 0, 0);
