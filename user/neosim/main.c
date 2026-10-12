@@ -13,7 +13,7 @@
  * Ctrl-D Ctrl-U Ctrl-F Ctrl-B, zz zt zb (v0.60.223); * # (v0.60.226);
  * text objects iw aw i" a" i( a( i{ a{ ... (v0.60.227); marks m ' ` (v0.60.231);
  * gu gU g~ and in visual u U ~ (v0.60.232); counts on inserts, 3. (v0.60.234);
- * paragraphs { } ip ap (v0.60.235); :set nu rnu (v0.60.236)
+ * paragraphs { } ip ap (v0.60.235); :set nu rnu (v0.60.236); registers "a-"z "0 "1-"9 (v0.60.240)
  * (v0.60.206); i a A I o O into insert mode; : for a command. Insert mode:
  * typing, Enter, Backspace (joining lines at the start of one), Tab as four
  * spaces, the arrows, Esc back. Commands: :w [FILE], :q, :q!, :wq, :x,
@@ -104,6 +104,39 @@ static void reg_take_chars(int ay, int ax, int by, int bx) {
         for (int i = from; i < to && i < lenof(y); i++) reg_add(E.t.s[y][i]);
         if (y < by) reg_add('\n');
     }
+}
+/* Registers (v0.60.240): "0-"9 and "a-"z beside the unnamed one above.
+ * "x before a command names one (reg_sel); "a-"z take a copy, "A-"Z add to
+ * theirs; with none named a yank also goes to "0, and a delete or change
+ * of whole lines to "1, the older ones moving down to "9. */
+#define BANK_MAX 8192
+static char bank[36][BANK_MAX];                      /* 0-9: "0-"9; 10-35: "a-"z */
+static int bank_n[36], bank_lines[36];
+static int reg_sel, reg_fresh;                       /* the register named for this command; just named */
+static int bank_of(int c) { return c >= '0' && c <= '9' ? c - '0' : c >= 'a' && c <= 'z' ? 10 + c - 'a' : c >= 'A' && c <= 'Z' ? 10 + c - 'A' : -1; }
+static void bank_put(int b, const char *s, int n, int lines) {
+    if (n > BANK_MAX) n = BANK_MAX;
+    for (int i = 0; i < n; i++) bank[b][i] = s[i];
+    bank_n[b] = n; bank_lines[b] = lines;
+}
+static void reg_after(int op) {                      /* after a yank, delete or change took the text into reg */
+    int b = bank_of(reg_sel);
+    if (reg_sel >= 'A' && reg_sel <= 'Z' && (bank_n[b] || bank_lines[b])) {   /* added to */
+        int lines = bank_lines[b] || reg_lines, n = bank_n[b];
+        if (lines && n < BANK_MAX) bank[b][n++] = '\n';
+        for (int i = 0; i < reg_n && n < BANK_MAX; i++) bank[b][n++] = reg[i];
+        bank_n[b] = n; bank_lines[b] = lines;
+        reg_n = 0; for (int i = 0; i < n; i++) reg_add(bank[b][i]);   /* "" is what "A holds now, as vim's */
+        reg_lines = lines;
+    } else if (b >= 10) bank_put(b, reg, reg_n, reg_lines);
+    else if (!reg_sel) {
+        if (op == 'y') bank_put(0, reg, reg_n, reg_lines);
+        else if (reg_lines) {
+            for (int i = 9; i > 1; i--) bank_put(i, bank[i - 1], bank_n[i - 1], bank_lines[i - 1]);
+            bank_put(1, reg, reg_n, reg_lines);
+        }
+    }
+    reg_sel = 0;
 }
 static void delete_chars(int ay, int ax, int by, int bx) {
     if (ay == by) { for (int i = ax; i < bx; i++) text_delete_char(&E.t, ay, ax); return; }
@@ -248,6 +281,32 @@ static int write_file(const char *path) {
     return 0;
 }
 static const char E21[] = "E21: Cannot make changes, 'modifiable' is off";
+/* :reg (v0.60.240): the registers as neovim's :registers lists them, on the
+ * read-only page :help uses: "Type Name Content", then "" "0-"9 "a-"z that
+ * hold anything, l lines or c characters, a new line as ^J. */
+static char reg_rows[40][SCR_COLS + 1];
+static const char *reg_ptr[40];
+static void reg_row(int *n, int name, const char *t, int len, int lines) {
+    if (*n >= 40 || (!len && !lines)) return;
+    char *o = reg_rows[*n]; int k = 0;
+    const char *head = lines ? "  l  \"" : "  c  \"";
+    while (*head) o[k++] = *head++;
+    o[k++] = (char)name; o[k++] = ' '; o[k++] = ' '; o[k++] = ' ';
+    for (int i = 0; i <= len && k < SCR_COLS; i++) {
+        if (i == len) { if (lines && k + 1 < SCR_COLS) { o[k++] = '^'; o[k++] = 'J'; } break; }
+        if (t[i] == '\n') { if (k + 1 < SCR_COLS) { o[k++] = '^'; o[k++] = 'J'; } }
+        else o[k++] = t[i];
+    }
+    o[k] = 0; reg_ptr[*n] = o; (*n)++;
+}
+static void reg_page(void) {
+    int n = 0;
+    scopy(reg_rows[0], "Type Name Content", SCR_COLS + 1); reg_ptr[n++] = reg_rows[0];
+    reg_row(&n, '"', reg, reg_n, reg_lines);
+    for (int b = 0; b < 36; b++) reg_row(&n, b < 10 ? '0' + b : 'a' + b - 10, bank[b], bank_n[b], bank_lines[b]);
+    E.help = 1; E.htop = 0; E.page = reg_ptr; E.pagen = n; E.pagename = "registers [RO]";
+    eprint("[neosim] registers\n");
+}
 static int command(char *c) {                        /* 1: end neosim */
     while (*c == ' ') c++;
     if (E.help) {                                    /* (v0.60.219) on the help page: only leaving it, or :e */
@@ -293,7 +352,8 @@ static int command(char *c) {                        /* 1: end neosim */
         open_file(arg);
         return 0;
     }
-    if (same(c, "help") || same(c, "h")) { E.help = 1; E.htop = 0; eprint("[neosim] help\n"); return 0; }
+    if (same(c, "help") || same(c, "h")) { E.help = 1; E.htop = 0; E.page = help_text; E.pagen = help_lines; E.pagename = "help.txt [Help][RO]"; eprint("[neosim] help\n"); return 0; }
+    if (same(c, "reg") || same(c, "registers") || same(c, "di") || same(c, "display")) { reg_page(); return 0; }
     if (c[0] == 's' && c[1] == '/') { substitute(E.cy, E.cy, c + 2); return 0; }
     if (c[0] == '%' && c[1] == 's' && c[2] == '/') { substitute(0, E.t.n - 1, c + 3); return 0; }
     if (!*c) return 0;
@@ -514,6 +574,7 @@ static void op_lines(int op, int a, int b) {
     a = imax(a, 0); b = imin(b, E.t.n - 1);
     if (case_op(op)) { int x = E.cx; change_case(op, a, 0, b, T_COLS + 1); E.cx = x; clamp(); E.want = E.cx; return; }   /* the column kept */
     reg_take_lines(a, b);
+    reg_after(op);
     if (op == 'y') { E.cy = a; clamp(); return; }
     change_begin();
     if (op == 'd') { delete_lines(a, b); E.cy = imin(a, E.t.n - 1); E.cx = first_nonblank(&E.t, E.cy); E.want = E.cx; return; }
@@ -662,6 +723,7 @@ static void op_apply(int op, mv_t m) {
     if (by == ay) bx = imin(bx, lenof(ay));
     if (case_op(op)) { change_case(op, ay, ax, by, bx); return; }
     reg_take_chars(ay, ax, by, bx);
+    reg_after(op);
     if (op == 'y') { E.cy = ay; E.cx = ax; clamp(); E.want = E.cx; return; }
     change_begin();
     delete_chars(ay, ax, by, bx);
@@ -669,7 +731,14 @@ static void op_apply(int op, mv_t m) {
     if (op == 'c') { insert_mode(ax, 0); return; }
     clamp(); E.want = E.cx;
 }
-static void paste(int after, int cnt) {
+static void paste_from(int after, int cnt, const char *reg, int reg_n, int reg_lines);
+static void paste(int after, int cnt) {               /* (v0.60.240) from the register named, else the unnamed */
+    int b = reg_sel && reg_sel != '"' ? bank_of(reg_sel) : -1;
+    reg_sel = 0;
+    if (b >= 0) paste_from(after, cnt, bank[b], bank_n[b], bank_lines[b]);
+    else paste_from(after, cnt, reg, reg_n, reg_lines);
+}
+static void paste_from(int after, int cnt, const char *reg, int reg_n, int reg_lines) {
     if (!reg_n && !reg_lines) return;
     change_begin();
     if (reg_lines) {
@@ -760,6 +829,11 @@ static void normal_key(unsigned k) {
         P.wait = 0;
         if (k == 27 || k >= 256) { P.op = 0; return; }
         if (w == 'r') { if (!P.op) replace_chars((int)k, cnt); P.op = 0; return; }
+        if (w == '"') {                              /* (v0.60.240) "x: the register for what comes next */
+            if (bank_of((int)k) >= 0 || k == '"') { reg_sel = (int)k; reg_fresh = 1; }
+            if (had) P.count = cnt;
+            return;
+        }
         if (w == 'm') { if (k >= 'a' && k <= 'z') { marks[k - 'a'].y = E.cy; marks[k - 'a'].x = E.cx; marks[k - 'a'].set = 1; } return; }
         if (w == 'i' || w == 'a') {                  /* an operator on a text object (v0.60.227) */
             int op = P.op, ay, ax, by, bx, line;
@@ -809,7 +883,7 @@ static void normal_key(unsigned k) {
         k = 'g' + 256; cnt = P.gcount; had = P.ghad;
     } else if (k == 'g') { P.g = 1; P.gcount = cnt; P.ghad = had; return; }
     if (k == 'f' || k == 't' || k == 'F' || k == 'T' || (k == 'r' && !P.op) || (P.op && (k == 'i' || k == 'a'))
-            || (k == 'm' && !P.op) || k == '\'' || k == '`') { P.wait = (int)k; P.wcount = cnt; P.whad = had; return; }
+            || (k == 'm' && !P.op) || k == '\'' || k == '`' || (k == '"' && !P.op)) { P.wait = (int)k; P.wcount = cnt; P.whad = had; return; }
     if (P.op) {                                     /* an operator waiting for its motion */
         int op = P.op, total = cnt * P.opcount, thad = had || P.ophad;
         P.op = 0;
@@ -918,7 +992,7 @@ static void dot(void) {                             /* the last change again */
 }
 static void help_key(unsigned k) {                  /* (v0.60.219) the help page: scroll, :, q; no changes */
     static int g;
-    int last = help_lines > TEXT_ROWS ? help_lines - TEXT_ROWS : 0;
+    int last = E.pagen > TEXT_ROWS ? E.pagen - TEXT_ROWS : 0;
     if (g) { g = 0; if (k == 'g') { E.htop = 0; return; } }
     if (k == 'j' || k == KEY_DOWN) { if (E.htop < last) E.htop++; }
     else if (k == 'k' || k == KEY_UP) { if (E.htop > 0) E.htop--; }
@@ -951,6 +1025,7 @@ static int key(unsigned k) {                        /* 1: end neosim */
     }
     cur_change_hook = 0;
     int r = key_inner(k);
+    if (idle()) { if (reg_fresh) reg_fresh = 0; else reg_sel = 0; }   /* (v0.60.240) a register named lasts one command */
     if (!replaying && cur_change_hook && cur_change == 0) cur_change = 1;
     if (!replaying && idle() && cur_change == 1) { for (int i = 0; i < curn; i++) rec[i] = cur[i]; recn = curn; cur_change = 0; }
     return r;

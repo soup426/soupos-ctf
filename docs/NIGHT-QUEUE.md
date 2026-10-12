@@ -60,7 +60,7 @@ program where they can, shorter fixed waits where an UNTIL can stand in.
 The number before and after; every test still fails when its feature is
 taken away (spot-check two).
 
-## 2. neosim: registers
+## 2. neosim: registers — DONE v0.60.240
 
 "a to "z before y d c p P x (and their doubled forms), "A to "Z adding
 to the register; "" the unnamed one; "0 the last yank; "1 the last

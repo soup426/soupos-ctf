@@ -20,6 +20,9 @@ typedef struct {
     int    vy, vx;             /* (v0.60.206) where visual mode was started */
     char   cmdch;              /* the command line's ':', '/' or '?' */
     int    help, htop;         /* (v0.60.219) the :help page shown, its first line shown */
+    const char *const *page;   /* (v0.60.240) what that read-only page shows: :help's, or :reg's */
+    int    pagen;
+    const char *pagename;
     int    nu, rnu;            /* (v0.60.236) :set number, relativenumber */
 } ed_t;
 void screen_draw(const ed_t *e, unsigned *body);   /* 640x480 */

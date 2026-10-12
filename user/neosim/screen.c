@@ -50,12 +50,15 @@ static int num(char *o, int v) {               /* decimal, no padding; its lengt
 void screen_draw(const ed_t *e, unsigned *b) {
     for (int r = 0; r < SCR_ROWS; r++) for (int c = 0; c < SCR_COLS; c++) cell(b, c, r, ' ', INK, r == TEXT_ROWS ? BAR : PAGE);
     if (e->help) {                                  /* (v0.60.219) the :help page, read-only, no numbers */
-        for (int r = 0; r < TEXT_ROWS && e->htop + r < help_lines; r++) {
-            const char *l = help_text[e->htop + r];
+        for (int r = 0; r < TEXT_ROWS && e->htop + r < e->pagen; r++) {
+            const char *l = e->page[e->htop + r];
             int head = l[0] >= 'A' && l[0] <= 'Z' && l[1] >= 'A' && l[1] <= 'Z';
             put(b, 0, r, l, head || e->htop + r == 0 ? CURNUM : INK, PAGE);
         }
-        put(b, 0, TEXT_ROWS, " NORMAL  help.txt [Help][RO]", BARINK, BAR);
+        char nm[60] = " NORMAL  "; int nn = 9;
+        for (const char *q = e->pagename; *q && nn < 59; q++) nm[nn++] = *q;
+        nm[nn] = 0;
+        put(b, 0, TEXT_ROWS, nm, BARINK, BAR);
         char pos[24]; int p = num(pos, e->htop + 1);
         pos[p++] = ':'; pos[p++] = '1'; pos[p] = 0;
         put(b, SCR_COLS - 1 - p, TEXT_ROWS, pos, BARINK, BAR);
