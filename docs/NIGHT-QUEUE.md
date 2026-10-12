@@ -480,7 +480,7 @@ Mincecraft; neosim and rx.c; Doom; tests, build and docs.)
   caller with ct_uid (countertop_win_open :526, countertop_note :2023).
   Fix: refuse a caller not owned by the desktop's cook (or not started
   from its sessions); no focus for a window not yet clicked.
-- **R-C2 (medium, security).** Removing a file from a files window copies
+- **R-C2 (medium, security) — DONE v0.60.263 (refused; ctcompostread-test).** Removing a file from a files window copies
   it into the cook's own compost with only 'w' checked: a write-only file
   becomes readable (ctx_remove :1460, compost_add :1590). Fix: 'r' too, or
   delete it outright when it cannot be read.

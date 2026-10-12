@@ -1471,11 +1471,23 @@ static void compost_add(const char *p);
 static void compost_put_back(const char *name);
 static void compost_empty(void);
 static void files_reload_all(void);
+static void bar_note(const char *msg);
+static int note_showing;                         /* with the notes, below */
+static uint32_t note_at;
 static void ctx_remove(struct files *f, int r) {
     char p[FAT_PATH_MAX];
     if (files_path(f, r, p) < 0) return;
     int bowl = f->dir[r];
     if (!users_may(bowl ? f->path : p, 'w')) { klog("[countertop] may not remove %s\n", p); return; }
+    if (!bowl && !users_may(p, 'r')) {                 /* (v0.60.263, review R-C2) */
+        /* The compost is the cook's own, so composting copies the file to
+         * where they may read it: one they may only write became readable.
+         * Refused; strain at a prompt still deletes it, with no copy. */
+        klog("[countertop] may not compost %s: not readable\n", p);
+        bar_note("you may not read it, so it cannot go to your compost: strain it in a terminal");
+        note_showing = 1; note_at = timer_get_ticks();
+        return;
+    }
     if (!bowl) { compost_add(p); return; }             /* a file to the compost, to come back (v0.60.189) */
     int ok = fat_rmdir(p);
     klog("[countertop] %s %s\n", ok == 0 ? "removed" : bowl ? "not empty, kept" : "could not remove", p);
@@ -1581,9 +1593,6 @@ static void files_copy(int from, int r, int to) {
  * a line a file, "name<TAB>where it came from". Put back copies it home
  * again; emptying is the one way off the disk. A move is a copy and a
  * delete here, as relabel's is: FAT has no rename across bowls. */
-static void bar_note(const char *msg);
-static int note_showing;                         /* with the notes, below */
-static uint32_t note_at;
 static void compost_dir(char *p) {
     if (ct_uid == 0) { strcpy(p, "/compost"); return; }
     strcpy(p, "/home/"); strcat(p, users_name_of((uint8_t)ct_uid)); strcat(p, "/compost");

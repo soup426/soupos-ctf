@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.262
+Current version: v0.60.263
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,17 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.263 (2026-10-12)  — NO COMPOST FOR A FILE THE COOK MAY NOT READ
+  - Removing a file in the files window copies it into the cook's own
+    ~/compost, to come back, and only 'w' on it was asked: a file the
+    cook might write but not read became theirs to read (the headchef's
+    /drop/memo.txt, rw--w-, read by saucier after "remove"; review R-C2).
+    Such a file is refused now, left where it is, with a note on the bar;
+    strain at a prompt still deletes it, with no copy made.
+  - scripts/ctcompostread-test.sh: saucier removes it in the files window
+    (asked twice); refused, still in /drop, nothing in saucier's compost.
+    Before the fix it was composted there.
 
 v0.60.262 (2026-10-12)  — SOUPYC'S FILES OBEY THE COOK'S RIGHTS
   - soupyc runs in ring 0 on the shell's task, and its open(), lines(),
