@@ -26,7 +26,7 @@ for s in $SEEDS; do
 done
 # The terrain itself (v0.60.198): real lakes, a narrow beach, hills. The
 # first generator piled heights up between 26 and 36 (2 to 5% under broth).
-python3 -I - "$PWD/scripts" <<'TERRAIN' || fail=1
+python3 -I -B - "$PWD/scripts" <<'TERRAIN' || fail=1
 import sys
 sys.path.insert(0, sys.argv[1]); import mincecraft_gen as g
 ok = True
