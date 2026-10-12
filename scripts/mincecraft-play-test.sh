@@ -14,6 +14,9 @@
 # and the cook drops into the hole; r then aims at their own cell and is
 # refused; looking up a little, r places it back on top of the next
 # block over (tried three times, a little higher each, exactly one lands).
+# Screendumps (v0.60.200): looking down, the block aimed at is outlined
+# (dark edges, the outline's own colour, away from the hotbar); after the
+# break, the count in the first slot has a black shadow under its white.
 # It opens on top, so it has the focus without a click. It starts at the
 # console with -wait, in the background, before the desktop, so its
 # markers reach the serial log.
@@ -27,7 +30,7 @@ trap cleanup EXIT
 boot() {   # $1: name, then the keys after the desktop is up
     local n=$1; shift
     cp disk.img "$WORK/disk-$n.img"
-    local keys=("headchef" "rosemary" "WAIT:1" "cook mincecraft.elf -flat -script -wait -world /PLAY.WLD &" "WAIT:1" "countertop" "WAIT:5" "$@")
+    local keys=("headchef" "rosemary" "WAIT:1" "cook mincecraft.elf -flat -script -wait -time 600 -world /PLAY.WLD &" "WAIT:1" "countertop" "WAIT:5" "$@")
     qemu-system-i386 -accel kvm -cpu host -drive "file=$WORK/disk-$n.img,format=raw,if=ide,index=0" \
         -cdrom soupOS.iso -boot d -m 128M -no-reboot -no-shutdown -display none \
         -serial "file:$WORK/serial-$n.log" -monitor "unix:$WORK/mon-$n.sock,server,nowait" >/dev/null 2>&1 &
@@ -39,8 +42,8 @@ boot walk "TYPE:m" "KEY:w 1000" "WAIT:2" \
           "TYPE:m" "KEY:spc 100" "WAIT:3" \
           "TYPE:m" "KEY:alt-tab" "WAIT:1" "KEY:w 1000" "WAIT:2" "KEY:alt-tab" "WAIT:1" "KEY:alt-tab" "WAIT:1" \
           "TYPE:m" "WAIT:1" "KEY:esc" "WAIT:3"
-boot build "TYPE:m" "KEY:down 2000" "WAIT:1" \
-           "TYPE:m" "KEY:f 1000" "WAIT:2" \
+boot build "TYPE:m" "KEY:down 2000" "WAIT:1" "MON:screendump $WORK/look.ppm" "WAIT:1" \
+           "TYPE:m" "KEY:f 1000" "WAIT:2" "MON:screendump $WORK/broke.ppm" "WAIT:1" \
            "TYPE:m" "TYPE:r" "WAIT:1" \
            "TYPE:m" "KEY:up 1000" "WAIT:1" "TYPE:r" "WAIT:1" "KEY:up 200" "WAIT:1" "TYPE:r" "WAIT:1" "KEY:up 200" "WAIT:1" "TYPE:r" "WAIT:1" \
            "TYPE:m" "WAIT:1" "KEY:esc" "WAIT:3"
@@ -93,6 +96,21 @@ if len(parts) == 6:
         x, y, z, b = map(int, pl[0])
         check(x == 64 and y == 11 and z in (65, 66) and b == 1, 'on top of the next block over: %r' % (pl[0],))
     check(re.search(r'\[mincecraft\] inv 1=0\b', place), 'out of the inventory: inv 1=0')
+def ppm(n):
+    d = open(f'{sys.argv[1]}/{n}.ppm', 'rb').read(); i = 0; words = []
+    while len(words) < 4:
+        while d[i:i+1].isspace(): i += 1
+        j = i
+        while not d[j:j+1].isspace(): j += 1
+        words.append(d[i:j]); i = j
+    px = d[i + 1:]; W = int(words[1])
+    return lambda x, y: (px[((93 + y) * W + 241 + x) * 3] << 16) | (px[((93 + y) * W + 241 + x) * 3 + 1] << 8) | px[((93 + y) * W + 241 + x) * 3 + 2]
+look = ppm('look')
+edge = sum(1 for y in range(0, 420, 2) for x in range(0, 640, 2) if look(x, y) == 0x1A1208)
+check(edge >= 50, 'looking down, the block aimed at is outlined: %d outline pixels' % edge)
+br = ppm('broke')
+slot = [br(x, y) for x in range(124, 160) for y in range(434, 470)]
+check(0xFFFFFF in slot and 0x000000 in slot, 'the count in the first slot: white over a black shadow')
 sys.exit(0 if ok else 1)
 PY
 [ "$fail" = 0 ] && echo "mincecraft-play-test: PASS" || echo "mincecraft-play-test: FAIL"

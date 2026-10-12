@@ -14,6 +14,7 @@
 static unsigned *rbuf;
 static unsigned frame;                   /* for the broth's simmer */
 #define BROTH_COL 0xB0661C               /* deeper than its texture: soup, not sand */
+#define OUTLINE   0x1A1208               /* the edges of the block aimed at */
 int render_alloc(void) {
     void *p = sys_sbrk(RW * RH * 4);
     if (p == (void *)-1) return -1;
@@ -32,7 +33,7 @@ void cam_forward(const cam_t *c, fx *dx, fx *dy, fx *dz) {
     fx sy = fx_sin(c->yaw), cy = fx_cos(c->yaw), sp = fx_sin(c->pitch), cp = fx_cos(c->pitch);
     *dx = fx_mul(sy, cp); *dy = sp; *dz = fx_mul(cy, cp);
 }
-void render(const cam_t *c, unsigned *body, int light, unsigned sky) {
+void render(const cam_t *c, unsigned *body, int light, unsigned sky, const ray_t *tg, int crack) {
     fx sy = fx_sin(c->yaw), cy = fx_cos(c->yaw), sp = fx_sin(c->pitch), cp = fx_cos(c->pitch);
     fx fx_ = fx_mul(sy, cp), fy = sp, fz = fx_mul(cy, cp);       /* forward */
     fx rx = cy, rz = -sy;                                         /* right (ry 0) */
@@ -59,6 +60,14 @@ void render(const cam_t *c, unsigned *body, int light, unsigned sky) {
                 int tx = r.u >> 13, ty = face == FACE_SIDE ? 7 - (r.v >> 13) : r.v >> 13;
                 int k = face == FACE_TOP ? 256 : face == FACE_BOTTOM ? 128 : r.axis == 0 ? 205 : 166;
                 col = shade(block_texel(b, face, tx, ty), k * light >> 8);
+                if (tg->hit && r.x == tg->x && r.y == tg->y && r.z == tg->z) {   /* the block aimed at (v0.60.200) */
+                    if (r.u < 0x0C00 || r.u > 0xF400 || r.v < 0x0C00 || r.v > 0xF400) col = shade(OUTLINE, light);
+                    else if (crack) {                             /* cracks: scattered texels darken as it gives */
+                        unsigned h = (unsigned)tx * 2654435761u ^ (unsigned)ty * 40503u ^ (unsigned)face * 2246822519u;
+                        h ^= h >> 15; h *= 0x2c1b3c6du; h ^= h >> 12;
+                        if ((int)(h & 255) < crack) col = shade(col, 110);
+                    }
+                }
                 dist = r.t;
             }
             if (r.broth_t >= 0) {                                 /* broth: darker the deeper (v0.60.199) */

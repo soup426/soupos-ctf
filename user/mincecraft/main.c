@@ -195,7 +195,12 @@ int main(void) {
         player_eye(&pl, &cam);
         cam_forward(&cam, &dx, &dy, &dz);
         ray_cast(cam.x, cam.y, cam.z, dx, dy, dz, 5 << 16, &tg);   /* the crosshair, for r and the HUD */
-        render(&cam, body, light_at(tod), sky_at(tod));
+        int crack = 0;
+        if (tg.hit && pl.bn && tg.x == pl.bx && tg.y == pl.by && tg.z == pl.bz) {
+            int hd = blocks[world_get(tg.x, tg.y, tg.z)].hardness;
+            if (hd) crack = pl.bn * 256 / hd;
+        }
+        render(&cam, body, light_at(tod), sky_at(tod), &tg, crack);
         hud_draw(body, &pl, &tg, tod);
         sys_win_put(win, body);
         frames++;

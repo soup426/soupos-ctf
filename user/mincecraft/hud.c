@@ -13,6 +13,10 @@ static void text(unsigned *b, int x, int y, const char *s, unsigned fg) {
         for (int j = 0; j < 16; j++) for (int i = 0; i < 8; i++)
             if ((font8x16[(unsigned char)*s][j] >> (7 - i)) & 1 && x + i < BODY_W && y + j < BODY_H) b[(y + j) * BODY_W + x + i] = fg;
 }
+static void text_shadowed(unsigned *b, int x, int y, const char *s, unsigned fg) {   /* readable on any swatch (v0.60.200) */
+    text(b, x + 1, y + 1, s, 0x000000);
+    text(b, x, y, s, fg);
+}
 static void num(char *o, int v) { char d[8]; int k = 0, n = 0; do { d[k++] = (char)('0' + v % 10); v /= 10; } while (v); while (k) o[n++] = d[--k]; o[n] = 0; }
 void hud_draw(unsigned *b, const player_t *p, const ray_t *tg, int tod) {
     for (int i = -8; i < 8; i++) {                                 /* crosshair: inverted */
@@ -30,11 +34,11 @@ void hud_draw(unsigned *b, const player_t *p, const ray_t *tg, int tod) {
             char c[8];
             rect(b, x + 6, y0 + 6, 28, 28, blocks[ids[s]].base);
             num(c, p->inv[ids[s]]);
-            text(b, x + 38 - 8 * strlen_(c), y0 + 22, c, 0xFFFFFF);
+            text_shadowed(b, x + 37 - 8 * strlen_(c), y0 + 21, c, 0xFFFFFF);
         }
     }
-    if (tg->hit) text(b, 8, 8, blocks[world_get(tg->x, tg->y, tg->z)].name, 0xFFFFFF);
+    if (tg->hit) text_shadowed(b, 8, 8, blocks[world_get(tg->x, tg->y, tg->z)].name, 0xFFFFFF);
     int m = tod * 1440 / 1200;                                     /* minutes past midnight */
     char clk[6] = { (char)('0' + m / 600), (char)('0' + m / 60 % 10), ':', (char)('0' + m % 60 / 10), (char)('0' + m % 10), 0 };
-    text(b, BODY_W - 48, 8, clk, 0xFFFFFF);
+    text_shadowed(b, BODY_W - 48, 8, clk, 0xFFFFFF);
 }

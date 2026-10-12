@@ -1,7 +1,7 @@
 /* ray.h - a ray through the block grid, Amanatides and Woo (v0.60.193). */
 #pragma once
 #include "fix.h"
-typedef struct {
+typedef struct ray {
     int hit;            /* 1: a solid block; 0: sky or out of reach        */
     int x, y, z;        /* the block hit                                   */
     int px, py, pz;     /* the cell before it, where a placed block goes   */

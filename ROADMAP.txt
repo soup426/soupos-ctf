@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.199
+Current version: v0.60.200
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,18 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.200 (2026-10-11)  — MINCECRAFT: WHAT YOU ARE AIMING AT
+  - The block the crosshair is on is outlined: its edges (3/64 of a block)
+    drawn in a dark crust brown, shaded by the time of day. While it is
+    being broken, scattered texels darken as the ticks add up, so a held
+    F shows how far along it is. render() takes the target and the crack.
+  - The HUD's text (the counts, the block's name, the clock) has a black
+    shadow a pixel down and right: the count on a sugar swatch was white
+    on white.
+  - mincecraft-play-test (now at noon, -time 600, so colours are exact):
+    a screendump looking down finds the outline, and one after the break
+    finds the first slot's count white over black.
 
 v0.60.199 (2026-10-11)  — MINCECRAFT: SOUP, NOT SAND
   - Broth read as sand: a flat half blend of its pale texture over the
