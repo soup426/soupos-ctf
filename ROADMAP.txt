@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.195
+Current version: v0.60.196
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,16 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.196 (2026-10-11)  — MINCECRAFT: SERVICE AND AFTER HOURS
+  - A 20-minute day: 1200 steps, one every 20 game ticks, a new world
+    starting at 06:00. The light is 256/256 at noon and 77 (30%) at
+    midnight, every pixel multiplied by it; the sky follows from
+    0x87BEEB to 0x0F142D. The HUD's clock shows it.
+  - -time T starts at step T (0 midnight, 600 noon) and holds the clock,
+    so screendumps are exact.
+  - mincecraft-view-test gains a midnight boot: the midnight sky exactly,
+    the ground at 77/256 of the noon picture's, the clock changed.
 
 v0.60.195 (2026-10-11)  — MINCECRAFT: MINING AND BUILDING
   - F, or the left button held in the window, breaks what the crosshair

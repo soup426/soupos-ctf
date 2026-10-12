@@ -7,7 +7,8 @@
  *   cook mincecraft.elf -wait ... &     (v0.60.193) wait up to a minute for
  *                                       the desktop, for tests that start it
  *                                       at the console before countertop
- *   cook mincecraft.elf -time T         (v0.60.193) taken, used from v0.60.196
+ *   cook mincecraft.elf -time T         (v0.60.196) start at time of day T (0
+ *                                       midnight, 600 noon, of 1200) and hold it
  *   cook mincecraft.elf -script         (v0.60.194) the player after every tick
  *   cook mincecraft.elf -world PATH     (v0.60.194) taken, used from v0.60.197
  *
@@ -48,11 +49,23 @@ static void cell_marker(const char *what, int x, int y, int z, int id) {
     eprint("[mincecraft] "); eprint(what); eprint(" "); eprint_u((unsigned)x); eprint(" "); eprint_u((unsigned)y);
     eprint(" "); eprint_u((unsigned)z); eprint(" "); eprint_u((unsigned)id); eprint("\n");
 }
+/* Day and night (v0.60.196): 1200 steps a day, one every 20 ticks (a
+ * 20-minute day). The light is 256 at noon and 77 (30%) at midnight;
+ * the sky goes from 0x87BEEB to 0x0F142D with it. */
+static int light_at(int tod) {
+    int dn = tod > 600 ? tod - 600 : 600 - tod;
+    return 256 - dn * 179 / 600;
+}
+static unsigned sky_at(int tod) {
+    int k = (256 - light_at(tod)) * 256 / 179;                  /* 0 noon .. 256 midnight */
+    int r = 0x87 + ((0x0F - 0x87) * k >> 8), g = 0xBE + ((0x14 - 0xBE) * k >> 8), b = 0xEB + ((0x2D - 0xEB) * k >> 8);
+    return (unsigned)r << 16 | (unsigned)g << 8 | (unsigned)b;
+}
 static int same(const char *a, const char *b) { while (*a && *a == *b) { a++; b++; } return *a == *b; }
 
 int main(void) {
     char *argv[12];
-    int argc = uargv(argv, 12), gen_only = 0, flat = 0, seeded = 0, wait = 0, script = 0;
+    int argc = uargv(argv, 12), gen_only = 0, flat = 0, seeded = 0, wait = 0, script = 0, tod = 300, hold_time = 0;
     unsigned seed = 0;
     for (int i = 0; i < argc; i++) {
         if (same(argv[i], "-gen")) gen_only = 1;
@@ -60,7 +73,7 @@ int main(void) {
         else if (same(argv[i], "-wait")) wait = 1;
         else if (same(argv[i], "-seed") && i + 1 < argc) { seed = parse_u(argv[++i]); seeded = 1; }
         else if (same(argv[i], "-script")) script = 1;
-        else if (same(argv[i], "-time") && i + 1 < argc) i++;
+        else if (same(argv[i], "-time") && i + 1 < argc) { tod = (int)(parse_u(argv[++i]) % 1200); hold_time = 1; }
         else if (same(argv[i], "-world") && i + 1 < argc) i++;
     }
     if (world_alloc() < 0) { print("Mincecraft: no memory for the world\n"); return 1; }
@@ -88,6 +101,7 @@ int main(void) {
     unsigned last = sys_ticks(), fps_t = last;
     int frames = 0, lbtn = 0;
     unsigned short inv_last[B_COUNT] = { 0 };
+    unsigned tt = 0;                                             /* game ticks, for the clock */
     for (;;) {
         uwinev_t ev;
         int g, quit = 0;
@@ -116,6 +130,7 @@ int main(void) {
             player_eye(&pl, &cam);
             cam_forward(&cam, &dx, &dy, &dz);
             ray_cast(cam.x, cam.y, cam.z, dx, dy, dz, 5 << 16, &tg);
+            if (!hold_time && ++tt % 20 == 0) tod = (tod + 1) % 1200;
             int broke = player_tick(&pl, &in, &tg);
             if (broke) { cell_marker("broke", tg.x, tg.y, tg.z, broke); inv_marker(&pl, inv_last); }
             if (script) {
@@ -138,8 +153,8 @@ int main(void) {
         player_eye(&pl, &cam);
         cam_forward(&cam, &dx, &dy, &dz);
         ray_cast(cam.x, cam.y, cam.z, dx, dy, dz, 5 << 16, &tg);   /* the crosshair, for r and the HUD */
-        render(&cam, body, 256, 0x87BEEB);
-        hud_draw(body, &pl, &tg, 600);
+        render(&cam, body, light_at(tod), sky_at(tod));
+        hud_draw(body, &pl, &tg, tod);
         sys_win_put(win, body);
         frames++;
         if (now - fps_t >= 500) { eprint("[mincecraft] fps="); eprint_u((unsigned)(frames * 100 / (int)(now - fps_t))); eprint("\n"); frames = 0; fps_t = now; }

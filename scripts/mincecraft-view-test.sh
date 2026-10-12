@@ -6,6 +6,9 @@
 # blocks ahead), and the fps marker is there, 5 or more (check.sh runs
 # tests side by side; the 15 fps goal is measured idle, in the changelog).
 # Also the HUD: the crosshair and the hotbar's nine slots.
+# Boot 3 (v0.60.196), the flat world at midnight (-time 0 holds the clock):
+# the top rows are the midnight sky exactly, the ground is the noon
+# picture's at 77/256 (each channel), and the clock reads differently.
 # Boot 2, seed 42: a real world is drawn (several block colours, not all
 # sky), kept as view.ppm for a look. Esc ends each (bye).
 # It starts at the console with -wait, in the background, before the
@@ -30,6 +33,7 @@ boot() {   # $1: name, $2: the arguments
 }
 boot flat "-flat -time 600"
 boot view "-seed 42 -time 600"
+boot night "-flat -time 0"
 python3 - "$WORK" <<'PY' || fail=1
 import re, sys
 work = sys.argv[1]
@@ -49,7 +53,7 @@ def ppm(n):
     return lambda x, y: (px[(y*W+x)*3] << 16) | (px[(y*W+x)*3+1] << 8) | px[(y*W+x)*3+2]
 BX, BY, SKY = 241, 93, 0x87BEEB
 def body(at, x, y): return at(BX + x, BY + y)
-for n in ('flat', 'view'):
+for n in ('flat', 'view', 'night'):
     log = open(f'{work}/serial-{n}.log', 'rb').read().decode('latin-1')
     check('[mincecraft] window up' in log, f'{n}: the window opened')
     fps = [int(v) for v in re.findall(r'\[mincecraft\] fps=(\d+)', log)]
@@ -84,6 +88,15 @@ for y in range(0, 480, 4):
         c = body(v, x, y)
         if c in pal: seen[pal[c]] = seen.get(pal[c], 0) + 1
 check(len([n for n, k in seen.items() if k >= 20]) >= 3, 'seed 42: three or more blocks drawn in their own colours: %r' % seen)
+n = ppm('night')
+top = {body(n, x, y) for y in range(4) for x in range(0, 640, 8)}
+check(top == {0x0F142D}, 'night: the top rows are the midnight sky: %s' % sorted('%06x' % c for c in top))
+def chans(c): return (c >> 16, c >> 8 & 255, c & 255)
+dim = [(body(f, x, 400), body(n, x, 400)) for x in range(0, 640, 16)]
+check(all(all(b <= a * 0.31 + 2 for a, b in zip(chans(d), chans(m))) for d, m in dim) and any(d != m for d, m in dim),
+      'night: the ground at 77/256 of noon: %s' % ['%06x>%06x' % p for p in dim[:3]])
+clock = lambda at: [body(at, x, y) for x in range(592, 632) for y in range(8, 24)]
+check(clock(f) != clock(n), 'night: the clock reads differently')
 sys.exit(0 if ok else 1)
 PY
 [ "$fail" = 0 ] && echo "mincecraft-view-test: PASS" || echo "mincecraft-view-test: FAIL"
