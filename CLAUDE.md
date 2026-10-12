@@ -29,8 +29,9 @@ Theming note: commands are kitchen-flavoured (`pour`/`stir`/`serve`/`cook`/…).
 > run while any other task is alive**, because doom.c has no `task_yield()` in
 > its gameplay path and only `heap.c` is preemption-safe. See
 > `docs/doom-reenable-plan.md` for why refusing beats `preempt_disable()` here.
-> Needs `DOOM1.WAD` on the disk (`make wad`). The enemy AI regression noted in
-> `ROADMAP.txt` is still open.
+> Needs `DOOM1.WAD` on the disk (`make wad`). The enemy AI works: the old
+> "regression" was resolved in v0.7.6 (ROADMAP "RESOLVED 2026-08-26 (v0.7.6) -
+> DOOM ENEMY AI": it was never broken; thing_think and los_clear in doom.c).
 
 The OS has **no libc**. All standard functions (memcpy, strlen, etc.) are in `src/doom_libc.c` / `src/str.c`. Everything is freestanding.
 

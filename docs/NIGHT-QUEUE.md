@@ -138,7 +138,7 @@ count each test's failures, and give the flakers what they wait for (a
 marker, a prompt) instead of a fixed time. Then five more runs, none
 failing. The numbers in the changelog either way.
 
-## 9. CLAUDE.md: the Doom note
+## 9. CLAUDE.md: the Doom note — DONE (2026-10-12; CLAUDE.md was the stale one)
 
 CLAUDE.md's Doom section says "the enemy AI regression noted in ROADMAP.txt
 is still open"; ROADMAP has it RESOLVED in v0.7.6. Read the code and the
