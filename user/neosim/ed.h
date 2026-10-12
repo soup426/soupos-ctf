@@ -19,5 +19,6 @@ typedef struct {
     int    ins_dirty;          /* this visit to insert mode changed something */
     int    vy, vx;             /* (v0.60.206) where visual mode was started */
     char   cmdch;              /* the command line's ':', '/' or '?' */
+    int    help, htop;         /* (v0.60.219) the :help page shown, its first line shown */
 } ed_t;
 void screen_draw(const ed_t *e, unsigned *body);   /* 640x480 */

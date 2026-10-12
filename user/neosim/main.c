@@ -8,7 +8,8 @@
  * Normal mode: counts; h j k l and the arrows, w b e 0 ^ $ gg G (v0.60.205);
  * the operators d c y with a motion, dd cc yy, D C; x X, p P, J; u and
  * Ctrl-R; > < (four spaces); / ? n N (plain text); v V with d y c > <; .;
- * % to the matching bracket; Enter, o and O keep the indent (v0.60.218)
+ * % to the matching bracket; Enter, o and O keep the indent (v0.60.218);
+ * :help, a read-only page of all this (v0.60.219)
  * (v0.60.206); i a A I o O into insert mode; : for a command. Insert mode:
  * typing, Enter, Backspace (joining lines at the start of one), Tab as four
  * spaces, the arrows, Esc back. Commands: :w [FILE], :q, :q!, :wq, :x,
@@ -22,6 +23,7 @@
  */
 #include "../ulib.h"
 #include "ed.h"
+#include "help.h"
 #include "motion.h"
 #include "undo.h"
 
@@ -212,8 +214,16 @@ static int write_file(const char *path) {
     msg_num("\"", path, bytes, "B written");
     return 0;
 }
+static const char E21[] = "E21: Cannot make changes, 'modifiable' is off";
 static int command(char *c) {                        /* 1: end neosim */
     while (*c == ' ') c++;
+    if (E.help) {                                    /* (v0.60.219) on the help page: only leaving it, or :e */
+        if (same(c, "q") || same(c, "q!") || same(c, "close")) { E.help = 0; return 0; }
+        if (same(c, "help") || same(c, "h")) return 0;
+        if (c[0] == 'w' || same(c, "x")) { msg("E382: Cannot write, 'buftype' option is set", 0, 0); return 0; }
+        if (!(c[0] == 'e' && (c[1] == ' ' || c[1] == '!'))) { msg(E21, 0, 0); return 0; }
+        E.help = 0;
+    }
     if ((c[0] == 's' && c[1] == '/') || (c[0] == '%' && c[1] == 's' && c[2] == '/')) {   /* :s keeps its spaces */
         if (c[0] == 's') substitute(E.cy, E.cy, c + 2); else substitute(0, E.t.n - 1, c + 3);
         return 0;
@@ -237,6 +247,7 @@ static int command(char *c) {                        /* 1: end neosim */
         open_file(arg);
         return 0;
     }
+    if (same(c, "help") || same(c, "h")) { E.help = 1; E.htop = 0; eprint("[neosim] help\n"); return 0; }
     if (c[0] == 's' && c[1] == '/') { substitute(E.cy, E.cy, c + 2); return 0; }
     if (c[0] == '%' && c[1] == 's' && c[2] == '/') { substitute(0, E.t.n - 1, c + 3); return 0; }
     if (!*c) return 0;
@@ -514,6 +525,18 @@ static void dot(void) {                             /* the last change again */
     for (int i = 0; i < n; i++) key((unsigned char)again[i] == 27 ? 27u : (unsigned)(unsigned char)again[i]);
     replaying = 0;
 }
+static void help_key(unsigned k) {                  /* (v0.60.219) the help page: scroll, :, q; no changes */
+    static int g;
+    int last = help_lines > TEXT_ROWS ? help_lines - TEXT_ROWS : 0;
+    if (g) { g = 0; if (k == 'g') { E.htop = 0; return; } }
+    if (k == 'j' || k == KEY_DOWN) { if (E.htop < last) E.htop++; }
+    else if (k == 'k' || k == KEY_UP) { if (E.htop > 0) E.htop--; }
+    else if (k == 'G') E.htop = last;
+    else if (k == 'g') g = 1;
+    else if (k == ':') { E.mode = M_COMMAND; E.cmdch = ':'; E.cmdn = 0; }
+    else if (k == 'q') E.help = 0;
+    else if (k != 27) msg(E21, 0, 0);
+}
 static int idle(void) { return E.mode == M_NORMAL && !P.count && !P.op && !P.g; }
 static int key(unsigned k) {                        /* 1: end neosim */
     if (!replaying) {                               /* the keys of a change, for . */
@@ -547,6 +570,7 @@ static int key_inner(unsigned k) {
         return 0;
     }
     E.msg[0] = 0;
+    if (E.help) { help_key(k); return 0; }
     if (E.mode == M_INSERT) insert_key(k);
     else if (E.mode == M_VISUAL || E.mode == M_VLINE) visual_key(k);
     else normal_key(k);
@@ -581,7 +605,7 @@ int main(void) {
         if (g < 0) break;
         while (g == 1 && !done) {
             if (ev.type == WEV_KEY) done = key(ev.key);
-            else if (ev.type == WEV_CLOSE) done = command((char[]){ 'q', 0 });
+            else if (ev.type == WEV_CLOSE) { E.help = 0; done = command((char[]){ 'q', 0 }); }
             g = sys_win_event(win, &ev, 0);
         }
     }

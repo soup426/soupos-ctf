@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.218
+Current version: v0.60.219
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,17 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.219 (2026-10-12)  — NEOSIM: :help
+  - :help (and :h) shows a read-only page of neosim's keys and commands
+    in place of the file, in four groups (moving, changing, searching,
+    files); j k and the arrows, gg and G scroll it, q or :q go back to the
+    file just as it was. Changes are refused as vim refuses them (E21),
+    :w too (E382); :e still opens a file from it. The status line says
+    help.txt [Help][RO]. The page is help.c.
+  - scripts/neosim-help-test.sh: the page read back against the font, the
+    refusals, :q back to the file unchanged, :h the same page. Picture in
+    docs/neosim/help.png.
 
 v0.60.218 (2026-10-12)  — NEOSIM: AUTO-INDENT AND %
   - Enter, o and O keep the line's indent (its leading spaces), as vim's

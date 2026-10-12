@@ -6,6 +6,7 @@
 #include "../ulib.h"
 #include "ed.h"
 #include "highlight.h"
+#include "help.h"
 #include "../../src/font8x16.h"
 
 #define PAGE   0x1A1B26u
@@ -48,6 +49,23 @@ static int num(char *o, int v) {               /* decimal, no padding; its lengt
 }
 void screen_draw(const ed_t *e, unsigned *b) {
     for (int r = 0; r < SCR_ROWS; r++) for (int c = 0; c < SCR_COLS; c++) cell(b, c, r, ' ', INK, r == TEXT_ROWS ? BAR : PAGE);
+    if (e->help) {                                  /* (v0.60.219) the :help page, read-only, no numbers */
+        for (int r = 0; r < TEXT_ROWS && e->htop + r < help_lines; r++) {
+            const char *l = help_text[e->htop + r];
+            int head = l[0] >= 'A' && l[0] <= 'Z' && l[1] >= 'A' && l[1] <= 'Z';
+            put(b, 0, r, l, head || e->htop + r == 0 ? CURNUM : INK, PAGE);
+        }
+        put(b, 0, TEXT_ROWS, " NORMAL  help.txt [Help][RO]", BARINK, BAR);
+        char pos[24]; int p = num(pos, e->htop + 1);
+        pos[p++] = ':'; pos[p++] = '1'; pos[p] = 0;
+        put(b, SCR_COLS - 1 - p, TEXT_ROWS, pos, BARINK, BAR);
+        if (e->mode == M_COMMAND) {
+            cell(b, 0, TEXT_ROWS + 1, ':', INK, PAGE);
+            for (int i = 0; i < e->cmdn && i + 1 < SCR_COLS; i++) cell(b, i + 1, TEXT_ROWS + 1, e->cmd[i], INK, PAGE);
+            for (int i = 0; i < 8; i++) b[((TEXT_ROWS + 1) * 16 + 15) * BODY_W + (e->cmdn + 1) * 8 + i] = CURSOR;
+        } else put(b, 0, TEXT_ROWS + 1, e->msg, INK, PAGE);
+        return;
+    }
     int kind = hl_kind(e->path), state = 0;
     static unsigned char cls[T_COLS + 1];
     for (int l = 0; l < e->top && l < e->t.n; l++) hl_line(kind, e->t.s[l], e->t.len[l], &state, cls);   /* the state at the top */

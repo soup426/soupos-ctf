@@ -60,7 +60,7 @@ across lines), and works as a motion (d%). Test: cases against neovim's
 (nvim --clean --headless, set autoindent, feedkeys "tx"), as
 neosim-ops-test.
 
-## 2. neosim: :help
+## 2. neosim: :help — DONE v0.60.219
 
 :help (and :h) opens a read-only page listing the keys and commands neosim
 has, grouped (moving, changing, searching, files), :q back to the file.
