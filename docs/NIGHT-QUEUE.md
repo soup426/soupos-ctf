@@ -85,6 +85,54 @@ whether QEMU can give soupOS a shorter framebuffer (the FB request, a
 fw_cfg). Then a test that reads the second column, or the numbers for why
 none can.
 
+## 5. The full check at 48: a flake count
+
+v0.60.246 runs three times the cores at once; three checks passed, but a
+heavier pace can bring out timing flakes the old one hid. Run the full
+check five times; every test that ever fails is a finding: its log read,
+the cause found (a fixed WAIT a window outran, a race), fixed with an
+UNTIL or what it needs, soaked six wide. The numbers in the notes.
+
+## 6. Doom: the face
+
+The status bar's face is always STFST00. Doom's (st_stuff.c,
+ST_updateFaceWidget): the row by health (ST_calcPainOffset, five rows),
+looking left, ahead and right in turn at random (ST_FACESTRIDE), the
+ouch face on a big hit, the grin on a new weapon, the dead face at 0.
+Measure first which of those the port can trigger (damage: a level's
+nukage or a monster). Test: the face's pixels against the lump the rule
+picks, at 100 health and after damage.
+
+## 7. Doom: the shotgun
+
+The port has only the pistol (and the fist?). E1M1 has a shotgun (thing
+2001) and shotgun guys drop one. Doom's shotgun: 7 pellets, 1 shell a
+shot, its own frames (SHTG A-D, SHTF A-B flash), weapon 3 on the ARMS
+panel lit when owned, the 3 key to switch. Measure first what the port
+does with thing 2001 and with weapon switching. Test: pick up the
+shotgun, 3 switches, a shot uses a shell, the gun's pixels against SHTGA0.
+(Needs item 3's ammo pools.)
+
+## 8. neosim: visual block
+
+Ctrl-V selects a block (columns from both corners), d y c I A > < on it,
+$ to the lines' ends, o to the other corner. Test: cases against
+neovim's.
+
+## 9. Mincecraft: broth flows
+
+Broth placed (or a block beside broth broken) spreads: down first, then
+sideways a few blocks on the level, thinning, as Minecraft's water but
+shallow; a source block stays. Through the falling-sugar queue's way of
+working (a queue of cells, a step a few ticks). Test: a world from the
+host, broth placed on a ledge: the cells it reaches in the markers, the
+save on the host.
+
+## For the user (not to be done unattended)
+
+- A double click on a text file in the files window opens jot; neosim is
+  there now (and on the desktop since v0.60.245). Which should it open?
+
 ## Review findings (2026-10-12)
 
 (Added as the six reviewers report: kernel and shell; the desktop;
