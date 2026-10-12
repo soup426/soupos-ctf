@@ -31,6 +31,7 @@ const char *const help_text[] = {
     "  \"a before y d c p  register a (\"A adds to it; \"0 last yank, \"1 deletes)",
     "  u  Ctrl-R          undo, redo",
     "  .                  the last change again",
+    "  qa ... q  @a  @@   record keys into a; play them (3@a: three times); again",
     "  v V                select characters, lines; then d y c > <",
     "  iw aw i\" a( i{ ...  after d c y, or in v: a word, quotes, brackets",
     "",

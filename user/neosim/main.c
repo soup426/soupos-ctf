@@ -13,7 +13,8 @@
  * Ctrl-D Ctrl-U Ctrl-F Ctrl-B, zz zt zb (v0.60.223); * # (v0.60.226);
  * text objects iw aw i" a" i( a( i{ a{ ... (v0.60.227); marks m ' ` (v0.60.231);
  * gu gU g~ and in visual u U ~ (v0.60.232); counts on inserts, 3. (v0.60.234);
- * paragraphs { } ip ap (v0.60.235); :set nu rnu (v0.60.236); registers "a-"z "0 "1-"9 (v0.60.240)
+ * paragraphs { } ip ap (v0.60.235); :set nu rnu (v0.60.236); registers "a-"z "0 "1-"9 (v0.60.240);
+ * macros q @ @@ (v0.60.241)
  * (v0.60.206); i a A I o O into insert mode; : for a command. Insert mode:
  * typing, Enter, Backspace (joining lines at the start of one), Tab as four
  * spaces, the arrows, Esc back. Commands: :w [FILE], :q, :q!, :wq, :x,
@@ -79,9 +80,11 @@ static void scroll(void) {
 
 /* ---- changes and undo ---- */
 static int cur_change_hook;                         /* set by change_begin: . keeps the command */
+static int grouping, group_pushed, pushed_last;     /* (v0.60.241) a macro played is one undo step */
 static void change_begin(void) {                    /* before every change: a step back to this */
     cur_change_hook = 1;
-    undo_push(&E.t, E.cy, E.cx, E.seq);
+    pushed_last = !grouping || !group_pushed;
+    if (pushed_last) { undo_push(&E.t, E.cy, E.cx, E.seq); group_pushed = 1; }
     E.seq = ++E.idgen;
     E.changed = 1;
 }
@@ -113,6 +116,9 @@ static void reg_take_chars(int ay, int ax, int by, int bx) {
 static char bank[36][BANK_MAX];                      /* 0-9: "0-"9; 10-35: "a-"z */
 static int bank_n[36], bank_lines[36];
 static int reg_sel, reg_fresh;                       /* the register named for this command; just named */
+static int rec_reg, rec_n, play_depth, last_play;    /* (v0.60.241) macros: being recorded into, played */
+static char rec_buf[BANK_MAX];
+static void macro_play(int r, int cnt);
 static int bank_of(int c) { return c >= '0' && c <= '9' ? c - '0' : c >= 'a' && c <= 'z' ? 10 + c - 'a' : c >= 'A' && c <= 'Z' ? 10 + c - 'A' : -1; }
 static void bank_put(int b, const char *s, int n, int lines) {
     if (n > BANK_MAX) n = BANK_MAX;
@@ -392,7 +398,7 @@ static void insert_key(unsigned k) {
         if (ai_pending && only_spaces(E.cy)) { while (lenof(E.cy)) text_delete_char(&E.t, E.cy, 0); E.cx = 0; }   /* an indent nothing came after */
         ai_pending = 0;
         E.mode = M_NORMAL;
-        if (!E.ins_dirty) { undo_discard(&E.seq); E.changed = E.seq != E.saved; }   /* nothing typed: no step */
+        if (!E.ins_dirty && pushed_last) { undo_discard(&E.seq); E.changed = E.seq != E.saved; if (grouping) group_pushed = 0; }   /* nothing typed: no step */
         E.cx--; clamp(); E.want = E.cx;
         return;
     }
@@ -829,6 +835,11 @@ static void normal_key(unsigned k) {
         P.wait = 0;
         if (k == 27 || k >= 256) { P.op = 0; return; }
         if (w == 'r') { if (!P.op) replace_chars((int)k, cnt); P.op = 0; return; }
+        if (w == 'q') {                              /* (v0.60.241) start recording */
+            if (bank_of((int)k) >= 0) { rec_reg = (int)k; rec_n = 0; E.recording = (char)k; }
+            return;
+        }
+        if (w == '@') { macro_play(k == '@' ? last_play : (int)k, cnt); return; }
         if (w == '"') {                              /* (v0.60.240) "x: the register for what comes next */
             if (bank_of((int)k) >= 0 || k == '"') { reg_sel = (int)k; reg_fresh = 1; }
             if (had) P.count = cnt;
@@ -883,7 +894,7 @@ static void normal_key(unsigned k) {
         k = 'g' + 256; cnt = P.gcount; had = P.ghad;
     } else if (k == 'g') { P.g = 1; P.gcount = cnt; P.ghad = had; return; }
     if (k == 'f' || k == 't' || k == 'F' || k == 'T' || (k == 'r' && !P.op) || (P.op && (k == 'i' || k == 'a'))
-            || (k == 'm' && !P.op) || k == '\'' || k == '`' || (k == '"' && !P.op)) { P.wait = (int)k; P.wcount = cnt; P.whad = had; return; }
+            || (k == 'm' && !P.op) || k == '\'' || k == '`' || (k == '"' && !P.op) || ((k == 'q' || k == '@') && !P.op)) { P.wait = (int)k; P.wcount = cnt; P.whad = had; return; }
     if (P.op) {                                     /* an operator waiting for its motion */
         int op = P.op, total = cnt * P.opcount, thad = had || P.ophad;
         P.op = 0;
@@ -1003,7 +1014,35 @@ static void help_key(unsigned k) {                  /* (v0.60.219) the help page
     else if (k != 27) msg(E21, 0, 0);
 }
 static int idle(void) { return E.mode == M_NORMAL && !P.count && !P.op && !P.g && !P.wait && !P.z; }
+/* Macros (v0.60.241): q and a letter records the keys typed until q (in
+ * normal mode), into that register as text; @ and a letter plays it, a
+ * count that many times, @@ the last one again; one undo step for it all. */
+static void macro_play(int r, int cnt) {
+    int b = bank_of(r);
+    if (b < 0 || play_depth > 8) return;
+    static char run[9][BANK_MAX];                    /* a copy: the macro may change its own register */
+    int n = bank_n[b];
+    for (int i = 0; i < n; i++) run[play_depth][i] = bank[b][i];
+    int outer = !grouping;
+    if (outer) { grouping = 1; group_pushed = 0; }
+    char *m = run[play_depth++];
+    last_play = r;
+    for (int c = 0; c < cnt; c++) for (int i = 0; i < n; i++) key((unsigned)(unsigned char)m[i]);
+    play_depth--;
+    if (outer) grouping = 0;
+    cur_change_hook = 0; cur_change = 0;              /* . is the macro's last change, not @a */
+}
 static int key(unsigned k) {                        /* 1: end neosim */
+    if (rec_reg && !play_depth && !replaying) {      /* recording */
+        if (k == 'q' && E.mode == M_NORMAL && idle()) {
+            int b = bank_of(rec_reg);
+            if (rec_reg >= 'A' && rec_reg <= 'Z') { for (int i = 0; i < rec_n && bank_n[b] < BANK_MAX; i++) bank[b][bank_n[b]++] = rec_buf[i]; }
+            else bank_put(b, rec_buf, rec_n, 0);
+            rec_reg = 0; E.recording = 0; E.msg[0] = 0;
+            return 0;
+        }
+        if (k < 256 && rec_n < BANK_MAX) rec_buf[rec_n++] = (char)k;
+    }
     if (!replaying) {                               /* the keys of a change, for . */
         if (idle() && k == '.') { E.msg[0] = 0; dot(); return 0; }
         if (k == '.' && E.mode == M_NORMAL && P.count && !P.op && !P.g && !P.wait && !P.z) {   /* (v0.60.234) 3.: the count in place of the change's own */

@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.240
+Current version: v0.60.241
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,18 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.241 (2026-10-12)  — NEOSIM: MACROS
+  - q and a letter records every key typed until q in normal mode, into
+    that register as text (so "ap shows it, Esc and all; qA adds to a);
+    the command line says "recording @a" meanwhile, as neovim's. @ and the
+    letter plays it, a count that many times, @@ the last one again.
+  - A play is one undo step however many changes it made: while one plays,
+    only its first change keeps a snapshot (an empty insert drops only a
+    snapshot it made itself). After it, . is the macro's last change, not
+    the @a.
+  - scripts/neosim-macro-test.sh: 18 cases against neovim 0.12.5 (0 of 18
+    on the neosim before). Listed on :help.
 
 v0.60.240 (2026-10-12)  — NEOSIM: REGISTERS
   - "a to "z before y d c x p P (8 KB each), "A to "Z adding to theirs

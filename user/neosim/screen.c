@@ -112,5 +112,8 @@ void screen_draw(const ed_t *e, unsigned *b) {
         cell(b, 0, TEXT_ROWS + 1, e->cmdch ? e->cmdch : ':', INK, PAGE);
         for (int i = 0; i < e->cmdn && i + 1 < SCR_COLS; i++) cell(b, i + 1, TEXT_ROWS + 1, e->cmd[i], INK, PAGE);
         for (int i = 0; i < 8; i++) b[((TEXT_ROWS + 1) * 16 + 15) * BODY_W + (e->cmdn + 1) * 8 + i] = CURSOR;
+    } else if (!e->msg[0] && e->recording) {       /* (v0.60.241) as neovim's */
+        char r[16] = "recording @"; r[11] = e->recording; r[12] = 0;
+        put(b, 0, TEXT_ROWS + 1, r, INK, PAGE);
     } else put(b, 0, TEXT_ROWS + 1, e->msg, INK, PAGE);
 }

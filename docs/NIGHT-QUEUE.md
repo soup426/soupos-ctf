@@ -67,7 +67,7 @@ to the register; "" the unnamed one; "0 the last yank; "1 the last
 delete of lines. :reg lists them. Test: cases against neovim's (the text,
 and :reg's lines read back).
 
-## 3. neosim: macros
+## 3. neosim: macros — DONE v0.60.241
 
 q and a letter records the keys typed until q; @ and the letter plays
 them (a count: that many times), @@ the last again; the macro is the

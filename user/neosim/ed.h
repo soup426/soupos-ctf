@@ -24,6 +24,7 @@ typedef struct {
     int    pagen;
     const char *pagename;
     int    nu, rnu;            /* (v0.60.236) :set number, relativenumber */
+    char   recording;          /* (v0.60.241) the register a macro is being recorded into, or 0 */
 } ed_t;
 void screen_draw(const ed_t *e, unsigned *body);   /* 640x480 */
 static inline int num_w(const ed_t *e) { return e->nu || e->rnu ? NUM_W : 0; }   /* the number column, or none */
