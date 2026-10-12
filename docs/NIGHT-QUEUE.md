@@ -593,6 +593,29 @@ Mincecraft; neosim and rx.c; Doom; tests, build and docs.)
 
 ## Area review findings (2026-10-12, began at e8bc3b7)
 
+### Tests, build and docs (reviewer confirmed 1-3 on copies, with mutations)
+
+- **R-T19 (high).** clockout-rights-test passes on the unfixed kernel when
+  the login is slow: infuse waits a fixed 12 s, and woken before the
+  headchef's Welcome it is refused by the login screen, not by the fix
+  (shown: WAIT:3 before rosemary, the resolver fix reverted, PASS). Fix:
+  infuse waits for a file the headchef makes after clocking in, or the
+  refusal must come after the Welcome.
+- **R-T20 (medium).** devkbd-test's background check cannot fail: a spoon
+  that reads the console's keys never closes /KEYS.TXT, so the file is
+  missing and "nothing in it" passes (shown with the foreground check
+  removed: keys were stolen, the test blamed a hang). Fix: the background
+  spoon must have exited before the word is typed; /KEYS.TXT must exist and
+  be empty; the shell's echo whole.
+- **R-T21 (low-medium).** disk-fresh.sh compares only the programs, not the
+  recipe's text files, bowls and /etc/kitchen; CLAUDE.md says more. Fix:
+  compare with a disk built into a temp file, or say "programs".
+- **R-T22 (low).** ctforeign-test never checks that no key reached
+  saucier's prod, nor a foreign SYS_NOTE. Fix: both.
+- **R-T23 (low, docs).** UNTIL's anchoring is undocumented: the last plain
+  line's echo, KEY:/TYPE: since v0.60.255, not MON:, and a line with no
+  echo (a secret) waits 10 s before anything counts.
+
 ### Kernel and shell (reviewer confirmed K12 in QEMU on a copy)
 
 - **R-K12 (critical, security).** soupyc's open(), read(), write() and its
@@ -647,7 +670,8 @@ Mincecraft; neosim and rx.c; Doom; tests, build and docs.)
    click opens neosim).
 1. The test harness (R-T1, R-T2, R-T3, R-T4, R-T5, R-T6), so the fixes
    after it are measured by tests that can fail.
-2. Security: R-K1, R-K2, R-C1, then R-K12 (critical), R-C2, R-K13,
+2. Security: R-K1, R-K2, R-C1, then R-T19 and R-T20 (the tests of
+   K2 and K1, which can pass broken), R-K12 (critical), R-C2, R-K13,
    R-C10, R-K14, R-C12 (the area review's, 2026-10-12).
 3. Kernel crashes any cook can cause: R-K5, R-K4, R-K3.
 4. Data loss: R-M1, R-M4, R-N3, R-N4, R-N5, R-N1, R-N2.
