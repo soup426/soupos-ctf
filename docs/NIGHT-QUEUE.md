@@ -1,11 +1,12 @@
 # Night queue
 
-Sixtieth queue. The first fifty-nine are in `docs/queue-archive-2026-10-*.md`;
-queue 59 (`-12c`) gave neosim auto-indent, % and :help, Doom the mouse (and
-fixed a held trigger emptying the clip), Mincecraft hearts. This one:
-neosim's character motions and paging; Mincecraft eating; Doom's flash.
-Written by an unattended run when queue 59 ran out, as the user asked on
-2026-10-11; the user has not seen it.
+Sixty-first queue. The first sixty are in `docs/queue-archive-2026-10-*.md`;
+queue 60 (`-12d`) gave neosim f t F T ; , r ~ and paging, Mincecraft eating,
+and found Doom's pistol (and flash) had never been on screen. This one:
+neosim's * # and text objects; toast as food; the rest of Doom's pictures
+checked the way the pistol should have been. Written by an unattended run
+when queue 60 ran out, as the user asked on 2026-10-11; the user has not
+seen it.
 
 ## Standing rules
 
@@ -51,37 +52,36 @@ Written by an unattended run when queue 59 ran out, as the user asked on
 
 ---
 
-## 1. neosim: f t F T ; , r ~ — DONE v0.60.222
+## 1. neosim: * and #
 
-f t F T and a character (a count before them too), ; and , to repeat or
-reverse the last; as motions (dt, cf); r and a character replaces (a count
-replaces that many, none if the line is short); ~ toggles case and moves on.
-Test: cases against neovim's, as neosim-ops-test.
+* and # search for the word under the cursor (or the next word on the
+line), whole words only, forward and back, a count the nth; n and N go on
+from there. Test: cases against neovim's, as neosim-ops-test.
 
-## 2. neosim: paging — DONE v0.60.223
+## 2. neosim: text objects
 
-Ctrl-D and Ctrl-U half a screen (the cursor goes with the text), Ctrl-F and
-Ctrl-B a screen, zz zt zb put the cursor's line in the middle, top, bottom.
-Test: a 200-line file, each key's screen read back (the first line number
-shown, the cursor's line), the numbers worked out from neovim's (its
-`line('w0')` and `line('.')` at 28 rows).
+After an operator or in visual mode: iw aw (a word, and its space), i" a"
+i' a' (the quotes on the line around or after the cursor), i( a( ib ab, i[
+a[, i{ a{ iB aB (across lines, nested). Test: cases against neovim's.
 
-## 3. Mincecraft: eating — DONE v0.60.224
+## 3. Mincecraft: toast is food
 
-e eats the food in hand: a heart back for sugar, two for butter, three
-for a floret; not past ten, nothing eaten at ten ("not hungry"), crust or
-cast iron refused ("not food"). A crunch. Test: a world file from the host
-with 4 hearts and food in hand, e on each: the hearts and the counts in
-the markers, the HUD's hearts read back.
+The note from queue 60: toast (crafted from a stalk) gives four hearts,
+the best food, so crafting has a reason. Test: the eat test's world given
+toast too, e on it: four back.
 
-## 4. Doom: the pistol's flash — DONE v0.60.225 (it, and the gun, had never been on screen)
+## 4. Doom: the other pictures, placed by Doom's rules
 
-The flash is drawn while the fire cooldown is high; with the cooldown in
-loop passes (before v0.60.220) it lasted a pass. Measure first: is the
-flash on screen in a dump taken just after a shot now? If it is, a test
-that pins it; if it is not, find why.
+The pistol had never been seen: drawn from the wrong origin, a lump name
+that is not in the WAD. Measure first, the same way, every other patch
+drawn: the status bar's numbers, face, keys and arms; the menu and the
+title; the intermission; the sprites' offsets (things standing on the
+floor, not in it). Each against its rule in Doom's source and its pixels
+decoded from the WAD. A test for each fixed; the numbers for the ones
+found right.
 
 ## Notes left by unattended runs
+
 
 
 
