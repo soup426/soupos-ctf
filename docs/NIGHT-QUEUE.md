@@ -52,7 +52,7 @@ user asked on 2026-10-11; the user has not seen it.
 
 ---
 
-## 1. Keys lost during a big write
+## 1. Keys lost during a big write — CLOSED, measured (2026-10-12): not reproduced
 
 Typed while a program wrote 3 MB, "countertop" arrived as "countert".
 Measure first: a line typed at the console during a long write (a test
@@ -81,6 +81,17 @@ angle puts it (low east in the morning, high at noon), the moon at night.
 An icon and a Kitchen entry: a double click opens neosim with no file
 ([No Name]), a :w NAME writes it. Test as ctgames-test: the icon named,
 its window up with no terminal on show.
+
+**Closed with the numbers (rule 3).** The game refusing a 3 MB world and
+copying it to .bad, "countertop" typed at the console straight after
+(scripts in the run's scratchpad, not kept): 3 runs alone, 12 six wide,
+48 sixteen wide: all 63 had every key and the desktop up. Nothing in
+ata.c or fat.c holds interrupts off; the key buffer is 256. The first
+try at it was wrong, worth saying: "echo" is not a soupOS command ("No
+soup for you"), so its line looked lost when it had run. The failure seen
+once (v0.60.239's full check) showed only the echo cut by the game's own
+output; the keys after it were never shown lost. mincecraft-save-test
+types after the copy now anyway, so it is out of that race.
 
 ## Notes left by unattended runs
 
