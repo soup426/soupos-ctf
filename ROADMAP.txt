@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.198
+Current version: v0.60.199
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,19 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.199 (2026-10-11)  — MINCECRAFT: SOUP, NOT SAND
+  - Broth read as sand: a flat half blend of its pale texture over the
+    sugar under it. Now a deeper golden brown (0xB0661C) laid over what is
+    beneath it more the deeper the ray goes (from 110/256 to 230/256), so
+    the steps of a lake's floor show through and the middle is dark; the
+    surface simmers, a bubble at one cell in 64, moving every 8 frames.
+    Distance fades after the broth, so far lakes go into the haze too.
+  - The sky lightens toward the horizon (to 90/256 of white at noon, less
+    by night), and the fog fades into that horizon colour, not the top's.
+  - The flat world has a broth pool, two deep, dead ahead of the spawn and
+    past the play test's walk; mincecraft-view-test sees it, and the sky's
+    gradient, and the crosshair is checked against the sky beside it.
 
 v0.60.198 (2026-10-11)  — MINCECRAFT: LAKES AND HILLS
   - Played, the first world was a white sugar plain with puddles: two

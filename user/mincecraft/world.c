@@ -66,7 +66,8 @@ void world_gen(unsigned seed) {
 void world_flat(void) {
     for (int y = 0; y < WY; y++) for (int z = 0; z < WZ; z++) for (int x = 0; x < WX; x++) {
         int edge = x == 0 || z == 0 || x == WX - 1 || z == WZ - 1;
-        world[(y * WZ + z) * WX + x] = (unsigned char)(edge || y == 0 ? B_CASTIRON : y < 10 ? B_PARMESAN : y == 10 ? B_CRUST : B_AIR);
+        int pool = x >= 60 && x < 68 && z >= 72 && z < 80 && (y == 9 || y == 10);   /* broth, two deep (v0.60.199) */
+        world[(y * WZ + z) * WX + x] = (unsigned char)(edge || y == 0 ? B_CASTIRON : pool ? B_BROTH : y < 10 ? B_PARMESAN : y == 10 ? B_CRUST : B_AIR);
     }
 }
 unsigned world_hash(void) {

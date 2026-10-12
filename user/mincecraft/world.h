@@ -18,6 +18,6 @@ static inline void world_set(int x, int y, int z, int id) {
 int      world_alloc(void);                  /* 0, or -1 */
 int      world_height(int x, int z, unsigned seed);
 void     world_gen(unsigned seed);
-void     world_flat(void);                   /* for the tests: crust at y 10 */
+void     world_flat(void);                   /* for the tests: crust at y 10, a broth pool ahead */
 unsigned world_hash(void);                   /* FNV-1a 32 over the grid */
 int      world_top(int x, int z);            /* highest solid y, or -1 */

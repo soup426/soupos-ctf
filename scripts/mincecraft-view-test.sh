@@ -63,13 +63,25 @@ f = ppm('flat')
 top = [body(f, x, y) for y in range(4) for x in range(0, 640, 8)]
 check(all(c == SKY for c in top), 'flat: the top rows are the noon sky, %06x' % SKY)
 # The HUD (v0.60.195): the crosshair XORs what is under it; above the
-# horizon that is the sky, so its upper stroke is exactly sky ^ 0xFFFFFF.
+# horizon that is the sky, so its upper stroke is the sky there ^ 0xFFFFFF.
 # The hotbar: nine 40x40 slots 44 apart from x 122, y 432; the first is the
 # chosen one (white frame), the rest grey, dark inside, empty at the start.
-cross = [body(f, x, y) for x in (319, 320) for y in range(232, 239)]
-check(all(c == SKY ^ 0xFFFFFF for c in cross), 'flat: the crosshair over the sky: %s' % sorted({'%06x' % c for c in cross}))
+# (v0.60.199: the sky is a gradient, so each stroke pixel is checked against
+# the same row's sky a little to the side.)
+cross = [(body(f, x, y), body(f, 340, y)) for x in (319, 320) for y in range(232, 239)]
+check(all(c == side ^ 0xFFFFFF for c, side in cross), 'flat: the crosshair inverts the sky under it: %s' % sorted({'%06x/%06x' % p for p in cross})[:3])
 check(body(f, 122, 432) == 0xFFFFFF and body(f, 124, 434) == 0x202020, 'flat: the first hotbar slot, chosen (white frame, dark inside)')
 check(all(body(f, 122 + 44 * k, 432) == 0x808080 for k in range(1, 9)), 'flat: the other eight slots, grey frames')
+# The sky (v0.60.199) lightens toward the horizon: a row partway down is
+# brighter than the top's exact sky colour.
+lum = lambda c: (c >> 16) + (c >> 8 & 255) + (c & 255)
+check(lum(body(f, 320, 200)) > lum(SKY) + 12, 'flat: the sky lighter toward the horizon: %06x vs %06x' % (body(f, 320, 200), SKY))
+# The flat world's broth pool (x 60..68, z 72..80, two deep), dead ahead
+# 7.5 to 15.5 blocks off: in the centre column between rows 292 and 330,
+# not crust, warm (red well over blue), not the sky.
+pool = [body(f, 320, y) for y in range(292, 331, 2)]
+check(all(c not in (0xC8873A, 0x8A5A22) and (c >> 16) > (c & 255) + 40 for c in pool),
+      'flat: the broth pool ahead, in broth colours: %s' % sorted({'%06x' % c for c in pool})[:5])
 # blocks.c's colours, base and alt, as render.c shades each face at noon
 BLOCKS = {'crust': (0xC8873A, 0x8A5A22), 'crumb': (0xEAD9B0, 0xC9B489), 'parmesan': (0xEFE8C8, 0xD4C99A),
           'cast iron': (0x2A2A2E, 0x18181B), 'sugar': (0xFAFAF5, 0xDCDCE6), 'stalk': (0xA9C77A, 0x86A65A),
@@ -79,7 +91,7 @@ pal = {}
 for name, cs in BLOCKS.items():
     for c in cs:
         for k in (256, 128, 205, 166): pal.setdefault(shade(c, k), name)
-low = {body(f, x, 476) for x in list(range(0, 120, 4)) + list(range(520, 640, 4))}   # beside the hotbar
+low = {body(f, x, 476) for x in list(range(0, 120, 4)) + list(range(520, 640, 4))}   # beside the hotbar (the pool is further on)
 check(low <= {0xC8873A, 0x8A5A22}, 'flat: the bottom row is crust tops, exactly: %s' % sorted('%06x' % c for c in low)[:6])
 v = ppm('view')
 seen = {}
