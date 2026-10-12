@@ -48,3 +48,26 @@ void hud_draw(unsigned *b, const player_t *p, const ray_t *tg, int tod) {
     char clk[6] = { (char)('0' + m / 600), (char)('0' + m / 60 % 10), ':', (char)('0' + m % 60 / 10), (char)('0' + m % 10), 0 };
     text_shadowed(b, BODY_W - 48, 8, clk, 0xFFFFFF);
 }
+/* F3 (v0.60.242): where the cook is, to a tenth; the way it faces; the
+ * frame rate; the block aimed at and its place; the time. */
+static int put_num(char *o, int v) { char d[12]; int k = 0, n = 0; if (v < 0) { o[n++] = '-'; v = -v; } do { d[k++] = (char)('0' + v % 10); v /= 10; } while (v); while (k) o[n++] = d[--k]; return n; }
+static int put_str(char *o, const char *s) { int n = 0; while (s[n]) { o[n] = s[n]; n++; } return n; }
+static int put_tenth(char *o, fx v) { int n = put_num(o, v >> 16); o[n++] = '.'; o[n++] = (char)('0' + (((v & 0xFFFF) * 10) >> 16)); return n; }
+void hud_debug(unsigned *b, const player_t *p, const ray_t *tg, int fps, int tod) {
+    char l[5][64]; int n;
+    n = put_str(l[0], "Mincecraft  "); n += put_num(l[0] + n, fps); n += put_str(l[0] + n, " fps"); l[0][n] = 0;
+    n = put_str(l[1], "XYZ: "); n += put_tenth(l[1] + n, p->x); n += put_str(l[1] + n, " / "); n += put_tenth(l[1] + n, p->y);
+    n += put_str(l[1] + n, " / "); n += put_tenth(l[1] + n, p->z); l[1][n] = 0;
+    static const char *const dir[4] = { "south (+z)", "east (+x)", "north (-z)", "west (-x)" };   /* yaw 0 faces +z */
+    n = put_str(l[2], "Facing: "); n += put_str(l[2] + n, dir[((p->yaw + 128) >> 8) & 3]); n += put_str(l[2] + n, "  yaw "); n += put_num(l[2] + n, p->yaw); l[2][n] = 0;
+    n = put_str(l[3], "Block: ");
+    if (tg->hit) {
+        n += put_str(l[3] + n, blocks[world_get(tg->x, tg->y, tg->z)].name); n += put_str(l[3] + n, " at ");
+        n += put_num(l[3] + n, tg->x); l[3][n++] = ' '; n += put_num(l[3] + n, tg->y); l[3][n++] = ' '; n += put_num(l[3] + n, tg->z);
+    } else n += put_str(l[3] + n, "none");
+    l[3][n] = 0;
+    int m = tod * 1440 / 1200;
+    n = put_str(l[4], "Time: ");
+    l[4][n++] = (char)('0' + m / 600); l[4][n++] = (char)('0' + m / 60 % 10); l[4][n++] = ':'; l[4][n++] = (char)('0' + m % 60 / 10); l[4][n++] = (char)('0' + m % 10); l[4][n] = 0;
+    for (int i = 0; i < 5; i++) text_shadowed(b, 8, 28 + 18 * i, l[i], 0xFFFFFF);
+}

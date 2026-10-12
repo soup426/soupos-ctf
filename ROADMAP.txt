@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.241
+Current version: v0.60.242
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,16 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.242 (2026-10-12)  — MINCECRAFT: F3
+  - F3 shows, in shadowed white down the left: "Mincecraft  N fps" (the
+    rate the fps marker says), "XYZ: x / y / z" to a tenth, "Facing:
+    south (+z)  yaw N" (S E N W by the yaw), the block aimed at and its
+    place, the time; F3 again hides it. F3 reaches the window as KEY_F1 +
+    2 (267), the desktop passing it on.
+  - scripts/mincecraft-f3-test.sh: a few steps and a look down, F3, the
+    five rows read back against the font, the place as the last position
+    marker has it; F3 again, none. Picture: docs/mincecraft/f3.png.
 
 v0.60.241 (2026-10-12)  — NEOSIM: MACROS
   - q and a letter records every key typed until q in normal mode, into

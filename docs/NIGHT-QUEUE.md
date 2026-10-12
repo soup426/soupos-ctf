@@ -73,7 +73,7 @@ q and a letter records the keys typed until q; @ and the letter plays
 them (a count: that many times), @@ the last again; the macro is the
 register's text, so "ap shows it. Test: cases against neovim's.
 
-## 4. Mincecraft: F3
+## 4. Mincecraft: F3 — DONE v0.60.242
 
 F3 shows the cook's place (x y z to a tenth), the way it faces (N E S W
 and the yaw), the frame rate, the block aimed at and its place, and the

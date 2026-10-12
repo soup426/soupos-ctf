@@ -223,7 +223,7 @@ int main(void) {
     ray_t tg = { 0 };
     fx dx, dy, dz;
     unsigned last = sys_ticks(), fps_t = last;
-    int frames = 0, lbtn = 0, unsaved = 0, rx = 0, ry = 0;
+    int frames = 0, lbtn = 0, unsaved = 0, rx = 0, ry = 0, f3 = 0, fps_shown = 0;   /* f3: the debug rows (v0.60.242) */
     unsigned short inv_last[B_COUNT] = { 0 };
     inv_marker(&pl, inv_last);                                   /* what a loaded world has in hand */
     unsigned tt = 0;                                             /* game ticks, for the clock */
@@ -235,6 +235,7 @@ int main(void) {
             if (ev.type == WEV_CLOSE || (ev.type == WEV_KEY && ev.key == 27)) quit = 1;
             else if (ev.type == WEV_KEY && ev.key == 'm') eprint("[mincecraft] mark\n");
             else if (ev.type == WEV_KEY && ev.key == 'p') do_save(wpath, &pl, seed, tod);
+            else if (ev.type == WEV_KEY && ev.key == 267) f3 = !f3;       /* F3 (KEY_F1 + 2) */
             else if (ev.type == WEV_KEY && ev.key == 'c') { int ids[9], n = hotbar(&pl, ids); craft(&pl, pl.slot < n ? ids[pl.slot] : 0, inv_last); }
             else if (ev.type == WEV_KEY && ev.key == 'e') {      /* (v0.60.224) eat what is in hand */
                 int ids[9], n = hotbar(&pl, ids), id = pl.slot < n ? ids[pl.slot] : 0;
@@ -335,13 +336,14 @@ int main(void) {
         }
         render(&cam, body, light_at(tod), sky_at(tod), &tg, crack, near_lamps, lamps_near(&cam));
         hud_draw(body, &pl, &tg, tod);
+        if (f3) hud_debug(body, &pl, &tg, fps_shown, tod);
         sys_win_put(win, body);
         frames++;
         /* About 33 frames a second (v0.60.202): the desktop draws the
          * window about 30 times a second, so faster only burns the CPU. */
         unsigned spent = sys_ticks() - now;
         if (spent < 3) sys_sleep((3 - spent) * 10);
-        if (now - fps_t >= 500) { eprint("[mincecraft] fps="); eprint_u((unsigned)(frames * 100 / (int)(now - fps_t))); eprint("\n"); frames = 0; fps_t = now; }
+        if (now - fps_t >= 500) { fps_shown = frames * 100 / (int)(now - fps_t); eprint("[mincecraft] fps="); eprint_u((unsigned)fps_shown); eprint("\n"); frames = 0; fps_t = now; }
     }
     eprint("[mincecraft] bye\n");
     sys_win_close(win);
