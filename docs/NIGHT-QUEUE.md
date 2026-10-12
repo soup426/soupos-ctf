@@ -280,6 +280,54 @@ tureen.elf. Split into commits as the stages land:
   of the page served locally over 11c; the live fetch is a manual check
   noted in ROADMAP.
 
+## 12-18. More desktop programs (the user asked for some, 2026-10-12)
+
+Each a ring-3 program with a window of its own (SYS_WIN_*, as frost,
+oven and scale are), on the taskbar launcher's list, one commit each.
+Rule 14 first: the desktop already has paint (frost), a timer (oven), a
+calculator (scale), Mandelbrot (swirl), processes (expo), files, a
+picture viewer, jot and neosim, so none of those again. Each gets a test
+that drives it with synthetic events and checks serial markers, and a
+host twin of its logic where there is logic to check (rule 4's way).
+
+- **12. popcorn.elf: Minesweeper.** The mines are unpopped kernels; a
+  click on one pops the lot. 9x9, 16x16 and 30x16; left click opens,
+  right click flags, a number's both-buttons chord opens around it; the
+  first click is never a kernel. Test: a seeded board from the host,
+  clicks replayed, the opened cells and win/loss in the markers.
+- **13. layercake.elf: Tetris.** Seven layers of cake falling, a row
+  baked whole clears. The 7-bag randomizer and SRS rotation with wall
+  kicks (the guideline's tables); levels speed up; hold and a next
+  preview. Test: the kick table against the guideline's, a scripted
+  game's line clears and score.
+- **14. noodle.elf: Snake.** A noodle that grows on meatballs and
+  ends on its own tail or the bowl's rim. The keys held through
+  SYS_WIN_KEYS, so a quick double turn is not lost. Test: a scripted
+  run, its length and the end it meets.
+- **15. cuttingboard.elf: chess.** Two players at one board, or against
+  the machine: legal moves only (castling, en passant, promotion), check
+  and mate and the draws (stalemate, fifty moves, threefold). The
+  machine is a small alpha-beta search. Rule 7's spirit: perft counts
+  from the start position and Kiwipete to depth 4 against the published
+  numbers, before any engine work.
+- **16. waffle.elf: a spreadsheet.** A grid of cells (the waffle's),
+  A1 references, + - * / and parentheses, SUM/AVG/MIN/MAX over ranges,
+  recalculation in dependency order, a cycle shown as #LOOP. Saves to and
+  opens CSV, so the text tools read it. Test: the formula engine on the
+  host against cases with known answers (and LibreOffice-free: the
+  answers are written in the test), a sheet saved and read back in QEMU.
+- **17. kettle.elf: a sound player.** WAV (PCM, 8/16-bit, mono/stereo,
+  resampled to the mixer's rate) with a level meter and a seek bar.
+  Measure first: there is no audio syscall for cooks (whistle and hum
+  are the kernel's), so this begins with one that hands the mixer PCM,
+  bounded, in its own commit. Test: a generated WAV through QEMU's
+  wav audiodev, the captured file compared with the source.
+- **18. grapevine.elf: an IRC client.** After 11a (cooks have no
+  sockets until then). Connect, NICK/USER, JOIN, PRIVMSG, PING/PONG, a
+  buffer per channel, the topic and names list. Test: a small IRC server
+  on the host (a python script in scripts/), a conversation replayed and
+  both sides checked. TLS (port 6697) once 11c is in.
+
 ## Review findings (2026-10-12)
 
 (Added as the six reviewers report: kernel and shell; the desktop;
@@ -511,6 +559,8 @@ Mincecraft; neosim and rx.c; Doom; tests, build and docs.)
    where they fit.
 7. Items 10 and 11 (the user's ideas, 2026-10-12) after the review;
    11 is a long one, its stages one commit each.
+8. Items 12-18 between Roux's stages, smallest first (popcorn,
+   noodle, layercake); 18 waits on 11a.
 
 ## Notes left by unattended runs
 
