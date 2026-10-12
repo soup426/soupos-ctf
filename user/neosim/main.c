@@ -10,7 +10,8 @@
  * Ctrl-R; > < (four spaces); / ? n N (plain text); v V with d y c > <; .;
  * % to the matching bracket; Enter, o and O keep the indent (v0.60.218);
  * :help, a read-only page of all this (v0.60.219); f t F T ; , r ~ (v0.60.222);
- * Ctrl-D Ctrl-U Ctrl-F Ctrl-B, zz zt zb (v0.60.223); * # (v0.60.226)
+ * Ctrl-D Ctrl-U Ctrl-F Ctrl-B, zz zt zb (v0.60.223); * # (v0.60.226);
+ * text objects iw aw i" a" i( a( i{ a{ ... (v0.60.227)
  * (v0.60.206); i a A I o O into insert mode; : for a command. Insert mode:
  * typing, Enter, Backspace (joining lines at the start of one), Tab as four
  * spaces, the arrows, Esc back. Commands: :w [FILE], :q, :q!, :wq, :x,
@@ -429,6 +430,105 @@ static void shift_lines(int a, int b, int dir) {      /* > and <: four spaces, e
     }
     E.cy = a; E.cx = first_nonblank(&E.t, a); E.want = E.cx;
 }
+/* ---- text objects (v0.60.227), as neovim's: iw aw iW aW, i" a" i' a',
+ * i( a( ib ab, i[ a[, i{ a{ iB aB, i< a<. The range is (ay,ax)..(by,bx),
+ * the end inclusive; *line: whole lines ay..by. 0: none here. ---- */
+static int wclass(char c, int big) { return c == ' ' || c == '\t' ? 0 : big || kw(c) ? 1 : 2; }
+static int obj_word(int a, int big, int cnt, int *ax, int *bx) {
+    const char *t = E.t.s[E.cy]; int n = len(), x = E.cx;
+    if (!n) return 0;
+    int c0 = wclass(t[x], big), s0 = x, e = x;
+    while (s0 > 0 && wclass(t[s0 - 1], big) == c0) s0--;
+    while (e + 1 < n && wclass(t[e + 1], big) == c0) e++;
+    if (!a) {                                        /* iw: runs, white ones counted too */
+        for (int k = 1; k < cnt && e + 1 < n; k++) { int c = wclass(t[e + 1], big); e++; while (e + 1 < n && wclass(t[e + 1], big) == c) e++; }
+        *ax = s0; *bx = e; return 1;
+    }
+    if (c0 == 0) {                                   /* aw on white: it and the word after */
+        for (int k = 0; k < cnt && e + 1 < n; k++) { int c = wclass(t[e + 1], big); e++; while (e + 1 < n && wclass(t[e + 1], big) == c) e++; }
+        *ax = s0; *bx = e; return 1;
+    }
+    int trail = 0;
+    for (int k = 0; k < cnt; k++) {
+        if (k) {                                     /* the next word */
+            if (e + 1 >= n) break;
+            int c = wclass(t[e + 1], big); e++; while (e + 1 < n && wclass(t[e + 1], big) == c) e++;
+        }
+        int w = e + 1; while (w < n && wclass(t[w], big) == 0) w++;
+        trail = w - 1 > e; e = w - 1;
+    }
+    if (!trail) while (s0 > 0 && wclass(t[s0 - 1], big) == 0) s0--;   /* none after: the white before */
+    *ax = s0; *bx = e; return 1;
+}
+static int obj_quote(int a, char q, int *ax, int *bx) {
+    const char *t = E.t.s[E.cy]; int n = len(), x = E.cx, before = 0, o = -1, c = -1;
+    for (int i = 0; i < x && i < n; i++) if (t[i] == q && (i == 0 || t[i - 1] != '\\')) before++;
+    int on = x < n && t[x] == q;
+    if (on) {                                        /* on a quote: which one it is, by those before it */
+        if (before % 2 == 0) { o = x; for (int i = x + 1; i < n; i++) if (t[i] == q && t[i - 1] != '\\') { c = i; break; } }
+        else { c = x; for (int i = x - 1; i >= 0; i--) if (t[i] == q && (i == 0 || t[i - 1] != '\\')) { o = i; break; } }
+    } else if (before % 2) {                         /* inside */
+        for (int i = x - 1; i >= 0; i--) if (t[i] == q && (i == 0 || t[i - 1] != '\\')) { o = i; break; }
+        for (int i = x + 1; i < n; i++) if (t[i] == q && t[i - 1] != '\\') { c = i; break; }
+    } else {                                         /* before: the next pair on the line */
+        for (int i = x + 1; i < n && c < 0; i++) if (t[i] == q && (i == 0 || t[i - 1] != '\\')) { if (o < 0) o = i; else c = i; }
+    }
+    if (o < 0 || c < 0) return 0;
+    if (!a) { if (c - o < 2) return 0; *ax = o + 1; *bx = c - 1; return 1; }
+    int s0 = o, e = c;
+    if (e + 1 < n && (t[e + 1] == ' ' || t[e + 1] == '\t')) { while (e + 1 < n && (t[e + 1] == ' ' || t[e + 1] == '\t')) e++; }
+    else while (s0 > 0 && (t[s0 - 1] == ' ' || t[s0 - 1] == '\t')) s0--;
+    *ax = s0; *bx = e; return 1;
+}
+static int at_ch(int y, int x) { return x >= 0 && x < lenof(y) ? E.t.s[y][x] : '\n'; }
+static int match_fwd(char o, char c, int y, int x, int *oy, int *ox) {   /* from the o at y,x to its c */
+    int d = 0;
+    for (;;) {
+        int ch = at_ch(y, x);
+        if (ch == o) d++; else if (ch == c && --d == 0) { *oy = y; *ox = x; return 1; }
+        if (++x >= lenof(y)) { if (++y >= E.t.n) return 0; x = -1; }
+    }
+}
+static int obj_block(int a, char o, char c, int cnt, int *ay, int *ax, int *by, int *bx, int *line) {
+    int y = E.cy, x = E.cx, oy = -1, ox = -1, need = cnt, bal = 0;
+    if (at_ch(y, x) == o) { oy = y; ox = x; need--; }
+    while (need > 0) {                               /* back to the open that is not closed before the cursor */
+        if (--x < 0) { if (--y < 0) break; x = lenof(y); continue; }
+        int ch = at_ch(y, x);
+        if (ch == c) bal++;
+        else if (ch == o) { if (bal) bal--; else { oy = y; ox = x; need--; } }
+    }
+    if (need > 0) {                                  /* not inside one: the next on the line (neovim's) */
+        if (cnt > 1) return 0;
+        oy = -1;
+        for (int i = E.cx; i < len(); i++) if (E.t.s[E.cy][i] == o) { oy = E.cy; ox = i; break; }
+        if (oy < 0) return 0;
+    }
+    int cy, cx;
+    if (!match_fwd(o, c, oy, ox, &cy, &cx)) return 0;
+    *line = 0;
+    if (a) { *ay = oy; *ax = ox; *by = cy; *bx = cx; return 1; }
+    int sy = oy, sx = ox + 1, ey = cy, ex = cx - 1, smoved = 0, emoved = 0;
+    if (sx >= lenof(oy) && oy < cy) { sy = oy + 1; sx = 0; smoved = 1; }
+    int blank = 1; for (int i = 0; i < cx; i++) if (E.t.s[cy][i] != ' ' && E.t.s[cy][i] != '\t') blank = 0;
+    if (blank && cy > oy) { ey = cy - 1; ex = lenof(ey) - 1; emoved = 1; }
+    if (smoved && emoved) { if (sy > ey) return 0; *ay = sy; *by = ey; *line = 1; return 1; }
+    if (sy > ey || (sy == ey && sx > ex)) return 0;
+    *ay = sy; *ax = sx; *by = ey; *bx = ex; return 1;
+}
+static int textobj(int a, int k, int cnt, int *ay, int *ax, int *by, int *bx, int *line) {
+    *line = 0; *ay = *by = E.cy;
+    switch (k) {
+    case 'w': return obj_word(a, 0, cnt, ax, bx);
+    case 'W': return obj_word(a, 1, cnt, ax, bx);
+    case '"': case '\'': case '`': return obj_quote(a, (char)k, ax, bx);
+    case '(': case ')': case 'b': return obj_block(a, '(', ')', cnt, ay, ax, by, bx, line);
+    case '[': case ']': return obj_block(a, '[', ']', cnt, ay, ax, by, bx, line);
+    case '{': case '}': case 'B': return obj_block(a, '{', '}', cnt, ay, ax, by, bx, line);
+    case '<': case '>': return obj_block(a, '<', '>', cnt, ay, ax, by, bx, line);
+    }
+    return 0;
+}
 static void op_apply(int op, mv_t m) {
     if (op == '>' || op == '<') { shift_lines(imin(E.cy, m.y), imax(E.cy, m.y), op == '>' ? 1 : -1); return; }
     if (m.line) { op_lines(op, imin(E.cy, m.y), imax(E.cy, m.y)); return; }
@@ -535,6 +635,17 @@ static void normal_key(unsigned k) {
         P.wait = 0;
         if (k == 27 || k >= 256) { P.op = 0; return; }
         if (w == 'r') { if (!P.op) replace_chars((int)k, cnt); P.op = 0; return; }
+        if (w == 'i' || w == 'a') {                  /* an operator on a text object (v0.60.227) */
+            int op = P.op, ay, ax, by, bx, line;
+            int total = cnt * P.opcount;
+            P.op = 0;
+            if (!textobj(w == 'a', (int)k, total, &ay, &ax, &by, &bx, &line)) return;
+            if (line) { op_lines(op, ay, by); return; }
+            E.cy = ay; E.cx = ax;
+            mv_t m = { 1, by, bx, 0, 1 };
+            op_apply(op, m);
+            return;
+        }
         find_ch = (int)k;
         if (P.op) {
             int op = P.op, total = cnt * P.opcount;
@@ -565,7 +676,7 @@ static void normal_key(unsigned k) {
         if (k != 'g') { P.op = 0; return; }
         k = 'g' + 256; cnt = P.gcount; had = P.ghad;
     } else if (k == 'g') { P.g = 1; P.gcount = cnt; P.ghad = had; return; }
-    if (k == 'f' || k == 't' || k == 'F' || k == 'T' || (k == 'r' && !P.op)) { P.wait = (int)k; P.wcount = cnt; P.whad = had; return; }
+    if (k == 'f' || k == 't' || k == 'F' || k == 'T' || (k == 'r' && !P.op) || (P.op && (k == 'i' || k == 'a'))) { P.wait = (int)k; P.wcount = cnt; P.whad = had; return; }
     if (P.op) {                                     /* an operator waiting for its motion */
         int op = P.op, total = cnt * P.opcount, thad = had || P.ophad;
         P.op = 0;
@@ -617,12 +728,22 @@ static void normal_key(unsigned k) {
 static char rec[256], cur[256];                     /* . : the last change's keys, and this command's */
 static int recn, curn, cur_change, replaying;
 static void visual_key(unsigned k) {
+    if (P.wait == 'i' || P.wait == 'a') {           /* (v0.60.227) a text object: the selection becomes it */
+        int a = P.wait == 'a', cnt = P.wcount, ay, ax, by, bx, line;
+        P.wait = 0;
+        if (k == 27 || !textobj(a, (int)k, cnt, &ay, &ax, &by, &bx, &line)) return;
+        E.vy = ay; E.vx = line ? 0 : ax; E.cy = by; E.cx = line ? imax(lenof(by) - 1, 0) : bx;
+        if (line) E.mode = M_VLINE;
+        E.want = E.cx;
+        return;
+    }
     if (k == 27) { E.mode = M_NORMAL; P.count = 0; return; }
     if ((k >= '1' && k <= '9') || (k == '0' && P.count)) { P.count = P.count * 10 + (int)(k - '0'); return; }
     int had = P.count > 0, cnt = had ? P.count : 1;
     P.count = 0;
     if (P.g) { P.g = 0; if (k == 'g') { mv_t m = motion('g' + 256, cnt, had, 0); E.cy = m.y; E.cx = E.want; clamp(); } return; }
     if (k == 'g') { P.g = 1; return; }
+    if (k == 'i' || k == 'a') { P.wait = (int)k; P.wcount = cnt; return; }
     if (k == 'v' || k == 'V') { int want = k == 'v' ? M_VISUAL : M_VLINE; E.mode = E.mode == want ? M_NORMAL : want; return; }
     int op = k == 'x' ? 'd' : (int)k;
     if (op == 'd' || op == 'y' || op == 'c' || op == '>' || op == '<') {

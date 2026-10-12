@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.226
+Current version: v0.60.227
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,19 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.227 (2026-10-12)  — NEOSIM: TEXT OBJECTS
+  - After d c y (and > <), and in visual mode: iw aw iW aW (a word, or
+    with its space after, or before when none is after; counts); i" a"
+    i' a' i` a` (the quotes around the cursor, or the next pair on the
+    line); i( a( ib ab, i[ a[, i{ a{ iB aB, i< a< (nested, across lines;
+    a count the nth out; not inside one, the next on the line, as neovim
+    0.12 does). An i{ whose { ends its line and whose } starts one is
+    whole lines (di{ leaves { and } on lines of their own). . repeats.
+  - scripts/neosim-objects-test.sh: 45 cases against neovim 0.12.5.
+    The case generator now quotes each key string for the shell: an
+    apostrophe in a key string had ended its quoting, so two cases typed
+    jdi where they meant jdi' (no earlier test had an apostrophe).
 
 v0.60.226 (2026-10-12)  — NEOSIM: * AND #
   - * and # search forward and back for the keyword under the cursor (or

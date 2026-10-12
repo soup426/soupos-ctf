@@ -58,7 +58,7 @@ seen it.
 line), whole words only, forward and back, a count the nth; n and N go on
 from there. Test: cases against neovim's, as neosim-ops-test.
 
-## 2. neosim: text objects
+## 2. neosim: text objects — DONE v0.60.227
 
 After an operator or in visual mode: iw aw (a word, and its space), i" a"
 i' a' (the quotes on the line around or after the cursor), i( a( ib ab, i[

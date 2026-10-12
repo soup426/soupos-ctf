@@ -28,6 +28,7 @@ const char *const help_text[] = {
     "  u  Ctrl-R          undo, redo",
     "  .                  the last change again",
     "  v V                select characters, lines; then d y c > <",
+    "  iw aw i\" a( i{ ...  after d c y, or in v: a word, quotes, brackets",
     "",
     "SEARCHING",
     "  / ?  then text     search forward, back (plain text)",
