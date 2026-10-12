@@ -1,12 +1,12 @@
 # Night queue
 
-Sixty-fifth queue. The first sixty-four are in `docs/queue-archive-2026-10-*.md`;
-queue 64 (`-12h`) made the full check faster, gave neosim registers, :reg
-and macros, and Mincecraft F3 (and, asked for by the user between items,
-Mincecraft and Doom icons on the desktop). This one: the keys lost during
-a big write that its notes found; neosim patterns; a sun and a moon; a
-neosim icon. Written by an unattended run when queue 64 ran out, as the
-user asked on 2026-10-11; the user has not seen it.
+Sixty-sixth queue. The first sixty-five are in `docs/queue-archive-2026-10-*.md`;
+queue 65 (`-12i`) closed the lost keys with the numbers, gave neosim vim's
+patterns (and fixed rx.c's search), Mincecraft a sun and a moon, and the
+desktop a neosim icon. This one: the full check's time again; neosim :g
+:sort and Ctrl-A Ctrl-X; flying in Mincecraft. Written by an unattended
+run when queue 65 ran out, as the user asked on 2026-10-11; the user has
+not seen it.
 
 ## Standing rules
 
@@ -52,48 +52,36 @@ user asked on 2026-10-11; the user has not seen it.
 
 ---
 
-## 1. Keys lost during a big write — CLOSED, measured (2026-10-12): not reproduced
+## 1. The full check's time, the desktop tests
 
-Typed while a program wrote 3 MB, "countertop" arrived as "countert".
-Measure first: a line typed at the console during a long write (a test
-program writing a few MB, or the shell copying a big file), the keys that
-arrive counted, under KVM; then whether the keyboard IRQ is held off
-through the ATA writes (cli, polling), or the key buffer overflows, or the
-echo is lost and the keys are not. Fix what it is; a test that types
-during a big write and gets every key.
+418 s under timeout 590 again. The ct*-test scripts are 40 tests and the
+biggest share of the sum (2403 s of 12123 at queue 64). Measure first:
+their fixed WAITs (after countertop, after each click), and which could
+wait for a [countertop] line instead (open, close, kitchen, ...). Change
+those, the same keys and checks; the numbers before and after; every
+changed test still fails when its feature is taken away (spot-check two).
 
-## 2. neosim: patterns — DONE v0.60.243 (and an rx.c bug)
+## 2. neosim: :g and :sort
 
-/ ? n N * and :s with vim's basic patterns: . * ^ $ [abc] [^a-z] \< \>
-\. (the magic ones, as 'magic' is on), plus \| ? Measure what neosim's
-plain search would miss first. Test: searches and substitutes against
-neovim's.
+:g/pat/cmd and :v/pat/cmd over the lines matching (or not) with d, s,
+normal-mode keys after :normal; :sort (and :sort!, :sort n, :sort u) over
+a range or the whole text. Test: cases against neovim's.
 
-## 3. Mincecraft: a sun and a moon — DONE v0.60.244
+## 3. neosim: Ctrl-A and Ctrl-X
 
-A square sun crossing the sky from east to west through the day, a
-square moon by night (as Minecraft's), drawn behind the clouds and the
-terrain. Test: dumps at three times of day, the sun's square where its
-angle puts it (low east in the morning, high at noon), the moon at night.
+The number under or after the cursor on the line, plus or minus the
+count; negative numbers, 0x hex, the cursor to its last digit; . repeats.
+Test: cases against neovim's.
 
-## 4. neosim on the desktop — DONE v0.60.245
+## 4. Mincecraft: flying
 
-An icon and a Kitchen entry: a double click opens neosim with no file
-([No Name]), a :w NAME writes it. Test as ctgames-test: the icon named,
-its window up with no terminal on show.
-
-**Closed with the numbers (rule 3).** The game refusing a 3 MB world and
-copying it to .bad, "countertop" typed at the console straight after
-(scripts in the run's scratchpad, not kept): 3 runs alone, 12 six wide,
-48 sixteen wide: all 63 had every key and the desktop up. Nothing in
-ata.c or fat.c holds interrupts off; the key buffer is 256. The first
-try at it was wrong, worth saying: "echo" is not a soupOS command ("No
-soup for you"), so its line looked lost when it had run. The failure seen
-once (v0.60.239's full check) showed only the echo cut by the game's own
-output; the keys after it were never shown lost. mincecraft-save-test
-types after the copy now anyway, so it is out of that race.
+Space twice quickly toggles flying: no fall, Space up and Shift down,
+walking as before; landing ends it. Saved in the world file (version 5).
+Test: the markers' y across a double space, a held space, a held Shift;
+a save and load keeps it.
 
 ## Notes left by unattended runs
+
 
 
 
