@@ -50,17 +50,29 @@ under the standing rules (a test that fails first, then the fix).
     /tmp/soupos-* after a run of failures, and never let a test compute a
     size from parsed tool output without checking it is a sane number
     (2026-10-11: `head -c` of a misparsed negative count wrote 11 GB).
-18. **A review every 10 commits** (the user, 2026-10-12): once 10 commits that
-    change more than this queue file have landed since the last review, stop
-    taking items and review the whole project: six reviewers in parallel, one
-    an area (kernel and shell; the desktop; Mincecraft; neosim and rx.c;
-    Doom; tests, build and docs), read-only, each claim checked before it is
-    queued. Their findings go into this queue's review section, most severe
-    first, and are worked from the top. Count with
+18. **Reviews: by area every 10 commits, the whole project every 30** (the
+    user, 2026-10-12; every 10 in full until then, the first one costing
+    about 1.4M tokens). Count commits that change more than the queue files:
     `git log --oneline LAST..HEAD -- . ':!docs/NIGHT-QUEUE.md' ':!docs/queue-archive-*' | wc -l`.
-    **Last review began at 7647649** (2026-10-12); move this line to the
-    commit each new review begins at.
-
+    - **Every 10 since the last review of either kind:** stop taking items
+      and review only the areas those commits touched, one read-only
+      reviewer each. Which areas: `git diff --stat LAST..HEAD` against
+      these paths (ROADMAP.txt and CLAUDE.md's version line touch none):
+      kernel and shell = src/ but the four below, user/*.c but rx.c;
+      the desktop = src/countertop.c; Mincecraft = user/mincecraft/;
+      neosim and rx.c = user/neosim/, user/rx.c; Doom = src/doom*.c,
+      src/wad*, src/doomsnd*; tests, build and docs = scripts/, Makefile,
+      CLAUDE.md past its version line.
+    - **Every 30 since the last full review:** all six areas, as the first.
+      An area review that finds anything critical brings the full one
+      forward.
+    - Reviewers work on disk.img copies, at most 4 QEMUs each, never
+      check.sh; every claim checked before it is queued; findings into the
+      review section, most severe first, worked by the order there. The
+      tree is not rebuilt while they run.
+    **Last review began at 7647649** (2026-10-12, full).
+    **Last full review began at 7647649** (2026-10-12).
+    Move the first line at each review, both at a full one.
 ---
 
 ## 0. A text file's double click opens neosim (the user's call, 2026-10-12) — DONE v0.60.250
