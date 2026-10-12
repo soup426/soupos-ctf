@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.243
+Current version: v0.60.244
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,20 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.244 (2026-10-12)  — MINCECRAFT: A SUN AND A MOON
+  - A square sun crosses the sky from the east (+x) at 06:00 to overhead
+    at noon to the west at 18:00, the moon opposite it, both square-on to
+    the eye as Minecraft's (a ray's place in the plane a unit out toward
+    them; divides only for rays already near one). The sun has a brighter
+    middle, the moon a few darker crater cells, and no stars on either.
+    They are drawn behind the clouds, and terrain covers them. Near the
+    zenith the moon's top rows show two pixels wider: left as it is.
+  - scripts/mincecraft-sun-test.sh: a saved flat world turned on the host
+    for each boot: 08:00 facing east 30 degrees up, the sun's square in the
+    middle; noon and midnight looking up, the sun and then the moon above
+    the middle where 10 degrees more puts them; the other never seen; fps
+    at its cap. Pictures: docs/mincecraft/sun.png, moon.png.
 
 v0.60.243 (2026-10-12)  — NEOSIM'S PATTERNS, AND RX.C SEARCHING ON
   - neosim's / ? n N * # and :s take vim's patterns ('magic'): . * ^ $

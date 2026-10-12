@@ -15,6 +15,12 @@ static unsigned *rbuf;
 static unsigned frame;                   /* for the broth's simmer */
 fx render_cloud_drift;                   /* (v0.60.237) how far the clouds have blown, along x */
 int render_clouds = 1;                   /* (v0.60.237) 0: a clear sky (-clear) */
+int render_tod = 600;                    /* (v0.60.244) the time of day, for the sun and the moon */
+#define SUN_COL  0xFFF0A0u
+#define MOON_COL 0xD8E0F0u
+#define MOON_DARK 0xA8B0C4u
+#define SUN_MID  0xFFFCE0u
+#define SUN_HALF 5900                    /* the squares' half side, in the plane a unit away: about 5 degrees */
 #define CLOUD_Y   (52 << 16)             /* the clouds' plane */
 #define CLOUD_COL 0xFFF4DCu              /* cream */
 #define BROTH_COL 0xB0661C               /* deeper than its texture: soup, not sand */
@@ -59,6 +65,13 @@ void render(const cam_t *c, unsigned *body, int light, unsigned sky, const ray_t
      * into that horizon colour; straight up and above 0.4 it is the sky. */
     unsigned horizon = mix(sky, 0xFFFFFF, 90 * light >> 8), bcol = shade(BROTH_COL, light), bub = shade(0xF0C070, light);
     frame++;
+    /* The sun and the moon (v0.60.244): up from the east (+x) at 06:00 to
+     * overhead at noon, down in the west at 18:00; the moon opposite. Each
+     * a square square-on to the eye: a ray's place in the plane a unit out
+     * toward it, along z and along its "up". */
+    int th = (render_tod - 300) * 512 / 600;          /* 1024ths of a turn */
+    fx scx = fx_cos(th), scy = fx_sin(th);            /* toward the sun; z 0 */
+    fx svx = -scy, svy = scx;                         /* its up, in the x-y plane */
     for (int py = 0; py < RH; py++) {
         fx v = (RH / 2 - py) * KPIX, h0 = -(RW / 2) * KPIX;
         fx dx = fx_ + fx_mul(ux, v) + fx_mul(rx, h0), dy = fy + fx_mul(uy, v), dz = fz + fx_mul(uz, v) + fx_mul(rz, h0);
@@ -79,6 +92,18 @@ void render(const cam_t *c, unsigned *body, int light, unsigned sky, const ray_t
             ray_cast(c->x, c->y, c->z, dx, dy, dz, VIEW << 16, &r);
             if (!r.hit) {
                 col = rowsky;
+                int body = 0;                                         /* the sun or the moon here: no stars */
+                for (int b = 0; b < 2; b++) {                         /* the sun, then the moon */
+                    fx sx = b ? -scx : scx, sy = b ? -scy : scy, vx = b ? -svx : svx, vy = b ? -svy : svy;
+                    fx dot = fx_mul(dx, sx) + fx_mul(dy, sy);
+                    if (dot < 52000) continue;                        /* not near it: no divides */
+                    fx pu = fx_div(dz, dot), pv = fx_div(fx_mul(dx, vx) + fx_mul(dy, vy), dot);
+                    if (pu <= -SUN_HALF || pu >= SUN_HALF || pv <= -SUN_HALF || pv >= SUN_HALF) continue;
+                    int cu = (pu + SUN_HALF) * 4 / (2 * SUN_HALF), cv = (pv + SUN_HALF) * 4 / (2 * SUN_HALF);   /* a 4x4 of cells */
+                    if (b) col = (0x2490 >> (cv * 4 + cu)) & 1 ? MOON_DARK : MOON_COL;       /* craters, as Minecraft's moon */
+                    else col = cu > 0 && cu < 3 && cv > 0 && cv < 3 ? SUN_MID : SUN_COL;   /* a brighter middle */
+                    body = 1;
+                }
                 if (ct) {
                     int cx = (int)((c->x + fx_mul(dx, ct) + render_cloud_drift) >> 18), cz = (int)((c->z + fx_mul(dz, ct)) >> 18);
                     unsigned h1 = (unsigned)(cx >> 2) * 73856093u ^ (unsigned)(cz >> 2) * 19349663u, h2 = (unsigned)cx * 83492791u ^ (unsigned)cz * 2654435761u;
@@ -86,7 +111,7 @@ void render(const cam_t *c, unsigned *body, int light, unsigned sky, const ray_t
                     h2 ^= h2 >> 13; h2 *= 0x5bd1e995u; h2 ^= h2 >> 15;
                     if ((h1 & 3) + (h2 & 3) >= 5) col = mix(col, ccol, cfade);   /* a cloudy region's cells, ragged at its edge */
                 }
-                if (light < 150 && sk > 64) {                     /* stars (v0.60.201), fixed in the sky as it turns: */
+                if (light < 150 && sk > 64 && !body) {            /* stars (v0.60.201), fixed in the sky as it turns: */
                     int az = c->yaw * 8 + (px - RW / 2) * 5, el = c->pitch * 8 + (RH / 2 - py) * 5;   /* 8ths of an angle unit */
                     unsigned h = (unsigned)(az >> 4) * 2654435761u ^ (unsigned)(el >> 4) * 40503u;
                     h ^= h >> 15; h *= 0x2c1b3c6du; h ^= h >> 12;

@@ -334,6 +334,7 @@ int main(void) {
             int hd = blocks[world_get(tg.x, tg.y, tg.z)].hardness;
             if (hd) crack = pl.bn * 256 / hd;
         }
+        render_tod = tod;
         render(&cam, body, light_at(tod), sky_at(tod), &tg, crack, near_lamps, lamps_near(&cam));
         hud_draw(body, &pl, &tg, tod);
         if (f3) hud_debug(body, &pl, &tg, fps_shown, tod);

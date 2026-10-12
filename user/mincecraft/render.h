@@ -16,3 +16,4 @@ void render(const cam_t *c, unsigned *body, int light, unsigned sky, const ray_t
             const lamp_t *lamps, int nlamps);
 extern fx render_cloud_drift;   /* (v0.60.237) set before render(): the clouds' drift along x */
 extern int render_clouds;       /* (v0.60.237) 0: a clear sky */
+extern int render_tod;          /* (v0.60.244) set before render(): the time of day, for the sun and moon */

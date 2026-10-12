@@ -69,7 +69,7 @@ during a big write and gets every key.
 plain search would miss first. Test: searches and substitutes against
 neovim's.
 
-## 3. Mincecraft: a sun and a moon
+## 3. Mincecraft: a sun and a moon — DONE v0.60.244
 
 A square sun crossing the sky from east to west through the day, a
 square moon by night (as Minecraft's), drawn behind the clouds and the
