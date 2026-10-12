@@ -63,7 +63,7 @@ Test: cases against neovim's.
 y{), ip and ap (the lines of the paragraph, ap with the blank lines after
 or before). Test: cases against neovim's.
 
-## 3. neosim: :set number and relativenumber
+## 3. neosim: :set number and relativenumber — DONE v0.60.236
 
 :set nu / nonu / rnu / nornu (and number, relativenumber): with rnu the
 other lines show their distance from the cursor's, the cursor's line its

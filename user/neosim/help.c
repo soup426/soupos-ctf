@@ -44,6 +44,8 @@ const char *const help_text[] = {
     "  :q  :q!            quit; quit throwing changes away",
     "  :wq  :x            write and quit; :x only writes if changed",
     "  :e NAME  :e!       open another file; open it, changes thrown away",
+    "  :set nu nonu       line numbers on (as at the start), off",
+    "  :set rnu nornu     each line's distance from the cursor's, or not",
     "  :help  :h          this page",
     "",
     "Colours for .c .h and .sc files.",

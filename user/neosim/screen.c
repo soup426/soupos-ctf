@@ -73,17 +73,22 @@ void screen_draw(const ed_t *e, unsigned *b) {
         int l = e->top + r;
         if (l < e->t.n) hl_line(kind, e->t.s[l], e->t.len[l], &state, cls);
         if (l >= e->t.n) { cell(b, 0, r, '~', NUMBER, PAGE); continue; }   /* past the end, as vim */
-        char n[12]; int k = num(n, l + 1);
-        put(b, NUM_W - 1 - k, r, n, l == e->cy ? CURNUM : NUMBER, PAGE);
-        for (int c = 0; c < SCR_COLS - NUM_W; c++) {
+        int nw = num_w(e);
+        if (nw) {                                    /* (v0.60.236) as :h number_relativenumber */
+            int d = l > e->cy ? l - e->cy : e->cy - l;
+            char n[12]; int k = num(n, e->rnu && !(d == 0 && e->nu) ? d : l + 1);
+            int left = e->rnu && e->nu && d == 0;    /* the cursor's line, both on: its own, at the left */
+            put(b, left ? 0 : nw - 1 - k, r, n, l == e->cy ? CURNUM : NUMBER, PAGE);
+        }
+        for (int c = 0; c < SCR_COLS - nw; c++) {
             int x = e->left + c;
             if (x >= e->t.len[l]) break;
-            cell(b, NUM_W + c, r, e->t.s[l][x], hl_colour[cls[x]], selected(e, l, x) ? SELECT : PAGE);
+            cell(b, nw + c, r, e->t.s[l][x], hl_colour[cls[x]], selected(e, l, x) ? SELECT : PAGE);
         }
     }
     /* The cursor: rows 14 and 15 of its cell (two for normal, one for insert). */
-    int cr = e->cy - e->top, cc = NUM_W + e->cx - e->left;
-    if (e->mode != M_COMMAND && cr >= 0 && cr < TEXT_ROWS && cc >= NUM_W && cc < SCR_COLS)
+    int cr = e->cy - e->top, cc = num_w(e) + e->cx - e->left;
+    if (e->mode != M_COMMAND && cr >= 0 && cr < TEXT_ROWS && cc >= num_w(e) && cc < SCR_COLS)
         for (int j = e->mode == M_INSERT ? 15 : 14; j < 16; j++) for (int i = 0; i < 8; i++) b[(cr * 16 + j) * BODY_W + cc * 8 + i] = CURSOR;
     /* The status line. */
     char st[SCR_COLS + 1]; int n = 0;

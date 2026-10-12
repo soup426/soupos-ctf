@@ -13,7 +13,7 @@
  * Ctrl-D Ctrl-U Ctrl-F Ctrl-B, zz zt zb (v0.60.223); * # (v0.60.226);
  * text objects iw aw i" a" i( a( i{ a{ ... (v0.60.227); marks m ' ` (v0.60.231);
  * gu gU g~ and in visual u U ~ (v0.60.232); counts on inserts, 3. (v0.60.234);
- * paragraphs { } ip ap (v0.60.235)
+ * paragraphs { } ip ap (v0.60.235); :set nu rnu (v0.60.236)
  * (v0.60.206); i a A I o O into insert mode; : for a command. Insert mode:
  * typing, Enter, Backspace (joining lines at the start of one), Tab as four
  * spaces, the arrows, Esc back. Commands: :w [FILE], :q, :q!, :wq, :x,
@@ -72,7 +72,7 @@ static void clamp(void) {
 static void scroll(void) {
     if (E.cy < E.top) E.top = E.cy;
     if (E.cy >= E.top + TEXT_ROWS) E.top = E.cy - TEXT_ROWS + 1;
-    int w = SCR_COLS - NUM_W;
+    int w = SCR_COLS - num_w(&E);
     if (E.cx < E.left) E.left = E.cx;
     if (E.cx >= E.left + w) E.left = E.cx - w + 1;
 }
@@ -273,6 +273,19 @@ static int command(char *c) {                        /* 1: end neosim */
     if (same(c, "wq") || same(c, "x")) {
         if (same(c, "x") && !E.changed) return 1;
         return write_file(*arg ? arg : E.path) == 0;
+    }
+    if (same(c, "set") || same(c, "se")) {          /* (v0.60.236) :set nu nonu rnu nornu (and the long names), several at once */
+        if (!*arg) { msg(E.nu ? "  number" : "nonumber", E.rnu ? "  relativenumber" : "  norelativenumber", 0); return 0; }
+        while (*arg) {
+            char *o = arg; while (*arg && *arg != ' ') arg++;
+            if (*arg) { *arg++ = 0; while (*arg == ' ') arg++; }
+            if (same(o, "nu") || same(o, "number")) E.nu = 1;
+            else if (same(o, "nonu") || same(o, "nonumber")) E.nu = 0;
+            else if (same(o, "rnu") || same(o, "relativenumber")) E.rnu = 1;
+            else if (same(o, "nornu") || same(o, "norelativenumber")) E.rnu = 0;
+            else { msg("E518: Unknown option: ", o, 0); return 0; }
+        }
+        return 0;
     }
     if (same(c, "e") || same(c, "e!")) {
         if (!*arg) { msg("E32: No file name", 0, 0); return 0; }
@@ -980,6 +993,7 @@ int main(void) {
     if (text_init() < 0 || undo_init() < 0) { print("neosim: no memory\n"); return 1; }
     text_lines_hook = marks_lines;
     E.t.n = 0;
+    E.nu = 1;                                        /* numbers on, as neosim always had them (neovim's are off) */
     text_clear(&E.t);
     if (file) open_file(file);
     int win = sys_win_open(640, 480, "neosim");

@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.235
+Current version: v0.60.236
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,17 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.236 (2026-10-12)  — NEOSIM: :set number AND relativenumber
+  - :set nu / nonu / rnu / nornu, and number, nonumber, relativenumber,
+    norelativenumber, several at once (:set nu rnu); :set alone says how
+    they stand; anything else is E518. With rnu the other lines show their
+    distance from the cursor's, the cursor's 0, or with nu too its own
+    number at the left, as neovim's :h number_relativenumber. With both
+    off the text starts at the window's edge. Numbers stay on at the start,
+    as they always were here. Listed on :help.
+  - scripts/neosim-number-test.sh: that help page's own example, each of
+    its four settings read back against the font, and the long names.
 
 v0.60.235 (2026-10-12)  — NEOSIM: PARAGRAPHS
   - { and } go to the empty line before and after, as neovim's findpar

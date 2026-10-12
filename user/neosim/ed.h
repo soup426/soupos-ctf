@@ -5,7 +5,7 @@ enum { M_NORMAL, M_INSERT, M_COMMAND, M_VISUAL, M_VLINE };   /* visual (v0.60.20
 #define SCR_COLS 80
 #define SCR_ROWS 30
 #define TEXT_ROWS 28          /* rows 0..27 the text, 28 the status, 29 the command line */
-#define NUM_W 4               /* "  1 ": the line number and a space */
+#define NUM_W 4               /* "  1 ": the line number and a space, when shown */
 typedef struct {
     text_t t;
     char   path[128];
@@ -20,5 +20,7 @@ typedef struct {
     int    vy, vx;             /* (v0.60.206) where visual mode was started */
     char   cmdch;              /* the command line's ':', '/' or '?' */
     int    help, htop;         /* (v0.60.219) the :help page shown, its first line shown */
+    int    nu, rnu;            /* (v0.60.236) :set number, relativenumber */
 } ed_t;
 void screen_draw(const ed_t *e, unsigned *body);   /* 640x480 */
+static inline int num_w(const ed_t *e) { return e->nu || e->rnu ? NUM_W : 0; }   /* the number column, or none */
