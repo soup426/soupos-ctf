@@ -2,10 +2,10 @@
 # ctfiles-test.sh - countertop's files window (v0.60.145), from screendumps
 # and the log. The bar's Files button lists / (bowls first, files with
 # their sizes); a double click on etc/ enters it, on .. comes back; a
-# double click on HELLO.TXT opens a terminal with it in jot (v0.60.154: a
-# text file goes to the editor, the rest to pour), Esc leaves it; the
+# double click on HELLO.TXT opens it in neosim (v0.60.250; jot from v0.60.154:
+# a text file goes to the editor, the rest to pour), :q leaves it; the
 # arrows scroll the list down to "A Long Recipe Name.txt" and Enter opens
-# that in jot too (the path quoted, spaces and all). The window's rows and the terminals' cells
+# that in neosim too (the path quoted, spaces and all). The window's rows and the terminals' cells
 # are read back against font8x16. The Files click and the .. double click
 # are pressed and released inside one monitor write, shorter than the
 # desktop loop's nap: before v0.60.145 such a click was lost.
@@ -29,9 +29,9 @@ keys=("headchef" "rosemary" "WAIT:1" "countertop" "WAIT:2"
       "$L" "$L" "$L" "$L" "$L" "MON:mouse_move 350 12" "WAIT:1" "$QUICK" "WAIT:2" "MON:screendump $WORK/s1.ppm" "WAIT:1"
       "MON:mouse_move 350 108" "WAIT:1" "${TWICE[@]}" "MON:screendump $WORK/s2.ppm" "WAIT:1"
       "$QUICK2" "WAIT:2" "MON:screendump $WORK/s3.ppm" "WAIT:1"
-      "MON:mouse_move 0 18" "WAIT:1" "${TWICE[@]}" "WAIT:2" "MON:screendump $WORK/s4.ppm" "WAIT:1" "KEY:esc" "WAIT:1"
+      "MON:mouse_move 0 18" "WAIT:1" "${TWICE[@]}" "WAIT:2" "MON:screendump $WORK/s4.ppm" "WAIT:1" "TYPE::q" "KEY:ret" "WAIT:1"
       "MON:mouse_move 200 -48" "WAIT:1" "${CLICK[@]}" "${DOWN[@]}" "WAIT:1" "MON:screendump $WORK/s5.ppm" "WAIT:1"
-      "KEY:ret" "WAIT:3" "MON:screendump $WORK/s6.ppm" "WAIT:1"
+      "KEY:ret" "WAIT:3" "MON:screendump $WORK/s6.ppm" "WAIT:1" "TYPE::q" "KEY:ret" "WAIT:1"
       "MON:mouse_move -600 -78" "WAIT:1" "${CLICK[@]}" "WAIT:2" "hash FBHELLO" "UNTIL:@soupOS:")
 qemu-system-i386 -accel kvm -cpu host -drive "file=$WORK/disk.img,format=raw,if=ide,index=0" \
     -cdrom soupOS.iso -boot d -m 128M -no-reboot -no-shutdown -display none \
@@ -62,15 +62,6 @@ def word(at, ox, oy, n=30):
         g = bytes(sum(1 << (7 - i) for i in range(8) if at(ox + c*8 + i, oy + j) in INK) for j in range(14))
         s += shape.get(g, '?')
     return s.rstrip()
-def term(at, ox, oy):
-    rows = []
-    for r in range(25):
-        line = ''
-        for c in range(80):
-            g = bytes(sum(1 << (7 - i) for i in range(8) if at(ox + c*8 + i, oy + r*16 + j) != 0) for j in range(14))
-            line += shape.get(g, '?')
-        rows.append(line.rstrip())
-    return rows
 # the window: 604,60, 380 wide; the path at 613,87; row i's text at 615,112+18i
 PATH, ROW = (613, 87), lambda i: (615, 112 + 18 * i)
 FOC = 0x3A6EA5
@@ -85,23 +76,35 @@ s2 = ppm('s2')
 want(word(s2, *PATH), '/etc', 's2 path (etc/ double clicked)'); want(word(s2, *ROW(0)), '..', 's2 row 0')
 s3 = ppm('s3')
 want(word(s3, *PATH), '/', 's3 path (.. double clicked)'); want(word(s3, *ROW(0)), 'etc/', 's3 row 0')
-t1 = term(ppm('s4'), 61, 83)
-if t1[:2] != ['Hello from soupOS!', 'A warm bowl of kernel soup.']:              # jot's first two rows
-    bad.append('Terminal 1: jot does not show HELLO.TXT: ' + ' | '.join(t1[:3]))
+# neosim's windows (v0.60.250): the first at 240,70, its text 1,23 inside; the
+# second there too, the first closed by then. Its rows: the number column, then the line.
+def neo(at, ox, oy, rows):
+    out = []
+    for r in range(rows):
+        line = ''
+        for c in range(60):
+            g = bytes(sum(1 << (7 - i) for i in range(8) if lum(at(ox + c*8 + i, oy + r*16 + j)) > 380) for j in range(14))
+            line += shape.get(g, '?')
+        out.append(line.rstrip())
+    return out
+lum = lambda c: (c >> 16) + (c >> 8 & 255) + (c & 255)
+t1 = neo(ppm('s4'), 241, 93, 2)
+if t1 != ['  1 Hello from soupOS!', '  2 A warm bowl of kernel soup.']:
+    bad.append('neosim 1 does not show HELLO.TXT: ' + ' | '.join(t1))
 s5 = ppm('s5')                                   # 22 rows shown: row 23 scrolled to the bottom
 want(word(s5, *ROW(21)), 'A Long Recipe Name.txt', 's5 last row (scrolled)'); want(s5(800, 112 + 18 * 21 + 8), FOC, 's5 last row selected')
 want(word(s5, *ROW(0)), 'README.TXT', 's5 first row (scrolled by two)')
-t2 = term(ppm('s6'), 89, 111)
-if t2[0] != 'A file whose name does not fit in 8.3 at all.':
-    bad.append('Terminal 2: jot does not show the long name: ' + ' | '.join(t2[:2]))
+t2 = neo(ppm('s6'), 241, 93, 1)
+if t2[0] != '  1 A file whose name does not fit in 8.3 at all.':
+    bad.append('neosim 2 does not show the long name: ' + ' | '.join(t2))
 for b in bad: print('        ' + b)
 sys.exit(1 if bad else 0)
 PY
 tr -d '\r' < "$WORK/serial.log" > "$WORK/log"
-grep -E '^\[countertop\] (open Files|files in|pour|jot)' "$WORK/log" | sed 's/, [0-9]* entries//' > "$WORK/events"
-printf '[countertop] open Files at /\n[countertop] files in /etc\n[countertop] files in /\n[countertop] jot /HELLO.TXT\n[countertop] jot /A Long Recipe Name.txt\n' | cmp -s - "$WORK/events" \
+grep -E '^\[countertop\] (open Files|files in|pour |jot |neosim )' "$WORK/log" | sed 's/, [0-9]* entries//' > "$WORK/events"
+printf '[countertop] open Files at /\n[countertop] files in /etc\n[countertop] files in /\n[countertop] neosim /HELLO.TXT\n[countertop] neosim /A Long Recipe Name.txt\n' | cmp -s - "$WORK/events" \
     || { echo "        the events: $(tr '\n' ';' < "$WORK/events")"; fail=1; }
 grep -x '\[countertop\] down' "$WORK/log" >/dev/null || { echo "        Leave did not give the console back"; fail=1; }
-[ "$fail" = 0 ] && echo "  ok    the files window: / with bowls first and sizes, a double click enters etc/ and .. comes back, HELLO.TXT opens in jot in a terminal, the arrows scroll and Enter opens a name with spaces in jot" \
+[ "$fail" = 0 ] && echo "  ok    the files window: / with bowls first and sizes, a double click enters etc/ and .. comes back, HELLO.TXT opens in neosim, the arrows scroll and Enter opens a name with spaces in neosim" \
     || echo "  FAIL  countertop's files window"
 exit $fail

@@ -4,8 +4,9 @@
 # bar says so, read back against the font); Esc leaves and the file on the
 # disk holds them. jot opened again there, a second jot in Terminal 2 is
 # refused (one buffer, one jot); closing Terminal 1 under its jot hangs it
-# up, so Terminal 2's jot then opens. From the files window a text file
-# goes to jot and anything else to pour (GREET.ELF).
+# up, so Terminal 2's jot then opens. From the files window anything
+# not text goes to pour (GREET.ELF); text goes to neosim since v0.60.250
+# (ctfiles-test), jot staying a shell command.
 set -uo pipefail
 cd "$(dirname "$0")/.."
 fail=0

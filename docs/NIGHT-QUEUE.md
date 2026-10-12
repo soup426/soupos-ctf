@@ -63,7 +63,13 @@ under the standing rules (a test that fails first, then the fix).
 
 ---
 
-## 0. A text file's double click opens neosim (the user's call, 2026-10-12)
+## 0. A text file's double click opens neosim (the user's call, 2026-10-12) — DONE v0.60.250
+
+Done: the double click (and Enter) types cook neosim.elf PATH as the menu's
+entry does; ctfiles-test reads neosim's window and quits it with :q. jot
+was never in the right-click menu (new bowl, remove, open in neosim); it
+stays a shell command.
+
 
 The files window opens a text file in jot on a double click; the user
 asked for neosim. Measure first where the double click decides (the files

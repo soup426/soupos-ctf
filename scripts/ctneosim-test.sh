@@ -2,7 +2,7 @@
 # ctneosim-test.sh - "open in neosim" in the files window's menu (v0.60.207),
 # as saucier: note.txt's menu has a third entry for a text file, and it
 # opens the file in neosim (a terminal types cook neosim.elf PATH, as a
-# double click types jot). neosim's window read back against the font: its
+# double click has since v0.60.250). neosim's window read back against the font: its
 # first line and its status line; the desktop's log line.
 set -uo pipefail
 cd "$(dirname "$0")/.."

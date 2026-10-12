@@ -45,8 +45,8 @@
  * Files (v0.60.145, step 6). A window listing a bowl: its path, then ..,
  * its bowls and its files (with their sizes). A click selects, a double
  * click (or Enter, with the arrows to move) opens: a bowl in the same
- * window, a file in a new terminal with `pour PATH` typed into it (`jot
- * PATH` for a text file, v0.60.154), so what may be read is the shell's to
+ * window, a file in a new terminal with `pour PATH` typed into it (`cook
+ * neosim.elf PATH` for a text file, v0.60.250; jot from v0.60.154), so what may be read is the shell's to
  * decide, as it always is.
  *
  * A terminal's bottom-right corner drags it to a new size (v0.60.162).
@@ -1385,8 +1385,8 @@ static int is_text(const char *p) {
     return 0;
 }
 /* Open what row r of files window k names: a bowl here, a file in a new
- * terminal with `jot 'PATH'` typed into it for text, `pour 'PATH'` for the
- * rest. */
+ * terminal with `cook neosim.elf 'PATH'` typed into it for text (jot
+ * before v0.60.250), `pour 'PATH'` for the rest. */
 /* Row r's path: the bowl above for "..". 0, or -1 if it will not fit. */
 static int files_path(const struct files *f, int r, char p[FAT_PATH_MAX]) {
     if (!strcmp(f->name[r], "..")) {
@@ -1742,12 +1742,11 @@ static void files_open(int k, int r) {
     if (is_bmp(p)) { open_platter(p); return; }       /* a picture to a platter (v0.60.186) */
     int t = open_terminal(0);
     if (t < 0) return;
-    const char *verb = is_text(p) ? "jot" : "pour";   /* text to the editor (v0.60.154) */
-    for (const char *c = verb; *c; c++) wt_key(win[t].term, *c);
-    wt_key(win[t].term, ' ');
+    int text = is_text(p);                           /* text to neosim (v0.60.250; jot before) */
+    for (const char *c = text ? "cook neosim.elf " : "pour "; *c; c++) wt_key(win[t].term, *c);
     type_path(win[t].term, p);
     wt_key(win[t].term, '\n');
-    klog("[countertop] %s %s\n", verb, p);
+    klog("[countertop] %s %s\n", text ? "neosim" : "pour", p);
 }
 
 /* Alt+Tab (v0.60.155): the focused window goes to the back, so the next one
