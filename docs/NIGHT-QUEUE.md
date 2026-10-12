@@ -270,6 +270,48 @@ Mincecraft; neosim and rx.c; Doom; tests, build and docs.)
   Mincecraft tests listed where there are 14; save.c's header comment says
   version 4.
 
+### Kernel and shell (reviewer reproduced 1-6 in QEMU on copies)
+
+- **R-K1 (critical, security).** /dev/kbd: any cook's read freezes the
+  machine (keyboard_getchar's hlt with interrupts off inside the syscall),
+  and it has no foreground check, so a background or SSH program would
+  read the console's keys, secrets typed at login and at chef included
+  (src/vfs.c:318). Fix: through user_stdin_getchar (sti, foreground, kills)
+  or refuse it from ring 3.
+- **R-K2 (critical, security).** A cook's background program takes the next
+  user's rights after clockout: syscall checks use the shell's current user,
+  not the process's owner (users.c eff_uid; usermode.c SYS_OPEN UNLINK
+  MKDIR READDIR STAT KILL). Reproduced: the probe read /etc/kitchen as the
+  headchef. Fix: every check from pr->owner; clockout and the desktop's
+  shift end kill or hang up the user's jobs.
+- **R-K3 (high).** A syscall copying into a program's promised but unmapped
+  heap panics the kernel when the page cap and swap are full (a ring-0
+  fault the pager declines). Fix: fail safely in ring 0 (pre-fault, or an
+  exception-table return of -1).
+- **R-K4 (high).** File writes buffer in RAM with no cap, and pmm hands out
+  ~97 top frames the identity map never covered (it maps a count, not the
+  highest frame): writing 113 MB panics (paging.c:90, vfs.c:215). Fix: map
+  to the highest usable frame; cap or charge write buffers.
+- **R-K5 (high).** Hostile ELF headers panic the kernel: e_phoff/e_phnum not
+  checked against the size, p_filesz > p_memsz not refused (usermode.c:303,
+  247). Fix: both checks, e_phentsize 32.
+- **R-K6 (medium).** A pipeline whose later stage cannot start leaks zombie
+  slots forever (shell.c:2262), shutting a cook out. Fix: proc_wait the
+  stages killed.
+- **R-K7 (medium, headchef only).** kill of a task blocked on a wait queue
+  frees it while still linked (use-after-free); a killed mutex owner holds
+  fat_mtx forever (task.c:343). Fix: unlink first, refuse mutex owners.
+- **R-K9 (low-medium).** An open file keeps reading the freed clusters of a
+  file deleted or overwritten under it; once reused, another user's data
+  (fat.c delete and overwrite never look at fat_fds). Fix: refuse, or
+  invalidate those fds.
+- **R-K8 (low).** sbrk wraps on a huge increment and says yes. Fix: refuse
+  newbrk < old.
+- **R-K10 (low).** An IPv4 total length under the header length wraps the
+  payload length; tcp/udp copy past the frame (net.c:426). Fix: refuse it.
+- **R-K11 (low).** 16 open files machine-wide, 13 for one process: one
+  program starves every redirect. Fix: a per-cook share or a bigger table.
+
 ### Mincecraft (reviewer reproduced 1-3 on the host with the game's own C)
 
 - **R-M1 (high).** Flying has no ceiling (player.c fly branch); a save with
