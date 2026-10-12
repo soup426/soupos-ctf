@@ -15,6 +15,17 @@
 #define BARINK 0x1A1B26u
 #define CURSOR 0xFF9E64u
 #define BODY_W 640
+#define SELECT 0x33467Cu               /* visual mode's selection (v0.60.206) */
+static int selected(const ed_t *e, int y, int x) {
+    if (e->mode != M_VISUAL && e->mode != M_VLINE) return 0;
+    int ay = e->vy, ax = e->vx, by = e->cy, bx = e->cx;
+    if (by < ay || (by == ay && bx < ax)) { int t = ay; ay = by; by = t; t = ax; ax = bx; bx = t; }
+    if (y < ay || y > by) return 0;
+    if (e->mode == M_VLINE) return 1;
+    if (y == ay && x < ax) return 0;
+    if (y == by && x > bx) return 0;
+    return 1;
+}
 
 static void cell(unsigned *b, int c, int r, char ch, unsigned fg, unsigned bg) {
     unsigned *p = b + (r * 16) * BODY_W + c * 8;
@@ -42,7 +53,7 @@ void screen_draw(const ed_t *e, unsigned *b) {
         for (int c = 0; c < SCR_COLS - NUM_W; c++) {
             int x = e->left + c;
             if (x >= e->t.len[l]) break;
-            cell(b, NUM_W + c, r, e->t.s[l][x], INK, PAGE);
+            cell(b, NUM_W + c, r, e->t.s[l][x], INK, selected(e, l, x) ? SELECT : PAGE);
         }
     }
     /* The cursor: rows 14 and 15 of its cell (two for normal, one for insert). */
@@ -51,7 +62,8 @@ void screen_draw(const ed_t *e, unsigned *b) {
         for (int j = e->mode == M_INSERT ? 15 : 14; j < 16; j++) for (int i = 0; i < 8; i++) b[(cr * 16 + j) * BODY_W + cc * 8 + i] = CURSOR;
     /* The status line. */
     char st[SCR_COLS + 1]; int n = 0;
-    const char *mode = e->mode == M_INSERT ? "-- INSERT --" : e->mode == M_COMMAND ? "COMMAND" : "NORMAL";
+    const char *mode = e->mode == M_INSERT ? "-- INSERT --" : e->mode == M_COMMAND ? "COMMAND" :
+                       e->mode == M_VISUAL ? "-- VISUAL --" : e->mode == M_VLINE ? "-- VISUAL LINE --" : "NORMAL";
     st[n++] = ' ';
     for (const char *s = mode; *s; s++) st[n++] = *s;
     st[n++] = ' '; st[n++] = ' ';
@@ -64,7 +76,7 @@ void screen_draw(const ed_t *e, unsigned *b) {
     put(b, SCR_COLS - 1 - p, TEXT_ROWS, pos, BARINK, BAR);
     /* The command line: what is being typed after :, or the last message. */
     if (e->mode == M_COMMAND) {
-        cell(b, 0, TEXT_ROWS + 1, ':', INK, PAGE);
+        cell(b, 0, TEXT_ROWS + 1, e->cmdch ? e->cmdch : ':', INK, PAGE);
         for (int i = 0; i < e->cmdn && i + 1 < SCR_COLS; i++) cell(b, i + 1, TEXT_ROWS + 1, e->cmd[i], INK, PAGE);
         for (int i = 0; i < 8; i++) b[((TEXT_ROWS + 1) * 16 + 15) * BODY_W + (e->cmdn + 1) * 8 + i] = CURSOR;
     } else put(b, 0, TEXT_ROWS + 1, e->msg, INK, PAGE);

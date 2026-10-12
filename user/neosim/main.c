@@ -7,10 +7,12 @@
  *
  * Normal mode: counts; h j k l and the arrows, w b e 0 ^ $ gg G (v0.60.205);
  * the operators d c y with a motion, dd cc yy, D C; x X, p P, J; u and
- * Ctrl-R; i a A I o O into insert mode; : for a command. Insert mode:
+ * Ctrl-R; > < (four spaces); / ? n N (plain text); v V with d y c > <; .
+ * (v0.60.206); i a A I o O into insert mode; : for a command. Insert mode:
  * typing, Enter, Backspace (joining lines at the start of one), Tab as four
  * spaces, the arrows, Esc back. Commands: :w [FILE], :q, :q!, :wq, :x,
- * :e[!] FILE. :q with changes is refused, as vim's E37. The close box is :q.
+ * :e[!] FILE, :s/A/B/[g] and :%s/A/B/[g] (plain text). :q with changes is
+ * refused, as vim's E37. The close box is :q.
  * Each change (an operator, x, a visit to insert mode) is one undo step.
  * Behaviour is checked against neovim's (scripts/neosim-ops-test.sh).
  *
@@ -68,7 +70,9 @@ static void scroll(void) {
 }
 
 /* ---- changes and undo ---- */
+static int cur_change_hook;                         /* set by change_begin: . keeps the command */
 static void change_begin(void) {                    /* before every change: a step back to this */
+    cur_change_hook = 1;
     undo_push(&E.t, E.cy, E.cx, E.seq);
     E.seq = ++E.idgen;
     E.changed = 1;
@@ -111,6 +115,80 @@ static void insert_text(int *y, int *x, const char *s, int n) {
     }
 }
 
+/* ---- search and substitute: plain text (v0.60.206) ---- */
+static char last_pat[80];
+static int last_dir = 1;
+static int match_at(int y, int x, const char *p, int pl) {
+    if (x + pl > lenof(y)) return 0;
+    for (int i = 0; i < pl; i++) if (E.t.s[y][x + i] != p[i]) return 0;
+    return 1;
+}
+/* The next match from just after (or before) the cursor, round the end of
+ * the text once; 1 found (at *oy,*ox), 0 none. *wrapped: it went round. */
+static int find(int dir, const char *p, int *oy, int *ox, int *wrapped) {
+    int pl = 0; while (p[pl]) pl++;
+    *wrapped = 0;
+    if (!pl) return 0;
+    int y = E.cy, x = E.cx;
+    for (int step = 0; step <= E.t.n; step++) {
+        if (dir > 0) {
+            int from = step == 0 ? x + 1 : 0;
+            for (int i = from; i + pl <= lenof(y); i++) if (match_at(y, i, p, pl)) { *oy = y; *ox = i; return 1; }
+            if (++y >= E.t.n) { y = 0; *wrapped = 1; }
+        } else {
+            int from = step == 0 ? x - 1 : lenof(y) - pl;
+            for (int i = from; i >= 0; i--) if (match_at(y, i, p, pl)) { *oy = y; *ox = i; return 1; }
+            if (--y < 0) { y = E.t.n - 1; *wrapped = 1; }
+        }
+    }
+    return 0;                                        /* the last step came back to the cursor's line, all of it */
+}
+static void search(int dir, const char *p) {
+    int y, x, w;
+    if (!find(dir, p, &y, &x, &w)) { msg("E486: Pattern not found: ", p, 0); return; }
+    E.cy = y; E.cx = x; E.want = x;
+    if (w) msg(dir > 0 ? "search hit BOTTOM, continuing at TOP" : "search hit TOP, continuing at BOTTOM", 0, 0);
+    else { msg(dir > 0 ? "/" : "?", p, 0); }
+}
+/* :s/PAT/REP/[g] on line a..b; the whole job one undo step. */
+static void substitute(int a, int b, char *spec) {
+    char *pat = spec, *rep, *fl;
+    rep = pat; while (*rep && *rep != '/') rep++;
+    if (!*rep) { msg("E486: Pattern not found: ", pat, 0); return; }
+    *rep++ = 0;
+    fl = rep; while (*fl && *fl != '/') fl++;
+    if (*fl) *fl++ = 0;
+    int all = 0; for (char *f = fl; *f; f++) if (*f == 'g') all = 1;
+    int pl = 0; while (pat[pl]) pl++;
+    int rl = 0; while (rep[rl]) rl++;
+    if (!pl) { if (!last_pat[0]) { msg("E35: No previous regular expression", 0, 0); return; } pat = last_pat; pl = 0; while (pat[pl]) pl++; }
+    else scopy(last_pat, pat, sizeof(last_pat));
+    int subs = 0, lines = 0, last = -1, begun = 0;
+    for (int y = a; y <= b; y++) {
+        int did = 0;
+        for (int x = 0; x + pl <= lenof(y); ) {
+            if (!match_at(y, x, pat, pl)) { x++; continue; }
+            if (lenof(y) - pl + rl > T_COLS) break;       /* it would not fit */
+            if (!begun) { change_begin(); begun = 1; }
+            for (int i = 0; i < pl; i++) text_delete_char(&E.t, y, x);
+            for (int i = 0; i < rl; i++) text_insert_char(&E.t, y, x + i, rep[i]);
+            x += rl; subs++; did = 1;
+            if (!all) break;
+        }
+        if (did) { lines++; last = y; }
+    }
+    if (!subs) { msg("E486: Pattern not found: ", pat, 0); return; }
+    E.cy = last; E.cx = first_nonblank(&E.t, last); E.want = E.cx;
+    char d[12]; int n = 11; d[n] = 0; unsigned v = (unsigned)subs;
+    do { d[--n] = (char)('0' + v % 10); v /= 10; } while (v);
+    msg(d + n, subs == 1 ? " substitution on " : " substitutions on ", 0);
+    int l = 0; while (E.msg[l]) l++;
+    n = 11; v = (unsigned)lines; do { d[--n] = (char)('0' + v % 10); v /= 10; } while (v);
+    for (const char *q = d + n; *q && l < 70; q++) E.msg[l++] = *q;
+    for (const char *q = lines == 1 ? " line" : " lines"; *q && l < 79; q++) E.msg[l++] = *q;
+    E.msg[l] = 0;
+}
+
 /* ---- files and commands ---- */
 static void open_file(const char *path) {
     scopy(E.path, path, sizeof(E.path));
@@ -135,6 +213,10 @@ static int write_file(const char *path) {
 }
 static int command(char *c) {                        /* 1: end neosim */
     while (*c == ' ') c++;
+    if ((c[0] == 's' && c[1] == '/') || (c[0] == '%' && c[1] == 's' && c[2] == '/')) {   /* :s keeps its spaces */
+        if (c[0] == 's') substitute(E.cy, E.cy, c + 2); else substitute(0, E.t.n - 1, c + 3);
+        return 0;
+    }
     char *arg = c;
     while (*arg && *arg != ' ') arg++;
     if (*arg) { *arg++ = 0; while (*arg == ' ') arg++; }
@@ -154,6 +236,8 @@ static int command(char *c) {                        /* 1: end neosim */
         open_file(arg);
         return 0;
     }
+    if (c[0] == 's' && c[1] == '/') { substitute(E.cy, E.cy, c + 2); return 0; }
+    if (c[0] == '%' && c[1] == 's' && c[2] == '/') { substitute(0, E.t.n - 1, c + 3); return 0; }
     if (!*c) return 0;
     msg("E492: Not an editor command: ", c, 0);
     return 0;
@@ -217,7 +301,9 @@ static mv_t motion(unsigned k, int cnt, int had, int op) {
 }
 
 /* ---- operators ---- */
+static void shift_lines(int a, int b, int dir);
 static void op_lines(int op, int a, int b) {
+    if (op == '>' || op == '<') { shift_lines(a, b, op == '>' ? 1 : -1); return; }
     a = imax(a, 0); b = imin(b, E.t.n - 1);
     reg_take_lines(a, b);
     if (op == 'y') { E.cy = a; clamp(); return; }
@@ -227,7 +313,17 @@ static void op_lines(int op, int a, int b) {
     if (E.t.n == 1 && lenof(0) == 0 && a == 0) { E.cy = 0; insert_mode(0, 0); return; }
     text_insert_line(&E.t, a); E.cy = a; insert_mode(0, 0);
 }
+static void shift_lines(int a, int b, int dir) {      /* > and <: four spaces, empty lines left alone (v0.60.206) */
+    a = imax(a, 0); b = imin(b, E.t.n - 1);
+    change_begin();
+    for (int y = a; y <= b; y++) {
+        if (dir > 0) { if (lenof(y)) for (int i = 0; i < 4; i++) text_insert_char(&E.t, y, 0, ' '); }
+        else for (int i = 0; i < 4 && lenof(y) && E.t.s[y][0] == ' '; i++) text_delete_char(&E.t, y, 0);
+    }
+    E.cy = a; E.cx = first_nonblank(&E.t, a); E.want = E.cx;
+}
 static void op_apply(int op, mv_t m) {
+    if (op == '>' || op == '<') { shift_lines(imin(E.cy, m.y), imax(E.cy, m.y), op == '>' ? 1 : -1); return; }
     if (m.line) { op_lines(op, imin(E.cy, m.y), imax(E.cy, m.y)); return; }
     int ay = E.cy, ax = E.cx, by = m.y, bx = m.x;
     if (by < ay || (by == ay && bx < ax)) { int t = ay; ay = by; by = t; t = ax; ax = bx; bx = t; }
@@ -308,7 +404,12 @@ static void normal_key(unsigned k) {
     }
     if (m.ok == 0 && (k == 'h' || k == 'l' || k == 'j' || k == 'k' || k >= 256)) return;
     switch (k) {
-    case 'd': case 'c': case 'y': P.op = (int)k; P.opcount = cnt; P.ophad = had; break;
+    case 'd': case 'c': case 'y': case '>': case '<': P.op = (int)k; P.opcount = cnt; P.ophad = had; break;
+    case 'n': for (int i = 0; i < cnt; i++) search(last_dir, last_pat); break;
+    case 'N': for (int i = 0; i < cnt; i++) search(-last_dir, last_pat); break;
+    case '/': case '?': E.mode = M_COMMAND; E.cmdch = (char)k; E.cmdn = 0; break;
+    case 'v': E.mode = M_VISUAL; E.vy = E.cy; E.vx = E.cx; break;
+    case 'V': E.mode = M_VLINE; E.vy = E.cy; E.vx = E.cx; break;
     case 'D': { mv_t e = motion('$', cnt, had, 1); if (e.ok) op_apply('d', e); break; }
     case 'C': { mv_t e = motion('$', cnt, had, 1); if (e.ok) op_apply('c', e); else insert_mode(E.cx, 1); break; }
     case 'x': if (len()) { mv_t e = { 1, E.cy, imin(E.cx + cnt, len()), 0, 0 }; op_apply('d', e); } break;
@@ -324,19 +425,91 @@ static void normal_key(unsigned k) {
     case 'I': insert_mode(len() ? first_nonblank(&E.t, E.cy) : 0, 1); break;
     case 'o': change_begin(); if (text_insert_line(&E.t, E.cy + 1) == 0) { E.cy++; insert_mode(0, 0); } break;
     case 'O': change_begin(); if (text_insert_line(&E.t, E.cy) == 0) insert_mode(0, 0); break;
-    case ':': E.mode = M_COMMAND; E.cmdn = 0; break;
+    case ':': E.mode = M_COMMAND; E.cmdch = ':'; E.cmdn = 0; break;
     }
 }
+/* ---- visual mode (v0.60.206): the motions move the cursor, an operator
+ * takes from where v or V was pressed to it ---- */
+static char rec[256], cur[256];                     /* . : the last change's keys, and this command's */
+static int recn, curn, cur_change, replaying;
+static void visual_key(unsigned k) {
+    if (k == 27) { E.mode = M_NORMAL; P.count = 0; return; }
+    if ((k >= '1' && k <= '9') || (k == '0' && P.count)) { P.count = P.count * 10 + (int)(k - '0'); return; }
+    int had = P.count > 0, cnt = had ? P.count : 1;
+    P.count = 0;
+    if (P.g) { P.g = 0; if (k == 'g') { mv_t m = motion('g' + 256, cnt, had, 0); E.cy = m.y; E.cx = E.want; clamp(); } return; }
+    if (k == 'g') { P.g = 1; return; }
+    if (k == 'v' || k == 'V') { int want = k == 'v' ? M_VISUAL : M_VLINE; E.mode = E.mode == want ? M_NORMAL : want; return; }
+    int op = k == 'x' ? 'd' : (int)k;
+    if (op == 'd' || op == 'y' || op == 'c' || op == '>' || op == '<') {
+        int line = E.mode == M_VLINE, dy = E.cy - E.vy, dx = E.cx - E.vx;
+        if (dy < 0) dy = -dy;
+        /* What . does again: as many lines (or characters on one line) from the cursor. */
+        curn = 0; cur_change = op != 'y';
+        cur[curn++] = line || op == '>' || op == '<' ? 'V' : 'v';
+        for (int i = 0; i < dy && curn < 200; i++) cur[curn++] = 'j';
+        if (!line && dy == 0) { if (dx < 0) dx = -dx; for (int i = 0; i < dx && curn < 200; i++) cur[curn++] = 'l'; }
+        cur[curn++] = (char)op;
+        mv_t m = { 1, E.cy, E.cx, line || op == '>' || op == '<', 1 };
+        E.mode = M_NORMAL;
+        int cy = E.cy, cx = E.cx;
+        E.cy = E.vy; E.cx = E.vx;
+        m.y = cy; m.x = cx;
+        if (!m.line && cx >= lenof(cy) && lenof(cy) > 0) m.x = lenof(cy) - 1;
+        op_apply(op, m);
+        return;
+    }
+    mv_t m = motion(k, cnt, had, 0);
+    if (!m.ok) return;
+    E.cy = m.y;
+    if (m.line) { E.cx = E.want; clamp(); } else { E.cx = m.x; clamp(); E.want = k == '$' ? 9999 : E.cx; }
+}
+static int key(unsigned k);
+static int key_inner(unsigned k);
+static void dot(void) {                             /* the last change again */
+    if (!recn || replaying) return;
+    char again[256]; int n = recn;
+    for (int i = 0; i < n; i++) again[i] = rec[i];
+    replaying = 1;
+    for (int i = 0; i < n; i++) key((unsigned char)again[i] == 27 ? 27u : (unsigned)(unsigned char)again[i]);
+    replaying = 0;
+}
+static int idle(void) { return E.mode == M_NORMAL && !P.count && !P.op && !P.g; }
 static int key(unsigned k) {                        /* 1: end neosim */
+    if (!replaying) {                               /* the keys of a change, for . */
+        if (idle() && k == '.') { E.msg[0] = 0; dot(); return 0; }
+        if (idle()) { curn = 0; cur_change = 0; }
+        if (E.mode == M_NORMAL || E.mode == M_INSERT) { if (curn < (int)sizeof(cur)) cur[curn++] = k < 256 ? (char)k : 0; else cur_change = -1; }
+        if (k >= 256) cur_change = -1;              /* arrows are not kept */
+    }
+    cur_change_hook = 0;
+    int r = key_inner(k);
+    if (!replaying && cur_change_hook && cur_change == 0) cur_change = 1;
+    if (!replaying && idle() && cur_change == 1) { for (int i = 0; i < curn; i++) rec[i] = cur[i]; recn = curn; cur_change = 0; }
+    return r;
+}
+static int key_inner(unsigned k) {
     if (E.mode == M_COMMAND) {
-        if (k == 27) { E.mode = M_NORMAL; return 0; }
-        if (k == '\n') { E.cmd[E.cmdn] = 0; E.mode = M_NORMAL; E.msg[0] = 0; return command(E.cmd); }
+        if (k == 27) { E.mode = M_NORMAL; cur_change = -1; return 0; }
+        if (k == '\n') {
+            E.cmd[E.cmdn] = 0; E.mode = M_NORMAL; E.msg[0] = 0; cur_change = -1;
+            if (E.cmdch == '/' || E.cmdch == '?') {
+                last_dir = E.cmdch == '/' ? 1 : -1;
+                if (E.cmdn) scopy(last_pat, E.cmd, sizeof(last_pat));
+                if (!last_pat[0]) { msg("E35: No previous regular expression", 0, 0); return 0; }
+                search(last_dir, last_pat);
+                return 0;
+            }
+            return command(E.cmd);
+        }
         if (k == '\b') { if (E.cmdn) E.cmdn--; else E.mode = M_NORMAL; return 0; }
         if (k >= ' ' && k < 127 && E.cmdn < (int)sizeof(E.cmd) - 1) E.cmd[E.cmdn++] = (char)k;
         return 0;
     }
     E.msg[0] = 0;
-    if (E.mode == M_INSERT) insert_key(k); else normal_key(k);
+    if (E.mode == M_INSERT) insert_key(k);
+    else if (E.mode == M_VISUAL || E.mode == M_VLINE) visual_key(k);
+    else normal_key(k);
     return 0;
 }
 

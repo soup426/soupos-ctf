@@ -79,7 +79,7 @@ Ctrl-R through a list of changes (each insert-mode visit one change), J.
 Test: each against vim's behaviour on the same text, the expected files
 written by hand from vim on the host and kept in the test.
 
-## 3. neosim: search, substitute, visual, repeat
+## 3. neosim: search, substitute, visual, repeat — DONE v0.60.206
 
 / and ? with n N (plain text, wraps with a note), :s/a/b/ and :%s/a/b/g
 (plain text, no regex), v and V with d y c > <, and . repeating the last

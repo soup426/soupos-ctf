@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.205
+Current version: v0.60.206
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,25 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.206 (2026-10-11)  — NEOSIM: SEARCH, SUBSTITUTE, VISUAL, REPEAT
+  - / and ? (plain text) from just past the cursor, round the end of the
+    text once ("search hit BOTTOM, continuing at TOP"), E486 when nothing
+    matches; n and N again, either way, with counts.
+  - :s/A/B/ and :%s/A/B/g (plain text): the first match of each line or
+    all of them, the whole job one undo step, the cursor to the last line
+    changed, "N substitutions on M lines"; an empty A uses the last
+    search. A line that would pass 255 is left as it was.
+  - > and < (operators, and >> <<, counts too): four spaces in or out,
+    empty lines left alone.
+  - v and V: the motions move the cursor over a highlighted selection; d x
+    y c > < take it (characters, across lines, or whole lines).
+  - . does the last change again: the keys of each command that changed
+    the text (an insert with what was typed, cw with its word) are kept;
+    a visual one as V and j's (or v and l's), so as many lines from the
+    cursor, as vim does.
+  - scripts/neosim-find-test.sh: 30 cases against neovim 0.12.5 (sw=4
+    et), as neosim-ops-test.
 
 v0.60.205 (2026-10-11)  — NEOSIM: COUNTS, OPERATORS, UNDO
   - Counts before commands and motions (3j, 5x, 2dd, 2d3w); the motions
