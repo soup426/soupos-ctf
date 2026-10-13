@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.293
+Current version: v0.60.294
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,16 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.294 (2026-10-13)  — NEOSIM: A MIXED FILE KEEPS ITS LINE ENDS
+  - v0.60.285 marked a file CRLF at its first CRLF line, so :w gave every
+    LF line a CR (review R-N47). Every CR is kept in its line as it is
+    read now, and only a file whose every newline came after a CR is
+    CRLF (those lines' CRs taken off, :w putting them back); a mixed file
+    is unix with its CRs kept as text, as nvim reads it. This also drops
+    v0.60.285's carry of a CR across reads.
+  - neosim-bytes-test: one\r\ntwo\nthree\n, x, :w: ne\r\ntwo\nthree\n.
+    Before the fix every line came back CRLF.
 
 v0.60.293 (2026-10-13)  — NEOSIM: UNDO KEEPS A FILE CRLF
   - v0.60.285 cleared the CRLF flag in text_clear, and undo rebuilds the

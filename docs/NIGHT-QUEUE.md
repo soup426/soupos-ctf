@@ -1004,7 +1004,7 @@ Mincecraft; neosim and rx.c; Doom; tests, build and docs.)
   undo.c's pop() rebuilds through text_clear, which now clears crlf; x u
   :w on a CRLF file writes it LF. Fix: crlf kept across pop (reset only in
   text_load).
-- **R-N47 (medium-high, data, my v0.60.285).** One CRLF line marks the whole
+- **R-N47 (medium-high, data, my v0.60.285) — DONE v0.60.294 (neosim-bytes-test).** One CRLF line marks the whole
   file CRLF, so every LF line gains a CR on :w; nvim reads such a file as
   unix and keeps the CR as text. Fix: crlf only when every newline had a
   CR; else the CRs stay in their lines.

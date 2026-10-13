@@ -27,22 +27,20 @@ int text_load(text_t *t, const char *path) {
     int fd = sys_open(path, O_READ);
     if (fd < 0) return -1;
     static char buf[4096];
-    int got, line = 0, over = 0, full = 0, cr = 0;
-    /* (v0.60.285, review R-N4) The bytes as they are: a tab stays a tab (it
-     * was made a space, and a Makefile saved after any edit lost its tabs),
-     * and a CR is dropped only just before a newline, the file then noted
-     * as CRLF and written back so; any other CR stays. cr: one was the last
-     * byte of a read, its newline perhaps in the next. */
+    int got, line = 0, over = 0, full = 0;
+    int nl = 0, crnl = 0, ended = 0;   /* newlines, those after a CR, the last byte one */
+    /* (v0.60.285, review R-N4) The bytes as they are: a tab stays a tab, a
+     * CR stays in its line. (v0.60.294, review R-N47) Only a file whose
+     * every newline came after a CR is CRLF: its lines' CRs come off here
+     * and :w puts them back. One CRLF line used to mark the whole file, and
+     * :w gave every LF line a CR; a mixed file is unix, as nvim reads it. */
     while ((got = sys_read(fd, buf, sizeof(buf))) > 0) {
         for (int i = 0; i < got; i++) {
             char c = buf[i];
-            if (cr && c != '\n') {                  /* a CR not before a newline: kept */
-                if (t->len[line] < T_COLS) t->s[line][t->len[line]++] = '\r'; else over = 1;
-            }
-            if (c == '\n' && cr) t->crlf = 1;
-            cr = c == '\r';
-            if (cr) continue;
+            ended = c == '\n';
             if (c == '\n') {
+                nl++;
+                if (t->len[line] && t->s[line][t->len[line] - 1] == '\r') crnl++;
                 if (t->n == T_MAXL) { full = 1; break; }
                 if (over) t->cut++;
                 over = 0;
@@ -55,7 +53,12 @@ int text_load(text_t *t, const char *path) {
         }
         if (full) break;
     }
-    if (cr && !full) { if (t->len[line] < T_COLS) t->s[line][t->len[line]++] = '\r'; else over = 1; }   /* the last byte */
+    if (nl && crnl == nl) {
+        t->crlf = 1;
+        int last = ended ? t->n - 1 : t->n - 2;   /* the lines a newline ended */
+        for (int k = 0; k <= last && k < t->n; k++)
+            if (t->len[k] && t->s[k][t->len[k] - 1] == '\r') t->len[k]--;
+    }
     sys_close(fd);
     if (over) t->cut++;
     /* A last newline ends the last line rather than starting another. */
