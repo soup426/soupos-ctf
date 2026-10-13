@@ -519,7 +519,7 @@ Mincecraft; neosim and rx.c; Doom; tests, build and docs.)
   ceilings (move_y/x snap as if the hit came from the leading edge). Fix:
   a fall stops where it would meet the player's box; moves leave the
   position alone when the box already overlaps.
-- **R-M4 (medium).** A failed save over an existing world destroys it: fat
+- **R-M4 (medium) — DONE v0.60.277 (in fat_write; overwrite-safe-test; writecap still counts the old file as room, a fail there is clean).** A failed save over an existing world destroys it: fat
   frees the old chain before writing and the fail path leaves the entry on
   freed clusters (src/fat.c:1021, 1117). Fix: write PATH.tmp then replace,
   or fat_write allocates before freeing.

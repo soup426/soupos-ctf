@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.276
+Current version: v0.60.277
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,18 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.277 (2026-10-12)  — AN OVERWRITE THAT FAILS KEEPS THE OLD FILE
+  - fat_write freed an existing file's chain before writing the new one.
+    A write that then ran out of room had given the old clusters away,
+    written part of the new data into them and left the entry pointing at
+    a free chain: the old file was gone and fsck complained (review R-M4:
+    a failed Mincecraft save lost the world it replaced). The new chain is
+    written first now and the old one freed only after the entry points
+    at the new, so an overwrite needs room for both for that moment.
+  - scripts/overwrite-safe-test.sh: decant a 60 KB file over a 10 KB one
+    with 20 KB free: the copy fails, the old file is whole (cmp), fsck is
+    clean. Before the fix it read 0 bytes over a free cluster.
 
 v0.60.276 (2026-10-12)  — MINCECRAFT: FLYING HAS A CEILING
   - Flying had none, but a world file with the cook's feet at y 68 (WY +

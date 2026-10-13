@@ -1003,7 +1003,12 @@ static int fat_write_src_impl(const char *path, uint32_t size, fat_source_fn src
         parse_83(leaf, fname, fext);
     }
 
-    /* Existing entry -> free its chain and reuse the slot; else find a slot.
+    /* Existing entry -> reuse the slot, its chain freed only once the new one
+     * is written and the entry points at it (v0.60.277, review R-M4: freed
+     * first, a write that then ran out of room had given the old file's
+     * clusters away, and its entry pointed at a free chain; a failed
+     * Mincecraft save lost the world it was replacing). An overwrite needs
+     * room for both, for that moment. Else find a slot.
      * An overwrite keeps the file's existing owner/mode; a new file is
      * stamped with the current creator uid and default permissions. */
     uint32_t dir_lba    = 0;
@@ -1015,11 +1020,11 @@ static int fat_write_src_impl(const char *path, uint32_t size, fat_source_fn src
     dirent_t de;
     uint32_t e_lba;
     int      e_idx;
+    uint32_t old_chain = 0;
     if (exists) {
         de = existing; e_lba = ex_lba; e_idx = ex_idx;
         if (de.attr & FAT_ATTR_DIR) return -1;     /* can't overwrite a bowl */
-        uint32_t old = ((uint32_t)de.cluster_hi << 16) | de.cluster_lo;
-        if (old >= 2 && fat_free_chain(old) < 0) return -1;
+        old_chain = ((uint32_t)de.cluster_hi << 16) | de.cluster_lo;
         uint8_t pm, po;
         if (meta_get(&de, &pm, &po)) {             /* keep prior ownership */
             ent_mode  = pm;
@@ -1112,7 +1117,12 @@ static int fat_write_src_impl(const char *path, uint32_t size, fat_source_fn src
     /* Past this point the entry references the chain, so a failure here must
      * NOT free it: that would be a dangling directory entry, which is worse
      * than lost space. */
-    return ata_write_sector(dir_lba, sec_buf);
+    if (ata_write_sector(dir_lba, sec_buf) < 0) return -1;
+    if (old_chain >= 2) {                      /* the old file's, now nothing's */
+        fat_free_chain(old_chain);
+        fat_flush_cache();
+    }
+    return 0;
 
 fail:
     if (first_cluster) {
