@@ -746,6 +746,30 @@ Mincecraft; neosim and rx.c; Doom; tests, build and docs.)
 
 ## Full review findings (2026-10-12, began at c6c8d32)
 
+### The desktop (reviewer confirmed 1-3 in QEMU on copies)
+
+- **R-C21 (medium).** Pastes and typed command lines over 128 keys are cut:
+  wt_key pushes into a 128-entry ring with no yield (countertop.c:254,
+  :348), and the shell does not drain it meanwhile (reproduced: "pasted
+  206 bytes", 128 arrived). The double click's `cook neosim.elf '...'`
+  loses its quote and Enter past a ~110-character path: a second limit on
+  top of R-C11. Fix: a ring of INPUT_MAX x 2 and a paste that waits for
+  room (or a pending buffer the loop drains).
+- **R-C22 (low-medium).** open_terminal leaks the 76 KB scrollback on both
+  failure paths (:1370, :1373; reproduced: 20 failed opens, +1.5 MB of
+  heap); ~100 would empty the kernel heap. Fix: free t->sb (a wt_free).
+- **R-C23 (low-medium).** The taskbar draws 5 buttons but its click test
+  goes on: slot 5 answers clicks where nothing is drawn, slot 6 and up are
+  off the screen, and a minimised window there can never come back
+  (Alt+Tab skips minimised ones). Fix: the same cut in taskbar_hit,
+  narrower buttons, or Alt+Tab listing minimised windows.
+- **R-C24 (low, suspected).** stream_copy sets the copy's mode after the
+  data: in a public bowl another cook's poller can open it in the gap.
+  Fix: a 0-byte file, chmod, then the data (an overwrite keeps the mode).
+- **R-C25 (low).** R-C16 repairs a /compost made before it only at the next
+  compost; its files keep the rwxr-x they were given. Fix: chmod the bowl
+  and .whence when the desktop starts or the compost window opens.
+
 ### Mincecraft (reviewer built the game's C on the host)
 
 - **R-M11 (medium).** Landing never ends flying: move_y zeroes vy on any
