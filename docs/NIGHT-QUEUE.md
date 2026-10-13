@@ -1155,7 +1155,7 @@ was queued.
 
 ### The desktop (reviewer confirmed C26-C29 in QEMU on copies)
 
-- **R-C28 (low-medium, data).** A files window's right-click menu
+- **R-C28 (low-medium, data) — DONE v0.60.317 (ctctxnav-test).** A files window's right-click menu
   survives keyboard navigation: armed on remove, then Down Enter into
   ~/compost, one click empties the compost unasked (files_open never
   calls ctx_close; ctx_label/ctx_click read name[ctx_row] past the new

@@ -1502,6 +1502,7 @@ static int ctx_click(int px, int py) {
     int i = (py - ctx_y - 2) / CTX_IH, k = ctx_win;
     struct files *f = win[k].files;
     if (!f) { ctx_close(); return 1; }
+    if (ctx_row >= f->n) { ctx_close(); return 1; }   /* a row the listing no longer has (v0.60.317) */
     if (ctx_compost()) {                               /* (v0.60.189) */
         if (i == 0 && !ctx_armed) { ctx_armed = 1; repaint(ctx_x, ctx_y, CTX_W, h); return 1; }   /* empty: ask again */
         if (i == 0) compost_empty();
@@ -1769,6 +1770,7 @@ static void open_platter(const char *path) {
 }
 static void files_open(int k, int r) {
     struct files *f = win[k].files;
+    if (ctx_win == k) ctx_close();                     /* its menu was for the listing that goes now (v0.60.317) */
     if (r < 0 || r >= f->n) return;
     char p[FAT_PATH_MAX];
     if (files_path(f, r, p) < 0) return;
@@ -2771,6 +2773,10 @@ int countertop_run(int (*avail)(void), int (*getch)(void), int uid) {
             else if (k >= 0 && win[k].app >= 0) app_push(win[k].app, WEV_KEY, (unsigned)c, 0, 0, 0);
             else if (k >= 0 && win[k].files && (c == KEY_UP || c == KEY_DOWN || c == '\n')) {
                 struct files *f = win[k].files;
+                /* (v0.60.317, review R-C28) A key closes the window's menu: it
+                 * outlived the arrows and Enter, then read its row out of the
+                 * next listing, and one click emptied the compost unasked. */
+                if (ctx_win == k) ctx_close();
                 if (c == '\n') files_open(k, f->sel);
                 else {
                     if (c == KEY_UP && f->sel > 0) f->sel--;

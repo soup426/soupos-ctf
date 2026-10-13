@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.316
+Current version: v0.60.317
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,17 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.317 (2026-10-13)  — DESKTOP: A FILES WINDOW'S MENU GOES WITH ITS LISTING
+  - The right-click menu outlived the arrow keys and Enter, and read the
+    row it was opened on out of whatever the window showed next: armed on
+    "remove note.txt", Down and Enter into ~/compost, and one click on it
+    emptied the compost, asked once (review R-C28). A key to a files
+    window and files_open close its menu now, and the menu refuses a row
+    the listing no longer has.
+  - scripts/ctctxnav-test.sh: saucier does just that; nothing is emptied
+    and compost/precious.txt is still on the disk. Before the fix: "compost
+    emptied, 1 file gone".
 
 v0.60.316 (2026-10-13)  — DOOM: MONSTERS WAIT THEIR REACTION TIME
   - The attack cooldown started at 0 and the attack ran in the step that
