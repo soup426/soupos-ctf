@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.281
+Current version: v0.60.282
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,16 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.282 (2026-10-12)  — CTCOMPOSTMODE-TEST CHECKS ALL THREE MODES
+  - It guarded only stream_copy's mode: with the compost bowl's chmod or
+    .whence's taken out it still passed, though saucier could then list
+    the headchef's composted files (review R-T29). And its one mode check
+    read the last perms: line, which, with the bowl closed to saucier,
+    could be the headchef's own earlier one. Now saucier's cd /compost
+    must be refused and no listing show priv.txt, and the headchef, back
+    in, reads the three modes: the bowl rwx---, the file rw----, the index
+    rw----. With both chmods taken out every one of those fails.
 
 v0.60.281 (2026-10-12)  — TOPRAM-TEST CAN FAIL AGAIN
   - v0.60.275's write cap stops /dev/zero > /z at the disk's room (28 MB),

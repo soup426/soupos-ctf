@@ -39,8 +39,10 @@ go(700, row(1)); out += twice                      # drop/, row 1 in directory o
 menu(1, 1, 2)                                      # remove priv.txt (asked twice): to /compost
 go(288, 12); out += click + ['WAIT:2']             # Leave
 out += ['clockout', 'WAIT:2', 'saucier', 'basil', 'WAIT:2',
-        'pour /compost/priv.txt', 'WAIT:1', 'pour /compost/.whence', 'WAIT:1',
-        'perms /compost/priv.txt', 'WAIT:1', 'slurp MODE-DONE', 'UNTIL:MODE-DONE']
+        'pour /compost/priv.txt', 'WAIT:1', 'pour /compost/.whence', 'WAIT:1', 'cd /compost', 'WAIT:1', 'serve', 'WAIT:1', 'cd', 'WAIT:1',
+        'clockout', 'WAIT:2', 'headchef', 'rosemary', 'WAIT:2',          # the modes, read by one who may (v0.60.282)
+        'perms /compost', 'WAIT:1', 'perms /compost/priv.txt', 'WAIT:1', 'perms /compost/.whence', 'WAIT:1',
+        'slurp MODE-DONE', 'UNTIL:MODE-DONE']
 print('\0'.join(out), end='')
 PY
 )
@@ -56,7 +58,14 @@ grep '^\[countertop\] composted /drop/priv.txt as /compost/priv.txt' "$WORK/log"
 grep headchefsecretpayroll "$WORK/log" | grep -v 'stir /drop' >/dev/null && { echo "        saucier read /compost/priv.txt"; fail=1; }
 grep 'priv.txt	/drop' "$WORK/log" >/dev/null && { echo "        saucier read /compost/.whence"; fail=1; }
 [ "$(grep -c 'Permission denied: /compost/' "$WORK/log")" -ge 2 ] || { echo "        not both refused: $(grep -c 'Permission denied: /compost/' "$WORK/log") refusals"; fail=1; }
-[ "$(grep -o 'perms: [rwx-]*' "$WORK/log" | tail -1)" = "perms: rw----" ] || { echo "        the composted file's mode: $(grep -o 'perms: [rwx-]*' "$WORK/log" | tail -1)"; fail=1; }   # the last perms: saucier's
+# (v0.60.282, review R-T29) saucier may not even list the compost, and the
+# three modes are read by the headchef afterwards: the bowl rwx---, the
+# file still rw----, the index rw---- (the last three perms: lines; the one
+# read before, by saucier, could have been the headchef's own earlier set).
+grep -E 'headchef +priv\.txt' "$WORK/log" >/dev/null && { echo "        saucier listed /compost: $(grep -E 'headchef +priv' "$WORK/log" | head -1)"; fail=1; }
+[ "$(grep -c 'Permission denied: /compost' "$WORK/log")" -ge 3 ] || { echo "        saucier's cd /compost was not refused"; fail=1; }
+modes=$(grep -o 'perms: [rwx-]*' "$WORK/log" | tail -3 | tr '\n' ' ')
+[ "$modes" = "perms: rwx--- perms: rw---- perms: rw---- " ] || { echo "        the modes (bowl, file, index): $modes"; fail=1; }
 [ "$fail" = 0 ] && echo "  ok    a composted rw---- file stays rw----; saucier is refused it and the compost's index" \
     || echo "  FAIL  the compost's modes"
 exit $fail

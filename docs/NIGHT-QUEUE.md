@@ -792,7 +792,7 @@ Mincecraft; neosim and rx.c; Doom; tests, build and docs.)
   passes). Fix (the reviewer's, confirmed): boot it -m 32M, where free RAM
   is under the disk's room; require "out of memory at" so it cannot go
   dead again; fix its header and ROADMAP's line.
-- **R-T29 (low-medium, mine).** ctcompostmode-test guards only stream_copy's
+- **R-T29 (low-medium, mine) — DONE v0.60.282 (fails with the two chmods removed).** ctcompostmode-test guards only stream_copy's
   mode: with the bowl's chmod or .whence's removed it passes, though saucier
   can then list /compost (names, owner, sizes). Fix: serve /compost as
   saucier must be refused, no priv.txt in it.
