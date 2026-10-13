@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.267
+Current version: v0.60.268
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,20 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.268 (2026-10-12)  — EVERY FRAME PMM GIVES IS MAPPED
+  - The kernel's identity map ran to pmm_total_pages(), a count of usable
+    pages, not the highest: below it the hole at 0xA0000-0xFFFFF left ~97
+    frames at the top of RAM (from 0x7f7f000 at -m 128M) free in pmm and
+    mapped nowhere, and the first kernel write to one panicked. Any cook
+    got there in 7 s with cook spoon.elf /dev/zero > /z, which buffers
+    the file in fresh frames (review R-K4, its first half). pmm keeps one
+    past the highest usable page now (pmm_top_page) and the map runs to
+    it. The same run now fills memory, fails its write to the disk, is
+    killed, and every page comes back. That the write buffer has no cap
+    is still open.
+  - scripts/topram-test.sh: 20 s of that, Ctrl-C, no panic, the shell
+    answers. Before the fix it panicked at 0x7f7f000.
 
 v0.60.267 (2026-10-12)  — THE DESKTOP ASKS WHOSE PROGRAM UNDER ITS LOCK
   - SYS_WIN_OPEN and SYS_NOTE asked ct_admits before taking app_mtx: a

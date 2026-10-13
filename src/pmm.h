@@ -6,6 +6,7 @@ void    *pmm_alloc_page(void);
 void     pmm_free_page(void *page);
 
 uint32_t pmm_total_pages(void);
+uint32_t pmm_top_page(void);     /* one past the highest usable page: what to map (v0.60.268) */
 uint32_t pmm_used_pages(void);
 uint32_t pmm_free_pages(void);
 uint32_t pmm_total_kb(void);

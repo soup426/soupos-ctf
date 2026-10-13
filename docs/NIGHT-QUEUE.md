@@ -449,7 +449,7 @@ Mincecraft; neosim and rx.c; Doom; tests, build and docs.)
   heap panics the kernel when the page cap and swap are full (a ring-0
   fault the pager declines). Fix: fail safely in ring 0 (pre-fault, or an
   exception-table return of -1).
-- **R-K4 (high).** File writes buffer in RAM with no cap, and pmm hands out
+- **R-K4 (high) — first half DONE v0.60.268 (the map to the highest frame; topram-test). OPEN: R-K4b, the write buffer's cap (one program still starves every pmm user until its write fails).** File writes buffer in RAM with no cap, and pmm hands out
   ~97 top frames the identity map never covered (it maps a count, not the
   highest frame): writing 113 MB panics (paging.c:90, vfs.c:215). Fix: map
   to the highest usable frame; cap or charge write buffers.

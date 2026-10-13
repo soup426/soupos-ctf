@@ -83,11 +83,12 @@ void paging_init(void) {
     for (int i = 0; i < 1024; i++)
         page_dir[i] = 0;
 
-    /* total_pages is the count of pages the bootloader reported as usable RAM.
-       Iterating 1..total_pages covers the full physical address range including
-       the reserved holes (VGA at 0xB8000, etc.) because their page numbers are
-       less than total_pages (~32 000 for a 128 MB VM). */
-    uint32_t total = pmm_total_pages();
+    /* Up to the highest usable page, holes (VGA at 0xB8000, the BIOS area)
+       and all. It ran to pmm_total_pages(), a COUNT of usable pages, which
+       the hole at 0xA0000-0xFFFFF puts ~97 below the highest: those frames
+       at the top of RAM were free in pmm and mapped nowhere, and the first
+       kernel write to one panicked (v0.60.268, review R-K4). */
+    uint32_t total = pmm_top_page();
     for (uint32_t p = 1; p < total; p++)
         map_page(p * PAGE_SIZE, p * PAGE_SIZE, PAGE_PRESENT | PAGE_WRITE);
 

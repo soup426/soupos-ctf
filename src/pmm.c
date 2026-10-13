@@ -28,6 +28,7 @@ static inline void irq_restore(uint32_t f) {
 static uint32_t bitmap[MAX_PAGES / 32];   /* 32 KB in BSS */
 static uint32_t total_pages_ = 0;
 static uint32_t used_pages_  = 0;
+static uint32_t top_page_    = 0;   /* one past the highest usable page (v0.60.268) */
 
 /* Provided by linker.ld - address immediately after the kernel image */
 extern char kernel_end;
@@ -60,6 +61,7 @@ void pmm_init(uint32_t mb_info_addr) {
             for (uint32_t p = first; p < last && p < MAX_PAGES; p++) {
                 set_free(p);
                 total_pages_++;
+                if (p + 1 > top_page_) top_page_ = p + 1;
             }
         }
         /* Advance: e->size does not include the size field itself (+4) */
@@ -104,6 +106,7 @@ void pmm_free_page(void *page) {
 }
 
 uint32_t pmm_total_pages(void) { return total_pages_; }
+uint32_t pmm_top_page(void)    { return top_page_; }
 uint32_t pmm_used_pages(void)  { return used_pages_; }
 uint32_t pmm_free_pages(void)  { return total_pages_ - used_pages_; }
 uint32_t pmm_total_kb(void)    { return total_pages_ * (PAGE_SIZE / 1024); }
