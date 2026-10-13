@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.301
+Current version: v0.60.302
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,18 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.302 (2026-10-13)  — WRITESHARE-TEST SEES THE WHOLE SHARE RULE
+  - writeshare-test had one cook and freed nothing, so v0.60.292's cap on
+    all cooks together and the share coming back at a close were never
+    tried: with both deleted it passed (review R-T37). Now sous's writer
+    runs beside saucier's and the two must stop near three quarters (at
+    most 1.6 times saucier's half), then both are killed, their files
+    strained, and a redirect of saucier's must reach the disk. HELLO.TXT
+    must read non-empty first (R-T40's half for this test).
+  - Shown: without the three-quarters clause sous ran to the shared cap
+    and the headchef's redirect got 0 bytes; without mem_drop's two share
+    decrements saucier's redirect after the kills was refused.
 
 v0.60.301 (2026-10-13)  — TWO NEOSIM TESTS WRITE WHAT THEY COMPARE
   - neosim-fullpaste-test and neosim-longjoin-test ended with :q (v0.60.296,

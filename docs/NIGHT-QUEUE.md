@@ -1109,7 +1109,7 @@ tests, build and docs. Nothing critical, so the full review stays at 30.
   compares the file with itself: a refusal that changes the buffer without
   marking it passes. Fix: after the :q check, a second neosim (or :e!)
   writes the buffer, or the cmp lines go.
-- **R-T37 (medium).** writeshare-test never frees and has one cook: with
+- **R-T37 (medium) — DONE v0.60.302.** writeshare-test never frees and has one cook: with
   mem_drop's two share decrements and the three-quarters cap deleted it
   passed. Fix: kill the writer, strain the file, saucier redirects again
   and it reaches the disk; a second cook's writer alongside, the two
