@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.278
+Current version: v0.60.279
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,12 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.279 (2026-10-12)  — CTSLOTS-TEST READS PAST KERNEL LINES
+  - Under the full check's load a kernel line landed in the middle of
+    "prod: hog holds 8", and ctslots-test read no number ("the hog held
+    none"; alone it passed twice). It takes the kernel's lines out before
+    reading what the program said, as prodwin-test does.
 
 v0.60.278 (2026-10-12)  — NEOSIM: :w OTHER KEEPS THE BUFFER'S NAME
   - :w OTHER took OTHER as the buffer's name and cleared [+], as vim does

@@ -203,7 +203,7 @@ Seen 2026-10-12 (v0.60.267's run): doom-mouse-test, "a shot each 0.15 s":
 gaps [14, 15, ...], one a tick under its 15 floor; three runs alone passed.
 Seen 2026-10-12 (v0.60.278's first run): ctslots-test "the hog held none";
 two runs alone passed. Probably a kernel line landing mid-line in "prod: hog
-holds N" (prodwin-test strips them for that reason); fixed next.
+holds N" (prodwin-test strips them for that reason); fixed v0.60.279.
 
 ## 6. Doom: the face
 

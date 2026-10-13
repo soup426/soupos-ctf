@@ -26,7 +26,11 @@ python3 scripts/qemu_keys.py "$WORK/mon.sock" "headchef" "rosemary" "WAIT:1" "hi
     || { echo "  FAIL  could not drive QEMU"; fail=1; }
 kill $PID 2>/dev/null; wait $PID 2>/dev/null; PID=""
 tr -d '\r' < "$WORK/log" > "$WORK/l"
-held=$(grep -oE 'prod: hog holds [0-9]+' "$WORK/l" | grep -oE '[0-9]+$' | head -1)
+# Kernel lines land mid-line in a program's output under load ("prod: hog
+# holds [countertop] ...\n8"), as prodwin-test found: read the program's
+# words with them taken out (v0.60.279; it once said "the hog held none").
+python3 -c "import re,sys; print(re.sub(r'\[(countertop|demand|proc \d+|swap|user)\][^\n]*\n', '', open(sys.argv[1], encoding='latin-1').read()), end='')" "$WORK/l" > "$WORK/said"
+held=$(grep -oE 'prod: hog holds [0-9]+' "$WORK/said" | grep -oE '[0-9]+$' | head -1)
 [ "${held:-0}" -ge 8 ] && echo "  ok    saucier's hog took every slot: $held" || { echo "  FAIL  the hog held ${held:-none}"; fail=1; }
 [ "$(grep -c '^\[countertop\] down' "$WORK/l")" -ge 1 ] && echo "  ok    saucier left the desktop" || { echo "  FAIL  saucier's desktop never went down"; fail=1; }
 vpid=$(grep -oE '^\[proc [0-9]+\] spawned /prod\.elf' "$WORK/l" | sed -n 2p | grep -oE '[0-9]+')
