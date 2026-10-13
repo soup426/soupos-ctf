@@ -133,7 +133,7 @@ linuxdoom; most visible in play first):
   Fix: lines block projectiles; monsters move through a try_move.
 - **R-D6 (medium).** The player shoots monsters through walls (no line of
   sight in fire_weapon). Fix: los_clear, as P_AimLineAttack.
-- **R-D8 (medium).** Walls clipped at the screen's left edge take depth
+- **R-D8 (high since R-D53: its wrong depths now hide sprites).** Walls clipped at the screen's left edge take depth
   and texture from the off-screen end: smeared, stretched near walls
   (about 13% of left-clipped walls, edges up to 188 px out). Fix:
   interpolate from the unclamped ends; move u1/u2 with the near clip.
@@ -1273,6 +1273,92 @@ and waits match. v0.60.308 regressed (R-D45).
   thinkers run each frame with waits in timer ticks (v0.60.309 changed
   it), and its kill lines predate v0.60.300's deferred kill.
 
+## Area review findings (2026-10-13, began at 428f262)
+
+All six areas changed since the full review at 88512a1. Nothing critical;
+two highs, both from my own fixes (v0.60.312, and v0.60.310 making R-D8
+show).
+
+### Kernel and shell (reviewer confirmed K42 and K43 in QEMU on copies)
+
+- **R-K42 (high, my v0.60.312).** Sending a session running a foreground
+  soup back to task_kill brings back R-K33 for sessions: killed mid-close,
+  the freed task still owns fat_mtx and every later file write hangs (a
+  console soup writing 1 MB never finished; /big.txt 0 bytes). Fix: the
+  deferred kill for any task with ->soupyc again (v0.60.312's clear in
+  soupyc_run is what fixes R-K37); the killer waits only for a spawned
+  script's death, and says "script stopped" for a session. Test:
+  killsession-test with a 24 MB close, then a console write and close in
+  10 s.
+- **R-K43 (medium-high, my v0.60.312).** The same: a task_kill'd
+  session's buffered writes are never released (sc_files_reset never
+  runs), so every write after is refused until a reboot. Fix: as R-K42.
+- **R-K44 (low-medium, plausible).** task_kill of a task blocked on a
+  wait queue leaves it linked when it is freed. Fix: task_unblock first.
+- **R-K45 (low, plausible).** task_init never sets task 0's kill_req or
+  spawned_script. Fix: both 0.
+
+### The desktop (reviewer confirmed C31 in QEMU on a copy)
+
+- **R-C31 (low-medium, data).** A drop onto a files window with its menu
+  open reloads its listing under the menu; the same row is another file
+  (a remove composted the dropped file, not the one the menu was for).
+  Fix: files_load closes a menu on its window.
+- **R-C32 (low, test, mine).** ctctxnav-test has no positive control: if
+  the keys or clicks miss it passes. With R-T48, R-T49 below.
+
+### Mincecraft (reviewer: host build, 800,000 fuzzed ticks)
+
+- **R-M20 (low).** In flight ground is no longer cleared on a still tick:
+  a stale ground can make the first tick after fly off a jump. Cosmetic.
+  (R-M2's walking and jumping snaps, through walls and up through solid
+  ground, were reproduced again: still queued, high.)
+
+### neosim and rx (reviewer: host harness with ASan, 900 paste runs and 3000 rx patterns against nvim and GNU grep)
+
+- **R-N65 (low, data, my v0.60.313).** The repeat check counts every
+  Enter typed, not one joined back by Backspace: G3A<CR><BS>x<Esc> on a
+  2047-line file gives lx (nvim lxxx). Fix: measure the first copy's net
+  and peak lines.
+- **R-N66 (low).** After a multi-line charwise paste the cursor goes to
+  its end, not its first character as nvim.
+
+### Doom (reviewer: an instrumented copy painting each clip's hidden pixels; 3 QEMU runs)
+
+- **R-D53 (high, looks; R-D8 made visible by my v0.60.310).** A wall
+  clipped at the near plane gets a far-off sx2, clamped, and its depth
+  interpolated over the clamped span: the per-column depths are wrong
+  (64 against a true 157), and now they hide sprites (doom at 3216 -3808
+  270: the shotgun guy beside wall 429 hidden at columns 529-587). Fix:
+  R-D8's, 1/vx from the unclamped ends. R-D8 rises to high with it.
+- **R-D54 (medium).** A sprite standing in front of a wall it touches is
+  cut where its billboard passes the wall plane; Doom clips only when
+  R_PointOnSegSide puts the thing behind the seg.
+- **R-D55 (medium, plausible).** Portal steps still narrow the sprite
+  span by order, not depth (R-D45's failure for steps). Fix: drawsegs.
+- **R-D56 (medium-low).** No movecount gate on the missile check.
+- **R-D57 (low).** The reaction time ends 2-3 tics late (Doom runs
+  A_Chase on the waking tic: 7T + 1); melee should not wait it out; a hit
+  should end it.
+- **R-D58 (low, test, mine).** doom-wake-test: see R-T47; its threshold
+  should be tic 22, and missile_hold is untested.
+
+### Tests, build and docs (reviewer reverted four fixes in a copy; one test passed)
+
+- **R-T47 (medium, mine).** doom-wake-test reads the hurt lines the fix
+  itself added: with e4174c4's doom.c reverted there are none, and both
+  checks pass on an empty list. Fix: at least one hit required (the
+  player dies there in 3 s), the first at tic 22 or later.
+- **R-T48 (low, mine).** ctctxnav-test is saved by any one of the fix's
+  three parts: more files in the compost so the row check cannot save
+  it, and a case with no Enter.
+- **R-T49 (low, mine).** ctctxnav-test's checks are both absences: a log
+  line or note.txt's removal as a positive marker.
+- **R-T50 (low).** doom-spritecut-test's dump comes after some world
+  tics, not "before the world runs".
+- **R-T51, R-T52 (nits).** killsession-test's "killed task N" prefix
+  match; ere-test's header count.
+
 ## The order to work the review in
 
 0. Item 0 first (the user asked for it directly: a text file's double
@@ -1291,6 +1377,7 @@ and waits match. v0.60.308 regressed (R-D45).
 4. Data loss: R-M1, R-M4, R-N3, R-N30 (my N3, incomplete), R-N4, R-N5, R-N1, R-N2, R-N31, then R-N46, R-N47 (my N4's regressions), R-N48, R-N49, R-N32, R-N50.
 4b. The area review at 3c49bd7 (my own regressions first): R-K33 with R-K34, R-T39, R-T37, R-T38, R-N53, R-N54, R-K35; then back to item 0b at R-D21. Its lows (R-N55, R-N56, R-D41, R-D42, R-D43 with R-D44 and R-K36, R-T40, R-T41) go with the rest by severity.
 4c. The full review at 88512a1, my own regressions first: R-D45 (v0.60.308), R-N57 (v0.60.305), R-K37 (v0.60.300), R-N61 (v0.60.304), R-T44; then R-M17, R-D46 (high), R-C28, R-N58, R-N59, R-N60 (data); then item 0b's order again from R-D2 with R-D47 beside R-D7. The rest of this review's (R-K38-40, R-C26-27, R-C29-30, R-M18-19, R-N62-64, R-D48-52, R-T42-43, R-T45-46) go with the rest by severity.
+4d. The area review at 428f262, my own first: R-K42 with R-K43 (and R-K45), R-D53 with R-D8, R-T47 with R-D58, R-N65, R-C32 with R-T48/R-T49; then R-C31, R-D54; then 4c's remaining order (R-N60, then item 0b from R-D2). The lows (R-K44, R-M20, R-N66, R-D55-57, R-T50-52) go with the rest by severity.
 5. Item 0b, Doom: R-D20, R-D21, R-D22 (what the user sees first), then R-D3, R-D2, R-D4, R-D1 and the rest by severity.
 6. The rest by severity, the area's mediums before the lows; items 1-9
    where they fit.
