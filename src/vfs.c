@@ -20,6 +20,7 @@
 #include "serial.h"
 #include "task.h"
 #include "proc.h"
+#include "users.h"
 #include "term.h"
 
 /* ---- open-handle table ---- */
@@ -221,6 +222,12 @@ static const vfs_ops_t fat_read_ops = {
  * the rest of the machine keeps its frames. */
 static uint32_t wbuf_pages;
 static uint32_t wbuf_room;                        /* bytes: the disk's free room when last measured */
+/* (v0.60.292, review R-K30) and each cook's share: one budget for all let one
+ * cook's background writer (it outlives clockout) hold the machine's, and
+ * every other cook's writes failed, the headchef's too. A cook may hold half
+ * the room, all cooks together three quarters; the headchef the rest. */
+static uint32_t wbuf_by_uid[256];
+static uint32_t wbuf_cooks;                       /* the pages of every cook but the headchef */
 static int      wbuf_measured;                    /* (v0.60.291, review R-K31) 0 until measured: room 0
                                                    * stood for "not measured" too, and on a full disk
                                                    * the shared cap switched itself off */
@@ -232,10 +239,13 @@ static void wbuf_measure(void) {
 static void mem_drop(vfs_node_t *n) {             /* a node's pages back, and off the count */
     for (uint32_t i = 0; i < n->npg; i++) pmm_free_page(n->pg[i]);
     wbuf_pages -= n->npg;
+    wbuf_by_uid[n->wuid] -= n->npg;
+    if (n->wuid) wbuf_cooks -= n->npg;
     if (n->pg) kfree(n->pg);
     n->pg = 0; n->npg = n->pgcap = 0;
 }
-/* 0; -1 out of memory; -2 the write buffers together hold the disk's room. */
+/* 0; -1 out of memory; -2 the write buffers together hold the disk's room;
+ * -3 the cook's share is full. */
 static int mem_ensure(vfs_node_t *n, uint32_t need) {
     uint32_t want = (need + VFS_PG - 1) / VFS_PG;
     if (want <= n->npg) return 0;
@@ -250,11 +260,15 @@ static int mem_ensure(vfs_node_t *n, uint32_t need) {
     while (n->npg < want) {
         if (!wbuf_measured) wbuf_measure();           /* the first append after boot, say */
         if ((uint64_t)(wbuf_pages + 1) * VFS_PG > wbuf_room) return -2;
+        if (n->wuid && ((uint64_t)(wbuf_by_uid[n->wuid] + 1) * VFS_PG > wbuf_room / 2 ||
+                        (uint64_t)(wbuf_cooks + 1) * VFS_PG > wbuf_room / 4 * 3)) return -3;
         uint8_t *page = (uint8_t *)pmm_alloc_page();
         if (!page) return -1;
         memset(page, 0, VFS_PG);
         n->pg[n->npg++] = page;
         wbuf_pages++;
+        wbuf_by_uid[n->wuid]++;
+        if (n->wuid) wbuf_cooks++;
     }
     return 0;
 }
@@ -301,7 +315,8 @@ static int mem_write_op(vfs_node_t *n, const void *buf, uint32_t count) {
     }
     int got = mem_ensure(n, n->pos + count);
     if (got < 0) {
-        if (!n->failed && got == -2) klog("[vfs] /%s: stops at %u bytes, the write buffers together hold the disk's room; the rest is lost\n", n->name, n->size);
+        if (!n->failed && got == -3) klog("[vfs] /%s: stops at %u bytes, the cook's share of the write budget; the rest is lost\n", n->name, n->size);
+        else if (!n->failed && got == -2) klog("[vfs] /%s: stops at %u bytes, the write buffers together hold the disk's room; the rest is lost\n", n->name, n->size);
         else if (!n->failed) klog("[vfs] /%s: out of memory at %u bytes; the rest is lost\n", n->name, n->size);
         n->failed = 1;
         return -1;
@@ -435,6 +450,7 @@ vfs_node_t *vfs_open(const char *path, int flags) {
     n->type  = VFS_FILE;
     n->flags = flags;
     copy_name(n->name, p);
+    n->wuid  = users_current_uid();       /* (v0.60.292) whose share its buffer takes */
 
     if (write) {
         /* Write mode: buffer is created on first write; an empty file is

@@ -62,6 +62,7 @@ typedef struct vfs_node {
                                  * growing at about 2 MB, silently)     */
     uint32_t         npg, pgcap;/* pages held, and room in pg[]          */
     int              failed;    /* a write or the flush failed           */
+    uint8_t          wuid;      /* the cook whose write buffer it is (v0.60.292) */
     uint32_t         limit;     /* bytes a write buffer may hold: what the
                                  * disk could take, set at the first write
                                  * (v0.60.275); 0 not yet set            */

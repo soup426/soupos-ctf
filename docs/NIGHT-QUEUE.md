@@ -981,7 +981,7 @@ Mincecraft; neosim and rx.c; Doom; tests, build and docs.)
   every buffered write on the machine is refused until a reboot (reproduced:
   "stops at 0 bytes"). Fix: close the task's soupyc files when it is killed
   or reaped (a kill hook), or a count the reaper can give back per node.
-- **R-K30 (medium-high, my v0.60.283).** One budget for all: one cook's
+- **R-K30 (medium-high, my v0.60.283) — DONE v0.60.292 (a cook half, cooks three quarters; writeshare-test).** One budget for all: one cook's
   background writer (it outlives clockout) holds the machine's, and every
   other cook's redirect, soupyc write, neosim and Mincecraft save fails
   (reproduced). Fix: a share per cook, a reserve for the headchef; or say it.

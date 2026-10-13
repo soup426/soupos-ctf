@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.291
+Current version: v0.60.292
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,17 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.292 (2026-10-13)  — EACH COOK HAS A SHARE OF THE WRITE BUDGET
+  - v0.60.283's one budget for all let one cook's background writer (it
+    outlives clockout) hold the machine's, so every other cook's redirect,
+    soupyc write and neosim or Mincecraft save failed, the headchef's too
+    (review R-K30). A write node knows its cook now: a cook may hold half
+    of the disk's room, all cooks together three quarters, and the
+    headchef the rest; past a share the write fails and the log says so.
+  - scripts/writeshare-test.sh: saucier's /dev/zero writer stops at its
+    share (14.2 MB), saucier clocks out, and the headchef's redirect
+    reaches the disk. Before the fix it stopped at 0 bytes.
 
 v0.60.291 (2026-10-13)  — THE WRITE BUDGET HOLDS ON A FULL DISK
   - wbuf_room 0 stood for "not measured" as well as "no room", so on a
