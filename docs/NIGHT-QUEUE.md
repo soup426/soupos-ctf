@@ -667,6 +667,32 @@ Mincecraft; neosim and rx.c; Doom; tests, build and docs.)
 - **R-C15 (nit).** `cook neosim.elf` finds ~/neosim.elf first (the cook's
   own, no gain); `static int ct_uid;` declared twice.
 
+## Area review findings (2026-10-12, began at a6f1c1c)
+
+### The desktop (reviewer confirmed 1 in QEMU on a copy)
+
+- **R-C16 (medium-high, security).** Compost, copy and put back drop the
+  file's mode: stream_copy makes the new file FAT_PERM_DEFAULT (rwxr-x),
+  and the headchef's compost is /compost at the root (made rwxr-x too),
+  so a rw---- file the headchef composts is every cook's to read
+  (reproduced: saucier poured /compost/priv.txt). Composting /etc/kitchen
+  would hand out every hash; /compost/.whence names every origin. Put back
+  and a drag copy lose the mode the same way. Fix: stream_copy keeps the
+  source's mode (and the owner on put back); /compost and ~/compost
+  rwx---, .whence rw----; perhaps refuse the pinned system files.
+- **R-C17 (low, mine, v0.60.263).** The new refusal note is 79 characters;
+  the bar shows about 43, so its advice is cut off. Fix: "not yours to
+  read: strain it in a terminal".
+- **R-C18 (low).** A file the cook may not write is refused with only a
+  log line; the unreadable one gets a note. Fix: a note for both.
+- **R-C19 (low, suspected).** A full .whence (about 2 KB) skips the new
+  line silently: the file is composted but put back cannot find its home.
+  Fix: refuse with a note, or a bigger index.
+- **R-C20 (low, suspected).** ct_admits' log line now goes out under
+  app_mtx (R-C12): with R-C14's alternating pollers every refusal holds
+  the mutex for a serial line. Fix: R-C14's told flag, or log after the
+  unlock.
+
 ## The order to work the review in
 
 0. Item 0 first (the user asked for it directly: a text file's double
@@ -675,7 +701,8 @@ Mincecraft; neosim and rx.c; Doom; tests, build and docs.)
    after it are measured by tests that can fail.
 2. Security: R-K1, R-K2, R-C1, then R-T19 and R-T20 (the tests of
    K2 and K1, which can pass broken), R-K12 (critical), R-C2, R-K13,
-   R-C10, R-K14, R-C12 (the area review's, 2026-10-12).
+   R-C10, R-K14, R-C12 (the area review's, 2026-10-12), then R-C16
+   (the second area review's).
 3. Kernel crashes any cook can cause: R-K4, R-K3 (R-K5 set aside for the user).
 4. Data loss: R-M1, R-M4, R-N3, R-N4, R-N5, R-N1, R-N2.
 5. Item 0b, Doom, from R-D3, R-D2, R-D4, R-D1 down.
