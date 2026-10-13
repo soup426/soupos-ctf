@@ -955,6 +955,34 @@ static void paste(int after, int cnt) {               /* (v0.60.240) from the re
     if (b >= 0) paste_from(after, cnt, bank[b], bank_n[b], bank_lines[b]);
     else paste_from(after, cnt, reg, reg_n, reg_lines);
 }
+/* The widest line a charwise paste of cnt copies would make (v0.60.305,
+ * review R-N54): insert_text skips what text_insert_char refuses, so a paste
+ * past 255 was cut with nothing said. One line: this line and every copy.
+ * Several: the head and the register's first line, its middle lines, its
+ * last and first where two copies meet, and its last and the tail. */
+static int too_wide_paste(int after, int cnt, const char *reg, int reg_n) {
+    int x = after && len() ? E.cx + 1 : E.cx, head = x, tail = len() - x;
+    int first = 0, last = 0, mid = 0, nl = 0, run = 0;
+    for (int i = 0; i < reg_n; i++) {
+        if (reg[i] != '\n') { run++; continue; }
+        if (!nl) first = run; else if (run > mid) mid = run;
+        nl++; run = 0;
+    }
+    last = run;
+    long c = cnt > 0 ? cnt : 1, wide;
+    if (c > T_COLS + 1) c = T_COLS + 1;              /* already too wide; 99999 * reg_n would wrap a 32-bit long */
+    if (!nl) wide = (long)len() + c * reg_n;
+    else {
+        wide = head + first;
+        if (last + tail > wide) wide = last + tail;
+        if (mid > wide) wide = mid;
+        if (c > 1 && last + first > wide) wide = last + first;
+    }
+    if (wide <= T_COLS) return 0;
+    msg("E1240: Resulting text too long", 0, 0);
+    eprint("[neosim] refused a paste past 255\n");
+    return 1;
+}
 static void paste_from(int after, int cnt, const char *reg, int reg_n, int reg_lines) {
     if (!reg_n && !reg_lines) return;
     /* Before the undo step (v0.60.296, review R-N49): refused after it, a
@@ -966,6 +994,7 @@ static void paste_from(int after, int cnt, const char *reg, int reg_n, int reg_l
     for (int i = 0; i < reg_n; i++) if (reg[i] == '\n') nl++;
     long need = (long)(reg_lines ? nl + 1 : nl) * (cnt > 0 ? cnt : 1);
     if (need && (need > T_MAXL || !text_room_for(&E.t, (int)need))) { msg("E: the file is full (2048 lines): nothing put", 0, 0); return; }
+    if (!reg_lines && too_wide_paste(after, cnt, reg, reg_n)) return;
     change_begin();
     if (reg_lines) {
         int y = after ? E.cy + 1 : E.cy, at = y, put = 0;

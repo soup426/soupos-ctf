@@ -1073,7 +1073,7 @@ tests, build and docs. Nothing critical, so the full review stays at 30.
   so on a 2046-line file G3ofoo<Esc>:w gives foo and foofoo (nvim: three
   foo). Enter on a full buffer fails silently too. Fix: text_room_for(cnt)
   before change_begin, and say the file is full when a split fails.
-- **R-N54 (medium, data).** A charwise paste past 255 drops the rest
+- **R-N54 (medium, data) — DONE v0.60.305 (neosim-widepaste-test).** A charwise paste past 255 drops the rest
   silently (insert_text skips text_insert_char's -1): 200 a, y$$p:w writes
   255 (nvim 400). R-N50 counted lines, never width. Fix: work out the
   widest line the paste makes before change_begin and refuse with E1240

@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.304
+Current version: v0.60.305
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,19 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.305 (2026-10-13)  — NEOSIM: A PASTE PAST 255 COLUMNS IS REFUSED
+  - insert_text skipped every character text_insert_char refused, so a
+    charwise paste that made a line past 255 was cut with nothing said: on
+    a line of 200 a, y$$p wrote 255 (review R-N54; v0.60.298 counted lines,
+    never width). too_wide_paste works out the widest line the paste makes
+    (the head and the register's first line, its middle lines, its last
+    and first where copies meet, its last and the tail) and refuses it
+    with E1240, as joins are.
+  - scripts/neosim-widepaste-test.sh: y$$p on a line of 200, and a
+    two-line paste whose last line would be 260: both refused and logged,
+    and the buffers written after are the files. Before the fix: 255 and
+    a 255 cut from 260.
 
 v0.60.304 (2026-10-13)  — NEOSIM: A COUNTED o THAT DOES NOT FIT IS REFUSED
   - v0.60.296's o and O asked for room for one line; a counted o repeats
