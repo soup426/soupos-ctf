@@ -1382,11 +1382,14 @@ static const thing_info_t thing_table[] = {
 
 /* Draw a textured column strip sx from y0..y1 (clamped to open span).
  * u     : texture X already wrapped to [0, tex->width).
- * ytop  : screen Y of wall top (V=0 maps here, including yoff shift).
- * wall_h: screen height of the full wall strip for V mapping. */
+ * ytop  : screen Y of the front ceiling, where the row is vtop.
+ * wall_h, map_h: the front sector's height on screen and in map units, so a
+ *   texel is a map unit (v0.60.307, review R-D21: the texture was stretched
+ *   over wall_h, a whole texture to every wall whatever its height).
+ * vtop  : the texture row at the front ceiling, from Doom's pegging. */
 static void col_fill_tex(int sx, int y0, int y1,
                           const tex_t *tex, int u,
-                          int ytop, int wall_h, int yoff, int shade) {
+                          int ytop, int wall_h, int map_h, int vtop, int shade) {
     if (!tex || wall_h <= 0) return;
     if (y0 < (int)col_top[sx]) y0 = (int)col_top[sx];
     if (y1 > (int)col_bot[sx]) y1 = (int)col_bot[sx];
@@ -1395,9 +1398,9 @@ static void col_fill_tex(int sx, int y0, int y1,
     u = u % tex->width; if (u < 0) u += tex->width;
 
     /* Fixed-point V stepping (×256) to avoid per-pixel division */
-    int32_t v_step  = ((int32_t)tex->height << 8) / wall_h;
-    int32_t v_fixed = ((int32_t)(y0 - ytop) * (int32_t)tex->height << 8) / wall_h
-                    + ((int32_t)yoff << 8);
+    int32_t v_step  = (int32_t)(((int64_t)map_h << 8) / wall_h);
+    int32_t v_fixed = (int32_t)(((int64_t)(y0 - ytop) * map_h << 8) / wall_h)
+                    + ((int32_t)vtop << 8);
 
     const int tw = tex->width;
     const int th = tex->height;
@@ -1610,12 +1613,12 @@ static void render_seg_3d(const dseg_t *seg) {
         if (!two_sided) {
             /* ── Solid wall ─────────────────────────────────────────── */
             if (mid_tex) {
-                /* Pegging: default = top-pegged (V=0 at ceiling).
-                 * Lower-unpegged = V=0 at bottom → shift yoff up by surplus. */
-                int v_yoff = (int)yoff;
-                if ((ld_flags & LD_LOWER_UNPEGGED) && mid_tex && wall_h > 0)
-                    v_yoff += mid_tex->height - wall_h;
-                col_fill_tex(sx, yfc, yff, mid_tex, u_coord, yfc, wall_h, v_yoff, shade);
+                /* Doom's pegging (r_segs.c), the row at the front ceiling:
+                 * pegged to it, 0; lower unpegged, the texture's bottom on
+                 * the floor: its height less the wall's. Then the row offset. */
+                int vtop = (int)yoff;
+                if (ld_flags & LD_LOWER_UNPEGGED) vtop += mid_tex->height - (fc - ff);
+                col_fill_tex(sx, yfc, yff, mid_tex, u_coord, yfc, wall_h, fc - ff, vtop, shade);
             } else {
                 col_fill(sx, yfc, yff, flat_col);
             }
@@ -1630,13 +1633,15 @@ static void render_seg_3d(const dseg_t *seg) {
             /* Upper step */
             if (ybc > yfc) {
                 if (upper_tex) {
-                    /* Default: texture bottom aligned with back ceiling (step bottom).
-                     * UPPER_UNPEGGED: V=0 at front ceiling (natural for doors). */
-                    int v_yoff_up = (int)yoff;
+                    /* Pegged: the texture's bottom on the back ceiling, so the
+                     * front ceiling is its height above it; unpegged (doors):
+                     * its top on the front ceiling. (The signs were the wrong
+                     * way, v0.60.307.) */
+                    int vtop = (int)yoff;
                     if (!(ld_flags & LD_UPPER_UNPEGGED))
-                        v_yoff_up += (fc - bc) - upper_tex->height;
+                        vtop += bc + upper_tex->height - fc;
                     col_fill_tex(sx, yfc, ybc-1, upper_tex, u_coord,
-                                 yfc, wall_h, v_yoff_up, shade);
+                                 yfc, wall_h, fc - ff, vtop, shade);
                 } else {
                     col_fill(sx, yfc, ybc-1,
                              flat_col > 20 ? flat_col-20 : 0);
@@ -1648,15 +1653,14 @@ static void render_seg_3d(const dseg_t *seg) {
             /* Lower step */
             if (ybf < yff) {
                 if (lower_tex) {
-                    /* Default: V=0 at back floor (top of step — Doom's natural pegging).
-                     * Our V-math has V=0 at front ceiling, so shift by (fc - bf) tex px.
-                     * LOWER_UNPEGGED: V=0 at front ceiling — no shift (texture flows
-                     * continuously with the ceiling texture). */
-                    int v_yoff = (int)yoff;
-                    if (!(ld_flags & LD_LOWER_UNPEGGED) && wall_h > 0)
-                        v_yoff += (fc - bf);
+                    /* Pegged: the texture's top on the back floor, the front
+                     * ceiling (fc - bf) above it; unpegged: the rows run on
+                     * from the front ceiling. (Sign fixed, v0.60.307.) */
+                    int vtop = (int)yoff;
+                    if (!(ld_flags & LD_LOWER_UNPEGGED))
+                        vtop += bf - fc;
                     col_fill_tex(sx, ybf+1, yff, lower_tex, u_coord,
-                                 yfc, wall_h, v_yoff, shade);
+                                 yfc, wall_h, fc - ff, vtop, shade);
                 } else {
                     col_fill(sx, ybf+1, yff,
                              flat_col > 20 ? flat_col-20 : 0);

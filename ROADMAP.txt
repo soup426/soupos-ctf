@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.306
+Current version: v0.60.307
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,21 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.307 (2026-10-13)  — DOOM: WALLS A TEXEL TO A MAP UNIT
+  - col_fill_tex stretched each wall texture over the wall's height (a
+    whole texture to every wall, whatever its height), and the upper and
+    lower pegging offsets had their signs the wrong way (review R-D21).
+    The row is in map units now (the front sector's height over its height
+    on screen) from Doom's texturemid (r_segs.c): a mid pegged to the
+    ceiling 0, lower unpegged the texture's height less the wall's; an
+    upper pegged bc + height - fc, unpegged 0; a lower pegged bf - fc,
+    unpegged 0; and the row offset.
+  - scripts/doom-walls-test.sh: at E1M1's courtyard windows, the pillar
+    (pegged to its ceiling) and the window's lower strip (lower unpegged)
+    are STARTAN3 at Doom's row and column (18 of 18 and 21 of 21 columns;
+    before the fix 0 of 18 and 3 of 21). The pegged upper and lower are
+    not in that view: their sign is from r_segs.c, not yet a test.
 
 v0.60.306 (2026-10-13)  — A COOK CAN APPEND TO THEIR OWN BIG FILE
   - An append starts its buffer with what the file holds, and v0.60.292's

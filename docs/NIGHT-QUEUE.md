@@ -812,7 +812,7 @@ Mincecraft; neosim and rx.c; Doom; tests, build and docs.)
   strip (doom.c:899). It also turns the wrong way, at a quarter of Doom's
   scale, and squeezes 128 rows into 84. Fix: patch_composite; u from
   pl_angle*8 + (SCR_CX - sx)*256/dw, v = y/ds + 16.
-- **R-D21 (high, looks).** Wall textures stretch over the sector's height
+- **R-D21 (high, looks) — DONE v0.60.307 (doom-walls-test; the pegged upper and lower are not in its view).** Wall textures stretch over the sector's height
   instead of a texel a map unit (v_step = th/wall_h); the upper and lower
   pegging offsets have their signs wrong; lower-unpegged mids swim with
   distance (doom.c:1365, 1573-1624). Fix: V in map units, offsets from the
