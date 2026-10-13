@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.313
+Current version: v0.60.314
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,18 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.314 (2026-10-13)  — DOOM-TICS-TEST SPLITS ITS PHASES BY THE LOG
+  - doom-tics-test cut its standing-still and turning phases at fixed
+    ticks, so a turn begun late was measured as standing still, its
+    comment said otherwise, its screendumps were never read, and its
+    header claimed the automap though it never opened it (review R-T44).
+    Each phase is its own pass of the driver now and the serial log's
+    length between passes splits their lines; a third phase opens the
+    automap (Tab) for 6 s.
+  - Shown: an extra world step on each moved frame gives 69.9 turning,
+    and a world stepped only in the 3D view gives none in the automap;
+    both fail. Now 35.0, 35.0 and 35.0.
 
 v0.60.313 (2026-10-13)  — NEOSIM: A COUNTED INSERT'S REPEATS NEED ROOM TOO
   - v0.60.304 asked for room for a counted o's own lines, but the Enters

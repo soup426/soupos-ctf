@@ -1266,7 +1266,7 @@ and waits match. v0.60.308 regressed (R-D45).
 - **R-T46 (low).** writebudget-test does not count its first driver's
   failure, and never requires "/leak.txt: stops at" before trusting its
   after2 check.
-- **R-T44 (low, mine).** doom-tics-test's comment says the phases split
+- **R-T44 (low, mine) — DONE v0.60.314.** doom-tics-test's comment says the phases split
   at the first left; the code uses fixed windows, which could miss a late
   turn; its screendumps are never read.
 - **R-T42, R-T43 (low, docs).** CLAUDE.md's Doom section still says the
