@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.300
+Current version: v0.60.301
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,16 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.301 (2026-10-13)  — TWO NEOSIM TESTS WRITE WHAT THEY COMPARE
+  - neosim-fullpaste-test and neosim-longjoin-test ended with :q (v0.60.296,
+    v0.60.298), so nothing was written and their cmp compared the file with
+    itself: a refusal that changed the buffer without marking it passed
+    (review R-T39). Each now does its refusals and :w, so the buffer
+    reaches the disk for the cmp, then reopens the file, does them again
+    and :q, which must quit.
+  - Shown: with a refused paste made to put a Z in the buffer unmarked,
+    both cmps fail and the :q check still passes.
 
 v0.60.300 (2026-10-13)  — KILLING A SCRIPT ASKS IT TO STOP
   - v0.60.290's kill marked a spawned script dead where it stood and

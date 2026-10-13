@@ -1104,7 +1104,7 @@ tests, build and docs. Nothing critical, so the full review stays at 30.
 
 ### Tests, build and docs (reviewer reverted fixes in a copy; two tests passed)
 
-- **R-T39 (medium, my v0.60.296/298).** neosim-fullpaste-test and
+- **R-T39 (medium, my v0.60.296/298) — DONE v0.60.301.** neosim-fullpaste-test and
   neosim-longjoin-test end with :q, so nothing is written and their cmp
   compares the file with itself: a refusal that changes the buffer without
   marking it passes. Fix: after the :q check, a second neosim (or :e!)
