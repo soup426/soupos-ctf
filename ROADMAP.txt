@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.274
+Current version: v0.60.275
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,19 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.275 (2026-10-12)  — A WRITE BUFFER HOLDS NO MORE THAN THE DISK COULD TAKE
+  - A file opened for writing is buffered in fresh frames until it is
+    closed, and nothing capped it: cook spoon.elf /dev/zero > /z took
+    121 MB, every free frame, before its write to a 32 MB volume failed,
+    and every other user of memory starved meanwhile (review R-K4, its
+    second half; v0.60.268 had stopped the panic). A write handle now
+    stops at the volume's free space plus what the file it replaces holds,
+    set at its first write: past it the write fails and the log says
+    where (28452864 bytes on the stock disk).
+  - scripts/writecap-test.sh: 15 s of that, Ctrl-C: the buffer stopped at
+    the disk's room, memory never ran out, the shell answers. Before the
+    fix memory ran out at 121348096 bytes.
 
 v0.60.274 (2026-10-12)  — A SPAWNED SCRIPT READS NO KEYS
   - soupyc's input reads its terminal's getc, which on the console is the

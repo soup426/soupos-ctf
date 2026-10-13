@@ -252,7 +252,26 @@ static int page_source(void *ctx, uint32_t off, uint8_t *dst, uint32_t len) {
     pages_get((vfs_node_t *)ctx, off, dst, len);
     return 0;
 }
+/* What a write handle may buffer (v0.60.275, review R-K4b): the volume's free
+ * space plus what the file it replaces holds, the most that could ever reach
+ * the disk. Unbounded, cook spoon.elf /dev/zero > /z took every free frame
+ * (121 MB) before its write to a 32 MB volume failed, and everything else
+ * that needed memory starved meanwhile. */
+static uint32_t write_limit(const vfs_node_t *n) {
+    uint32_t fr = 0, tot = 0, cb = 0;
+    fat_space(&fr, &tot, &cb);
+    uint32_t room = fr * cb, old = 0;
+    int fd = fat_fopen(n->name);
+    if (fd >= 0) { old = fat_fsize(fd); fat_fclose(fd); }
+    return room + old > room ? room + old : room;   /* no wrap */
+}
 static int mem_write_op(vfs_node_t *n, const void *buf, uint32_t count) {
+    if (!n->limit) n->limit = write_limit(n);
+    if (count > n->limit || n->pos > n->limit - count) {
+        if (!n->failed) klog("[vfs] /%s: stops at %u bytes, the disk's room; the rest is lost\n", n->name, n->limit);
+        n->failed = 1;
+        return -1;
+    }
     if (mem_ensure(n, n->pos + count) < 0) {
         if (!n->failed) klog("[vfs] /%s: out of memory at %u bytes; the rest is lost\n", n->name, n->size);
         n->failed = 1;
