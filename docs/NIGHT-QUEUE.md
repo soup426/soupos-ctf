@@ -1188,7 +1188,7 @@ was queued.
 
 ### neosim and rx.c (reviewer: host harness with ASan/UBSan against nvim, 4400 random runs; 1-6 also in QEMU)
 
-- **R-N57 (high, data, my v0.60.305 incomplete).** A charwise paste
+- **R-N57 (high, data, my v0.60.305 incomplete) — DONE v0.60.311 (neosim-widepaste-test).** A charwise paste
   across lines puts its first segment into the target line before the
   split: on a long line those characters are refused and lost silently
   (abc/def/255 z, 0lvjy G099lP :w loses "bc"); too_wide_paste passes as

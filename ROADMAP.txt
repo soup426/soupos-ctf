@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.310
+Current version: v0.60.311
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,16 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.311 (2026-10-13)  — NEOSIM: A PASTE ACROSS LINES SPLITS FIRST
+  - insert_text put a multi-line paste's first part into the line before
+    splitting it, so on a long line what passed 255 was refused and lost,
+    though the lines the paste makes fit: abc/def/255 z with 0lvjy G099lP
+    lost "bc" (review R-N57; v0.60.305 checked only the final widths). It
+    splits at the cursor first now: the first part goes on the head, a new
+    line takes each middle part, the last part goes before the tail.
+  - neosim-widepaste-test: that paste gives 99 z + bc and de + 156 z, as
+    nvim. Before the fix the first of them was 99 columns.
 
 v0.60.310 (2026-10-13)  — DOOM: A SPRITE IS CUT ONLY BY WALLS IN FRONT OF IT
   - v0.60.308 had solid walls close the sprite span as they were drawn,

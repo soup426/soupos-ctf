@@ -166,11 +166,22 @@ static void delete_chars(int ay, int ax, int by, int bx) {
 static void delete_lines(int a, int b) {
     for (int y = a; y <= b; y++) text_delete_line(&E.t, a);
 }
-/* Text (with \n for new lines) in at (y,x); the position after its last character. */
+/* Text (with \n for new lines) in at (y,x); the position after its last character.
+ * Split first when it has new lines (v0.60.311, review R-N57): put in before
+ * the split, its first part went onto the whole line, and on a long line
+ * what passed 255 was refused and lost, though the lines it makes fit. The
+ * tail goes down at once; the first part goes on the head, a new line takes
+ * each middle part, and the last part goes before the tail. */
 static void insert_text(int *y, int *x, const char *s, int n) {
+    int nl = 0;
+    for (int i = 0; i < n; i++) if (s[i] == '\n') nl++;
+    if (nl && text_split(&E.t, *y, *x) < 0) nl = 0;     /* no room: as before, onto the line */
+    int seen = 0;
     for (int i = 0; i < n; i++) {
-        if (s[i] == '\n') { if (text_split(&E.t, *y, *x) == 0) { (*y)++; *x = 0; } }
-        else if (text_insert_char(&E.t, *y, *x, s[i]) == 0) (*x)++;
+        if (s[i] != '\n') { if (text_insert_char(&E.t, *y, *x, s[i]) == 0) (*x)++; continue; }
+        if (!nl) continue;
+        if (++seen < nl && text_insert_line(&E.t, *y + 1) < 0) { nl = 0; continue; }
+        (*y)++; *x = 0;                                  /* a middle line, or the tail for the last part */
     }
 }
 
