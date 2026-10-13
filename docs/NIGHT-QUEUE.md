@@ -1317,7 +1317,7 @@ show).
 
 ### neosim and rx (reviewer: host harness with ASan, 900 paste runs and 3000 rx patterns against nvim and GNU grep)
 
-- **R-N65 (low, data, my v0.60.313).** The repeat check counts every
+- **R-N65 (low, data, my v0.60.313) — DONE v0.60.323 (neosim-fullpaste-test).** The repeat check counts every
   Enter typed, not one joined back by Backspace: G3A<CR><BS>x<Esc> on a
   2047-line file gives lx (nvim lxxx). Fix: measure the first copy's net
   and peak lines.

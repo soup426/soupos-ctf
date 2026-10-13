@@ -602,10 +602,11 @@ static void put_indent(int y, int n) { for (int i = 0; i < n; i++) text_insert_c
 static int ins_count = 1, ins_open, ins_n, ins_again;
 static unsigned ins_keys[256];
 static int ins_full;                                 /* a split refused in this insert (v0.60.304) */
+static int ins_start, ins_peak;                      /* lines when it began, and its most (v0.60.323) */
 /* The buffer is at its most lines: said, and logged for the tests (v0.60.304). */
 static void full_msg(void) { msg("E: the file is full (2048 lines)", 0, 0); eprint("[neosim] the file is full\n"); }
 static void insert_mode(int x, int push) {
-    ins_count = 1; ins_open = 0; ins_n = 0; ins_full = 0;
+    ins_count = 1; ins_open = 0; ins_n = 0; ins_full = 0; ins_start = ins_peak = E.t.n;
     if (push) change_begin();
     E.ins_dirty = !push;                            /* an operator before it already changed the text */
     E.mode = M_INSERT; E.cx = x; clamp(); E.want = E.cx;
@@ -616,10 +617,15 @@ static void insert_key(unsigned k) {
          * review R-N61): an Enter typed in a counted insert is replayed too,
          * and o/O's own line; split by split a nearly full buffer ran the
          * rest of a copy onto the line. The first copy stays; the repeats
-         * are refused whole. */
-        long lines = ins_open;
-        for (int i = 0; i < ins_n; i++) if (ins_keys[i] == '\n') lines++;
-        long need = lines * (ins_count - 1);
+         * are refused whole. The first copy's lines are measured, not its
+         * Enters counted (v0.60.323, review R-N65): one joined back by
+         * Backspace needs a line at a time, and each copy adds none. A
+         * repeat adds o/O's line and the copy's net, and at its most the
+         * copy's peak; the last repeat goes highest, or the first if they
+         * shrink the file. */
+        long net = (long)E.t.n - ins_start, peak = (long)ins_peak - ins_start;
+        long step = ins_open + net;
+        long need = (step > 0 ? step * (ins_count - 2) : 0) + ins_open + peak;
         if (need && (need > T_MAXL || !text_room_for(&E.t, (int)need))) { full_msg(); ins_count = 1; }
     }
     if (k == 27 && ins_count > 1 && ins_n && !ins_again) {
@@ -647,6 +653,7 @@ static void insert_key(unsigned k) {
         if (ai_pending && only_spaces(E.cy)) { while (lenof(E.cy)) text_delete_char(&E.t, E.cy, 0); E.cx = 0; }
         if (text_split(&E.t, E.cy, E.cx) == 0) {
             E.cy++; put_indent(E.cy, ind); E.cx = E.want = ind; E.ins_dirty = 1; ai_pending = ind;
+            if (!ins_again && E.t.n > ins_peak) ins_peak = E.t.n;
         } else { ins_full = 1; full_msg(); }        /* was silent: what came next ran onto this line */
         return;
     }

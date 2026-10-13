@@ -10,6 +10,8 @@
 # And a 2046-line file with G3ofoo<Esc>: three lines where two fit, refused
 # whole; it gave 000 and 000000 (v0.60.304, R-N53). And on 2045 lines,
 # G3oa<CR>b<Esc>: the repeats' Enters need room too (v0.60.313, R-N61).
+# And on 2047 lines, G3A<CR><BS>x<Esc>: an Enter joined back needs one line
+# at a time, not one a copy (v0.60.323, R-N65); it gave 3047x (nvim 3047xxx).
 cd "$(dirname "$0")/.."
 WORK=$(mktemp -d /tmp/soupos-neofullpaste.XXXXXX)
 PID=""
@@ -20,6 +22,7 @@ seq 1001 3048 > "$WORK/full"; mcopy -o -i "$WORK/disk.img" "$WORK/full" ::FULL.T
 seq 1001 3047 > "$WORK/full2"; mcopy -o -i "$WORK/disk.img" "$WORK/full2" ::FULL2.TXT
 seq 1001 3046 > "$WORK/full3"; mcopy -o -i "$WORK/disk.img" "$WORK/full3" ::FULL3.TXT
 seq 1001 3045 > "$WORK/full4"; mcopy -o -i "$WORK/disk.img" "$WORK/full4" ::FULL4.TXT
+seq 1001 3047 > "$WORK/full5"; mcopy -o -i "$WORK/disk.img" "$WORK/full5" ::FULL5.TXT
 qemu-system-i386 -accel kvm -cpu host -drive "file=$WORK/disk.img,format=raw,if=ide,index=0" \
     -cdrom soupOS.iso -boot d -m 128M -no-reboot -no-shutdown -display none \
     -serial "file:$WORK/log" -monitor "unix:$WORK/mon.sock,server,nowait" >/dev/null 2>&1 &
@@ -36,6 +39,7 @@ timeout 200 python3 scripts/qemu_keys.py "$WORK/mon.sock" "headchef" "rosemary" 
     "TYPE::e /FULL2.TXT" "KEY:ret" "UNTIL:[neosim] open /FULL2.TXT" "${full2[@]}" "TYPE::w" "KEY:ret" "UNTIL:[neosim] wrote /FULL2.TXT" "WAIT:1" \
     "TYPE::e /FULL3.TXT" "KEY:ret" "UNTIL:[neosim] open /FULL3.TXT" "${full3[@]}" "TYPE::w" "KEY:ret" "UNTIL:[neosim] wrote /FULL3.TXT" "WAIT:1" \
     "TYPE::e /FULL4.TXT" "KEY:ret" "UNTIL:[neosim] open /FULL4.TXT" "TYPE:G3oa" "KEY:ret" "TYPE:b" "KEY:esc" "WAIT:1" "TYPE::w" "KEY:ret" "UNTIL:[neosim] wrote /FULL4.TXT" "WAIT:1" \
+    "TYPE::e /FULL5.TXT" "KEY:ret" "UNTIL:[neosim] open /FULL5.TXT" "TYPE:G3A" "KEY:ret" "KEY:backspace" "TYPE:x" "KEY:esc" "WAIT:1" "TYPE::w" "KEY:ret" "UNTIL:[neosim] wrote /FULL5.TXT" "WAIT:1" \
     "TYPE::e /FULL.TXT" "KEY:ret" "UNTIL:[neosim] open /FULL.TXT" "WAIT:1" "${full[@]}" \
     "TYPE::e /FULL2.TXT" "KEY:ret" "UNTIL:[neosim] open /FULL2.TXT" "${full2[@]}" \
     "TYPE::e /FULL3.TXT" "KEY:ret" "UNTIL:[neosim] open /FULL3.TXT" "${full3[@]}" \
@@ -52,6 +56,12 @@ mcopy -n -i "$WORK/disk.img" ::FULL4.TXT "$WORK/after4" 2>/dev/null
 { cat "$WORK/full4"; printf 'a\nb\n'; } > "$WORK/want4"
 cmp -s "$WORK/want4" "$WORK/after4" && echo "  ok    3oa<CR>b on 2045 lines: the first a and b, the repeats refused whole (v0.60.313)" \
     || { echo "  FAIL  FULL4.TXT: $(wc -l < "$WORK/after4") lines, the last three '$(tail -3 "$WORK/after4" | tr '\n' ' ')' (want 2047, ending a b)"; fail=1; }
+# (v0.60.323, review R-N65) G3A<CR><BS>x<Esc> on 2047 lines: each copy
+# makes a line and joins it back, so one free line is room for all three.
+mcopy -n -i "$WORK/disk.img" ::FULL5.TXT "$WORK/after5" 2>/dev/null
+{ seq 1001 3046; echo 3047xxx; } > "$WORK/want5"
+cmp -s "$WORK/want5" "$WORK/after5" && echo "  ok    3A<CR><BS>x on 2047 lines: 3047xxx, the Enter joined back needs no room a copy (v0.60.323)" \
+    || { echo "  FAIL  FULL5.TXT: $(wc -l < "$WORK/after5") lines, the last two '$(tail -2 "$WORK/after5" | tr '\n' ' ')' (want 2047, ending 3047xxx)"; fail=1; }
 cmp -s "$WORK/full3" "$WORK/after3" && echo "  ok    3o into a 2046-line buffer was refused whole: the buffer written after it is as the file was (v0.60.304)" \
     || { echo "  FAIL  FULL3.TXT changed: $(wc -l < "$WORK/after3") lines, the last two '$(tail -2 "$WORK/after3" | tr '\n' ' ')'"; fail=1; }
 cmp -s "$WORK/full2" "$WORK/after2" && echo "  ok    a 3-line paste into a 2047-line buffer was refused whole: the buffer written after it is as the file was (v0.60.298)" \
