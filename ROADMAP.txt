@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.285
+Current version: v0.60.286
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,17 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.286 (2026-10-12)  — NEOSIM REFUSES A JOIN PAST 255 COLUMNS
+  - text_join took what fitted of the next line and threw the rest away:
+    two 250-column lines and J gave one of 255 and lost 245 characters,
+    and a delete across lines or Backspace at a line's start dropped text
+    the same way (review R-N5). Each asks first now, before changing
+    anything: past 255 it is refused (E1240: Resulting text too long), and
+    text_join itself no longer cuts.
+  - scripts/neosim-longjoin-test.sh: J, 200lvj190hd and Backspace at line
+    2's start on two 250-column lines are all refused and :w writes the
+    file back as it was. Before the fix it came back one line of 64 bytes.
 
 v0.60.285 (2026-10-12)  — NEOSIM KEEPS TABS AND CRLF
   - Reading a file made every tab a space and dropped every CR, so a

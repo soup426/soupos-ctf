@@ -122,7 +122,11 @@ int text_split(text_t *t, int line, int col) {
 }
 void text_join(text_t *t, int line) {
     if (line + 1 >= t->n) return;
-    int room = T_COLS - t->len[line], take = t->len[line + 1] < room ? t->len[line + 1] : room;
+    /* Never cut (v0.60.286, review R-N5): it took only what fitted and threw
+     * the rest of the next line away. The callers ask first (too_long_join
+     * in main.c); a join that would not fit is not made. */
+    if (t->len[line] + t->len[line + 1] > T_COLS) return;
+    int take = t->len[line + 1];
     joining = t->len[line];
     for (int i = 0; i < take; i++) t->s[line][t->len[line] + i] = t->s[line + 1][i];
     t->len[line] += take;

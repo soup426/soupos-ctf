@@ -147,7 +147,16 @@ static void reg_after(int op) {                      /* after a yank, delete or 
     }
     reg_sel = 0;
 }
+/* A join that would pass 255 columns (v0.60.286, review R-N5): refused,
+ * said, logged, before anything is changed. 1 if refused. */
+static int too_long_join(int total) {
+    if (total <= T_COLS) return 0;
+    msg("E1240: Resulting text too long", 0, 0);
+    eprint("[neosim] refused a join past 255\n");
+    return 1;
+}
 static void delete_chars(int ay, int ax, int by, int bx) {
+    if (ay != by && too_long_join(ax + lenof(by) - bx)) return;
     if (ay == by) { for (int i = ax; i < bx; i++) text_delete_char(&E.t, ay, ax); return; }
     while (lenof(ay) > ax) text_delete_char(&E.t, ay, ax);           /* the rest of the first line */
     for (int y = ay + 1; y < by; y++) text_delete_line(&E.t, ay + 1);  /* the lines between */
@@ -599,7 +608,7 @@ static void insert_key(unsigned k) {
     }
     if (k == '\b') {
         if (E.cx > 0) { text_delete_char(&E.t, E.cy, E.cx - 1); E.cx--; E.want = E.cx; E.ins_dirty = 1; }
-        else if (E.cy > 0) { int at = lenof(E.cy - 1); text_join(&E.t, E.cy - 1); E.cy--; E.cx = E.want = at; E.ins_dirty = 1; }
+        else if (E.cy > 0 && !too_long_join(lenof(E.cy - 1) + len())) { int at = lenof(E.cy - 1); text_join(&E.t, E.cy - 1); E.cy--; E.cx = E.want = at; E.ins_dirty = 1; }
         return;
     }
     if (k == '\t') { for (int i = 0; i < 4; i++) if (text_insert_char(&E.t, E.cy, E.cx, ' ') == 0) E.cx++; E.want = E.cx; E.ins_dirty = 1; return; }
@@ -959,6 +968,7 @@ static void join(int cnt) {
         while (skip < lenof(n2) && E.t.s[n2][skip] == ' ') skip++;
         int at = len();
         int space = at > 0 && skip < lenof(n2) && E.t.s[E.cy][at - 1] != ' ' && E.t.s[n2][skip] != ')';
+        if (too_long_join(at + space + lenof(n2) - skip)) break;
         for (int k = 0; k < skip; k++) text_delete_char(&E.t, n2, 0);
         if (space) text_insert_char(&E.t, E.cy, at, ' ');
         text_join(&E.t, E.cy);

@@ -558,7 +558,7 @@ Mincecraft; neosim and rx.c; Doom; tests, build and docs.)
 - **R-N4 (high, data) — DONE v0.60.285 (neosim-bytes-test; a tab is one blank cell, not expanded).** Tabs become spaces and CRs vanish on load, so a
   saved Makefile is broken (text.c:41). Fix: keep tabs (expand when drawn),
   keep or report CRLF.
-- **R-N5 (high, data).** Joins over 255 columns drop text (J, multi-line
+- **R-N5 (high, data) — DONE v0.60.286 (neosim-longjoin-test).** Joins over 255 columns drop text (J, multi-line
   deletes, Backspace at column 0). Fix: refuse before changing anything.
 - **R-N6 (high).** cw on a one-letter word or a word's last letter changes
   the next word too, across lines. Fix: vim's stay-at-end rule.
