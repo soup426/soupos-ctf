@@ -1016,7 +1016,11 @@ static void add_number(int delta) {
         while (e < n && (hex ? hexv(t[e]) >= 0 : t[e] >= '0' && t[e] <= '9')) e++;
         int s0 = !hex && p > 0 && t[p - 1] == '-' ? p - 1 : p;
         if (e <= E.cx) { p = e; continue; }          /* before the cursor */
-        char out[40]; int k = 0;
+        /* A whole line's worth (v0.60.289, review R-N31): a hex number is
+         * zero-padded to as many digits as it had, up to 253, and out[40] let
+         * a 61-digit one write past it and take neosim down. The fit check
+         * below still refuses a result the line has no room for. */
+        char out[T_COLS + 8]; int k = 0;
         if (hex) {
             unsigned v = 0; int upper = 0;
             for (int i = d0; i < e; i++) { v = v * 16 + (unsigned)hexv(t[i]); if (t[i] >= 'A' && t[i] <= 'F') upper = 1; }

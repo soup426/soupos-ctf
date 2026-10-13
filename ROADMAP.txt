@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.288
+Current version: v0.60.289
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,15 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.289 (2026-10-13)  — NEOSIM: CTRL-A ON A LONG HEX NUMBER IS NO CRASH
+  - Ctrl-A rebuilt the number in char out[40], zero-padded to as many
+    digits as it had (up to 253): a 0x with 61 digits wrote past it and
+    neosim went down with its unsaved work (review R-N31). The buffer is a
+    whole line's now; the fit check after it still refuses a result the
+    line has no room for. (Hex past 32 bits still wraps: R-N21.)
+  - scripts/neosim-bighex-test.sh: 0x, 60 zeros and 1, Ctrl-A, :w: the
+    same 61 digits ending in 2. Before the fix neosim quit and wrote none.
 
 v0.60.288 (2026-10-12)  — NEOSIM: A PASTE INTO A FULL BUFFER IS NO CRASH
   - With 2048 lines (neosim's most), a linewise p inserted nothing, but

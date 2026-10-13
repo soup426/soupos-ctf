@@ -752,7 +752,7 @@ Mincecraft; neosim and rx.c; Doom; tests, build and docs.)
   changed named buffer write OTHER and quit, the edit lost (main.c:518;
   reproduced). Fix: quit only after writing the buffer's own path or when
   nothing is changed; else E37 as :q.
-- **R-N31 (high, crash).** Ctrl-A on a long hex number overflows out[40]
+- **R-N31 (high, crash) — DONE v0.60.289 (neosim-bighex-test).** Ctrl-A on a long hex number overflows out[40]
   (main.c:1000; 0x and 61 digits: neosim exits, unsaved work gone). Fix:
   refuse past 32 digits, or a T_COLS-sized buffer.
 - **R-N32 (medium-high, data).** A search leaves the cursor one past the
