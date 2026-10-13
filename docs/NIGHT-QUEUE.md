@@ -746,6 +746,44 @@ Mincecraft; neosim and rx.c; Doom; tests, build and docs.)
 
 ## Full review findings (2026-10-12, began at c6c8d32)
 
+### neosim and rx.c (reviewer: host harness with ASan against nvim, 14k fuzz runs, 1.2M rx patterns; 1-3 and 5 also in QEMU)
+
+- **R-N30 (high, data, my R-N3 incomplete).** :wq OTHER and :x OTHER on a
+  changed named buffer write OTHER and quit, the edit lost (main.c:518;
+  reproduced). Fix: quit only after writing the buffer's own path or when
+  nothing is changed; else E37 as :q.
+- **R-N31 (high, crash).** Ctrl-A on a long hex number overflows out[40]
+  (main.c:1000; 0x and 61 digits: neosim exits, unsaved work gone). Fix:
+  refuse past 32 digits, or a T_COLS-sized buffer.
+- **R-N32 (medium-high, data).** A search leaves the cursor one past the
+  line's end (/$, /\>, /x*): p then writes a NUL into the file (reproduced,
+  abcdef\0). Fix: clamp in search(); text_insert_char refuses col > len.
+- **R-N33 (medium-high).** \n \t \r in patterns become the letters n t r
+  (vim2ere, main.c:198): :%s/\n// deletes every n. Fix: \t a tab; refuse
+  \n, \r and unknown escapes.
+- **R-N34 (medium).** :normal leaves a half-typed command pending: :normal
+  d then j deletes two lines (reproduced). Fix: clear P and reg_sel after.
+- **R-N35 (medium).** :{range}normal walks fixed line numbers: :%norm dd
+  deletes every other line. Fix: gmark the range as :g does.
+- **R-N36 (medium).** :s replacement has no \r line break and no \u \U \l
+  \L \e, ~ (inserts the letter). Fix: \r splits; refuse the rest.
+- **R-N37 (medium).** Operators take no search motions (d/x, dn, d*).
+- **R-N38 (medium-low).** Visual :, p, J, gJ, o are missing (:'<,'>s).
+- **R-N39 (low-medium).** Keys silently ignored: s S Y W B E ZZ ZQ, Enter,
+  Space, Backspace in normal mode; Del Home End PgUp PgDn; "_ falls
+  through; dw on an empty line; it/at; \c; :s#a#b#; :s///gc's c; :w! :wq!
+  :qa :qa!.
+- **R-N40 (low).** Tab inserts four spaces, not to the next stop of 4.
+- **R-N41 (low, rx.c).** RX_MAXCLS 32 counts every copy a count makes:
+  [0-9a-f]{40} fails in sift -E and reckon. Fix: a slot per source [.
+- **R-N42 (low).** Alternation is leftmost-longest, vim's leftmost-first;
+  :s/b*/-/g allows an empty match after a match.
+- **R-N43 (low).** u inside :normal or a macro breaks the one-step undo.
+- **R-N44 (low).** Counted n N * # rescan the file each count (1000n:
+  minutes under QEMU, no interrupt). Fix: stop when the match repeats.
+- **R-N45 (low, nits).** A 2048-line file says "too long"; :sort n overflows
+  past 10 digits; cut lines written back cut; msg_num drops a quote.
+
 ### Tests, build and docs (reviewer reverted each new fix in copies)
 
 - **R-T28 (medium-high, mine).** topram-test can no longer fail: v0.60.275's
@@ -926,7 +964,7 @@ Mincecraft; neosim and rx.c; Doom; tests, build and docs.)
 2c. R-T28 and R-T29 (my tests that cannot fail) right after R-K21.
 2b. R-T24 and R-T25 with R-K20 (tests that cannot fail, the second area review's).
 3. Kernel crashes any cook can cause: R-K15 (my K3, incomplete), R-K16, then R-K17 (security), R-K4b (R-K5 set aside for the user).
-4. Data loss: R-M1, R-M4, R-N3, R-N4, R-N5, R-N1, R-N2.
+4. Data loss: R-M1, R-M4, R-N3, R-N30 (my N3, incomplete), R-N4, R-N5, R-N1, R-N2, R-N31, R-N32.
 5. Item 0b, Doom: R-D20, R-D21, R-D22 (what the user sees first), then R-D3, R-D2, R-D4, R-D1 and the rest by severity.
 6. The rest by severity, the area's mediums before the lows; items 1-9
    where they fit.
