@@ -70,7 +70,7 @@ under the standing rules (a test that fails first, then the fix).
       check.sh; every claim checked before it is queued; findings into the
       review section, most severe first, worked by the order there. The
       tree is not rebuilt while they run.
-    **Last review began at 8eebe4e** (2026-10-13, by area: kernel and shell, neosim, tests build and docs; full at c6c8d32).
+    **Last review began at 3c49bd7** (2026-10-13, by area: kernel and shell, neosim, Doom, tests build and docs; the one before at 8eebe4e).
     **Last full review began at c6c8d32** (2026-10-12; the first at 7647649).
     Move the first line at each review, both at a full one.
 ---
@@ -1026,6 +1026,102 @@ Mincecraft; neosim and rx.c; Doom; tests, build and docs.)
 - **R-N52 (low).** :wq ./file on buffer file writes its own file but the
   string compare says OTHER, so E37. Fix: normalise the path.
 
+## Area review findings (2026-10-13, began at 3c49bd7)
+
+Four areas changed since 8eebe4e: kernel and shell, neosim, Doom, and
+tests, build and docs. Nothing critical, so the full review stays at 30.
+
+### Kernel and shell (reviewer confirmed K33 and K34 in QEMU on copies)
+
+- **R-K33 (high, my v0.60.290).** kill can hang the shell for good.
+  task_kill only marks the task DEAD wherever it stopped, and
+  soupyc_release_killed then runs release_ctx on the killer from the dead
+  task's half-done state. Killed inside close(f): fat_write_from holds
+  fat_mtx for the whole flush (fat.c:1572), the dead task owns it, and
+  m_sc_files[i] still points at the node (soupyc.c:1780 clears it after
+  vfs_close), so the killer's vfs_close blocks on the mutex forever: no
+  "killed task", no prompt. Narrower windows (traced): killed in
+  mem_drop's free loop (pages freed twice), after the flush before
+  n->used=0 (junk written), after vfs_close before sc_files[i]=0 (another
+  task's handle closed), between n->npg++ and the wbuf counts (wbuf_pages
+  wraps, every buffered write refused). Fix: a deferred kill, as
+  proc_kill_pending does for programs: kill of a soup: task sets a flag,
+  the interpreter checks it at statement boundaries and in sleep/input,
+  and soupyc_child's own release_ctx unwinds. Test: a script writes 24 MB,
+  prints CLOSING, closes; kill right after CLOSING; the shell answers in
+  10 s and the file is 24 MB.
+- **R-K34 (medium, rights, my v0.60.290).** A killed cook's file is
+  created as the headchef's: the flush runs in the headchef's shell task,
+  so creator_now() and may_use_reserve() give uid 0 (perms said owner:
+  headchef for /home/saucier/own.txt). R-K33's deferred kill fixes it;
+  test: owner: saucier after the kill.
+- **R-K35 (medium-low, my v0.60.292).** The append load (vfs.c:466) goes
+  through mem_ensure, so the per-cook check counts the old contents: with
+  1 MB free a cook cannot >> to their own 600 KB log, a plain "cannot
+  open" and nothing logged. Fix: count the append load only beyond the
+  old size (or not against the share); log the share line on a refusal.
+- **R-K36 (low).** doom at: see R-D43 and R-D44 (one fix): the spawn
+  stays pending after a quit at the menu; no range check (doom at 30000
+  30000 0 is the void; past 8388607 the << 8 overflows; a bare - is 0;
+  trailing junk ignored).
+
+### neosim (reviewer confirmed N53-N55 in QEMU on copies, against nvim)
+
+- **R-N53 (medium, data, my v0.60.296).** o/O check room for one line; a
+  counted o repeats insert_key('\n') at Esc and a failed split is silent,
+  so on a 2046-line file G3ofoo<Esc>:w gives foo and foofoo (nvim: three
+  foo). Enter on a full buffer fails silently too. Fix: text_room_for(cnt)
+  before change_begin, and say the file is full when a split fails.
+- **R-N54 (medium, data).** A charwise paste past 255 drops the rest
+  silently (insert_text skips text_insert_char's -1): 200 a, y$$p:w writes
+  255 (nvim 400). R-N50 counted lines, never width. Fix: work out the
+  widest line the paste makes before change_begin and refuse with E1240
+  as joins do.
+- **R-N55 (low-medium).** gu/gU/g~, ~ and :sort begin an undo step though
+  nothing changes: guu on abc then :q says E37 (nvim: not modified). Fix:
+  change_begin only when something will change; :sort discards the step
+  when nothing moved. (shift_lines is right: nvim marks << modified.)
+- **R-N56 (low).** Visual mode sets cur_change before op_apply, so a
+  refused visual d or c becomes what . repeats. Fix: record it only once
+  op_apply began a change.
+
+### Doom (reviewer checked against r_main.c's tables in Python, one QEMU run)
+
+- **R-D41 (low, test).** doom-sky-test passes a sky shifted by -11 to +9
+  columns (more than a whole pl_angle step). Fix: nearest palette index,
+  an exact match (or one column either side) on over 98%, and a shift of
+  2 must score clearly worse.
+- **R-D42 (low, looks).** g_sky_xu is up to 2 columns off Doom's
+  xtoviewangle at 320 wide (168 of 320 differ; 1 at 960): the pixel middle
+  and the arctangent approximation, where Doom takes viewangletox's
+  rounding. Fix: build the table as Doom does, from a fine tangent.
+- **R-D43 (low).** g_at_set is cleared only by level_load: quit at the
+  menu and the next plain doom spawns there. Clear it when doom_menu_run
+  returns.
+- **R-D44 (low).** doom at checks nothing: clamp X and Y to int16, refuse
+  a lone - or trailing junk, and a point outside the map's sectors.
+
+### Tests, build and docs (reviewer reverted fixes in a copy; two tests passed)
+
+- **R-T39 (medium, my v0.60.296/298).** neosim-fullpaste-test and
+  neosim-longjoin-test end with :q, so nothing is written and their cmp
+  compares the file with itself: a refusal that changes the buffer without
+  marking it passes. Fix: after the :q check, a second neosim (or :e!)
+  writes the buffer, or the cmp lines go.
+- **R-T37 (medium).** writeshare-test never frees and has one cook: with
+  mem_drop's two share decrements and the three-quarters cap deleted it
+  passed. Fix: kill the writer, strain the file, saucier redirects again
+  and it reaches the disk; a second cook's writer alongside, the two
+  stopped near three quarters together.
+- **R-T38 (low-medium).** neosim-longjoin-test never pastes after a
+  refusal: with the check moved back after reg_take_chars it passed. Fix:
+  yl first, then the refused d or c, then p and :w: the file holds that
+  character.
+- **R-T40 (low).** writebudget-test and writeshare-test compare with
+  mcopy ::/HELLO.TXT unchecked: two empty reads match. Fix: -n on it.
+- **R-T41 (low, flaky toward FAIL).** fullbudget-test's WAIT:12 before
+  the kill; fix: UNTIL:/fill: stops at.
+
 ## The order to work the review in
 
 0. Item 0 first (the user asked for it directly: a text file's double
@@ -1042,6 +1138,7 @@ Mincecraft; neosim and rx.c; Doom; tests, build and docs.)
 3. Kernel crashes any cook can cause: R-K15 (my K3, incomplete), R-K16, then R-K17 (security), R-K4b (R-K5 set aside for the user).
 3b. R-K29 with R-T32, R-K31, R-K30 (my K24's regressions) before the rest of data loss.
 4. Data loss: R-M1, R-M4, R-N3, R-N30 (my N3, incomplete), R-N4, R-N5, R-N1, R-N2, R-N31, then R-N46, R-N47 (my N4's regressions), R-N48, R-N49, R-N32, R-N50.
+4b. The area review at 3c49bd7 (my own regressions first): R-K33 with R-K34, R-T39, R-T37, R-T38, R-N53, R-N54, R-K35; then back to item 0b at R-D21. Its lows (R-N55, R-N56, R-D41, R-D42, R-D43 with R-D44 and R-K36, R-T40, R-T41) go with the rest by severity.
 5. Item 0b, Doom: R-D20, R-D21, R-D22 (what the user sees first), then R-D3, R-D2, R-D4, R-D1 and the rest by severity.
 6. The rest by severity, the area's mediums before the lows; items 1-9
    where they fit.
