@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.321
+Current version: v0.60.322
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,16 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.322 (2026-10-13)  — DOOM-WAKE-TEST NEEDS A HIT, AND A HELD SHOT
+  - doom-wake-test read the hurt lines v0.60.316 itself added: with that
+    fix's doom.c reverted there were none, and both checks passed on an
+    empty list (review R-T47). At least one hit is required now (the
+    player dies there in 3 s), the first at tic 22 or later, Doom's
+    soonest (R-D58; 24 here).
+  - missile_hold was untested (R-D58): each shotgun guy fires once before
+    the player dies, all four on tic 24 without it; the test asks for
+    their hits on more than one tic (24 and 30 here).
 
 v0.60.321 (2026-10-13)  — DOOM: A WALL RUNNING PAST THE PLAYER HAS ITS TRUE DEPTH
   - A wall clipped at the near plane got a far-off end on screen, clamped

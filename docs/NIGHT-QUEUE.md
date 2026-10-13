@@ -1341,12 +1341,12 @@ show).
 - **R-D57 (low).** The reaction time ends 2-3 tics late (Doom runs
   A_Chase on the waking tic: 7T + 1); melee should not wait it out; a hit
   should end it.
-- **R-D58 (low, test, mine).** doom-wake-test: see R-T47; its threshold
+- **R-D58 (low, test, mine) — DONE v0.60.322 with R-T47.** doom-wake-test: see R-T47; its threshold
   should be tic 22, and missile_hold is untested.
 
 ### Tests, build and docs (reviewer reverted four fixes in a copy; one test passed)
 
-- **R-T47 (medium, mine).** doom-wake-test reads the hurt lines the fix
+- **R-T47 (medium, mine) — DONE v0.60.322 (doom-wake-test red with the fix reverted, missile_hold bypassed, or no reaction time).** doom-wake-test reads the hurt lines the fix
   itself added: with e4174c4's doom.c reverted there are none, and both
   checks pass on an empty list. Fix: at least one hit required (the
   player dies there in 3 s), the first at tic 22 or later.

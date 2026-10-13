@@ -7,8 +7,14 @@
 # pressed. Doom (p_enemy.c): reactiontime 8, counted down a chase step at a
 # time (a zombieman's is 4 tics, an imp's or a sergeant's 3), no missile
 # until it is 0; then P_CheckMissileRange's chance by distance. Here, from
-# "[doom] hurt N by WHAT at tic T": no hit before tic 24, so health is 100
-# a third of a second in.
+# "[doom] hurt N by WHAT at tic T": no hit before tic 22 (Doom's soonest,
+# 7 chase steps of 3 and the waking tic), so health is 100 a third of a
+# second in. At least one hit is required (v0.60.322, review R-T47): with
+# the fix reverted there are no hurt lines and both checks passed on an
+# empty list; the player dies here in 3 s. And the range chance holds a
+# shot (R-D58): each shotgun guy fires once before the player dies (the
+# cooldown is 50 tics), all four on tic 24 without missile_hold, so their
+# hits fall on more than one tic.
 set -uo pipefail
 cd "$(dirname "$0")/.."
 [ -f DOOM1.WAD ] || { echo "  skip  no DOOM1.WAD"; exit 0; }
@@ -29,16 +35,19 @@ import re, sys
 t = open(sys.argv[1], errors='replace').read().replace('\r', '')
 hits = [(int(n), w, int(tic), int(h)) for n, w, tic, h in re.findall(r'\[doom\] hurt (\d+) by ([a-z ]+) at tic (\d+), health (-?\d+)', t)]
 first = min((h[2] for h in hits), default=None)
-ok1 = first is None or first >= 24
-print(('  ok    ' if ok1 else '  FAIL  ') + f'the first hit came at tic {first} (Doom: not before reactiontime 8 chase steps, 24 tics at the least); {len(hits)} hits in 3 s')
-early = [h for h in hits if h[2] < 24]
-if early: print('        before tic 24: ' + ', '.join(f'{n} by {w} at {tic}' for n, w, tic, _ in early[:8]))
+ok1 = first is not None and first >= 22
+print(('  ok    ' if ok1 else '  FAIL  ') + f'the first hit came at tic {first} (Doom: not before reactiontime 8 chase steps, tic 22 at the soonest; none means no hurt lines); {len(hits)} hits in 3 s')
+early = [h for h in hits if h[2] < 22]
+if early: print('        before tic 22: ' + ', '.join(f'{n} by {w} at {tic}' for n, w, tic, _ in early[:8]))
+sg = sorted({h[2] for h in hits if h[1] == 'shotgun guy'})
+held = len(sg) > 1
+print(('  ok    ' if held else '  FAIL  ') + f'a shotgun guy holds a shot (P_CheckMissileRange): their hits at tics {sg}')
 # Full health a third of a second in (12 tics), as the review measured it.
 # (Dead within 3 s here still: every monster spawns whatever the skill and
 # the hitscans' damage is fixed, R-D2 and R-D30.)
-full = all(h[2] > 12 for h in hits)
+full = bool(hits) and all(h[2] > 12 for h in hits)
 print(('  ok    ' if full else '  FAIL  ') + 'health is 100 a third of a second in (tic 12)')
-sys.exit(0 if ok1 and full else 1)
+sys.exit(0 if ok1 and held and full else 1)
 PY
 [ "$fail" = 0 ] && echo "doom-wake-test: PASS" || echo "doom-wake-test: FAIL"
 exit "$fail"
