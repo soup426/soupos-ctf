@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.289
+Current version: v0.60.290
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,20 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.290 (2026-10-13)  — A KILLED SCRIPT GIVES ITS WRITE BUDGET BACK
+  - A spawned soupyc script killed with kill was marked dead and never ran
+    on to release_ctx: its files were never closed, and since v0.60.283 a
+    write file's pages stayed in the shared write budget for good, so
+    every buffered write on the machine was refused until a reboot
+    (review R-K29). kill now releases a spawned script's context: its
+    files closed (and flushed), its arrays and strings freed.
+  - writebudget-test (review R-T32: it could not catch a count never given
+    back) now also kills its five writers and removes their files, then a
+    small redirect must reach the disk; and a spawned soupyc writer fills
+    the budget, is killed by its task id, and a second redirect must still
+    reach it. With the count's decrement taken out of mem_drop both fail;
+    before the fix the second did.
 
 v0.60.289 (2026-10-13)  — NEOSIM: CTRL-A ON A LONG HEX NUMBER IS NO CRASH
   - Ctrl-A rebuilt the number in char out[40], zero-padded to as many

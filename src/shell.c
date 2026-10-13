@@ -4455,7 +4455,10 @@ static void cmd_kill(const char *args) {
         klog("[proc] %s may not kill task %d\n", users_current_name(), id);
         return;
     }
+    task_t *kt = task_by_id((uint32_t)id);
+    void *sc = kt ? kt->soupyc : 0;               /* (v0.60.290) a spawned script's, to release */
     int r = task_kill((uint32_t)id);
+    if (r == 0 && sc) { kt->soupyc = 0; soupyc_release_killed(sc); }
     if (r == 0) t_printf("killed task %d\n", id);
     else        t_printf("kill: %d not killable (unknown, self, or kernel)\n", id);
 }

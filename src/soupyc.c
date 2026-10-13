@@ -1914,6 +1914,17 @@ static void release_ctx(soupyc_ctx_t *c) {
         if (c->m_arr_owned & (1u << i)) arrays[i].used = 0;
 }
 
+/* A spawned script killed by `kill` (v0.60.290, review R-K29): its task is
+ * marked dead and never runs on to release_ctx, so its files were never
+ * closed, and a write file's pages stayed in the shared write budget for
+ * good (every buffered write refused until a reboot). The killer releases
+ * its context instead: files closed (and flushed), arrays and strings back. */
+void soupyc_release_killed(void *ctx) {
+    if (!ctx) return;
+    release_ctx((soupyc_ctx_t *)ctx);
+    kfree(ctx);
+}
+
 static void soupyc_child(void *arg) {
     soupyc_ctx_t *ctx = (soupyc_ctx_t *)arg;
     task_current()->soupyc = ctx;

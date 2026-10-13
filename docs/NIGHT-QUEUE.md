@@ -954,7 +954,7 @@ Mincecraft; neosim and rx.c; Doom; tests, build and docs.)
 
 ### Tests, build and docs (reviewer reverted every fix in copies; all but one test failed as it should)
 
-- **R-T32 (medium, mine).** writebudget-test cannot catch a count never
+- **R-T32 (medium, mine) — DONE v0.60.290 (catches the decrement removed).** writebudget-test cannot catch a count never
   given back: with `wbuf_pages -= n->npg` deleted from mem_drop it passes,
   though every later write in that boot then fails. The append path's
   mem_drop is untested too. Fix: after the writers stop (Ctrl-C or kill;
@@ -975,7 +975,7 @@ Mincecraft; neosim and rx.c; Doom; tests, build and docs.)
 
 ### Kernel and shell (reviewer confirmed 1-3 in QEMU on copies)
 
-- **R-K29 (high, my v0.60.283).** A killed soup: task never runs
+- **R-K29 (high, my v0.60.283) — DONE v0.60.290 (writebudget-test).** A killed soup: task never runs
   release_ctx, so its write nodes are never closed and their pages stay in
   wbuf_pages for good: after `kill` of a script that had buffered 28 MB,
   every buffered write on the machine is refused until a reboot (reproduced:
