@@ -786,7 +786,7 @@ Mincecraft; neosim and rx.c; Doom; tests, build and docs.)
 
 ### Tests, build and docs (reviewer reverted each new fix in copies)
 
-- **R-T28 (medium-high, mine).** topram-test can no longer fail: v0.60.275's
+- **R-T28 (medium-high, mine) — DONE v0.60.281 (fails with the map fix reverted).** topram-test can no longer fail: v0.60.275's
   write cap stops /dev/zero > /z at the disk's room (28 MB), far below the
   top frames at -m 128M (reproduced: paging.c and pmm.c reverted, it still
   passes). Fix (the reviewer's, confirmed): boot it -m 32M, where free RAM
