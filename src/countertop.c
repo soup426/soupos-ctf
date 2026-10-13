@@ -1564,6 +1564,11 @@ static int stream_copy(const char *src, const char *dst, uint32_t *size) {   /* 
     *size = fat_fsize(c.fd);
     int ok = fat_write_from(dst, *size, copy_pull, &c) == 0;
     fat_fclose(c.fd);
+    /* The copy keeps the file's mode (v0.60.270, review R-C16): made new it
+     * was rwxr-x, so a rw---- file composted, copied or put back was every
+     * cook's to read. */
+    uint8_t owner, mode;
+    if (ok && fat_stat(src, &owner, &mode) == 0) fat_chmod(dst, mode);
     return ok ? 0 : -1;
 }
 static void files_copy(int from, int r, int to) {
@@ -1617,10 +1622,14 @@ static int whence_load(const char *dir, char *path) {
 static void files_reload_all(void) {
     for (int k = 0; k < MAX_WIN; k++) if (win[k].used && win[k].files) { files_load(win[k].files); repaint_win(k); }
 }
+/* The compost bowl's mode (v0.60.270, review R-C16): the headchef's is
+ * /compost at the root, which fat_mkdir made rwxr-x, so all of it was open. */
+#define COMPOST_MODE (FAT_PERM_MARK | FAT_PERM_OR | FAT_PERM_OW | FAT_PERM_OX)
 static void compost_add(const char *p) {
     char dir[FAT_PATH_MAX], dst[FAT_PATH_MAX], idx[FAT_PATH_MAX];
     compost_dir(dir);
     if (!fat_is_dir(dir) && fat_mkdir(dir) < 0) { klog("[countertop] no compost at %s\n", dir); return; }
+    fat_chmod(dir, COMPOST_MODE);                      /* the cook's alone (v0.60.270), made so or not */
     const char *base = p;
     for (const char *c = p; *c; c++) if (*c == '/') base = c + 1;
     for (int n = 1; n < 100; n++) {                    /* name, name.2, name.3 ... */
@@ -1637,6 +1646,7 @@ static void compost_add(const char *p) {
     if (n + (int)strlen(name) + (int)strlen(p) + 3 < (int)sizeof(whence)) {
         strcat(whence, name); strcat(whence, "\t"); strcat(whence, p); strcat(whence, "\n");
         fat_write(idx, (const uint8_t *)whence, (uint32_t)strlen(whence));
+        fat_chmod(idx, FAT_PERM_MARK | FAT_PERM_OR | FAT_PERM_OW);   /* where each came from: the cook's (v0.60.270) */
     }
     klog("[countertop] composted %s as %s\n", p, dst);
 }

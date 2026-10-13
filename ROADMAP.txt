@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.269
+Current version: v0.60.270
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,18 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.270 (2026-10-12)  — A COMPOSTED FILE KEEPS ITS MODE
+  - The desktop's compost, copy and put back made every new file rwxr-x,
+    whatever the old one's mode, and the headchef's compost is /compost
+    at the root, made rwxr-x too: a rw---- file the headchef composted was
+    every cook's to read, and /compost/.whence named where each came from
+    (review R-C16, the second area review's). stream_copy now gives the
+    copy its source's mode; the compost bowl is made (and kept) rwx---,
+    its .whence rw----. Put back still makes the file the desktop cook's.
+  - scripts/ctcompostmode-test.sh: the headchef composts a rw---- file;
+    saucier is refused it and the index, and it reads rw----. Before the
+    fix saucier read both.
 
 v0.60.269 (2026-10-12)  — A SYSCALL'S COPY THE PAGER CANNOT BACK IS A -1
   - user_ok passed any heap page below the break (and any stack page above

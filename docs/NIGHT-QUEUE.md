@@ -719,7 +719,7 @@ Mincecraft; neosim and rx.c; Doom; tests, build and docs.)
 
 ### The desktop (reviewer confirmed 1 in QEMU on a copy)
 
-- **R-C16 (medium-high, security).** Compost, copy and put back drop the
+- **R-C16 (medium-high, security) — DONE v0.60.270 (modes kept, compost rwx---; put back still takes the desktop cook as owner; ctcompostmode-test).** Compost, copy and put back drop the
   file's mode: stream_copy makes the new file FAT_PERM_DEFAULT (rwxr-x),
   and the headchef's compost is /compost at the root (made rwxr-x too),
   so a rw---- file the headchef composts is every cook's to read
