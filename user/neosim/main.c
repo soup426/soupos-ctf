@@ -600,6 +600,17 @@ static void insert_mode(int x, int push) {
 }
 static void insert_key(unsigned k) {
     if (k == 27 && ins_count > 1 && ins_n && !ins_again) {
+        /* Room for every line the repeats make, before them (v0.60.313,
+         * review R-N61): an Enter typed in a counted insert is replayed too,
+         * and o/O's own line; split by split a nearly full buffer ran the
+         * rest of a copy onto the line. The first copy stays; the repeats
+         * are refused whole. */
+        long lines = ins_open;
+        for (int i = 0; i < ins_n; i++) if (ins_keys[i] == '\n') lines++;
+        long need = lines * (ins_count - 1);
+        if (need && (need > T_MAXL || !text_room_for(&E.t, (int)need))) { full_msg(); ins_count = 1; }
+    }
+    if (k == 27 && ins_count > 1 && ins_n && !ins_again) {
         ins_again = 1;
         for (int r = 1; r < ins_count && !ins_full; r++) {   /* not on past a refused split */
             if (ins_open) insert_key('\n');

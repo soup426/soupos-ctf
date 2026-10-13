@@ -1207,7 +1207,7 @@ was queued.
 - **R-N60 (medium, data).** :s cuts the expanded replacement at 255 and
   :s///g stops partway, silently. Fix: a wider buffer and E1240 before
   change_begin.
-- **R-N61 (medium, data, my v0.60.304 incomplete).** Enters typed inside
+- **R-N61 (medium, data, my v0.60.304 incomplete) — DONE v0.60.313 (neosim-fullpaste-test).** Enters typed inside
   a counted o/O (or i/a/A) are replayed with no room check: on a
   2045-line file G3oa<CR>b<Esc> ends a, b, ab. Fix: room for every line
   the replay makes, checked at Esc, refused whole.

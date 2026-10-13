@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.312
+Current version: v0.60.313
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,16 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.313 (2026-10-13)  — NEOSIM: A COUNTED INSERT'S REPEATS NEED ROOM TOO
+  - v0.60.304 asked for room for a counted o's own lines, but the Enters
+    typed in a counted insert are replayed at Esc as well: on a 2045-line
+    file G3oa<CR>b<Esc> gave a, b, ab (review R-N61). Before the replay the
+    lines it makes are counted ((count - 1) x the Enters typed, and o/O's
+    line); if they do not fit, the first copy stays and the repeats are
+    refused whole, with the file-full message.
+  - neosim-fullpaste-test: that case ends a, b at 2047 lines. Before the
+    fix: a, b, ab at 2048.
 
 v0.60.312 (2026-10-13)  — ONLY A SPAWNED SCRIPT TAKES THE DEFERRED KILL
   - v0.60.300 sent any task with ->soupyc down the deferred kill, and a
