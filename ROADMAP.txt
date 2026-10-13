@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.292
+Current version: v0.60.293
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,13 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.293 (2026-10-13)  — NEOSIM: UNDO KEEPS A FILE CRLF
+  - v0.60.285 cleared the CRLF flag in text_clear, and undo rebuilds the
+    text through text_clear: x u :w on a CRLF file wrote it LF (review
+    R-N46). The flag is cleared only when a file is loaded now.
+  - neosim-bytes-test: a third CRLF file, $x u :w, comes back CRLF.
+    Before the fix it came back LF.
 
 v0.60.292 (2026-10-13)  — EACH COOK HAS A SHARE OF THE WRITE BUDGET
   - v0.60.283's one budget for all let one cook's background writer (it

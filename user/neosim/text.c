@@ -19,10 +19,11 @@ static void unblk(char *b) { if (b) freel[nfree++] = b; }
 
 void text_clear(text_t *t) {
     for (int i = 0; i < t->n; i++) unblk(t->s[i]);
-    t->n = 1; t->s[0] = blk(); t->len[0] = 0; t->cut = 0; t->crlf = 0;
+    t->n = 1; t->s[0] = blk(); t->len[0] = 0; t->cut = 0;   /* not crlf: undo rebuilds through here (v0.60.293) */
 }
 int text_load(text_t *t, const char *path) {
     text_clear(t);
+    t->crlf = 0;                       /* a file's own (v0.60.293, review R-N46): text_clear is undo's too */
     int fd = sys_open(path, O_READ);
     if (fd < 0) return -1;
     static char buf[4096];

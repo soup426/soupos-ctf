@@ -1000,7 +1000,7 @@ Mincecraft; neosim and rx.c; Doom; tests, build and docs.)
 
 ### neosim (reviewer: host harness, ASan, 7-byte reads, 300 random runs against nvim)
 
-- **R-N46 (high, data, my v0.60.285).** Undo or redo drops the CRLF flag:
+- **R-N46 (high, data, my v0.60.285) — DONE v0.60.293 (neosim-bytes-test).** Undo or redo drops the CRLF flag:
   undo.c's pop() rebuilds through text_clear, which now clears crlf; x u
   :w on a CRLF file writes it LF. Fix: crlf kept across pop (reset only in
   text_load).
