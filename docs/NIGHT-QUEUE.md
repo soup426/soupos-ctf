@@ -669,6 +669,32 @@ Mincecraft; neosim and rx.c; Doom; tests, build and docs.)
 
 ## Area review findings (2026-10-12, began at a6f1c1c)
 
+### Kernel and shell (reviewer confirmed K15 in QEMU on a copy)
+
+- **R-K15 (high, my v0.60.269 incomplete).** One syscall over a buffer
+  larger than the page cap still panics: the pre-fault evicts the buffer's
+  own first pages, can take the last swap slot doing it, and the copy's
+  touch of page 0 then needs swap_in, which calls swap_out_one BEFORE it
+  frees the incoming slot (swap.c:145), finds none, and declines in ring 0
+  (reproduced: one sys_read of 5114 pages after kfill's measure). The
+  comment's "swap having just made room" is wrong. Fix: swap_in reads into
+  a fresh frame and frees its slot before evicting; and/or user_ok and the
+  copy work in chunks under the cap; a kfill-test case for one big call.
+- **R-K16 (medium, regression of v0.60.269, suspected).** The pre-fault
+  costs the whole buffer, not what is copied: a 20 MB read of a 47-byte
+  file maps, zeroes and swaps out thousands of pages first, filling the
+  machine's swap. Fix: clamp to what can be copied, or chunk (with K15).
+- **R-K17 (medium, security, suspected).** A spawn()ed script's input()
+  reads the console's keyboard with no foreground rule (soupyc.c:1160):
+  the /dev/kbd hole K13 closed, by another door; it outlives clockout and
+  races the next login for its keys. Fix: input() gives an empty line in a
+  task with uid set (a spawned one), or soup: tasks end at clockout.
+- **R-K18 (low, suspected).** users_may_open checks "/" as the parent of
+  a new relative path ("home/rosemary/x"), too strict for soupyc's
+  unresolved paths. Fix: keep the computed parent, or prefix "/".
+- **R-K19 (low, suspected).** A killed soup: task never runs release_ctx:
+  its vfs nodes (16 machine-wide) and buffered writes are lost.
+
 ### The desktop (reviewer confirmed 1 in QEMU on a copy)
 
 - **R-C16 (medium-high, security).** Compost, copy and put back drop the
@@ -703,7 +729,7 @@ Mincecraft; neosim and rx.c; Doom; tests, build and docs.)
    K2 and K1, which can pass broken), R-K12 (critical), R-C2, R-K13,
    R-C10, R-K14, R-C12 (the area review's, 2026-10-12), then R-C16
    (the second area review's).
-3. Kernel crashes any cook can cause: R-K4, R-K3 (R-K5 set aside for the user).
+3. Kernel crashes any cook can cause: R-K15 (my K3, incomplete), R-K16, then R-K17 (security), R-K4b (R-K5 set aside for the user).
 4. Data loss: R-M1, R-M4, R-N3, R-N4, R-N5, R-N1, R-N2.
 5. Item 0b, Doom, from R-D3, R-D2, R-D4, R-D1 down.
 6. The rest by severity, the area's mediums before the lows; items 1-9
