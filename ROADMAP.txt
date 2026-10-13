@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.303
+Current version: v0.60.304
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,16 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.304 (2026-10-13)  — NEOSIM: A COUNTED o THAT DOES NOT FIT IS REFUSED
+  - v0.60.296's o and O asked for room for one line; a counted o repeats
+    the Enter at Esc, and a split refused there said nothing, so on a
+    2046-line file G3ofoo<Esc> gave foo and foofoo (review R-N53). o and O
+    ask for every line the count makes now; Enter in insert mode says the
+    file is full when it cannot split, and the repeat stops there.
+  - neosim-fullpaste-test: G3o000<Esc> on a 2046-line file is refused and
+    the buffer written after it is the file. Before the fix: 000 and
+    000000.
 
 v0.60.303 (2026-10-13)  — LONGJOIN-TEST PASTES AFTER A REFUSAL
   - v0.60.295 asked about a long join before the register, so a refused d

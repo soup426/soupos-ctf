@@ -578,8 +578,11 @@ static void put_indent(int y, int n) { for (int i = 0; i < n; i++) text_insert_c
  * count - 1 times (for o and O after a new line each time); one undo step. */
 static int ins_count = 1, ins_open, ins_n, ins_again;
 static unsigned ins_keys[256];
+static int ins_full;                                 /* a split refused in this insert (v0.60.304) */
+/* The buffer is at its most lines: said, and logged for the tests (v0.60.304). */
+static void full_msg(void) { msg("E: the file is full (2048 lines)", 0, 0); eprint("[neosim] the file is full\n"); }
 static void insert_mode(int x, int push) {
-    ins_count = 1; ins_open = 0; ins_n = 0;
+    ins_count = 1; ins_open = 0; ins_n = 0; ins_full = 0;
     if (push) change_begin();
     E.ins_dirty = !push;                            /* an operator before it already changed the text */
     E.mode = M_INSERT; E.cx = x; clamp(); E.want = E.cx;
@@ -587,7 +590,7 @@ static void insert_mode(int x, int push) {
 static void insert_key(unsigned k) {
     if (k == 27 && ins_count > 1 && ins_n && !ins_again) {
         ins_again = 1;
-        for (int r = 1; r < ins_count; r++) {
+        for (int r = 1; r < ins_count && !ins_full; r++) {   /* not on past a refused split */
             if (ins_open) insert_key('\n');
             for (int i = 0; i < ins_n; i++) insert_key(ins_keys[i]);
         }
@@ -610,7 +613,7 @@ static void insert_key(unsigned k) {
         if (ai_pending && only_spaces(E.cy)) { while (lenof(E.cy)) text_delete_char(&E.t, E.cy, 0); E.cx = 0; }
         if (text_split(&E.t, E.cy, E.cx) == 0) {
             E.cy++; put_indent(E.cy, ind); E.cx = E.want = ind; E.ins_dirty = 1; ai_pending = ind;
-        }
+        } else { ins_full = 1; full_msg(); }        /* was silent: what came next ran onto this line */
         return;
     }
     if (k == '\b') {
@@ -1215,9 +1218,12 @@ static void normal_key(unsigned k) {
     case 'a': insert_mode(len() ? E.cx + 1 : 0, 1); ins_count = cnt; break;
     case 'A': insert_mode(len(), 1); ins_count = cnt; break;
     case 'I': insert_mode(len() ? first_nonblank(&E.t, E.cy) : 0, 1); ins_count = cnt; break;
-    case 'o': { if (!text_room(&E.t)) { msg("E: the file is full (2048 lines)", 0, 0); break; }   /* (v0.60.296) */
+    /* Room for every line the count makes (v0.60.304, review R-N53): asked
+     * for one, a 3o on a nearly full file split what it could and ran the
+     * rest together on the last line. */
+    case 'o': { if (!text_room_for(&E.t, cnt)) { full_msg(); break; }   /* (v0.60.296) */
                 int ind = indent_of(E.cy); change_begin(); if (text_insert_line(&E.t, E.cy + 1) == 0) { E.cy++; put_indent(E.cy, ind); insert_mode(ind, 0); ai_pending = ind; ins_count = cnt; ins_open = 1; } break; }
-    case 'O': { if (!text_room(&E.t)) { msg("E: the file is full (2048 lines)", 0, 0); break; }
+    case 'O': { if (!text_room_for(&E.t, cnt)) { full_msg(); break; }
                 int ind = indent_of(E.cy); change_begin(); if (text_insert_line(&E.t, E.cy) == 0) { put_indent(E.cy, ind); insert_mode(ind, 0); ai_pending = ind; ins_count = cnt; ins_open = 1; } break; }
     case ':': E.mode = M_COMMAND; E.cmdch = ':'; E.cmdn = 0; break;
     }

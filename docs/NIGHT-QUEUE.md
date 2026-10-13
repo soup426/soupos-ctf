@@ -1068,7 +1068,7 @@ tests, build and docs. Nothing critical, so the full review stays at 30.
 
 ### neosim (reviewer confirmed N53-N55 in QEMU on copies, against nvim)
 
-- **R-N53 (medium, data, my v0.60.296).** o/O check room for one line; a
+- **R-N53 (medium, data, my v0.60.296) — DONE v0.60.304 (neosim-fullpaste-test).** o/O check room for one line; a
   counted o repeats insert_key('\n') at Esc and a failed split is silent,
   so on a 2046-line file G3ofoo<Esc>:w gives foo and foofoo (nvim: three
   foo). Enter on a full buffer fails silently too. Fix: text_room_for(cnt)
