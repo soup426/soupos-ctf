@@ -53,6 +53,7 @@
 #endif
 #ifndef NO_DOOM
 #include "doom.h"
+#include "doom_libc.h"   /* doom_atoi, for doom at (v0.60.299) */
 #endif
 
 /* POSIX extended regular expressions for [[ =~ ]] (v0.60.120): the same
@@ -5002,7 +5003,7 @@ static void cmd_reheat(void) {
  * Doom's menus call t_getc(), which yields. Wrapping the session
  * would leak the lock into an unrelated task the first time a player paused on
  * a menu. See docs/doom-reenable-plan.md. */
-static void cmd_doom(void) {
+static void cmd_doom(const char *a) {
     if (needs_console("doom")) return;
     if (task_count_users() > 1) {
         t_color(VGA_YELLOW, VGA_BLACK);
@@ -5017,6 +5018,19 @@ static void cmd_doom(void) {
         t_color(VGA_LIGHT_GREY, VGA_BLACK);
         t_puts("  Put the shareware WAD next to the Makefile and run: make wad\n");
         return;
+    }
+    /* doom at X Y DEG (v0.60.299): the level the menu starts puts the player
+     * there, so a test can stand where a picture is (scripts/doom-sky-test.sh). */
+    if (str_startswith(a, "at ")) {
+        const char *q = a + 3; int v[3];
+        for (int i = 0; i < 3; i++) {
+            while (*q == ' ') q++;
+            if (!(*q == '-' || (*q >= '0' && *q <= '9'))) { t_puts("  usage: doom [at X Y DEG]\n"); return; }
+            v[i] = doom_atoi(q);
+            if (*q == '-') q++;
+            while (*q >= '0' && *q <= '9') q++;
+        }
+        doom_spawn_at(v[0], v[1], v[2]);
     }
     doom_menu_run();
     t_clear();
@@ -5631,7 +5645,7 @@ static void dispatch(const char *buf) {
     else if (str_eq(p, "fortune"))   cmd_fortune();
     else if (str_eq(p, "bounce"))    cmd_bounce();
 #ifndef NO_DOOM
-    else if (str_eq(p, "doom"))      cmd_doom();
+    else if (str_eq(p, "doom") || str_startswith(p, "doom at ")) cmd_doom(p[4] ? p + 5 : "");
 #endif
     else if (str_eq(p, "cat"))       cmd_cat();  /* hidden */
     else if (str_eq(p, "ps"))          cmd_ps();

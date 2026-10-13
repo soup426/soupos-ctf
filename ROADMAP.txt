@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.298
+Current version: v0.60.299
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,22 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.299 (2026-10-13)  — DOOM: THE SKY
+  - The sky was black: sky_ensure decoded SKY1 with patch_blit, which took
+    the patch's offsets (127, 123) off and kept a 129x5 strip of it
+    (review R-D20). It is decoded by the texture's own columns now
+    (patch_composite), and drawn by Doom's rule: the column is the ray's
+    angle at 1024 to a turn, each screen column's angle its arctangent
+    (xtoviewangle, by an integer approximation within 0.62 of a column),
+    so SKY1 shows four times round and turns the right way; the row is
+    y + 16 at the 320x200 scale, wrapped at 128, not 128 rows squeezed
+    into the 84 above the horizon.
+  - doom at X Y DEG: the level the menu starts puts the player there, once,
+    so a test can stand where a picture is.
+  - scripts/doom-sky-test.sh: at E1M1's courtyard windows, facing east and
+    at 350 degrees, the sky between the pillars is SKY1 by Doom's rule
+    (522 of 522 and 342 of 342 pixels). Before the fix: 0 of 522.
 
 v0.60.298 (2026-10-13)  — NEOSIM: A PASTE THAT DOES NOT FIT IS REFUSED WHOLE
   - A paste of several lines into a nearly full buffer split line by line

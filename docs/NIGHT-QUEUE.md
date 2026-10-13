@@ -806,7 +806,7 @@ Mincecraft; neosim and rx.c; Doom; tests, build and docs.)
 
 ### Doom (reviewer's host harness matched a QEMU frame on 100% of pixels; item 0b)
 
-- **R-D20 (high, looks).** The sky is black: sky_ensure decodes SKY1 with
+- **R-D20 (high, looks) — DONE v0.60.299 (doom-sky-test; u by xtoviewangle's arctangent, not the linear one proposed).** The sky is black: sky_ensure decodes SKY1 with
   patch_blit, which subtracts its offsets (127, 123), leaving a 129x5
   strip (doom.c:899). It also turns the wrong way, at a quarter of Doom's
   scale, and squeezes 128 rows into 84. Fix: patch_composite; u from

@@ -474,6 +474,8 @@ static thing_ai_t *lv_thing_ai = NULL;
  * pl_angle: fine view angle 0-127 (128 steps, 2.8125° each; 0=East).
  * pl_dir: coarse 8-direction (= pl_angle / ANG_PER_DIR), for sprite rotation. */
 static int32_t pl_x = 0, pl_y = 0;
+static int g_at_set = 0, g_at_x, g_at_y, g_at_deg;   /* doom at X Y DEG (v0.60.299) */
+void doom_spawn_at(int x, int y, int deg) { g_at_set = 1; g_at_x = x; g_at_y = y; g_at_deg = deg; }
 static int     pl_angle = 0;
 static int     pl_dir   = 0;
 
@@ -503,7 +505,6 @@ static const int sin128[8] = {   0,  91, 128,  91,    0, -91, -128, -91 };
 #define ANG_90       (ANG_N / 4)    /* quarter turn, for strafing       */
 #define ANG_270      (ANG_N * 3 / 4)
 #define ANG_PER_DIR  (ANG_N / 8)    /* angles per 8-way sprite rotation */
-#define ANG_SKY_U    (256 / ANG_N)  /* sky texels per angle step        */
 
 static const int16_t view_cos[ANG_N] = {
      1024,  1023,  1019,  1013,  1004,   993,   980,   964,
@@ -677,6 +678,12 @@ static int level_load(const char *name) {
                 }
             }
         }
+    }
+    if (g_at_set) {                                  /* doom at X Y DEG: once (v0.60.299) */
+        pl_x = (int32_t)g_at_x << 8; pl_y = (int32_t)g_at_y << 8;
+        pl_angle = (((g_at_deg % 360) + 360) % 360 * ANG_N / 360) & ANG_MASK;
+        pl_dir = pl_angle / ANG_PER_DIR;
+        g_at_set = 0;
     }
     /* AI state array — parallel to lv_things */
     if (lv_nthings > 0) {
@@ -852,8 +859,25 @@ typedef struct { char name[8]; uint8_t *pixels; } flat_t;
 static flat_t  g_flats[MAX_FLAT_CACHE];
 static int     g_nflats = 0;
 
+static void patch_composite(const uint8_t *data, uint8_t *out, int out_w, int out_h, int ox, int oy);
 static uint8_t g_sky_pixels[256 * 128];
 static int     g_sky_loaded = 0;   /* 0=untried, 1=ok, -1=missing */
+/* xtoviewangle in sky columns (v0.60.299): floor(atan((cx - x - 1/2) / cx)
+ * * 512 / pi), by pi/4 t + 0.273 t (1 - |t|), within 0.62 of a column. */
+#define SKY_XU_MAX 2048
+static int16_t g_sky_xu[SKY_XU_MAX];
+static int     g_sky_xu_w = 0;
+static void sky_cols(void) {
+    if (g_sky_xu_w == dw || dw > SKY_XU_MAX) return;
+    int cx = dw / 2;
+    for (int x = 0; x < dw; x++) {
+        int32_t t = (int32_t)((cx - x) * 2 - 1) * 16384 / (2 * cx);  /* t * 2^14, in (-1, 1) */
+        int32_t at = t < 0 ? -t : t;
+        int32_t v = 128 * t + ((t * (16384 - at)) >> 14) * 89 / 2;  /* columns * 2^14 */
+        g_sky_xu[x] = (int16_t)(v >> 14);
+    }
+    g_sky_xu_w = dw;
+}
 
 static void flat_cache_free(void) {
     for (int i = 0; i < g_nflats; i++) {
@@ -896,7 +920,10 @@ static void sky_ensure(void) {
     if (!tmp) { g_sky_loaded = -1; return; }
     if (wad_read_lump(idx, tmp, sz) == (int)sz) {
         memset(g_sky_pixels, 0, sizeof(g_sky_pixels));
-        patch_blit(tmp, g_sky_pixels, 256, 128, 0, 0);
+        /* The texture's own columns, as R_GenerateComposite (v0.60.299,
+         * review R-D20): patch_blit took SKY1's offsets (127, 123) off and
+         * kept a 129x5 strip of it, and the sky was black. */
+        patch_composite(tmp, g_sky_pixels, 256, 128, 0, 0);
         g_sky_loaded = 1;
     }
     kfree(tmp);
@@ -1004,9 +1031,15 @@ static void draw_flats(int psec) {
 
         uint8_t *row = g_backbuf + y * dw;
 
-        int sky_u_base = ((int)pl_angle * ANG_SKY_U) & 255;
-        int sky_v = y * 128 / VIEW_HALF_H;
-        if (sky_v > 127) sky_v = 127;
+        /* Doom's sky (v0.60.299, review R-D20): the column is the ray's
+         * angle at 1024 to a turn (ANGLETOSKYSHIFT), so the 256-wide SKY1
+         * shows four times round and 256 columns across the 90-degree view;
+         * the row is skytexturemid 100 + y - centery 84, at the 320x200
+         * scale, wrapped at 128. It turned the wrong way at a quarter of
+         * that, and squeezed 128 rows into the 84 above the horizon. */
+        sky_cols();
+        int sky_u_base = (int)pl_angle * (1024 / ANG_N);
+        int sky_v = (y / ds + 16) & 127;
 
         int last_sec = -999;
         uint8_t *flat = NULL;
@@ -1040,7 +1073,7 @@ static void draw_flats(int psec) {
 
             if (is_sky_here) {
                 if (g_sky_loaded == 1) {
-                    int sky_u = (sky_u_base + sx * 64 / dw) & 255;
+                    int sky_u = (sky_u_base + g_sky_xu[sx]) & 255;
                     row[sx] = g_sky_pixels[sky_v * 256 + sky_u];
                 }
                 continue;

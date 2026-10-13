@@ -9,6 +9,11 @@
  * Stays in VGA mode 13h until the user selects Quit Game. */
 void doom_menu_run(void);
 
+/* The next level starts the player at (x, y) facing deg (0 = east) instead
+ * of the map's Player 1 start, once (v0.60.299): `doom at X Y DEG`, so a
+ * test can stand where a picture is, as Doom's own -warp does for maps. */
+void doom_spawn_at(int x, int y, int deg);
+
 /* Show just the TITLEPIC title screen, wait for a key, return to text mode. */
 void doom_titlescreen(void);
 
