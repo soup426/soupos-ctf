@@ -1123,6 +1123,152 @@ tests, build and docs. Nothing critical, so the full review stays at 30.
 - **R-T41 (low, flaky toward FAIL).** fullbudget-test's WAIT:12 before
   the kill; fix: UNTIL:/fill: stops at.
 
+## Full review findings (2026-10-13, began at 88512a1)
+
+Six areas. Every claim below was spot-checked against the code before it
+was queued.
+
+### Kernel and shell (reviewer confirmed K37 and K38 in QEMU on copies)
+
+- **R-K37 (medium, my v0.60.300).** kill of a shell session running a
+  foreground script takes the deferred path (soupyc_run sets ->soupyc on
+  the shell's own task, soupyc.c:1994) and leaves kill_req set for good:
+  every later soup in that session fails "killed", every pipe read gives
+  EOF, and the killer is told "is stopping" forever. Fix: the deferred
+  path only for a spawned script's task (a flag set in soupyc_child), the
+  shell's task keeps task_kill; clear kill_req when soupyc_run returns.
+  Test: SSH session runs a sleep loop, the console kills its task; then
+  soup /HI.SC and a here-string in it must work, or the session be gone.
+- **R-K38 (low-medium).** A cook cannot kill their own spawned script
+  ("only the headchef may kill a kernel task"), and ps shows OWNER - for
+  it. Fix: allow t->soupyc && t->uid == the caller's; ps shows t->uid.
+- **R-K39 (low, rights).** input's buffer is one static (soupyc.c:1168):
+  two sessions at input mix their keys (B's x can hold A's key). Fix: a
+  per-context or stack buffer.
+- **R-K40 (low, plausible).** wbuf_loading is a global: another task's
+  mem_ensure during an append's load skips its share check. Fix: pass it
+  as a parameter.
+
+### The desktop (reviewer confirmed C26-C29 in QEMU on copies)
+
+- **R-C28 (low-medium, data).** A files window's right-click menu
+  survives keyboard navigation: armed on remove, then Down Enter into
+  ~/compost, one click empties the compost unasked (files_open never
+  calls ctx_close; ctx_label/ctx_click read name[ctx_row] past the new
+  listing). Fix: ctx_close in files_open and on a key to that window;
+  ctx_click refuses ctx_row >= f->n.
+- **R-C26 (medium).** A snapped terminal maximised and restored comes
+  back half-screen wide with 80 columns: 16 columns outside its frame,
+  then painted over its neighbours (maximise_window saves over the
+  snap's rectangle). Fix: maximise unsnaps first, or its own rectangle.
+- **R-C27 (medium-low).** A program window wider than half the screen
+  (neosim, Mincecraft at 640) snapped draws 129 px past its frame. Fix:
+  no snap when the body does not fit, and the window-rectangle clip.
+- **R-C29 (low).** A narrow program window draws its title and boxes
+  outside itself and its close box cannot be clicked; long names run out
+  of the files window and the right-click menu. Fix: draw_window clips
+  to the window's rectangle (covers C26, C27, C29's drawing), a minimum
+  width, text cut to its space.
+- **R-C30 (low, plausible).** Alt+Tab's panel can survive Leave:
+  countertop_run's reset never clears tab_on/tab_mark.
+
+### Mincecraft (reviewer: host build with ASan/UBSan, 3000 fuzzed files, 2.4M random ticks)
+
+- **R-M17 (high, data).** move_y has no `if (!d) return;` (move_x and
+  move_z do): flying with nothing held while the box overlaps a block
+  (sugar fallen into the cook, R-M2's trigger) snaps the feet down a block
+  a tick, through the floor without end; the save is then refused (y < 0)
+  and the next start kept it aside and saved a new world over it. Fix:
+  the early return. Test: in mincecraft-fly-test, sugar above the head,
+  double Space, nothing held 1 s, P, -check: y stays and the file loads.
+- **R-M19 (low, data).** keep_aside always writes PATH.bad: a second
+  refusal overwrites the first kept world. Fix: .bad2, .bad3, or refuse.
+- **R-M18 (low).** The fall queue is not saved: sugar saved mid-fall
+  floats after a load. Fix: queue unsupported sugar after a load.
+
+### neosim and rx.c (reviewer: host harness with ASan/UBSan against nvim, 4400 random runs; 1-6 also in QEMU)
+
+- **R-N57 (high, data, my v0.60.305 incomplete).** A charwise paste
+  across lines puts its first segment into the target line before the
+  split: on a long line those characters are refused and lost silently
+  (abc/def/255 z, 0lvjy G099lP :w loses "bc"); too_wide_paste passes as
+  the final lines fit. Fix: split first, then put the segments.
+- **R-N58 (medium-high, data).** \1-\9 in a pattern become a literal
+  digit: :%s/\(\w\+\) \1/\1/ changes "item 1 here" to "item here".
+  Fix: refuse them in patterns (or support them).
+- **R-N59 (medium, data, rx.c).** An unclosed [ inside a group compiles
+  to a program matching the empty string everywhere (rx.c:158 returns -1
+  without an error): :%s/\([[:alpha:]\)/X/ changes every line. Fix: the
+  error, and rx_compile fails on -1. sift -E and [[ =~ ]] share it.
+- **R-N60 (medium, data).** :s cuts the expanded replacement at 255 and
+  :s///g stops partway, silently. Fix: a wider buffer and E1240 before
+  change_begin.
+- **R-N61 (medium, data, my v0.60.304 incomplete).** Enters typed inside
+  a counted o/O (or i/a/A) are replayed with no room check: on a
+  2045-line file G3oa<CR>b<Esc> ends a, b, ab. Fix: room for every line
+  the replay makes, checked at Esc, refused whole.
+- **R-N62 (low-medium, data).** Ctrl-A/Ctrl-X overflow a signed long
+  long (9223372036854775807 + 1 writes garbage). Fix: unsigned, clamped
+  as nvim.
+- **R-N63 (low-medium, data).** "A appends make a linewise register line
+  past 255, and a linewise paste cuts it. Fix: E1240 in paste_from.
+- **R-N64 (low, data).** In a CRLF file the CR counts against 255: a
+  255-column line loads the file as unix and writes it LF. Fix: let the
+  CR through at 255.
+- Extensions: a visual selection ending on an empty line never takes its
+  line break (with R-N17); a self-recursive macro runs 3^9 times (with
+  R-N9/R-N44).
+
+### Doom (reviewer: a host build of doom.c matched a QEMU frame on 483,840 of 483,840 pixels; 4 QEMU runs)
+
+The recent fixes against id's rules: v0.60.307's five pegging rows match
+r_segs.c's texturemid (the pegged upper and lower too, which the walls test
+does not reach); v0.60.299's sky matches R_DrawPlanes; v0.60.309's speeds
+and waits match. v0.60.308 regressed (R-D45).
+
+- **R-D45 (high, looks, my v0.60.308).** Solid walls closing the sprite
+  span cut sprites off with a straight edge: a sprite is wider than its
+  subsector, and walls of subsectors the BSP visits first can be behind
+  it (doom at 3216 -3184 270: the imp on the ledge spans columns 76-143,
+  only 76-113 drawn; a grid search of E1M1 found 139 views with 9 or more
+  columns wrongly hidden). Fix: Doom's drawsegs (each wall's x range and
+  depth; a sprite clipped only by those in front of it), or at least a
+  per-column depth of the solid wall, hiding a sprite column only when
+  the wall is nearer. Test: that view in its first 0.3 s, columns 114-143
+  rows 0-56 are TROOA1.
+- **R-D46 (high, play).** Monsters fire on the tic they wake, all at once
+  (atk_cd starts 0): doom at 3216 -3184 270 has 10% health at 0.35 s,
+  dead in 1.5 s with no input. Doom: reactiontime 8, counted down per
+  chase, no missile while it is set; and the range chance. Test: that
+  view, health 100 at 0.35 s.
+- **R-D47 (medium).** Every monster moves 4 a tic (140 u/s): Doom's
+  zombieman 70, imp/sergeant/baron 93, demon 175. Fix: per-type speed and
+  chase period.
+- **R-D48 (medium-low, looks).** No red flash on damage or gold on a
+  pickup (PLAYPAL 1-8 by damagecount, 9-12 by bonuscount).
+- **R-D49 (low).** Using an open DR door again keeps it open; Doom closes
+  it (EV_VerticalDoor).
+- **R-D50 (low, looks).** No weapon or view bob.
+- **R-D51 (low).** Imp fireballs: 8 a tic and 8 damage; Doom 10 a tic and
+  3 x (1..8).
+- **R-D52 (low, looks).** The weapon is drawn at full brightness; Doom
+  lights it by the sector (colormap 5 at light 128).
+
+### Tests, build and docs (reviewer mutated three fixes in a copy; all three tests failed as they should)
+
+- **R-T45 (low, plausible).** killclose-test kills about 0.6 s after
+  CLOSING on a 12 MB close: nothing proves the kill landed inside close.
+  Fix: log a close's start and end and require the kill between them.
+- **R-T46 (low).** writebudget-test does not count its first driver's
+  failure, and never requires "/leak.txt: stops at" before trusting its
+  after2 check.
+- **R-T44 (low, mine).** doom-tics-test's comment says the phases split
+  at the first left; the code uses fixed windows, which could miss a late
+  turn; its screendumps are never read.
+- **R-T42, R-T43 (low, docs).** CLAUDE.md's Doom section still says the
+  thinkers run each frame with waits in timer ticks (v0.60.309 changed
+  it), and its kill lines predate v0.60.300's deferred kill.
+
 ## The order to work the review in
 
 0. Item 0 first (the user asked for it directly: a text file's double
@@ -1140,6 +1286,7 @@ tests, build and docs. Nothing critical, so the full review stays at 30.
 3b. R-K29 with R-T32, R-K31, R-K30 (my K24's regressions) before the rest of data loss.
 4. Data loss: R-M1, R-M4, R-N3, R-N30 (my N3, incomplete), R-N4, R-N5, R-N1, R-N2, R-N31, then R-N46, R-N47 (my N4's regressions), R-N48, R-N49, R-N32, R-N50.
 4b. The area review at 3c49bd7 (my own regressions first): R-K33 with R-K34, R-T39, R-T37, R-T38, R-N53, R-N54, R-K35; then back to item 0b at R-D21. Its lows (R-N55, R-N56, R-D41, R-D42, R-D43 with R-D44 and R-K36, R-T40, R-T41) go with the rest by severity.
+4c. The full review at 88512a1, my own regressions first: R-D45 (v0.60.308), R-N57 (v0.60.305), R-K37 (v0.60.300), R-N61 (v0.60.304), R-T44; then R-M17, R-D46 (high), R-C28, R-N58, R-N59, R-N60 (data); then item 0b's order again from R-D2 with R-D47 beside R-D7. The rest of this review's (R-K38-40, R-C26-27, R-C29-30, R-M18-19, R-N62-64, R-D48-52, R-T42-43, R-T45-46) go with the rest by severity.
 5. Item 0b, Doom: R-D20, R-D21, R-D22 (what the user sees first), then R-D3, R-D2, R-D4, R-D1 and the rest by severity.
 6. The rest by severity, the area's mediums before the lows; items 1-9
    where they fit.
