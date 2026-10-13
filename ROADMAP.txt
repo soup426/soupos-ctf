@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.323
+Current version: v0.60.324
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,22 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.324 (2026-10-13)  — CTCTXNAV-TEST: A POSITIVE CONTROL, AND EACH PART OF ITS FIX
+  - ctctxnav-test's checks were both absences, so keys or clicks that
+    missed passed it, and any one of v0.60.317's three parts saved it
+    alone (reviews R-C32, R-T48, R-T49). Now four files in the compost,
+    so the menu's row is still in the listing it lands on and the row
+    check cannot save it; after the Down and Enter case, one with no
+    Enter (armed, Down, the same click), which only the key's close
+    passes; and positive markers: the listings' "files in" lines in
+    order, and last the menu's remove used as meant, which composts
+    note.txt.
+  - Red with all three parts reverted (the compost emptied), with the
+    key's close alone reverted (note.txt composted by the no-Enter
+    click: the compost then lists 6), and with the row check kept but
+    both closes reverted (the compost emptied). files_open's close alone
+    cannot be told apart: the key's close comes first on every path.
 
 v0.60.323 (2026-10-13)  — NEOSIM: A COUNTED INSERT'S ROOM IS MEASURED, NOT COUNTED
   - v0.60.313 counted every Enter typed in a counted insert as a line each

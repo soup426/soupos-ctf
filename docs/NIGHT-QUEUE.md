@@ -1305,7 +1305,7 @@ show).
   open reloads its listing under the menu; the same row is another file
   (a remove composted the dropped file, not the one the menu was for).
   Fix: files_load closes a menu on its window.
-- **R-C32 (low, test, mine).** ctctxnav-test has no positive control: if
+- **R-C32 (low, test, mine) — DONE v0.60.324 with R-T48, R-T49 (files_open's close alone cannot be told apart: the key's close comes first).** ctctxnav-test has no positive control: if
   the keys or clicks miss it passes. With R-T48, R-T49 below.
 
 ### Mincecraft (reviewer: host build, 800,000 fuzzed ticks)
@@ -1350,10 +1350,10 @@ show).
   itself added: with e4174c4's doom.c reverted there are none, and both
   checks pass on an empty list. Fix: at least one hit required (the
   player dies there in 3 s), the first at tic 22 or later.
-- **R-T48 (low, mine).** ctctxnav-test is saved by any one of the fix's
+- **R-T48 (low, mine) — DONE v0.60.324.** ctctxnav-test is saved by any one of the fix's
   three parts: more files in the compost so the row check cannot save
   it, and a case with no Enter.
-- **R-T49 (low, mine).** ctctxnav-test's checks are both absences: a log
+- **R-T49 (low, mine) — DONE v0.60.324.** ctctxnav-test's checks are both absences: a log
   line or note.txt's removal as a positive marker.
 - **R-T50 (low).** doom-spritecut-test's dump comes after some world
   tics, not "before the world runs".
