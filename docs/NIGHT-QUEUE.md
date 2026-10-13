@@ -204,6 +204,7 @@ gaps [14, 15, ...], one a tick under its 15 floor; three runs alone passed.
 Seen 2026-10-12 (v0.60.278's first run): ctslots-test "the hog held none";
 two runs alone passed. Probably a kernel line landing mid-line in "prod: hog
 holds N" (prodwin-test strips them for that reason); fixed v0.60.279.
+- doom-mouse-test failed once in a full check (2026-10-13, v0.60.321: one gap of 14 ticks against 15), passed in the rerun.
 - while-test W6 failed once in a full check (2026-10-13, v0.60.300; its Ctrl-C after a fixed WAIT:4), passed twice alone and in the rerun.
 
 ## 6. Doom: the face
@@ -1325,7 +1326,7 @@ show).
 
 ### Doom (reviewer: an instrumented copy painting each clip's hidden pixels; 3 QEMU runs)
 
-- **R-D53 (high, looks; R-D8 made visible by my v0.60.310).** A wall
+- **R-D53 (high, looks; R-D8 made visible by my v0.60.310) — DONE v0.60.321 with R-D8 (doom-nearclip-test).** A wall
   clipped at the near plane gets a far-off sx2, clamped, and its depth
   interpolated over the clamped span: the per-column depths are wrong
   (64 against a true 157), and now they hide sprites (doom at 3216 -3808

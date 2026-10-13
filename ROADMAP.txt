@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.320
+Current version: v0.60.321
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,18 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.321 (2026-10-13)  — DOOM: A WALL RUNNING PAST THE PLAYER HAS ITS TRUE DEPTH
+  - A wall clipped at the near plane got a far-off end on screen, clamped
+    to the screen, and its depth and texture were interpolated over the
+    clamped span with the unclamped ends' values: wrong depths (64 for a
+    true 157), smeared textures, and since v0.60.310 the sprites beside
+    such a wall hidden (reviews R-D8, R-D53). Depth and U are interpolated
+    from the unclamped ends now (1/vx linear in a 2^30 fraction, in 64
+    bits), and the near clip moves U with the end it moves.
+  - scripts/doom-nearclip-test.sh: doom at 3216 -3808 270, the shotgun guy
+    beside wall 429 shows where the wrong depth hid him (92 of 390 pixels
+    his red; before the fix 0).
 
 v0.60.320 (2026-10-13)  — A SESSION'S SCRIPT IS ASKED TO STOP TOO
   - v0.60.312 killed a session running a foreground soup where it stood:

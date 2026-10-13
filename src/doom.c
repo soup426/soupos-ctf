@@ -1517,15 +1517,6 @@ static void render_seg_3d(const dseg_t *seg) {
     int32_t vx1 = view_project(lv_verts[seg->v1].x, lv_verts[seg->v1].y, &vy1);
     int32_t vx2 = view_project(lv_verts[seg->v2].x, lv_verts[seg->v2].y, &vy2);
 
-    #define NP 256
-    if (vx1 <= NP && vx2 <= NP) return;
-    if (vx1 < NP) { int32_t d=vx2-vx1; vy1=vy1+(vy2-vy1)*(NP-vx1)/d; vx1=NP; }
-    if (vx2 < NP) { int32_t d=vx1-vx2; vy2=vy2+(vy1-vy2)*(NP-vx2)/d; vx2=NP; }
-    #undef NP
-
-    int sx1 = SCR_CX + (int)(vy1 * PROJ_DIST / vx1);
-    int sx2 = SCR_CX + (int)(vy2 * PROJ_DIST / vx2);
-
     /* Seg U coordinates: offset at v1, offset+length at v2 */
     int32_t sdx = lv_verts[seg->v2].x - lv_verts[seg->v1].x;
     int32_t sdy = lv_verts[seg->v2].y - lv_verts[seg->v1].y;
@@ -1533,15 +1524,34 @@ static void render_seg_3d(const dseg_t *seg) {
     int32_t u1 = (int32_t)(int16_t)seg->offset;
     int32_t u2 = u1 + seg_len;
 
+    /* The near clip moves U with the end it moves (v0.60.321, review R-D8):
+     * it moved only the position, so the texture slid along a wall that
+     * ran past the player. In 64 bits: the products pass 2^31. */
+    #define NP 256
+    if (vx1 <= NP && vx2 <= NP) return;
+    if (vx1 < NP) { int64_t d = vx2 - vx1; vy1 += (int32_t)((int64_t)(vy2 - vy1) * (NP - vx1) / d);
+                    u1 += (int32_t)((int64_t)(u2 - u1) * (NP - vx1) / d); vx1 = NP; }
+    if (vx2 < NP) { int64_t d = vx1 - vx2; vy2 += (int32_t)((int64_t)(vy1 - vy2) * (NP - vx2) / d);
+                    u2 += (int32_t)((int64_t)(u1 - u2) * (NP - vx2) / d); vx2 = NP; }
+    #undef NP
+
+    /* The ends on screen, unclamped (v0.60.321, reviews R-D8, R-D53): depth
+     * and U were interpolated over the span clamped to the screen with the
+     * unclamped ends' values, so a wall running past the player had wrong
+     * depths (64 for 157), smeared textures, and since v0.60.310 hid the
+     * sprites beside it. */
+    int64_t X1 = SCR_CX + (int64_t)vy1 * PROJ_DIST / vx1;
+    int64_t X2 = SCR_CX + (int64_t)vy2 * PROJ_DIST / vx2;
+
     /* Ensure left-to-right; swap U ends to match */
-    if (sx1 > sx2) {
-        int t=sx1; sx1=sx2; sx2=t;
+    if (X1 > X2) {
+        int64_t t=X1; X1=X2; X2=t;
         int32_t tv=vx1; vx1=vx2; vx2=tv;
         int32_t tu=u1;  u1=u2;   u2=tu;
     }
-    if (sx2 < 0 || sx1 >= dw) return;
-    if (sx1 < 0)        sx1 = 0;
-    if (sx2 >= dw) sx2 = dw - 1;
+    if (X2 < 0 || X1 >= dw) return;
+    int sx1 = X1 < 0 ? 0 : (int)X1;
+    int sx2 = X2 >= dw ? dw - 1 : (int)X2;
 
     /* Look up front/back sectors and sidedefs */
     int front_sec = -1, back_sec = -1, two_sided = 0;
@@ -1583,8 +1593,6 @@ static void render_seg_3d(const dseg_t *seg) {
     int16_t xoff = fsd ? fsd->xoff : 0;
     int16_t yoff = fsd ? fsd->yoff : 0;
 
-    int span = sx2 - sx1 + 1;
-    int s    = span - 1;   /* denominator for perspective-correct lerp */
 
     for (int sx = sx1; sx <= sx2; sx++) {
         if (col_top[sx] > col_bot[sx]) continue;
@@ -1595,12 +1603,15 @@ static void render_seg_3d(const dseg_t *seg) {
          *   u(t)   = (u1*vx2*(s-t) + u2*vx1*t) / (vx2*(s-t) + vx1*t)
          * where t = sx - sx1. */
         int32_t vx, u_raw;
-        if (s > 0) {
-            int      t   = sx - sx1;
-            int64_t  den = (int64_t)vx2 * (s - t) + (int64_t)vx1 * t;
-            vx    = (den > 0) ? (int32_t)((int64_t)vx1 * vx2 * s / den) : vx1;
-            u_raw = (den > 0) ? (int32_t)(((int64_t)u1 * vx2 * (s - t)
-                                           + (int64_t)u2 * vx1 * t) / den) : u1;
+        if (X2 > X1) {
+            /* f = (sx - X1) / (X2 - X1) at 2^30, from the unclamped ends;
+             * 1/vx is linear in it: vx = vx1 vx2 / ((1-f) vx2 + f vx1), and
+             * U moves by f vx1 over that (v0.60.321). */
+            int64_t f = (((int64_t)sx - X1) << 30) / (X2 - X1);
+            int64_t d = ((int64_t)vx2 * ((1LL << 30) - f) + (int64_t)vx1 * f) >> 30;
+            if (d < 1) d = 1;
+            vx    = (int32_t)((int64_t)vx1 * vx2 / d);
+            u_raw = u1 + (int32_t)(((int64_t)(u2 - u1) * (f * vx1 / d)) >> 30);
         } else {
             vx    = vx1;
             u_raw = u1;
