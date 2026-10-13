@@ -750,7 +750,11 @@ static node_t *parse_stmt(void) {
         consume();
         if (tok.type != TK_STR) { set_err("expected \"filename\" after include"); return (void *)0; }
         char fname[SVAL_LEN];
-        strncpy(fname, tok.sval, SVAL_LEN-1); fname[SVAL_LEN-1] = '\0';
+        /* The literal is in tok.str (v0.60.272, review R-K20): tok.sval is
+         * cleared for every token, so this name was always empty and every
+         * include said "file not found". */
+        uint32_t fl = tok.slen < SVAL_LEN - 1 ? (uint32_t)tok.slen : SVAL_LEN - 1;
+        memcpy(fname, tok.str, fl); fname[fl] = '\0';
         consume();                    /* advance the outer stream past the name */
 
         if (inc_depth >= MAX_INCLUDE_DEPTH) { set_err("include nested too deep"); return (void *)0; }

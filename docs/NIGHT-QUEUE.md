@@ -678,7 +678,7 @@ Mincecraft; neosim and rx.c; Doom; tests, build and docs.)
   both builds), so that guard and CLAUDE.md:297's line may be dead. A
   quick EOF also passes, an auth failure included. Fix: a real path or
   drop that half and its doc; a marker in the SSH output either way.
-- **R-T25 (medium) / R-K20 (soupyc).** include never finds a file in any
+- **R-T25 (medium) / R-K20 (soupyc) — DONE v0.60.272 (soupyc-include-test).** include never finds a file in any
   build: it copies tok.sval, but string literals live in tok.str
   (soupyc.c:752); the disk's INCLUDE.SC fails, and no test runs it. So
   soupyc-perms-test's include check cannot fail. Fix: tok.str; an include

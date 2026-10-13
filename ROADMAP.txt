@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.271
+Current version: v0.60.272
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,17 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.272 (2026-10-12)  — SOUPYC'S INCLUDE FINDS ITS FILE
+  - include copied its file name from tok.sval, but the lexer keeps a
+    string literal in tok.str (tok.sval is cleared for every token), so
+    the name was always empty and every include said "file not found":
+    the disk's own INCLUDE.SC never ran, in any build, and no test ran it
+    (review R-K20); soupyc-perms-test's include case could not fail
+    (R-T25). The name comes from tok.str now.
+  - scripts/soupyc-include-test.sh: INCLUDE.SC prints cube(3) = 27 from
+    MATHLIB.SC; saucier's include of /MATHLIB.SC works and of /etc/kitchen
+    is refused, nothing of it printed.
 
 v0.60.271 (2026-10-12)  — KBDTAP-TEST TESTS ONLY WHAT IT CAN
   - kbdtap-test's SSH half passed with v0.60.264's dev_kbd_read guard
