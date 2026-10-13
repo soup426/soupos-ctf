@@ -956,7 +956,13 @@ static void paste_from(int after, int cnt, const char *reg, int reg_n, int reg_l
     if (!reg_n && !reg_lines) return;
     /* Before the undo step (v0.60.296, review R-N49): refused after it, a
      * paste into a full buffer left an empty step and [+]. */
-    if (reg_lines && !text_room(&E.t)) { msg("E: the file is full (2048 lines): nothing put", 0, 0); return; }
+    /* Every line the paste would make, before anything (v0.60.298, review
+     * R-N50): split by split, a nearly full buffer ran the register's lines
+     * together into the last, cut at 255, and said nothing. */
+    int nl = 0;
+    for (int i = 0; i < reg_n; i++) if (reg[i] == '\n') nl++;
+    long need = (long)(reg_lines ? nl + 1 : nl) * (cnt > 0 ? cnt : 1);
+    if (need && (need > T_MAXL || !text_room_for(&E.t, (int)need))) { msg("E: the file is full (2048 lines): nothing put", 0, 0); return; }
     change_begin();
     if (reg_lines) {
         int y = after ? E.cy + 1 : E.cy, at = y, put = 0;

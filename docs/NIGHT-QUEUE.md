@@ -1015,7 +1015,7 @@ Mincecraft; neosim and rx.c; Doom; tests, build and docs.)
   that.
 - **R-N49 (medium, my v0.60.288) — DONE v0.60.296 (neosim-fullpaste-test).** A refused paste or o/O into a full buffer
   leaves an empty undo step and [+] (change_begin first). Fix: room first.
-- **R-N50 (low-medium).** A multi-line paste into a nearly full buffer joins
+- **R-N50 (low-medium) — DONE v0.60.298 (neosim-fullpaste-test).** A multi-line paste into a nearly full buffer joins
   the register's lines (insert_text drops the \n when text_split fails),
   cut at 255, silently. Fix: stop and say the file is full.
 - **R-N51 (low-medium, my v0.60.285).** Code that knew only spaces meets

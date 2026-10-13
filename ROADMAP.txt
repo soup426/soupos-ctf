@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.297
+Current version: v0.60.298
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,15 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.298 (2026-10-13)  — NEOSIM: A PASTE THAT DOES NOT FIT IS REFUSED WHOLE
+  - A paste of several lines into a nearly full buffer split line by line
+    until the buffer was full, then ran the rest of the register into the
+    last line, cut at 255, with nothing said (review R-N50). The lines a
+    paste needs are counted first now (text_room_for) and a paste that
+    does not fit is refused whole.
+  - neosim-fullpaste-test: ggy2jGp on a 2047-line file is refused and :q
+    still quits. Before the fix the buffer changed and :q was refused.
 
 v0.60.297 (2026-10-13)  — NEOSIM: A SEARCH TO A LINE'S END STAYS ON IT
   - A search put the cursor at its match's start unclamped: /$ (and /\>,

@@ -90,9 +90,11 @@ int text_save(const text_t *t, const char *path, unsigned *bytes) {
 /* (v0.60.231) told of every line put in or taken out, so marks can move */
 void (*text_lines_hook)(int at, int delta, int join_col);
 static int joining = -1;                         /* text_join: the column line + 1 lands at */
+int text_room_for(const text_t *t, int k);
 /* Room for one more line (v0.60.296): what text_insert_line will need, asked
  * before a change begins so a refusal leaves nothing behind. */
-int text_room(const text_t *t) { return t->n < T_MAXL && nfree > 0; }
+int text_room(const text_t *t) { return text_room_for(t, 1); }
+int text_room_for(const text_t *t, int k) { return t->n + k <= T_MAXL && nfree >= k; }
 int text_insert_line(text_t *t, int at) {
     if (t->n == T_MAXL || !nfree) return -1;
     for (int i = t->n; i > at; i--) { t->s[i] = t->s[i - 1]; t->len[i] = t->len[i - 1]; }

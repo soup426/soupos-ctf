@@ -17,6 +17,7 @@ int  text_load(text_t *t, const char *path);            /* 0, -1 no such file (e
 int  text_save(const text_t *t, const char *path, unsigned *bytes);   /* 0, or -1 */
 int  text_insert_line(text_t *t, int at);
 int  text_room(const text_t *t);                      /* room for a line (v0.60.296) */               /* an empty line at `at`; 0, or -1 full */
+int  text_room_for(const text_t *t, int k);            /* room for k lines (v0.60.298) */
 void text_delete_line(text_t *t, int at);
 int  text_insert_char(text_t *t, int line, int col, char c);          /* 0, or -1 line full */
 void text_delete_char(text_t *t, int line, int col);
