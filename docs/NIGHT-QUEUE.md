@@ -744,6 +744,31 @@ Mincecraft; neosim and rx.c; Doom; tests, build and docs.)
   the mutex for a serial line. Fix: R-C14's told flag, or log after the
   unlock.
 
+## Full review findings (2026-10-12, began at c6c8d32)
+
+### Mincecraft (reviewer built the game's C on the host)
+
+- **R-M11 (medium).** Landing never ends flying: move_y zeroes vy on any
+  hit, so the fly branch's p->vy < 0 (player.c:86) is never true after a
+  landing; "fly off (landed)" can never print and CLAUDE.md's "landing
+  ends it" is false (host: Shift to the ground, y 11.000 fly=1 ground=1).
+  Fix: test in->down (or the downward hit) before move_y; a fly-test step
+  that sinks to the ground.
+- **R-M12 (low-medium).** The chosen slot is a bare index into kinds packed
+  by id: one more kind or one run out shifts it (slot 2 butter becomes
+  crumb), so r and e act on another block. With R-M5: keep the chosen id.
+- **R-M13 (low, looks).** The cast-iron edge walls go on above the world
+  in the picture (world_get gives cast iron outside the grid at any y).
+  Fix: out-of-grid cells at cy >= WY are air to the ray.
+- **R-M14 (low, looks).** Clouds vanish with the eye at or above y 52
+  (render.c:104), which flying now reaches. Fix: draw them below too.
+- **R-M15 (low, suspected).** The left button can stick if the full event
+  queue drops its WEV_UP (countertop.c:513): breaking goes on. Fix: a
+  move with the button up counts as up; the desktop never drops an UP.
+- **R-M16 (low, suspected).** A refused world whose .bad copy fails (the
+  path plus ".bad" past 128) is then saved over with a new world. Fix:
+  save elsewhere or warn when keep_aside fails.
+
 ## The order to work the review in
 
 0. Item 0 first (the user asked for it directly: a text file's double
