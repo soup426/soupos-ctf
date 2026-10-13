@@ -13,7 +13,7 @@
 # (line 26, STARTAN3, lower unpegged) both have texturemid 200 - 25 = 175.
 # Each column is compared with STARTAN3's at Doom's column along the wall,
 # at the best of the 32 light levels (the light is not what is tested), a
-# texel either way.
+# texel either way. (v0.60.308) And a sprite behind the pillar is hidden by it.
 set -uo pipefail
 cd "$(dirname "$0")/.."
 [ -f DOOM1.WAD ] || { echo "  skip  no DOOM1.WAD"; exit 0; }
@@ -62,7 +62,7 @@ def at(x, y):
     o = ((84 + y * 3 + 1) * W + 32 + x * 3 + 1) * 3; return px[o:o + 3]
 def near(a, b): return all(abs(p - q) <= 12 for p, q in zip(a, b))
 dist, eye, mid = 164.0, 25.0, 175.0          # the wall at x=1344; floor -16 + 41; ceiling 200 - eye
-def check(name, xs, ys, v1y):
+def check(name, xs, ys, v1y, need=9):
     good_cols = 0
     for x in xs:
         yw = -3232 + (160 - x - 0.5) * dist / 160                  # where this column's ray meets the wall
@@ -75,13 +75,18 @@ def check(name, xs, ys, v1y):
                 want = [pal[cmap[k * 256 + tex[(u + du) % tw][int(v + dv) % th]] * 3:][:3] for du in (-1, 0, 1) for dv in (-1, 0, 1)]
                 hit += any(near(at(x, y), c) for c in want)
             best = max(best, hit)
-        good_cols += best * 10 >= len(ys) * 9
+        good_cols += best * 10 >= len(ys) * need
     ok = good_cols * 10 >= len(xs) * 9
     print(('  ok    ' if ok else '  FAIL  ') + f'{name}: {good_cols} of {len(xs)} columns are STARTAN3 a texel to a map unit, as Doom pegs it')
     return ok
 r1 = check('the pillar (line 27, pegged to its ceiling)', range(134, 186, 3), range(4, 120, 2), -3200)
 r2 = check("the window's lower strip (line 26, lower unpegged)", range(220, 282, 3), range(103, 122), -3264)   # the barrel at (1312, -3264) covers up to 216
-sys.exit(0 if r1 and r2 else 1)
+# (v0.60.308, review R-D22) The green armor out in the courtyard (thing
+# 2019 at 1824,-3280) is behind the pillar from here: drawn through solid
+# walls, it covered the pillar about x 166-178, y 100-112. Those rows of
+# those columns are the pillar's, all but a texel's rounding.
+r3 = check('the pillar where the armor behind it would show (R-D22)', range(162, 184, 2), range(98, 116), -3200, need=10)
+sys.exit(0 if r1 and r2 and r3 else 1)
 PY
 [ "$fail" = 0 ] && echo "doom-walls-test: PASS" || echo "doom-walls-test: FAIL"
 exit "$fail"

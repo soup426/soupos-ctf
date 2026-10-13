@@ -1623,6 +1623,12 @@ static void render_seg_3d(const dseg_t *seg) {
                 col_fill(sx, yfc, yff, flat_col);
             }
             col_top[sx] = (int16_t)(col_bot[sx] + 1);
+            /* The sprites' span closes too (v0.60.308, review R-D22): left
+             * open, a sprite in a subsector behind this wall drew through it.
+             * A sprite's own subsector is snapshotted before its segs, and a
+             * convex subsector's visible walls are behind what stands in it,
+             * so this hides no sprite in front of its wall. */
+            spr_top[sx] = (int16_t)(spr_bot[sx] + 1);
             cols_open--;
 
         } else {

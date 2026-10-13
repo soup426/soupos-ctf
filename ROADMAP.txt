@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.307
+Current version: v0.60.308
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,17 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.308 (2026-10-13)  — DOOM: SOLID WALLS HIDE THE SPRITES BEHIND THEM
+  - A solid wall closed col_top/col_bot but not spr_top/spr_bot, so a
+    sprite in a subsector behind it drew through it: the green armor out
+    in E1M1's courtyard showed on the pillar between the windows (review
+    R-D22). Solid walls close both now. That is safe because a sprite's
+    own subsector is snapshotted before its segs are drawn, and a convex
+    subsector's visible walls are behind what stands in it; CLAUDE.md's
+    pitfall 8, which said the opposite, says so.
+  - doom-walls-test: the pillar's columns where the armor would show are
+    STARTAN3 on every row (11 of 11; before the fix 2 of 11).
 
 v0.60.307 (2026-10-13)  — DOOM: WALLS A TEXEL TO A MAP UNIT
   - col_fill_tex stretched each wall texture over the wall's height (a

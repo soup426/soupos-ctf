@@ -818,7 +818,7 @@ Mincecraft; neosim and rx.c; Doom; tests, build and docs.)
   distance (doom.c:1365, 1573-1624). Fix: V in map units, offsets from the
   front ceiling (mid 0; unpegged lower th-(fc-ff); upper bc+th-fc; lower
   bf-fc; plus yoff).
-- **R-D22 (high, looks).** Sprites draw through solid walls: those close
+- **R-D22 (high, looks) — DONE v0.60.308 (doom-walls-test).** Sprites draw through solid walls: those close
   col_top/col_bot only, never spr_top/spr_bot (doom.c:1589, 2701). Fix:
   solid walls close the sprite clip too; CLAUDE.md pitfall 8 is stale.
 - **R-D23 (medium-high, looks).** Floors and ceilings are all at the
