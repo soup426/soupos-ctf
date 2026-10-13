@@ -952,6 +952,31 @@ Mincecraft; neosim and rx.c; Doom; tests, build and docs.)
 
 ## Area review findings (2026-10-13, began at 8eebe4e)
 
+### Kernel and shell (reviewer confirmed 1-3 in QEMU on copies)
+
+- **R-K29 (high, my v0.60.283).** A killed soup: task never runs
+  release_ctx, so its write nodes are never closed and their pages stay in
+  wbuf_pages for good: after `kill` of a script that had buffered 28 MB,
+  every buffered write on the machine is refused until a reboot (reproduced:
+  "stops at 0 bytes"). Fix: close the task's soupyc files when it is killed
+  or reaped (a kill hook), or a count the reaper can give back per node.
+- **R-K30 (medium-high, my v0.60.283).** One budget for all: one cook's
+  background writer (it outlives clockout) holds the machine's, and every
+  other cook's redirect, soupyc write, neosim and Mincecraft save fails
+  (reproduced). Fix: a share per cook, a reserve for the headchef; or say it.
+- **R-K31 (medium, my v0.60.283).** wbuf_room 0 means "not measured" too, so
+  on a full disk the shared cap switches itself off and each overwrite
+  handle may buffer its file again (reproduced: three at 28 MB, no
+  "together"). The first append after boot is unchecked the same way.
+  Fix: a separate measured flag; room 0 refuses past the old size.
+- **R-K32 (low, suspected).** wbuf_room is measured only at a handle's first
+  write: stale-low an append open fails as "cannot open"; stale-high a
+  started handle buffers past what now fits. Fix: re-measure before
+  refusing and at the append load.
+- (Note: the budget is the disk's room, not memory; on a disk with more
+  room than RAM it guards nothing. min(room, a share of free frames) is
+  the reviewer's suggestion.)
+
 ### neosim (reviewer: host harness, ASan, 7-byte reads, 300 random runs against nvim)
 
 - **R-N46 (high, data, my v0.60.285).** Undo or redo drops the CRLF flag:
@@ -994,6 +1019,7 @@ Mincecraft; neosim and rx.c; Doom; tests, build and docs.)
 2c. R-T28 and R-T29 (my tests that cannot fail) right after R-K21.
 2b. R-T24 and R-T25 with R-K20 (tests that cannot fail, the second area review's).
 3. Kernel crashes any cook can cause: R-K15 (my K3, incomplete), R-K16, then R-K17 (security), R-K4b (R-K5 set aside for the user).
+3b. R-K29, R-K31, R-K30 (my K24's regressions) before the rest of data loss.
 4. Data loss: R-M1, R-M4, R-N3, R-N30 (my N3, incomplete), R-N4, R-N5, R-N1, R-N2, R-N31, then R-N46, R-N47 (my N4's regressions), R-N48, R-N49, R-N32, R-N50.
 5. Item 0b, Doom: R-D20, R-D21, R-D22 (what the user sees first), then R-D3, R-D2, R-D4, R-D1 and the rest by severity.
 6. The rest by severity, the area's mediums before the lows; items 1-9
