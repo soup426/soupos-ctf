@@ -1197,7 +1197,7 @@ was queued.
   split: on a long line those characters are refused and lost silently
   (abc/def/255 z, 0lvjy G099lP :w loses "bc"); too_wide_paste passes as
   the final lines fit. Fix: split first, then put the segments.
-- **R-N58 (medium-high, data).** \1-\9 in a pattern become a literal
+- **R-N58 (medium-high, data) — DONE v0.60.318 (neosim-backref-test; refused, not supported).** \1-\9 in a pattern become a literal
   digit: :%s/\(\w\+\) \1/\1/ changes "item 1 here" to "item here".
   Fix: refuse them in patterns (or support them).
 - **R-N59 (medium, data, rx.c).** An unclosed [ inside a group compiles

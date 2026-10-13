@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.317
+Current version: v0.60.318
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,16 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.318 (2026-10-13)  — NEOSIM: A BACK-REFERENCE IN A PATTERN IS REFUSED
+  - vim2ere passed \1-\9 through, and rx (which has no back-references)
+    read them as plain digits: the duplicate-word idiom :%s/\(\w\+\) \1/\1/
+    left "the the" alone and turned "item 1 here" into "item here"
+    (review R-N58). They are refused in a pattern now, with "back-
+    references (\1) are not supported" and a log line; nothing changes.
+    In a replacement \1 still means the group, as before.
+  - scripts/neosim-backref-test.sh: that command on those lines, then :w:
+    the file is as it was. Before the fix: "item here".
 
 v0.60.317 (2026-10-13)  — DESKTOP: A FILES WINDOW'S MENU GOES WITH ITS LISTING
   - The right-click menu outlived the arrow keys and Enter, and read the

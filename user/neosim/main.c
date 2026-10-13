@@ -203,8 +203,10 @@ static void *rx_take(unsigned n) {
 static char last_pat[80];
 static int last_dir = 1;
 static int kw(char c) { return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '_' || (unsigned char)c >= 192; }
+static int pat_backref;                            /* the last pattern had \1-\9 (v0.60.318) */
 static int vim2ere(const char *v, char *o, int cap) {
     int n = 0, k = 0, start = 1;
+    pat_backref = 0;
     while (v[n]) n++;
 #define PUT(c) do { if (k >= cap - 1) return -1; o[k++] = (char)(c); } while (0)
     for (int i = 0; i < n; i++) {
@@ -212,6 +214,10 @@ static int vim2ere(const char *v, char *o, int cap) {
         int was_start = start; start = 0;
         if (c == '\\' && i + 1 < n) {
             char d = v[++i];
+            /* A back-reference (v0.60.318, review R-N58): rx has none, and
+             * passed on as \1 it was a plain 1, so :%s/\(\w\+\) \1/\1/
+             * cut the 1 out of "item 1 here". Refused, said by pat_fail. */
+            if (d >= '1' && d <= '9') { pat_backref = 1; return -1; }
             if (d == '+' || d == '?' || d == '|' || d == '(' || d == ')' || d == '{' || d == '}') { PUT(d); start = d == '|' || d == '('; }
             else if (d == '=') PUT('?');
             else if (d == 'd' || d == 'D') { const char *q = d == 'd' ? "[0-9]" : "[^0-9]"; while (*q) PUT(*q++); }
@@ -235,6 +241,12 @@ static int vim2ere(const char *v, char *o, int cap) {
 }
 static rx_t RX;
 static int rx_sub[2 * (RX_MAXGRP + 1)];
+/* A pattern that will not compile, said (v0.60.318): a back-reference is
+ * refused by name, the rest are E486 as before. */
+static void pat_fail(const char *pat) {
+    if (pat_backref) { msg("E: back-references (\\1) are not supported: ", pat, 0); eprint("[neosim] refused a back-reference\n"); }
+    else msg("E486: Pattern not found: ", pat, 0);
+}
 static int pat_compile(const char *p) {             /* 0, or -1 a pattern rx cannot take */
     char e[512];
     if (vim2ere(p, e, sizeof e) < 0) return -1;
@@ -274,7 +286,7 @@ static int find(int dir, const char *p, int *oy, int *ox, int *wrapped) {
 }
 static void search(int dir, const char *p) {
     int y, x, w;
-    if (!find(dir, p, &y, &x, &w)) { msg("E486: Pattern not found: ", p, 0); return; }
+    if (!find(dir, p, &y, &x, &w)) { if (pat_backref) pat_fail(p); else msg("E486: Pattern not found: ", p, 0); return; }
     E.cy = y; E.cx = x;
     clamp(); E.want = E.cx;                          /* (v0.60.297, review R-N32) /$ matches past the last character */
     if (w) msg(dir > 0 ? "search hit BOTTOM, continuing at TOP" : "search hit TOP, continuing at BOTTOM", 0, 0);
@@ -307,7 +319,7 @@ static void substitute(int a, int b, char *spec) {
     int all = 0; for (char *f = fl; *f; f++) if (*f == 'g') all = 1;
     if (!pat[0]) { if (!last_pat[0]) { msg("E35: No previous regular expression", 0, 0); return; } pat = last_pat; }
     else scopy(last_pat, pat, sizeof(last_pat));
-    if (pat_compile(pat) < 0) { msg("E486: Pattern not found: ", pat, 0); return; }
+    if (pat_compile(pat) < 0) { pat_fail(pat); return; }
     int subs = 0, lines = 0, last = -1, begun = 0;
     for (int y = a; y <= b; y++) {
         int did = 0, x = 0, ms, me;
@@ -401,7 +413,7 @@ static void global_cmd(int a, int b, int inv, char *spec) {
     if (*cmd) *cmd++ = 0;
     if (!pat[0]) { if (!last_pat[0]) { msg("E35: No previous regular expression", 0, 0); return; } pat = last_pat; }
     else scopy(last_pat, pat, sizeof(last_pat));
-    if (pat_compile(pat) < 0) { msg("E486: Pattern not found: ", pat, 0); return; }
+    if (pat_compile(pat) < 0) { pat_fail(pat); return; }
     int any = 0, s0, e0;
     for (int y = 0; y < E.t.n; y++) {
         int m = y >= a && y <= b && (rx_at(y, 0, &s0, &e0) != inv);
