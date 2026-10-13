@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.296
+Current version: v0.60.297
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,17 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.297 (2026-10-13)  — NEOSIM: A SEARCH TO A LINE'S END STAYS ON IT
+  - A search put the cursor at its match's start unclamped: /$ (and /\>,
+    /x*) left it one past the last character, and p then wrote a NUL into
+    the file (review R-N32). The cursor is clamped after a search now; a
+    forward search counts a match at a line's end as on its last
+    character, so n from there goes on to the next line's end, as nvim;
+    text_insert_char refuses a column past the end.
+  - scripts/neosim-searchend-test.sh: yl/$<CR>p gives abcdefa, and
+    /$<CR>nx on abc / def gives abc / de, as nvim. Before the fix the
+    first wrote abcdef and a NUL.
 
 v0.60.296 (2026-10-13)  — NEOSIM: A FULL BUFFER'S REFUSALS CHANGE NOTHING
   - A linewise p, o or O into a 2048-line buffer began its undo step

@@ -755,7 +755,7 @@ Mincecraft; neosim and rx.c; Doom; tests, build and docs.)
 - **R-N31 (high, crash) — DONE v0.60.289 (neosim-bighex-test).** Ctrl-A on a long hex number overflows out[40]
   (main.c:1000; 0x and 61 digits: neosim exits, unsaved work gone). Fix:
   refuse past 32 digits, or a T_COLS-sized buffer.
-- **R-N32 (medium-high, data).** A search leaves the cursor one past the
+- **R-N32 (medium-high, data) — DONE v0.60.297 (neosim-searchend-test).** A search leaves the cursor one past the
   line's end (/$, /\>, /x*): p then writes a NUL into the file (reproduced,
   abcdef\0). Fix: clamp in search(); text_insert_char refuses col > len.
 - **R-N33 (medium-high).** \n \t \r in patterns become the letters n t r

@@ -109,6 +109,7 @@ void text_delete_line(text_t *t, int at) {
 }
 int text_insert_char(text_t *t, int line, int col, char c) {
     if (t->len[line] >= T_COLS) return -1;
+    if (col < 0 || col > t->len[line]) return -1;   /* (v0.60.297) past the end it showed a stale byte */
     char *s = t->s[line];
     for (int i = t->len[line]; i > col; i--) s[i] = s[i - 1];
     s[col] = c; t->len[line]++;

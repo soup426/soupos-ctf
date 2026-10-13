@@ -244,7 +244,13 @@ static int find(int dir, const char *p, int *oy, int *ox, int *wrapped) {
     int y = E.cy, x = E.cx, s, e;
     for (int step = 0; step <= E.t.n; step++) {
         if (dir > 0) {
-            if (rx_at(y, step == 0 ? x + 1 : 0, &s, &e)) { *oy = y; *ox = s; return 1; }
+            if (rx_at(y, step == 0 ? x + 1 : 0, &s, &e)) {
+                /* (v0.60.297) a match at the line's end lands on its last
+                 * character: one there already is not after the cursor, as
+                 * nvim's /$ then n goes on to the next line's end. */
+                int land = s < lenof(y) ? s : (lenof(y) ? lenof(y) - 1 : 0);
+                if (!(step == 0 && land <= x)) { *oy = y; *ox = s; return 1; }
+            }
             if (++y >= E.t.n) { y = 0; *wrapped = 1; }
         } else {
             int limit = step == 0 ? x : lenof(y) + 1, best = -1, f = 0;   /* the last that starts before limit */
@@ -258,7 +264,8 @@ static int find(int dir, const char *p, int *oy, int *ox, int *wrapped) {
 static void search(int dir, const char *p) {
     int y, x, w;
     if (!find(dir, p, &y, &x, &w)) { msg("E486: Pattern not found: ", p, 0); return; }
-    E.cy = y; E.cx = x; E.want = x;
+    E.cy = y; E.cx = x;
+    clamp(); E.want = E.cx;                          /* (v0.60.297, review R-N32) /$ matches past the last character */
     if (w) msg(dir > 0 ? "search hit BOTTOM, continuing at TOP" : "search hit TOP, continuing at BOTTOM", 0, 0);
     else { msg(dir > 0 ? "/" : "?", p, 0); }
 }
