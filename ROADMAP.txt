@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.319
+Current version: v0.60.320
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,21 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.320 (2026-10-13)  — A SESSION'S SCRIPT IS ASKED TO STOP TOO
+  - v0.60.312 killed a session running a foreground soup where it stood:
+    one killed inside close() died holding fat_mtx, so every later write
+    on the machine hung, and its buffered writes were never given back
+    (reviews R-K42, R-K43). Any task running a script takes the deferred
+    kill again; v0.60.312's clear of kill_req when soupyc_run returns is
+    what keeps a session from being flagged for good (R-K37). The killer
+    waits for a spawned script's task to go, or for a session's script to
+    end ("stopped the script in task N"). Task 0's kill_req and
+    spawned_script are set at task_init (R-K45).
+  - killsession-test: an SSH session's script writes 12 MB and is killed
+    just after CLOSING; the console's 1 MB write and close then finish,
+    the session runs a script again, and the big file is whole. Before the
+    fix the console's write never finished and the file was 0 bytes.
 
 v0.60.319 (2026-10-13)  — RX: AN UNCLOSED [ INSIDE A GROUP IS AN ERROR
   - rx_atom_end gave -1 for a [ never closed inside a group without

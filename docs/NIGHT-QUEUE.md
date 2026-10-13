@@ -1281,7 +1281,7 @@ show).
 
 ### Kernel and shell (reviewer confirmed K42 and K43 in QEMU on copies)
 
-- **R-K42 (high, my v0.60.312).** Sending a session running a foreground
+- **R-K42 (high, my v0.60.312) — DONE v0.60.320 (killsession-test).** Sending a session running a foreground
   soup back to task_kill brings back R-K33 for sessions: killed mid-close,
   the freed task still owns fat_mtx and every later file write hangs (a
   console soup writing 1 MB never finished; /big.txt 0 bytes). Fix: the
@@ -1290,12 +1290,12 @@ show).
   script's death, and says "script stopped" for a session. Test:
   killsession-test with a 24 MB close, then a console write and close in
   10 s.
-- **R-K43 (medium-high, my v0.60.312).** The same: a task_kill'd
+- **R-K43 (medium-high, my v0.60.312) — DONE v0.60.320.** The same: a task_kill'd
   session's buffered writes are never released (sc_files_reset never
   runs), so every write after is refused until a reboot. Fix: as R-K42.
 - **R-K44 (low-medium, plausible).** task_kill of a task blocked on a
   wait queue leaves it linked when it is freed. Fix: task_unblock first.
-- **R-K45 (low, plausible).** task_init never sets task 0's kill_req or
+- **R-K45 (low, plausible) — DONE v0.60.320.** task_init never sets task 0's kill_req or
   spawned_script. Fix: both 0.
 
 ### The desktop (reviewer confirmed C31 in QEMU on a copy)

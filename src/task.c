@@ -125,6 +125,8 @@ void task_init(void) {
     t->user_resume_esp = 0; /* never been in ring 3 */
     t->proc          = 0;
     t->uid           = -1;
+    t->kill_req      = 0;                   /* (v0.60.320, review R-K45) */
+    t->spawned_script = 0;
     t->term          = 0;
     t->shell         = 0;
     t->page_dir      = paging_kernel_dir();

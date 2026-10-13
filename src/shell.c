@@ -4457,18 +4457,23 @@ static void cmd_kill(const char *args) {
         return;
     }
     task_t *kt = task_by_id((uint32_t)id);
-    /* Only a spawn()ed script's task (v0.60.312, review R-K37): a session
-     * running a foreground soup has ->soupyc too, and the deferred kill left
-     * it flagged for good; it is killed as any task is. */
-    if (kt && kt->soupyc && kt->spawned_script) {
-        /* A spawned script is asked, not killed where it stands (v0.60.300,
-         * review R-K33): it stops at its next statement, sleep or write and
-         * closes its own files as its own cook. Up to 5 s for it to go. */
+    if (kt && kt->soupyc) {
+        /* A task running a script is asked, not killed where it stands
+         * (v0.60.300, review R-K33): it stops at its next statement, sleep or
+         * write and closes its own files as its own cook. A session's too
+         * (v0.60.320, reviews R-K42, R-K43): v0.60.312 killed those where they
+         * stood, and one killed inside close() died holding fat_mtx (every
+         * write after hung) with its buffers never given back. Its kill_req
+         * is cleared when the script returns (R-K37), and the session goes
+         * on. Up to 5 s: a spawned script's task to go, a session's script
+         * to end. */
+        int spawned = kt->spawned_script;
         if (task_request_kill((uint32_t)id) != 0) { t_printf("kill: %d not killable (unknown, self, or kernel)\n", id); return; }
         uint32_t until = timer_get_ticks() + 500;
         while (timer_get_ticks() < until) {
             task_t *g = task_by_id((uint32_t)id);
-            if (!g || g->state == TASK_DEAD) { t_printf("killed task %d\n", id); return; }
+            if (spawned && (!g || g->state == TASK_DEAD)) { t_printf("killed task %d\n", id); return; }
+            if (!spawned && (!g || !g->soupyc)) { t_printf("stopped the script in task %d\n", id); return; }
             task_sleep(20);
         }
         t_printf("task %d is stopping (it ends at its next statement)\n", id);
