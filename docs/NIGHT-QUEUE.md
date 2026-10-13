@@ -1056,7 +1056,7 @@ tests, build and docs. Nothing critical, so the full review stays at 30.
   so creator_now() and may_use_reserve() give uid 0 (perms said owner:
   headchef for /home/saucier/own.txt). R-K33's deferred kill fixes it;
   test: owner: saucier after the kill.
-- **R-K35 (medium-low, my v0.60.292).** The append load (vfs.c:466) goes
+- **R-K35 (medium-low, my v0.60.292) — DONE v0.60.306 (appendshare-test).** The append load (vfs.c:466) goes
   through mem_ensure, so the per-cook check counts the old contents: with
   1 MB free a cook cannot >> to their own 600 KB log, a plain "cannot
   open" and nothing logged. Fix: count the append load only beyond the

@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.305
+Current version: v0.60.306
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,19 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.306 (2026-10-13)  — A COOK CAN APPEND TO THEIR OWN BIG FILE
+  - An append starts its buffer with what the file holds, and v0.60.292's
+    per-cook share counted those pages: a cook could not >> onto their own
+    file once it was past half the disk's free room (review R-K35). And the
+    load ran on a stale measure of the room, so it got in and the first
+    write was refused ("did not reach the disk whole"). The load is counted
+    in the shared cap now (the close writes the file again) but not in the
+    share (n->wload, taken back at mem_drop), the room is measured first,
+    and an append refused for room is logged.
+  - scripts/appendshare-test.sh: saucier writes a 12 MB file, then >>
+    one line onto it (share about 8 MB then): it reaches the disk. Before
+    the fix it was cut short.
 
 v0.60.305 (2026-10-13)  — NEOSIM: A PASTE PAST 255 COLUMNS IS REFUSED
   - insert_text skipped every character text_insert_char refused, so a

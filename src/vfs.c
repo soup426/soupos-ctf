@@ -236,11 +236,13 @@ static void wbuf_measure(void) {
     fat_space(&fr, &tot, &cb);
     wbuf_room = fr * cb; wbuf_measured = 1;
 }
+static int wbuf_loading;                          /* an append's load in mem_ensure (v0.60.306) */
 static void mem_drop(vfs_node_t *n) {             /* a node's pages back, and off the count */
     for (uint32_t i = 0; i < n->npg; i++) pmm_free_page(n->pg[i]);
     wbuf_pages -= n->npg;
-    wbuf_by_uid[n->wuid] -= n->npg;
-    if (n->wuid) wbuf_cooks -= n->npg;
+    wbuf_by_uid[n->wuid] -= n->npg - n->wload;     /* the share counted only what it grew by */
+    if (n->wuid) wbuf_cooks -= n->npg - n->wload;
+    n->wload = 0;
     if (n->pg) kfree(n->pg);
     n->pg = 0; n->npg = n->pgcap = 0;
 }
@@ -260,13 +262,14 @@ static int mem_ensure(vfs_node_t *n, uint32_t need) {
     while (n->npg < want) {
         if (!wbuf_measured) wbuf_measure();           /* the first append after boot, say */
         if ((uint64_t)(wbuf_pages + 1) * VFS_PG > wbuf_room) return -2;
-        if (n->wuid && ((uint64_t)(wbuf_by_uid[n->wuid] + 1) * VFS_PG > wbuf_room / 2 ||
+        if (n->wuid && !wbuf_loading && ((uint64_t)(wbuf_by_uid[n->wuid] + 1) * VFS_PG > wbuf_room / 2 ||
                         (uint64_t)(wbuf_cooks + 1) * VFS_PG > wbuf_room / 4 * 3)) return -3;
         uint8_t *page = (uint8_t *)pmm_alloc_page();
         if (!page) return -1;
         memset(page, 0, VFS_PG);
         n->pg[n->npg++] = page;
         wbuf_pages++;
+        if (wbuf_loading) { n->wload++; continue; }
         wbuf_by_uid[n->wuid]++;
         if (n->wuid) wbuf_cooks++;
     }
@@ -464,7 +467,20 @@ vfs_node_t *vfs_open(const char *path, int flags) {
             if (fd >= 0) fat_fclose(fd);
             if (sz) {
                 int rfd = fat_fopen(p);
-                if (rfd < 0 || mem_ensure(n, sz) < 0) { if (rfd >= 0) fat_fclose(rfd); mem_drop(n); n->used = 0; return 0; }
+                /* What the file holds is in the shared cap (the close writes
+                 * it all again) but not the cook's share (v0.60.306, review
+                 * R-K35): counted there, a cook could not >> onto their own
+                 * file once it was past half the room. Room measured now: a
+                 * stale one let the load in and the first write refuse it. */
+                wbuf_measure();
+                wbuf_loading = 1;
+                int got_room = rfd < 0 ? -1 : mem_ensure(n, sz);
+                wbuf_loading = 0;
+                if (got_room < 0) {
+                    if (got_room == -2) klog("[vfs] /%s: cannot append: its %u bytes and the write buffers together pass the disk's room\n", n->name, sz);
+                    if (rfd >= 0) fat_fclose(rfd);
+                    mem_drop(n); n->used = 0; return 0;
+                }
                 uint32_t got = 0;
                 while (got < sz) {                      /* page by page into the pages */
                     uint32_t k = sz - got < VFS_PG ? sz - got : VFS_PG;
