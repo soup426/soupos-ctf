@@ -985,7 +985,7 @@ Mincecraft; neosim and rx.c; Doom; tests, build and docs.)
   background writer (it outlives clockout) holds the machine's, and every
   other cook's redirect, soupyc write, neosim and Mincecraft save fails
   (reproduced). Fix: a share per cook, a reserve for the headchef; or say it.
-- **R-K31 (medium, my v0.60.283).** wbuf_room 0 means "not measured" too, so
+- **R-K31 (medium, my v0.60.283) — DONE v0.60.291 (fullbudget-test).** wbuf_room 0 means "not measured" too, so
   on a full disk the shared cap switches itself off and each overwrite
   handle may buffer its file again (reproduced: three at 28 MB, no
   "together"). The first append after boot is unchecked the same way.

@@ -220,7 +220,15 @@ static const vfs_ops_t fat_read_ops = {
  * first write): all that could ever reach it. Past it a write fails, and
  * the rest of the machine keeps its frames. */
 static uint32_t wbuf_pages;
-static uint32_t wbuf_room;                        /* bytes; 0 until a first write measures it */
+static uint32_t wbuf_room;                        /* bytes: the disk's free room when last measured */
+static int      wbuf_measured;                    /* (v0.60.291, review R-K31) 0 until measured: room 0
+                                                   * stood for "not measured" too, and on a full disk
+                                                   * the shared cap switched itself off */
+static void wbuf_measure(void) {
+    uint32_t fr = 0, tot = 0, cb = 0;
+    fat_space(&fr, &tot, &cb);
+    wbuf_room = fr * cb; wbuf_measured = 1;
+}
 static void mem_drop(vfs_node_t *n) {             /* a node's pages back, and off the count */
     for (uint32_t i = 0; i < n->npg; i++) pmm_free_page(n->pg[i]);
     wbuf_pages -= n->npg;
@@ -240,7 +248,8 @@ static int mem_ensure(vfs_node_t *n, uint32_t need) {
         n->pg = np; n->pgcap = nc;
     }
     while (n->npg < want) {
-        if (wbuf_room && (uint64_t)(wbuf_pages + 1) * VFS_PG > wbuf_room) return -2;
+        if (!wbuf_measured) wbuf_measure();           /* the first append after boot, say */
+        if ((uint64_t)(wbuf_pages + 1) * VFS_PG > wbuf_room) return -2;
         uint8_t *page = (uint8_t *)pmm_alloc_page();
         if (!page) return -1;
         memset(page, 0, VFS_PG);
@@ -278,7 +287,7 @@ static uint32_t write_limit(const vfs_node_t *n) {
     uint32_t fr = 0, tot = 0, cb = 0;
     fat_space(&fr, &tot, &cb);
     uint32_t room = fr * cb, old = 0;
-    wbuf_room = room;                          /* buffers reach the disk only at close: free now is all of it */
+    wbuf_room = room; wbuf_measured = 1;       /* buffers reach the disk only at close: free now is all of it */
     int fd = fat_fopen(n->name);
     if (fd >= 0) { old = fat_fsize(fd); fat_fclose(fd); }
     return room + old > room ? room + old : room;   /* no wrap */

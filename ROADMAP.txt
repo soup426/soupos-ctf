@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.290
+Current version: v0.60.291
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,17 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.291 (2026-10-13)  — THE WRITE BUDGET HOLDS ON A FULL DISK
+  - wbuf_room 0 stood for "not measured" as well as "no room", so on a
+    full disk the shared cap switched itself off and each overwrite handle
+    could buffer its old file's size again (three overwrites of a 28 MB
+    file held 84 MB; review R-K31). A measured flag of its own now, the
+    room measured at the first need if nothing has (the first append after
+    boot), and room 0 refuses.
+  - scripts/fullbudget-test.sh: the headchef fills the disk, then three
+    writers overwrite that file: each is stopped at 0 bytes by the shared
+    cap. Before the fix each buffered 28 MB.
 
 v0.60.290 (2026-10-13)  — A KILLED SCRIPT GIVES ITS WRITE BUDGET BACK
   - A spawned soupyc script killed with kill was marked dead and never ran
