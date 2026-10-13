@@ -70,8 +70,8 @@ under the standing rules (a test that fails first, then the fix).
       check.sh; every claim checked before it is queued; findings into the
       review section, most severe first, worked by the order there. The
       tree is not rebuilt while they run.
-    **Last review began at 3c49bd7** (2026-10-13, by area: kernel and shell, neosim, Doom, tests build and docs; the one before at 8eebe4e).
-    **Last full review began at c6c8d32** (2026-10-12; the first at 7647649).
+    **Last review began at 88512a1** (2026-10-13, full: all six areas; the area one before at 3c49bd7).
+    **Last full review began at 88512a1** (2026-10-13; the one before at c6c8d32, the first at 7647649).
     Move the first line at each review, both at a full one.
 ---
 
