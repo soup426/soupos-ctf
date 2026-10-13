@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.272
+Current version: v0.60.273
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,26 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.273 (2026-10-12)  — ONE BIG SYSCALL PAST THE CAP IS SAFE, AND CHEAP
+  - v0.60.269 faulted every page of a syscall's buffer in at its top. A
+    buffer past the page cap evicted its own first pages doing it, could
+    take the last swap slot, and the copy into page 0 then needed swap_in,
+    which made room (a free slot) BEFORE freeing the page's own: none,
+    and a panic (review R-K15, reproduced: one read into 5114 fresh pages).
+    And a 20 MB read of a 47-byte file mapped, zeroed and swapped the
+    whole buffer for nothing (R-K16).
+  - user_ok touches nothing now: it counts the new pages the range could
+    need (neither mapped nor on disk) and refuses the call (-1) only if
+    the room under the cap, the free swap slots and the free frames could
+    not cover them. swap_in reads the page in and frees its slot before it
+    evicts, so a page on disk always comes back; swap_out_one takes its
+    slot before taking the page out of its set (a full swap used to drop a
+    resident page from it). Another program taking the last slots between
+    the count and the copy is not covered.
+  - proof.elf kbig N; kfill-test now also makes one read into as many
+    fresh pages as kfill could have: 47 bytes, no panic. On v0.60.269 it
+    panicked at 0xc4000000.
 
 v0.60.272 (2026-10-12)  — SOUPYC'S INCLUDE FINDS ITS FILE
   - include copied its file name from tok.sval, but the lexer keeps a

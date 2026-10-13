@@ -24,6 +24,7 @@ void     swap_init(void);                /* after fat_init; logs what it found *
 int      swap_available(void);
 uint32_t swap_slots_total(void);
 uint32_t swap_slots_used(void);
+int      swap_has(proc_t *pr, uint32_t va);   /* a heap page of pr's on disk (v0.60.273) */
 
 /* The heap page at `va` (page-aligned, inside [USER_HEAP, brk)) was just
  * mapped for `pr`: remember it as the newest resident page. */

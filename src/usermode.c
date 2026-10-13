@@ -82,29 +82,41 @@ static uint32_t g_fault_exc, g_fault_err, g_fault_eip, g_fault_cr2;
  * the pager declined, and isr.c panicked the machine. Checked before the
  * copy rather than caught in the fault, because by then the call may hold
  * a lock (FAT's, the desktop's) that unwinding would strand. */
-/* (v0.60.269, review R-K3) A promised page the pager might not give (at
- * the page cap with the swap full) is faulted in HERE, at the syscall's
- * top where nothing is held: "would give" let the copy fault in ring 0 on a
- * page the pager then declined, and isr.c panicked. Refused, the call is
- * a -1. A copy longer than the cap can still evict its own earlier pages;
- * those come back through the pager as before, swap having just made room. */
+/* (v0.60.273, reviews R-K3, R-K15, R-K16) A page the program was promised
+ * is fine to copy into only if the pager will be able to back it, and the
+ * pager backs a new page from the program's room under the cap or, past
+ * it, by sending one to a free swap slot. So user_ok counts the new pages
+ * the range could need (neither mapped nor on disk) against that room and
+ * the free frames, and refuses the call (-1) when they could not all be
+ * had, rather than letting the copy fault in ring 0 on one the pager then
+ * declines, which panicked. v0.60.269 faulted every page in first: a buffer
+ * past the cap evicted its own first pages and could still panic (K15),
+ * and a 20 MB read of a 47-byte file filled the swap for nothing (K16).
+ * Nothing is touched here now. A page on disk comes back without needing a
+ * free slot (swap_in, v0.60.273). Another program taking the last slots
+ * between this count and the copy is not covered. */
 static int user_page_ok(const proc_t *pr, uint32_t pg) {
     if (paging_is_mapped(pg)) return 1;
-    int promised = (pr && pg >= USER_HEAP && pg < pr->brk) ||
-                   (pg >= USTACK_GUARD + 4096 && pg < USTACK_TOP);
-    if (!promised) return 0;
-    return usermode_demand_page(pg, 0) == 0;
+    if (pr && pg >= USER_HEAP && pg < pr->brk) return 1;
+    return pg >= USTACK_GUARD + 4096 && pg < USTACK_TOP;
 }
 static int user_ok(uint32_t ptr, uint32_t len) {
     if (ptr < USER_LO || ptr >= USER_HI) return 0;
     if (len > USER_HI - ptr) return 0;
     if (!len) return 1;
     proc_t *pr = proc_current();
-    uint32_t end = (ptr + len - 1) & ~0xFFFu;
+    uint32_t end = (ptr + len - 1) & ~0xFFFu, fresh = 0;
     for (uint32_t pg = ptr & ~0xFFFu; ; pg += 4096) {
         if (!user_page_ok(pr, pg)) return 0;
-        if (pg == end) return 1;
+        if (pr && !paging_is_mapped(pg) && !swap_has((proc_t *)pr, pg)) fresh++;
+        if (pg == end) break;
     }
+    if (!pr || !fresh) return 1;
+    uint32_t under = pr->upages < PROC_PAGE_CAP ? PROC_PAGE_CAP - pr->upages : 0;
+    uint32_t slots = swap_slots_total() - swap_slots_used();
+    if (fresh > under + slots) return 0;
+    if (pmm_free_pages() < (fresh < under ? fresh : under)) return 0;
+    return 1;
 }
 
 /* A NUL-terminated path out of user memory, each byte checked. 0, or -1 for

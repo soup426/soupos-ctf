@@ -45,6 +45,12 @@ void swap_init(void) {
 int      swap_available(void)   { return nslots != 0; }
 uint32_t swap_slots_total(void) { return nslots; }
 uint32_t swap_slots_used(void)  { return used; }
+/* Is this heap page of pr's on disk (v0.60.273)? */
+int swap_has(proc_t *pr, uint32_t va) {
+    if (!nslots || !pr->swap_slot || va < USER_HEAP_BASE) return 0;
+    uint32_t idx = (va - USER_HEAP_BASE) >> 12;
+    return idx < MAX_HEAP_PAGES && pr->swap_slot[idx] != 0;
+}
 
 /* Lazily give a process its tables. */
 static int tables(proc_t *pr) {
@@ -116,14 +122,16 @@ int swap_out_one(proc_t *pr) {
         k++;
     }
     if (best < 0) return -1;
+    /* The slot first (v0.60.273): taken after the page left the set, a
+     * full swap dropped a resident page from it for good. */
+    int s = slot_alloc();
+    if (s < 0) { klog("[swap] full: %u pages\n", nslots); return -1; }
     uint16_t idx = pr->fifo[best];
     uint32_t last = (pr->fifo_head + pr->fifo_len - 1) % PROC_PAGE_CAP;
     pr->fifo[best] = pr->fifo[last];          /* the set has no order to keep */
     pr->fifo_len--;
     uint32_t va = USER_HEAP_BASE + ((uint32_t)idx << 12);
 
-    int s = slot_alloc();
-    if (s < 0) { klog("[swap] full: %u pages\n", nslots); return -1; }
     if (ata_write_sectors(base_lba + (uint32_t)s * SECTORS_PER_PAGE, SECTORS_PER_PAGE, (const uint8_t *)va) < 0) {
         slot_free((uint32_t)s); return -1;
     }
@@ -141,8 +149,11 @@ int swap_in(proc_t *pr, uint32_t va) {
     uint32_t idx = heap_index(va & ~0xFFFu);
     if (idx >= MAX_HEAP_PAGES || !pr->swap_slot[idx]) return 0;
     uint32_t s = (uint32_t)pr->swap_slot[idx] - 1;
-    /* Room first: the cap counts residents, and this page is about to be one. */
-    if (pr->upages >= PROC_PAGE_CAP && swap_out_one(pr) < 0) return -1;
+    /* The page in and its slot free BEFORE room is made under the cap
+     * (v0.60.273, review R-K15): evicting first needed a free slot, and with
+     * the swap full there was none, so a page on disk could never come back
+     * and the kernel's own copy into it panicked. Now the eviction reuses
+     * the slot just read. One page over the cap, for that moment. */
     void *frame = pmm_alloc_page();
     if (!frame) return -1;
     uint32_t page = va & ~0xFFFu;
@@ -155,6 +166,7 @@ int swap_in(proc_t *pr, uint32_t va) {
     pr->swap_slot[idx] = 0;
     pr->swaps_in++;
     pr->swapped--;
+    if (pr->upages > PROC_PAGE_CAP) swap_out_one(pr);   /* a slot is free: this one's */
     swap_note_resident(pr, page);
     return 1;
 }

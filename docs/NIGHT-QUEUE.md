@@ -693,7 +693,7 @@ Mincecraft; neosim and rx.c; Doom; tests, build and docs.)
 
 ### Kernel and shell (reviewer confirmed K15 in QEMU on a copy)
 
-- **R-K15 (high, my v0.60.269 incomplete).** One syscall over a buffer
+- **R-K15 (high, my v0.60.269 incomplete) — DONE v0.60.273 (kfill-test's big read).** One syscall over a buffer
   larger than the page cap still panics: the pre-fault evicts the buffer's
   own first pages, can take the last swap slot doing it, and the copy's
   touch of page 0 then needs swap_in, which calls swap_out_one BEFORE it
@@ -702,7 +702,7 @@ Mincecraft; neosim and rx.c; Doom; tests, build and docs.)
   comment's "swap having just made room" is wrong. Fix: swap_in reads into
   a fresh frame and frees its slot before evicting; and/or user_ok and the
   copy work in chunks under the cap; a kfill-test case for one big call.
-- **R-K16 (medium, regression of v0.60.269, suspected).** The pre-fault
+- **R-K16 (medium, regression of v0.60.269, suspected) — DONE v0.60.273 (no pre-fault; a budget).** The pre-fault
   costs the whole buffer, not what is copied: a 20 MB read of a 47-byte
   file maps, zeroes and swaps out thousands of pages first, filling the
   machine's swap. Fix: clamp to what can be copied, or chunk (with K15).

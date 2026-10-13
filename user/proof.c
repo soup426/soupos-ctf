@@ -20,6 +20,9 @@
  *   cook proof.elf kfill     (v0.60.269) 32 MB again, every page written
  *                           by the KERNEL (sys_random into it): past the cap
  *                           and the swap a call must give -1, not panic
+ *   cook proof.elf kbig N    (v0.60.273) N fresh pages, then ONE read of
+ *                           HELLO.TXT into all of them: no panic, whether the
+ *                           kernel takes the call or refuses it (kfill gives N)
  *   cook proof.elf read      has the KERNEL touch the page first: a read()
  *                           into a buffer this program never wrote to, so
  *                           the fault is taken in ring 0 and must be
@@ -36,7 +39,18 @@ int main(void) {
     int greedy = (n > 0 && (arg[0] == 'g' || arg[0] == 'a'));
     int kread  = (n > 0 && arg[0] == 'r');
     int hold   = (n > 0 && arg[0] == 'h');
-    int kfill  = (n > 0 && arg[0] == 'k');
+    int kfill  = (n > 0 && arg[0] == 'k' && arg[1] == 'f');
+    int kbig   = (n > 0 && arg[0] == 'k' && arg[1] == 'b');
+    if (kbig) {                        /* (v0.60.273, review R-K15) */
+        int want = 0;
+        for (int i = 4; i < n && arg[i]; i++) if (arg[i] >= '0' && arg[i] <= '9') want = want * 10 + (arg[i] - '0');
+        char *b = (char *)sys_sbrk(want * PAGE);
+        if (b == (char *)-1 || b == 0) { eprint("LAZY sbrk-failed\n"); return 1; }
+        int fd = sys_open("/HELLO.TXT", 0);
+        int got = sys_read(fd, b, want * PAGE);
+        eprint("LAZY one read into "); eprint_int(want); eprint(" pages gave "); eprint_int(got); eprint("\n");
+        return 0;
+    }
     int pages  = (n > 0 && (arg[0] == 'a' || kfill)) ? 2 * PAGES : PAGES;
 
     char *base = (char *)sys_sbrk(pages * PAGE);
