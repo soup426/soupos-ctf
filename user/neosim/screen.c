@@ -47,6 +47,10 @@ static int num(char *o, int v) {               /* decimal, no padding; its lengt
     o[n] = 0;
     return n;
 }
+/* The command line's cursor column (v0.60.287, review R-N1): after the
+ * typed text, but never past the last column. 79 characters put it at
+ * column 80, past the window's pixels, and neosim died of a page fault. */
+static int cmd_col(const ed_t *e) { return e->cmdn + 1 < SCR_COLS ? e->cmdn + 1 : SCR_COLS - 1; }
 void screen_draw(const ed_t *e, unsigned *b) {
     for (int r = 0; r < SCR_ROWS; r++) for (int c = 0; c < SCR_COLS; c++) cell(b, c, r, ' ', INK, r == TEXT_ROWS ? BAR : PAGE);
     if (e->help) {                                  /* (v0.60.219) the :help page, read-only, no numbers */
@@ -65,7 +69,7 @@ void screen_draw(const ed_t *e, unsigned *b) {
         if (e->mode == M_COMMAND) {
             cell(b, 0, TEXT_ROWS + 1, ':', INK, PAGE);
             for (int i = 0; i < e->cmdn && i + 1 < SCR_COLS; i++) cell(b, i + 1, TEXT_ROWS + 1, e->cmd[i], INK, PAGE);
-            for (int i = 0; i < 8; i++) b[((TEXT_ROWS + 1) * 16 + 15) * BODY_W + (e->cmdn + 1) * 8 + i] = CURSOR;
+            for (int i = 0; i < 8; i++) b[((TEXT_ROWS + 1) * 16 + 15) * BODY_W + cmd_col(e) * 8 + i] = CURSOR;
         } else put(b, 0, TEXT_ROWS + 1, e->msg, INK, PAGE);
         return;
     }
@@ -113,7 +117,7 @@ void screen_draw(const ed_t *e, unsigned *b) {
     if (e->mode == M_COMMAND) {
         cell(b, 0, TEXT_ROWS + 1, e->cmdch ? e->cmdch : ':', INK, PAGE);
         for (int i = 0; i < e->cmdn && i + 1 < SCR_COLS; i++) cell(b, i + 1, TEXT_ROWS + 1, e->cmd[i], INK, PAGE);
-        for (int i = 0; i < 8; i++) b[((TEXT_ROWS + 1) * 16 + 15) * BODY_W + (e->cmdn + 1) * 8 + i] = CURSOR;
+        for (int i = 0; i < 8; i++) b[((TEXT_ROWS + 1) * 16 + 15) * BODY_W + cmd_col(e) * 8 + i] = CURSOR;
     } else if (!e->msg[0] && e->recording) {       /* (v0.60.241) as neovim's */
         char r[16] = "recording @"; r[11] = e->recording; r[12] = 0;
         put(b, 0, TEXT_ROWS + 1, r, INK, PAGE);

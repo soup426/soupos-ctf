@@ -547,7 +547,7 @@ Mincecraft; neosim and rx.c; Doom; tests, build and docs.)
 
 ### neosim and rx.c (reviewer: 401 existing cases replayed faithfully on a host harness with ASan; 1-2 also in QEMU)
 
-- **R-N1 (high).** A 79-character : or / command crashes neosim (the
+- **R-N1 (high) — DONE v0.60.287 (neosim-longcmd-test).** A 79-character : or / command crashes neosim (the
   cursor drawn at column 80, past the body; screen.c:114, :67). Fix: clamp.
 - **R-N2 (high).** A linewise p on the last line of a full 2048-line buffer
   crashes it (paste_from after a failed insert). Fix: return when nothing
