@@ -383,6 +383,46 @@ settings idea is a spice rack row for item 10's trap (on, off), in item
   ones dropped); one machine alone plays the computer. Test: two QEMUs on
   a QEMU socket network, a scripted rally, both sides' scores agreeing.
 
+## 22. Real hardware (the user, 2026-10-13)
+
+soupOS has only ever run under QEMU, and every driver is for a device
+QEMU emulates: a GRUB multiboot ISO booted by a legacy BIOS, ATA PIO on
+the primary IDE master (ata.c), PS/2 keyboard and mouse, RTL8139, AC97.
+The user asked to find out where a real machine stops and to start on
+the drivers most machines need. In this order, one commit each:
+
+- **22a. Never write a disk that is not soupOS's (first, before any
+  real boot).** fat_init mounts whatever FAT16 or FAT32 boot sector is on
+  the primary master, and the boot writes to it (the logins record,
+  /etc/kitchen). On a real machine that could be the owner's own disk.
+  Mount read-write only a volume labelled SOUPOS (mkfs.fat -n in the
+  Makefile); anything else read-only or not at all, said on the console
+  and in the log. Test: QEMU with a FAT16 disk labelled something else,
+  its bytes unchanged after a boot, a login and a stir; disk.img as now.
+- **22b. Hardware that is not there (measured in QEMU).** Boot without
+  each device in turn (-nic none, no AC97, no disk, the mouse absent)
+  and record what happens: a clean "not found" and the rest of the boot,
+  or a hang or a fault. Fix each hang (timeouts on every probe and wait
+  loop). Also boot from a USB stick image: the ISO is a hybrid
+  (isohybrid or grub-mkrescue's), and the FAT disk can be a second
+  partition or a second stick. Test: one QEMU run per missing device,
+  each reaching the shell's prompt.
+- **22c. The first real boot (the user's, set aside like R-K5: it needs
+  their machine).** An old legacy-BIOS PC, the SATA controller in IDE
+  mode, PS/2 if it has the ports. Write down where it stops: GRUB, the
+  framebuffer, the disk, the keyboard. Its findings become items here.
+- **22d. AHCI.** A SATA driver beside ata.c, chosen at boot by PCI
+  class (01:06:01), the same block interface so fat.c does not change.
+  QEMU's -machine q35 has an AHCI controller. Test: check.sh's disk
+  tests once on q35 (a new configuration), byte for byte as on IDE.
+- **22e. USB keyboard.** xHCI first (what most machines since about
+  2012 have; UHCI/EHCI only if 22c's machine needs them), the HID boot
+  protocol only, into the same scancode path as keyboard.c. QEMU:
+  -device qemu-xhci -device usb-kbd. Test: the gate's typing through
+  USB instead of PS/2. A USB mouse after it, the same way.
+- Not queued yet: UEFI boot, NVMe, other network cards, HD Audio, Wi-Fi.
+  Each is large; 22c says which matters first.
+
 ## Review findings (2026-10-12)
 
 (Added as the six reviewers report: kernel and shell; the desktop;
@@ -1388,6 +1428,9 @@ show).
 8. Items 12-18 between Roux's stages, smallest first (popcorn,
    noodle, layercake); 18 waits on 11a.
 9. Items 19-21 with them; 21 waits on 11a, 20 is measured first.
+10. Item 22 (real hardware, the user's, 2026-10-13) after the review
+    findings (step 6); 22a before any real machine boots soupOS, 22c set
+    aside for the user. The user may move it sooner.
 
 ## Notes left by unattended runs
 
