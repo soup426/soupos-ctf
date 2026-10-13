@@ -213,6 +213,21 @@ static const vfs_ops_t fat_read_ops = {
  * them to the FAT through fat_write_from. A failure marks the handle, and
  * vfs_close says so. */
 #define VFS_PG 4096u
+/* Every page the write buffers hold, together (v0.60.283, review R-K24).
+ * v0.60.275 capped each handle at the disk's room, but each one: five at
+ * once took 28 MB apiece and memory ran out under them. Together they may
+ * hold no more than the disk's room either (as last measured, at a handle's
+ * first write): all that could ever reach it. Past it a write fails, and
+ * the rest of the machine keeps its frames. */
+static uint32_t wbuf_pages;
+static uint32_t wbuf_room;                        /* bytes; 0 until a first write measures it */
+static void mem_drop(vfs_node_t *n) {             /* a node's pages back, and off the count */
+    for (uint32_t i = 0; i < n->npg; i++) pmm_free_page(n->pg[i]);
+    wbuf_pages -= n->npg;
+    if (n->pg) kfree(n->pg);
+    n->pg = 0; n->npg = n->pgcap = 0;
+}
+/* 0; -1 out of memory; -2 the write buffers together hold the disk's room. */
 static int mem_ensure(vfs_node_t *n, uint32_t need) {
     uint32_t want = (need + VFS_PG - 1) / VFS_PG;
     if (want <= n->npg) return 0;
@@ -225,10 +240,12 @@ static int mem_ensure(vfs_node_t *n, uint32_t need) {
         n->pg = np; n->pgcap = nc;
     }
     while (n->npg < want) {
+        if (wbuf_room && (uint64_t)(wbuf_pages + 1) * VFS_PG > wbuf_room) return -2;
         uint8_t *page = (uint8_t *)pmm_alloc_page();
         if (!page) return -1;
         memset(page, 0, VFS_PG);
         n->pg[n->npg++] = page;
+        wbuf_pages++;
     }
     return 0;
 }
@@ -261,6 +278,7 @@ static uint32_t write_limit(const vfs_node_t *n) {
     uint32_t fr = 0, tot = 0, cb = 0;
     fat_space(&fr, &tot, &cb);
     uint32_t room = fr * cb, old = 0;
+    wbuf_room = room;                          /* buffers reach the disk only at close: free now is all of it */
     int fd = fat_fopen(n->name);
     if (fd >= 0) { old = fat_fsize(fd); fat_fclose(fd); }
     return room + old > room ? room + old : room;   /* no wrap */
@@ -272,8 +290,10 @@ static int mem_write_op(vfs_node_t *n, const void *buf, uint32_t count) {
         n->failed = 1;
         return -1;
     }
-    if (mem_ensure(n, n->pos + count) < 0) {
-        if (!n->failed) klog("[vfs] /%s: out of memory at %u bytes; the rest is lost\n", n->name, n->size);
+    int got = mem_ensure(n, n->pos + count);
+    if (got < 0) {
+        if (!n->failed && got == -2) klog("[vfs] /%s: stops at %u bytes, the write buffers together hold the disk's room; the rest is lost\n", n->name, n->size);
+        else if (!n->failed) klog("[vfs] /%s: out of memory at %u bytes; the rest is lost\n", n->name, n->size);
         n->failed = 1;
         return -1;
     }
@@ -305,9 +325,7 @@ static void mem_close_op(vfs_node_t *n) {
         klog("[vfs] /%s: the write to disk failed (%u bytes)\n", n->name, n->size);
         n->failed = 1;
     }
-    for (uint32_t i = 0; i < n->npg; i++) pmm_free_page(n->pg[i]);
-    if (n->pg) kfree(n->pg);
-    n->pg = 0; n->npg = n->pgcap = 0;
+    mem_drop(n);
 }
 static const vfs_ops_t mem_file_ops = {
     mem_read_op, mem_write_op, mem_seek_op, mem_close_op
@@ -421,7 +439,7 @@ vfs_node_t *vfs_open(const char *path, int flags) {
             if (fd >= 0) fat_fclose(fd);
             if (sz) {
                 int rfd = fat_fopen(p);
-                if (rfd < 0 || mem_ensure(n, sz) < 0) { if (rfd >= 0) fat_fclose(rfd); n->used = 0; return 0; }
+                if (rfd < 0 || mem_ensure(n, sz) < 0) { if (rfd >= 0) fat_fclose(rfd); mem_drop(n); n->used = 0; return 0; }
                 uint32_t got = 0;
                 while (got < sz) {                      /* page by page into the pages */
                     uint32_t k = sz - got < VFS_PG ? sz - got : VFS_PG;

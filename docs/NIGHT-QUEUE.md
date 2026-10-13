@@ -884,7 +884,7 @@ Mincecraft; neosim and rx.c; Doom; tests, build and docs.)
   swap_in needs a free frame first: with every frame taken (write buffers,
   K24), a read into a swapped page panicked (reproduced, cr2 0xc4000000).
   Fix: at least one free frame when any page of the range is on swap.
-- **R-K24 (high, my R-K4b incomplete).** The write limit is per handle:
+- **R-K24 (high, my R-K4b incomplete) — DONE v0.60.283 (one budget, the disk's room; writebudget-test).** The write limit is per handle:
   each may buffer the whole free space, and a program has 13 (reproduced:
   four at 28 MB each, then out of memory, ~120 MB of buffers). Fix: one
   budget over all open write nodes (or a share per cook), charged in

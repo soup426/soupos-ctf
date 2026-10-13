@@ -36,7 +36,7 @@ cmp -s "$WORK/B.TXT" "$WORK/C.TXT" \
 L=$(tr -d '\r' < "$WORK/serial.log")
 echo "$L" | grep "the output to /D.TXT did not reach the disk whole" >/dev/null \
     && echo "$L" | grep -E "^\[proc [0-9]+\] /spoon.elf exited with code 1" >/dev/null \
-    && echo "$L" | grep -E "^\[vfs\] /D.TXT: (the write to disk failed|stops at [0-9]+ bytes, the disk's room)" >/dev/null \
+    && echo "$L" | grep -E "^\[vfs\] /D.TXT: (the write to disk failed|stops at [0-9]+ bytes, the (write buffers together hold the )?disk's room)" >/dev/null \
     && echo "  ok    one that does not fit is reported on the terminal and in the log, and exits 1" \
     || { echo "  FAIL  the failed output was not reported"; fail=1; }
 [ "$(fsck.fat -n "$WORK/disk.img" 2>&1 | wc -l)" -le 2 ] && echo "  ok    fsck is clean after the failed write" \

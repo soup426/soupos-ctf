@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.282
+Current version: v0.60.283
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,19 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.283 (2026-10-12)  — THE WRITE BUFFERS SHARE ONE BUDGET
+  - v0.60.275 capped each write handle at the disk's room, but each one
+    alone: five at once took 28 MB apiece and memory ran out under them
+    (review R-K24, my K4b incomplete). One count of the pages every write
+    buffer holds is kept now, capped at the disk's room as last measured,
+    all that could ever reach it: at -m 128M the buffers can no longer
+    take the machine's memory. The append path's failed load now gives
+    its pages back too (it leaked them).
+  - scripts/writebudget-test.sh: five background spoons write /dev/zero
+    into five files at once: none runs out of memory, the shared cap
+    stops them at 28450816 bytes between them, the shell answers. Before
+    the fix the fifth ran out of memory.
 
 v0.60.282 (2026-10-12)  — CTCOMPOSTMODE-TEST CHECKS ALL THREE MODES
   - It guarded only stream_copy's mode: with the compost bowl's chmod or

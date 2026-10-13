@@ -123,7 +123,7 @@ if [ "$MODE" = "full" ]; then
            run-test lname-test seq-test vars-test testcmd-test glob-test stat-test lsl-test
            find-test control-test cmp-test arith-test while-test args-test subst-test read-test
            profile-test flip-test label-test tab-test clockout-test clip-test mince-test
-           knead-test layer-test leftovers-test search-test case-test lint-test stderr-test gate-patterns-test disk-fresh-test keys-until-test devkbd-test clockout-rights-test ctforeign-test soupyc-perms-test ctcompostread-test kbdtap-test ctslots-test soupyc-spawn-rights-test topram-test kfill-test ctcompostmode-test soupyc-include-test soupyc-spawn-input-test writecap-test mincecraft-ceiling-test overwrite-safe-test neosim-writeas-test
+           knead-test layer-test leftovers-test search-test case-test lint-test stderr-test gate-patterns-test disk-fresh-test keys-until-test devkbd-test clockout-rights-test ctforeign-test soupyc-perms-test ctcompostread-test kbdtap-test ctslots-test soupyc-spawn-rights-test topram-test kfill-test ctcompostmode-test soupyc-include-test soupyc-spawn-input-test writecap-test mincecraft-ceiling-test overwrite-safe-test neosim-writeas-test writebudget-test
            func-test stack-test spread-test env-test bpipe-test longword-test cd-test
            loopin-test pipeloop-test wordsplit-test litexp-test assign-test prefix-test
            param-test until-test break-test herestr-test return-test rest-test dish-test
