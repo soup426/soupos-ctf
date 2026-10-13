@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.294
+Current version: v0.60.295
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,15 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.295 (2026-10-13)  — NEOSIM: A REFUSED JOIN CHANGES NOTHING
+  - v0.60.286 asked whether a join would pass 255 columns inside
+    delete_chars, after op_apply had already taken the register and begun
+    an undo step: a refused delete or c overwrote the register, left an
+    empty undo step and [+] (so :q said E37), and c went on into insert;
+    J began its step before its check (review R-N48). Both ask first now.
+  - neosim-longjoin-test ends with :q, which must quit; a refused c joins
+    the refusals. Before the fix :q was refused.
 
 v0.60.294 (2026-10-13)  — NEOSIM: A MIXED FILE KEEPS ITS LINE ENDS
   - v0.60.285 marked a file CRLF at its first CRLF line, so :w gave every

@@ -1008,7 +1008,7 @@ Mincecraft; neosim and rx.c; Doom; tests, build and docs.)
   file CRLF, so every LF line gains a CR on :w; nvim reads such a file as
   unix and keeps the CR as text. Fix: crlf only when every newline had a
   CR; else the CRs stay in their lines.
-- **R-N48 (medium, my v0.60.286).** A refused join still takes the register,
+- **R-N48 (medium, my v0.60.286) — DONE v0.60.295 (neosim-longjoin-test).** A refused join still takes the register,
   starts an undo step and sets [+] (op_apply asks too_long_join only in
   delete_chars, after reg_take_chars and change_begin); a refused c goes on
   into insert; J starts its step before its check. Fix: ask before any of

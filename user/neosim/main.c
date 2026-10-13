@@ -925,6 +925,10 @@ static void op_apply(int op, mv_t m) {
     if (m.incl) bx++;
     if (by == ay) bx = imin(bx, lenof(ay));
     if (case_op(op)) { change_case(op, ay, ax, by, bx); return; }
+    /* Before the register, the undo step and c's insert (v0.60.295, review
+     * R-N48): asked only inside delete_chars, a refused join still took the
+     * register, left an empty undo step and [+], and c went on into insert. */
+    if (op != 'y' && by != ay && too_long_join(ax + lenof(by) - bx)) { reg_sel = 0; return; }
     reg_take_chars(ay, ax, by, bx);
     reg_after(op);
     if (op == 'y') { E.cy = ay; E.cx = ax; clamp(); E.want = E.cx; return; }
@@ -964,16 +968,24 @@ static void paste_from(int after, int cnt, const char *reg, int reg_n, int reg_l
     for (int c = 0; c < cnt; c++) insert_text(&y, &x, reg, reg_n);
     E.cy = y; E.cx = x - 1; clamp(); E.want = E.cx;
 }
+/* What J would make of line y and the next: its length (v0.60.295). */
+static int join_len(int y) {
+    int n2 = y + 1, skip = 0, at = lenof(y);
+    while (skip < lenof(n2) && E.t.s[n2][skip] == ' ') skip++;
+    int space = at > 0 && skip < lenof(n2) && E.t.s[y][at - 1] != ' ' && E.t.s[n2][skip] != ')';
+    return at + space + lenof(n2) - skip;
+}
 static void join(int cnt) {
     int times = imax(cnt, 2) - 1;
     if (E.cy + 1 >= E.t.n) return;
+    if (too_long_join(join_len(E.cy))) return;      /* before the undo step (v0.60.295, review R-N48) */
     change_begin();
     for (int i = 0; i < times && E.cy + 1 < E.t.n; i++) {
         int n2 = E.cy + 1, skip = 0;
         while (skip < lenof(n2) && E.t.s[n2][skip] == ' ') skip++;
         int at = len();
         int space = at > 0 && skip < lenof(n2) && E.t.s[E.cy][at - 1] != ' ' && E.t.s[n2][skip] != ')';
-        if (too_long_join(at + space + lenof(n2) - skip)) break;
+        if (i > 0 && too_long_join(at + space + lenof(n2) - skip)) break;   /* the first asked above */
         for (int k = 0; k < skip; k++) text_delete_char(&E.t, n2, 0);
         if (space) text_insert_char(&E.t, E.cy, at, ' ');
         text_join(&E.t, E.cy);
