@@ -669,6 +669,28 @@ Mincecraft; neosim and rx.c; Doom; tests, build and docs.)
 
 ## Area review findings (2026-10-12, began at a6f1c1c)
 
+### Tests, build and docs (reviewer reverted 11 fixes in copies; 9 tests failed as they should)
+
+- **R-T24 (medium).** kbdtap-test's SSH half cannot fail: the shell's pour
+  never reaches the device ("Not found: /dev/kbd"), so with v0.60.264's
+  dev_kbd_read guard removed it still passed; no ring-0 reader on another
+  terminal was found at all (cook spoon.elf < /dev/kbd over SSH hangs on
+  both builds), so that guard and CLAUDE.md:297's line may be dead. A
+  quick EOF also passes, an auth failure included. Fix: a real path or
+  drop that half and its doc; a marker in the SSH output either way.
+- **R-T25 (medium) / R-K20 (soupyc).** include never finds a file in any
+  build: it copies tok.sval, but string literals live in tok.str
+  (soupyc.c:752); the disk's INCLUDE.SC fails, and no test runs it. So
+  soupyc-perms-test's include check cannot fail. Fix: tok.str; an include
+  test (INCLUDE.SC prints "cube(3)  = 27"); the perms case then refused by
+  the rule, beside one saucier may read.
+- **R-T26 (low, flaky toward FAIL).** UNTIL texts inside their own typed
+  line ("OPEN ", "LINES ", "WOPEN ", "MINE ", "KBD ") are met by the echo;
+  under load the output can come after the WAIT:1 that follows. Fix: split
+  the marker ("MI" + "NE ") or wait on the result text.
+- **R-T27 (low, docs).** CLAUDE.md:1110-1117 still says a program is killed
+  at first touch past the cap, and says nothing of v0.60.269's pre-fault.
+
 ### Kernel and shell (reviewer confirmed K15 in QEMU on a copy)
 
 - **R-K15 (high, my v0.60.269 incomplete).** One syscall over a buffer
@@ -729,6 +751,7 @@ Mincecraft; neosim and rx.c; Doom; tests, build and docs.)
    K2 and K1, which can pass broken), R-K12 (critical), R-C2, R-K13,
    R-C10, R-K14, R-C12 (the area review's, 2026-10-12), then R-C16
    (the second area review's).
+2b. R-T24 and R-T25 with R-K20 (tests that cannot fail, the second area review's).
 3. Kernel crashes any cook can cause: R-K15 (my K3, incomplete), R-K16, then R-K17 (security), R-K4b (R-K5 set aside for the user).
 4. Data loss: R-M1, R-M4, R-N3, R-N4, R-N5, R-N1, R-N2.
 5. Item 0b, Doom, from R-D3, R-D2, R-D4, R-D1 down.
