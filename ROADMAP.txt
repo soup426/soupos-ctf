@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.302
+Current version: v0.60.303
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,14 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.303 (2026-10-13)  — LONGJOIN-TEST PASTES AFTER A REFUSAL
+  - v0.60.295 asked about a long join before the register, so a refused d
+    or c no longer overwrote it, but neosim-longjoin-test never pasted
+    after one: with the check moved back after reg_take_chars it passed
+    (review R-T38). Now, on a second copy of the file, yl, the refused
+    visual d and c, then gg0p and :w: line 1 must be the a put after its
+    first character. With the check moved back it fails.
 
 v0.60.302 (2026-10-13)  — WRITESHARE-TEST SEES THE WHOLE SHARE RULE
   - writeshare-test had one cook and freed nothing, so v0.60.292's cap on

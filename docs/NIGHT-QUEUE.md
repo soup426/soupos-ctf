@@ -1114,7 +1114,7 @@ tests, build and docs. Nothing critical, so the full review stays at 30.
   passed. Fix: kill the writer, strain the file, saucier redirects again
   and it reaches the disk; a second cook's writer alongside, the two
   stopped near three quarters together.
-- **R-T38 (low-medium).** neosim-longjoin-test never pastes after a
+- **R-T38 (low-medium) — DONE v0.60.303.** neosim-longjoin-test never pastes after a
   refusal: with the check moved back after reg_take_chars it passed. Fix:
   yl first, then the refused d or c, then p and :w: the file holds that
   character.

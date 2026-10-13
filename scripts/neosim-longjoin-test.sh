@@ -6,7 +6,8 @@
 # start dropped text the same way. Here J, a visual delete across both
 # lines (200lvj190hd) and Backspace at the start of line 2 are each refused,
 # and the file is as it was; a refused c inserts nothing, and :q quits (no
-# [+], no undo step: v0.60.295).
+# [+], no undo step: v0.60.295). And (v0.60.303) after yl, a refused d and
+# c leave the register: p puts what yl took.
 cd "$(dirname "$0")/.."
 WORK=$(mktemp -d /tmp/soupos-neolongjoin.XXXXXX)
 PID=""
@@ -17,7 +18,7 @@ python3 -c "
 import sys
 a = ''.join(chr(97 + i % 26) for i in range(250)); b = ''.join(chr(65 + i % 26) for i in range(250))
 open(sys.argv[1], 'w').write(a + '\n' + b + '\n')" "$WORK/long"
-mcopy -o -i "$WORK/disk.img" "$WORK/long" ::LONG.TXT
+mcopy -o -i "$WORK/disk.img" "$WORK/long" ::LONG.TXT; mcopy -o -i "$WORK/disk.img" "$WORK/long" ::LONG2.TXT
 qemu-system-i386 -accel kvm -cpu host -drive "file=$WORK/disk.img,format=raw,if=ide,index=0" \
     -cdrom soupOS.iso -boot d -m 128M -no-reboot -no-shutdown -display none \
     -serial "file:$WORK/log" -monitor "unix:$WORK/mon.sock,server,nowait" >/dev/null 2>&1 &
@@ -29,6 +30,8 @@ PID=$!
 refuse=("TYPE:J" "WAIT:1" "TYPE:gg200lvj190hd" "WAIT:1" "KEY:esc" "TYPE:ggj0i" "KEY:backspace" "KEY:esc" "WAIT:1" 'TYPE:gg$vj0c' "KEY:esc" "WAIT:1")
 timeout 120 python3 scripts/qemu_keys.py "$WORK/mon.sock" "headchef" "rosemary" "WAIT:1" "cook neosim.elf -wait /LONG.TXT &" "WAIT:1" "countertop" \
     "UNTIL:[neosim] window up" "WAIT:1" "${refuse[@]}" "TYPE::w" "KEY:ret" "UNTIL:[neosim] wrote /LONG.TXT" "WAIT:1" \
+    "TYPE::e /LONG2.TXT" "KEY:ret" "UNTIL:[neosim] open /LONG2.TXT" "WAIT:1" "TYPE:gg0yl" "WAIT:1" "TYPE:gg200lvj190hd" "WAIT:1" "KEY:esc" \
+    'TYPE:gg$vj0c' "KEY:esc" "WAIT:1" "TYPE:gg0p" "WAIT:1" "TYPE::w" "KEY:ret" "UNTIL:[neosim] wrote /LONG2.TXT" "WAIT:1" \
     "TYPE::e! /LONG.TXT" "KEY:ret" "UNTIL:[neosim] open /LONG.TXT" "WAIT:1" "${refuse[@]}" \
     "TYPE::q" "KEY:ret" "UNTIL:[neosim] bye" "WAIT:1" >/dev/null 2>&1 \
     || { echo "  FAIL  could not drive QEMU: $(tr -d '\r' < "$WORK/log" | grep '\[neosim\]' | tail -3 | tr '\n' ';')"; fail=1; }
@@ -36,8 +39,16 @@ kill $PID 2>/dev/null; wait $PID 2>/dev/null; PID=""
 mcopy -n -i "$WORK/disk.img" ::LONG.TXT "$WORK/after" 2>/dev/null
 cmp -s "$WORK/long" "$WORK/after" && echo "  ok    J, a delete across the lines and Backspace at a line's start were refused: the buffer written after them is as the file was (cmp)" \
     || { echo "  FAIL  the file changed: $(wc -c < "$WORK/after" 2>/dev/null) bytes, $(wc -l < "$WORK/after" 2>/dev/null) lines (was 502, 2)"; fail=1; }
-[ "$(tr -d '\r' < "$WORK/log" | grep -c '\[neosim\] refused a join past 255')" -ge 8 ] && echo "  ok    each refusal logged" \
-    || { echo "  FAIL  refusals logged: $(tr -d '\r' < "$WORK/log" | grep -c '\[neosim\] refused a join past 255') of 8"; fail=1; }
+# (v0.60.303, review R-T38) A refused d or c takes no register: yl, the two
+# refusals, then gg0p puts the a after the first character.
+mcopy -n -i "$WORK/disk.img" ::LONG2.TXT "$WORK/after2" 2>/dev/null
+python3 -c "
+import sys
+a = open(sys.argv[1]).read().split('\n')[0]; open(sys.argv[2], 'w').write(a[0] + 'a' + a[1:] + '\n' + open(sys.argv[1]).read().split('\n')[1] + '\n')" "$WORK/long" "$WORK/want2"
+cmp -s "$WORK/want2" "$WORK/after2" && echo "  ok    yl, a refused d and c, then p: the register still held what yl took" \
+    || { echo "  FAIL  after yl, the refusals and p, line 1 is $(head -1 "$WORK/after2" | wc -c) bytes: $(head -1 "$WORK/after2" | cut -c1-12)... (want $(head -1 "$WORK/want2" | cut -c1-12)...)"; fail=1; }
+[ "$(tr -d '\r' < "$WORK/log" | grep -c '\[neosim\] refused a join past 255')" -ge 10 ] && echo "  ok    each refusal logged" \
+    || { echo "  FAIL  refusals logged: $(tr -d '\r' < "$WORK/log" | grep -c '\[neosim\] refused a join past 255') of 10"; fail=1; }
 # (v0.60.295, review R-N48) a refusal changes nothing: no undo step, no [+],
 # no insert after a refused c: :q quits.
 tr -d '\r' < "$WORK/log" | grep -F '[neosim] refused :q' >/dev/null && { echo "  FAIL  :q was refused: a refused join marked the buffer changed"; fail=1; }
