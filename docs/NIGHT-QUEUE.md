@@ -1200,7 +1200,7 @@ was queued.
 - **R-N58 (medium-high, data) — DONE v0.60.318 (neosim-backref-test; refused, not supported).** \1-\9 in a pattern become a literal
   digit: :%s/\(\w\+\) \1/\1/ changes "item 1 here" to "item here".
   Fix: refuse them in patterns (or support them).
-- **R-N59 (medium, data, rx.c).** An unclosed [ inside a group compiles
+- **R-N59 (medium, data, rx.c) — DONE v0.60.319 (ere-test).** An unclosed [ inside a group compiles
   to a program matching the empty string everywhere (rx.c:158 returns -1
   without an error): :%s/\([[:alpha:]\)/X/ changes every line. Fix: the
   error, and rx_compile fails on -1. sift -E and [[ =~ ]] share it.

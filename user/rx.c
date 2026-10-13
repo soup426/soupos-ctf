@@ -155,7 +155,14 @@ static int rx_atom_end(rx_t *r, int p, int hi) {
         int d = 0;
         for (int i = p; i < hi; i++) {
             if (r->pat[i] == '\\') { i++; continue; }
-            if (r->pat[i] == '[') { int e = rx_class_end(r, i); if (e < 0) return -1; i = e - 1; continue; }
+            if (r->pat[i] == '[') {
+                int e = rx_class_end(r, i);
+                /* Said (v0.60.319, review R-N59): left unset, rx_compile took
+                 * the pattern as one that matches the empty string, and
+                 * :%s/\([[:alpha:]\)/X/ changed every line. */
+                if (e < 0) { if (!r->err) r->err = "Unmatched [, [^, [:, [., or [="; return -1; }
+                i = e - 1; continue;
+            }
             if (r->pat[i] == '(') d++;
             else if (r->pat[i] == ')' && --d == 0) return i + 1;
         }
@@ -214,7 +221,7 @@ static void rx_cat(rx_t *r, int lo, int hi) {
     while (p < hi && !r->err) {
         if (lead && (r->pat[p] == '*' || r->pat[p] == '+' || r->pat[p] == '?')) { p++; continue; }   /* repeats nothing */
         int e = rx_atom_end(r, p, hi);
-        if (e < 0) return;
+        if (e < 0) { if (!r->err) r->err = "Invalid regular expression"; return; }   /* never a silent -1 (v0.60.319) */
         int q = e, mn = 1, mx = 1;
         if (q < hi && (r->pat[q] == '*' || r->pat[q] == '+' || r->pat[q] == '?')) {
             char k = r->pat[q++];

@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.318
+Current version: v0.60.319
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,17 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.319 (2026-10-13)  — RX: AN UNCLOSED [ INSIDE A GROUP IS AN ERROR
+  - rx_atom_end gave -1 for a [ never closed inside a group without
+    setting an error, and rx_compile took the pattern as one matching the
+    empty string everywhere: (a[) and ([[:alpha:]) matched every line, and
+    neosim's :%s/\([[:alpha:]\)/X/ changed them all (review R-N59; sift -E
+    and [[ =~ ]] share rx). It says "Unmatched [" now, and an atom that
+    ends at -1 is never a silent one.
+  - ere-test: (a[), x(y[z) and ([[:alpha:]) are bad patterns, status 2,
+    as GNU grep -E. Before the fix sift took them (status 0) and printed
+    every line.
 
 v0.60.318 (2026-10-13)  — NEOSIM: A BACK-REFERENCE IN A PATTERN IS REFUSED
   - vim2ere passed \1-\9 through, and rx (which has no back-references)

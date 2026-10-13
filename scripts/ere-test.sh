@@ -3,7 +3,8 @@
 # GNU grep -E (v0.60.119): 26 patterns over the same lines, each with -o,
 # -c, -v and -in, through one recipe on each side; three patterns that
 # take a backtracking matcher exponential time (a Pike VM: linear), and
-# three bad ones (status 2). GNU grep is called by
+# six bad ones (status 2; v0.60.319, review R-N59: an unclosed [ inside a
+# group compiled to a program matching the empty string everywhere). GNU grep is called by
 # its path: an interactive shell's grep may be a ugrep wrapper.
 set -uo pipefail
 cd "$(dirname "$0")/.."
@@ -43,7 +44,7 @@ PATS=('soup|cat' '^s' 't$' 'o+' 'so?up' 'x{2}' 'x{2,}' 'x{1,2}' '[aeiou]{2}' '[^
       printf "cook sift.elf -E %s '%s' /t.txt\n" "$m" "$p"
     done
   done
-  for p in '(' 'a(b' '[a'; do                     # bad patterns: status 2, nothing out
+  for p in '(' 'a(b' '[a' '(a[)' 'x(y[z)' '([[:alpha:])'; do   # bad patterns: status 2, nothing out; (v0.60.319) a [ unclosed inside a group too
     printf "cook sift.elf -E '%s' /t.txt\nslurp \"== bad \$?\"\n" "$p"
   done
 } > "$H/r.sh"
@@ -58,6 +59,6 @@ kill "$PID" 2>/dev/null; wait "$PID" 2>/dev/null; PID=""
 mcopy -n -i "$WORK/disk.img" ::/out.txt "$WORK/got" 2>/dev/null || { echo "  FAIL  the recipe wrote nothing"; fail=1; exit 1; }
 sed "s/^cook sift.elf/\/usr\/bin\/grep/; s/^slurp/echo/; s/ \/t.txt$/ t.txt/" "$H/r.sh" > "$H/r.bash"
 (cd "$H" && LC_ALL=C bash r.bash 2>/dev/null) > "$WORK/want"
-if cmp -s "$WORK/got" "$WORK/want"; then echo "  ok    sift -E is GNU grep -E ($(grep -c '^==' "$WORK/want") runs: 33 patterns with -o, -c, -v, -in, 3 bad; $(wc -l < "$WORK/want") lines alike)"
+if cmp -s "$WORK/got" "$WORK/want"; then echo "  ok    sift -E is GNU grep -E ($(grep -c '^==' "$WORK/want") runs: 33 patterns with -o, -c, -v, -in, 6 bad; $(wc -l < "$WORK/want") lines alike)"
 else echo "  FAIL  sift -E differs from grep -E:"; diff "$WORK/want" "$WORK/got" | head -40 | sed 's/^/        /'; fail=1; fi
 exit $fail
