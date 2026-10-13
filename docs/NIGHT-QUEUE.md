@@ -867,7 +867,7 @@ Mincecraft; neosim and rx.c; Doom; tests, build and docs.)
 
 ### Kernel and shell (reviewer confirmed K21-K24 and K27 in QEMU on copies)
 
-- **R-K21 (critical, security).** soupyc's remove(path) calls fat_delete
+- **R-K21 (critical, security) — DONE v0.60.280 (soupyc-perms-test).** soupyc's remove(path) calls fat_delete
   with no rights check in any build (soupyc.c:1585), missed by K12:
   reproduced, saucier removed /etc/kitchen, and the next boot reseeds the
   headchef with the stock secret and drops every hired cook. Fix: under

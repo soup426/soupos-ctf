@@ -1587,6 +1587,12 @@ static int call_builtin(node_t *n, val_t *out) {
         eval_args(n, a, 1);
         if (err_flag) return 1;
         const char *path = val_str(&a[0], scratch, SVAL_LEN);
+#ifdef NO_CHALLENGE
+        /* What strain asks (v0.60.280, review R-K21): 'w' on the file, and
+         * no bowls. Unchecked, any cook removed /etc/kitchen, and the next
+         * boot reseeded the headchef with the stock secret. */
+        if (fat_is_dir(path) || !users_may(path, 'w')) { *out = mkival(0); return 1; }
+#endif
         *out = mkival(fat_delete(path) >= 0 ? 1 : 0);
         return 1;
     }

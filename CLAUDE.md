@@ -3,7 +3,7 @@
 ## What this is
 
 soupOS is a 32-bit x86 hobby OS written in C and NASM assembly (currently
-**v0.60.279**; ROADMAP.txt is the authority on the version). It boots via GRUB and runs in protected mode with paging, a
+**v0.60.280**; ROADMAP.txt is the authority on the version). It boots via GRUB and runs in protected mode with paging, a
 physical/heap allocator, and a cooperative scheduler. On top of that:
 
 - **Filesystem**: FAT16 read/write with subdirectories ("bowls") and a VFS shim
@@ -926,7 +926,7 @@ gates kill/plate/steep; kernel tasks are the headchef's to kill.
 by the open/unlink/mkdir syscalls. A new syscall that touches a file asks it
 too, the way the matching shell command does. The open check is
 `#ifdef NO_CHALLENGE`: the challenge build's unchecked open is deliberate.
-soupyc's open(), lines(), write_lines() and include ask the same rule
+soupyc's open(), lines(), write_lines() and include ask the same rule (and remove() asks strain's, 'w' and no bowls, v0.60.280)
 (`users_may_open`, v0.60.262) through `sc_open` in soupyc.c; only the
 CHALLENGE build's stay unchecked. Whose rights it checks: inside a program's syscall the program's own
 `proc_t.owner` (v0.60.258, `shell_uid_resolver`), in a spawn()ed soupyc task

@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.279
+Current version: v0.60.280
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,17 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.280 (2026-10-12)  — SOUPYC'S REMOVE ASKS WHOSE FILE
+  - v0.60.262 put soupyc's opens behind the cook's rights but missed
+    remove(), which called fat_delete with nothing asked, in every build:
+    saucier removed /etc/kitchen, and the next boot reseeded the headchef
+    with the stock secret and dropped every hired cook (review R-K21,
+    critical, the second full review's). In the ordinary build it asks
+    what strain asks now: 'w' on the file, and no bowls.
+  - soupyc-perms-test: saucier's remove("/etc/kitchen") gives 0 and the
+    file stays; saucier's own file still removes. Before the fix it gave 1
+    and /etc/kitchen was gone.
 
 v0.60.279 (2026-10-12)  — CTSLOTS-TEST READS PAST KERNEL LINES
   - Under the full check's load a kernel line landed in the middle of
