@@ -6,6 +6,10 @@
 #include "world.h"
 #define WALK  14090          /* 0.215 blocks a tick, 4.3 a second */
 #define FLY 16384                      /* (v0.60.249) a quarter of a block a tick, flying up or down */
+/* The highest the feet fly (v0.60.276, review R-M1): two blocks over the top
+ * row. A world file with the feet at WY + 4 or above is refused on load
+ * (save.c), and with no ceiling the next start made a new world over it. */
+#define FLY_TOP ((WY + 2) << 16)
 #define GRAV  5243           /* 0.08 a tick, each tick */
 #define JUMP  27525          /* 0.42: about 1.3 blocks up */
 #define TERM  58982          /* 0.9 a tick at most, falling */
@@ -78,6 +82,7 @@ int player_tick(player_t *p, const input_t *in, const ray_t *tg) {
     if (p->fly) {                                     /* (v0.60.249) no fall; Space up, Shift down; landing ends it */
         p->vy = in->jump ? FLY : in->down ? -FLY : 0;
         move_y(p, p->vy);
+        if (p->y > FLY_TOP) p->y = FLY_TOP;         /* (v0.60.276) the save's own bound keeps it */
         if (p->ground && p->vy < 0) p->fly = 0;
         p->vy = 0; p->hurt = 0; p->fall_top = p->y;
         return broke;

@@ -508,7 +508,7 @@ Mincecraft; neosim and rx.c; Doom; tests, build and docs.)
 
 ### Mincecraft (reviewer reproduced 1-3 on the host with the game's own C)
 
-- **R-M1 (high).** Flying has no ceiling (player.c fly branch); a save with
+- **R-M1 (high) — DONE v0.60.276 (mincecraft-ceiling-test).** Flying has no ceiling (player.c fly branch); a save with
   the feet above y 68 is refused on load (save.c:90), so the next start
   makes a new world and its Esc saves over the real one. Fix: cap flight
   (feet at most (WY+2)<<16) inside the load bound. Test: fly past 64, save,
