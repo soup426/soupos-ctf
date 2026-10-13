@@ -201,6 +201,9 @@ UNTIL or what it needs, soaked six wide. The numbers in the notes.
 
 Seen 2026-10-12 (v0.60.267's run): doom-mouse-test, "a shot each 0.15 s":
 gaps [14, 15, ...], one a tick under its 15 floor; three runs alone passed.
+Seen 2026-10-12 (v0.60.278's first run): ctslots-test "the hog held none";
+two runs alone passed. Probably a kernel line landing mid-line in "prod: hog
+holds N" (prodwin-test strips them for that reason); fixed next.
 
 ## 6. Doom: the face
 
@@ -549,7 +552,7 @@ Mincecraft; neosim and rx.c; Doom; tests, build and docs.)
 - **R-N2 (high).** A linewise p on the last line of a full 2048-line buffer
   crashes it (paste_from after a failed insert). Fix: return when nothing
   was put in; audit the cy++ after failed inserts.
-- **R-N3 (high, data).** :w OTHER renames the buffer and clears [+]: the
+- **R-N3 (high, data) — DONE v0.60.278 (neosim-writeas-test).** :w OTHER renames the buffer and clears [+]: the
   original is never written, :q then quits losing it. Fix: rename only a
   nameless buffer; saved/changed only for its own path.
 - **R-N4 (high, data).** Tabs become spaces and CRs vanish on load, so a

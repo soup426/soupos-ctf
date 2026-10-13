@@ -335,8 +335,13 @@ static int write_file(const char *path) {
     if (!path[0]) { msg("E32: No file name", 0, 0); return -1; }
     if (text_save(&E.t, path, &bytes) < 0) { msg("E212: Can't open file for writing: ", path, 0); eprint("[neosim] write failed\n"); return -1; }
     eprint("[neosim] wrote "); eprint(path); eprint(" bytes="); eprint_u(bytes); eprint("\n");
-    if (path != E.path) scopy(E.path, path, sizeof(E.path));
-    E.saved = E.seq; E.changed = 0;
+    /* As vim's (v0.60.278, review R-N3): a buffer with no name takes the
+     * one written; a named buffer keeps its own, and only a write to it
+     * clears [+]. Taking OTHER's name, :w OTHER then :q quit with the edit
+     * never written to the file it came from. */
+    int own = path == E.path || !E.path[0] || same(path, E.path);
+    if (!E.path[0]) scopy(E.path, path, sizeof(E.path));
+    if (own) { E.saved = E.seq; E.changed = 0; }
     msg_num("\"", path, bytes, "B written");
     return 0;
 }

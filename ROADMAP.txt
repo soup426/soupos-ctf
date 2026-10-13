@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.277
+Current version: v0.60.278
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,16 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.278 (2026-10-12)  — NEOSIM: :w OTHER KEEPS THE BUFFER'S NAME
+  - :w OTHER took OTHER as the buffer's name and cleared [+], as vim does
+    only for a buffer with no name: after x and :w /B.TXT, :q quit with
+    the edit never written to the file it came from (review R-N3). A named
+    buffer keeps its name now and only a write to it clears [+]; a buffer
+    with no name still takes the name written.
+  - scripts/neosim-writeas-test.sh: x, :w /B.TXT, :q refused (E37), :wq
+    writes /A.TXT; both hold the edit. Before the fix :q quit and /A.TXT
+    kept its old text.
 
 v0.60.277 (2026-10-12)  — AN OVERWRITE THAT FAILS KEEPS THE OLD FILE
   - fat_write freed an existing file's chain before writing the new one.
