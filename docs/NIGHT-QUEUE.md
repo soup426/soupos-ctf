@@ -950,6 +950,36 @@ Mincecraft; neosim and rx.c; Doom; tests, build and docs.)
   path plus ".bad" past 128) is then saved over with a new world. Fix:
   save elsewhere or warn when keep_aside fails.
 
+## Area review findings (2026-10-13, began at 8eebe4e)
+
+### neosim (reviewer: host harness, ASan, 7-byte reads, 300 random runs against nvim)
+
+- **R-N46 (high, data, my v0.60.285).** Undo or redo drops the CRLF flag:
+  undo.c's pop() rebuilds through text_clear, which now clears crlf; x u
+  :w on a CRLF file writes it LF. Fix: crlf kept across pop (reset only in
+  text_load).
+- **R-N47 (medium-high, data, my v0.60.285).** One CRLF line marks the whole
+  file CRLF, so every LF line gains a CR on :w; nvim reads such a file as
+  unix and keeps the CR as text. Fix: crlf only when every newline had a
+  CR; else the CRs stay in their lines.
+- **R-N48 (medium, my v0.60.286).** A refused join still takes the register,
+  starts an undo step and sets [+] (op_apply asks too_long_join only in
+  delete_chars, after reg_take_chars and change_begin); a refused c goes on
+  into insert; J starts its step before its check. Fix: ask before any of
+  that.
+- **R-N49 (medium, my v0.60.288).** A refused paste or o/O into a full buffer
+  leaves an empty undo step and [+] (change_begin first). Fix: room first.
+- **R-N50 (low-medium).** A multi-line paste into a nearly full buffer joins
+  the register's lines (insert_text drops the \n when text_split fails),
+  cut at 255, silently. Fix: stop and say the file is full.
+- **R-N51 (low-medium, my v0.60.285).** Code that knew only spaces meets
+  tabs: J skips only spaces and adds one before a tab; << removes no tab;
+  >> puts spaces before it; autoindent ignores a tab indent; cw on a tab
+  becomes ce; the highlighter misses \t#define. (j/k keep the byte column:
+  the one-cell design, noted.)
+- **R-N52 (low).** :wq ./file on buffer file writes its own file but the
+  string compare says OTHER, so E37. Fix: normalise the path.
+
 ## The order to work the review in
 
 0. Item 0 first (the user asked for it directly: a text file's double
@@ -964,7 +994,7 @@ Mincecraft; neosim and rx.c; Doom; tests, build and docs.)
 2c. R-T28 and R-T29 (my tests that cannot fail) right after R-K21.
 2b. R-T24 and R-T25 with R-K20 (tests that cannot fail, the second area review's).
 3. Kernel crashes any cook can cause: R-K15 (my K3, incomplete), R-K16, then R-K17 (security), R-K4b (R-K5 set aside for the user).
-4. Data loss: R-M1, R-M4, R-N3, R-N30 (my N3, incomplete), R-N4, R-N5, R-N1, R-N2, R-N31, R-N32.
+4. Data loss: R-M1, R-M4, R-N3, R-N30 (my N3, incomplete), R-N4, R-N5, R-N1, R-N2, R-N31, then R-N46, R-N47 (my N4's regressions), R-N48, R-N49, R-N32, R-N50.
 5. Item 0b, Doom: R-D20, R-D21, R-D22 (what the user sees first), then R-D3, R-D2, R-D4, R-D1 and the rest by severity.
 6. The rest by severity, the area's mediums before the lows; items 1-9
    where they fit.
