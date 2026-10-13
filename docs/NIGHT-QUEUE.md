@@ -746,6 +746,26 @@ Mincecraft; neosim and rx.c; Doom; tests, build and docs.)
 
 ## Full review findings (2026-10-12, began at c6c8d32)
 
+### Tests, build and docs (reviewer reverted each new fix in copies)
+
+- **R-T28 (medium-high, mine).** topram-test can no longer fail: v0.60.275's
+  write cap stops /dev/zero > /z at the disk's room (28 MB), far below the
+  top frames at -m 128M (reproduced: paging.c and pmm.c reverted, it still
+  passes). Fix (the reviewer's, confirmed): boot it -m 32M, where free RAM
+  is under the disk's room; require "out of memory at" so it cannot go
+  dead again; fix its header and ROADMAP's line.
+- **R-T29 (low-medium, mine).** ctcompostmode-test guards only stream_copy's
+  mode: with the bowl's chmod or .whence's removed it passes, though saucier
+  can then list /compost (names, owner, sizes). Fix: serve /compost as
+  saucier must be refused, no priv.txt in it.
+- **R-T30 (low, suspected).** keys-until-test's margin is thin: the broken
+  driver returned in 1.2-1.6 s against a 2600 ms floor. Fix: time from the
+  fake monitor's receipt of the key.
+- **R-T31 (low, suspected).** mincecraft-ceiling-test needs 220 ticks in a
+  14 s hold; under load (under 5 fps, 4 catch-up ticks a frame) "reached
+  it" can fail. Fix: hold until a p line shows y 66, with a limit.
+- (Its note on write_limit's comment is R-K25.)
+
 ### Doom (reviewer's host harness matched a QEMU frame on 100% of pixels; item 0b)
 
 - **R-D20 (high, looks).** The sky is black: sky_ensure decodes SKY1 with
@@ -903,6 +923,7 @@ Mincecraft; neosim and rx.c; Doom; tests, build and docs.)
    R-C10, R-K14, R-C12 (the area review's, 2026-10-12), then R-C16
    (the second area review's).
 2a. R-K21 first (critical, the second full review's); then K22, K23, K24 with the kernel crashes.
+2c. R-T28 and R-T29 (my tests that cannot fail) right after R-K21.
 2b. R-T24 and R-T25 with R-K20 (tests that cannot fail, the second area review's).
 3. Kernel crashes any cook can cause: R-K15 (my K3, incomplete), R-K16, then R-K17 (security), R-K4b (R-K5 set aside for the user).
 4. Data loss: R-M1, R-M4, R-N3, R-N4, R-N5, R-N1, R-N2.
