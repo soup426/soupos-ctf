@@ -517,7 +517,11 @@ static int command(char *c) {                        /* 1: end neosim */
     if (same(c, "w")) { write_file(*arg ? arg : E.path); return 0; }
     if (same(c, "wq") || same(c, "x")) {
         if (same(c, "x") && !E.changed) return 1;
-        return write_file(*arg ? arg : E.path) == 0;
+        if (write_file(*arg ? arg : E.path) != 0) return 0;
+        /* Written somewhere else (v0.60.284, review R-N30): the buffer's own
+         * file still lacks the edit, so not a quit, as :q refuses. */
+        if (E.changed) { msg("E37: No write since last change (add ! to override)", 0, 0); eprint("[neosim] refused :wq (changed)\n"); return 0; }
+        return 1;
     }
     if (same(c, "set") || same(c, "se")) {          /* (v0.60.236) :set nu nonu rnu nornu (and the long names), several at once */
         if (!*arg) { msg(E.nu ? "  number" : "nonumber", E.rnu ? "  relativenumber" : "  norelativenumber", 0); return 0; }

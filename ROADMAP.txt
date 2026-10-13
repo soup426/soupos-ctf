@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.283
+Current version: v0.60.284
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,15 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.284 (2026-10-12)  — NEOSIM: :wq OTHER DOES NOT QUIT A CHANGED BUFFER
+  - v0.60.278 fixed :w OTHER but not the quits: :wq OTHER (and :x OTHER)
+    on a changed named buffer wrote OTHER and quit, the buffer's own file
+    never getting the edit (review R-N30). They write OTHER and then, the
+    buffer still changed, refuse to quit with E37, as :q does.
+  - neosim-writeas-test: a second boot, x and :wq /C.TXT: the copy is
+    written and neosim stays; :wq then writes /A.TXT. Before the fix it
+    quit with /A.TXT unchanged.
 
 v0.60.283 (2026-10-12)  — THE WRITE BUFFERS SHARE ONE BUDGET
   - v0.60.275 capped each write handle at the disk's room, but each one

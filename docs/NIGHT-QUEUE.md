@@ -748,7 +748,7 @@ Mincecraft; neosim and rx.c; Doom; tests, build and docs.)
 
 ### neosim and rx.c (reviewer: host harness with ASan against nvim, 14k fuzz runs, 1.2M rx patterns; 1-3 and 5 also in QEMU)
 
-- **R-N30 (high, data, my R-N3 incomplete).** :wq OTHER and :x OTHER on a
+- **R-N30 (high, data, my R-N3 incomplete) — DONE v0.60.284 (neosim-writeas-test).** :wq OTHER and :x OTHER on a
   changed named buffer write OTHER and quit, the edit lost (main.c:518;
   reproduced). Fix: quit only after writing the buffer's own path or when
   nothing is changed; else E37 as :q.
