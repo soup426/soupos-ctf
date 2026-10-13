@@ -42,6 +42,9 @@ typedef struct task {
                                   * Inherited by every task it spawns (v0.36.0) */
     void         *shell;         /* the shell it belongs to (shell_t), inherited */
     void         *soupyc;        /* soupyc_ctx_t while this task interprets  */
+    int           kill_req;      /* kill asked of a spawned script (v0.60.300):
+                                  * it stops at its next statement, sleep or
+                                  * write and closes its own files */
     int           uid;           /* the cook a kernel task works for, or -1:
                                   * a spawn()ed soupyc script's (v0.60.266),
                                   * so its rights do not follow its shell's
@@ -127,6 +130,11 @@ task_t  *task_by_id(uint32_t id);
 /* Mark a task DEAD. Refuses to kill task 0 (kernel) or the current
  * task. Returns 0 on success, -1 on invalid/refused. */
 int      task_kill(uint32_t id);
+/* Ask a task to stop (v0.60.300, review R-K33): kill_req set, for a spawned
+ * script to stop at its next safe point (a statement, its sleep, a pipe);
+ * woken if it waits on a queue. */
+int      task_request_kill(uint32_t id);
+int      task_kill_requested(void);
 
 /* One-letter status for ps: R=running, r=ready, B=blocked, D=dead */
 char     task_state_letter(task_state_t s);

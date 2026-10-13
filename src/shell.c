@@ -4457,9 +4457,21 @@ static void cmd_kill(const char *args) {
         return;
     }
     task_t *kt = task_by_id((uint32_t)id);
-    void *sc = kt ? kt->soupyc : 0;               /* (v0.60.290) a spawned script's, to release */
+    if (kt && kt->soupyc) {
+        /* A spawned script is asked, not killed where it stands (v0.60.300,
+         * review R-K33): it stops at its next statement, sleep or write and
+         * closes its own files as its own cook. Up to 5 s for it to go. */
+        if (task_request_kill((uint32_t)id) != 0) { t_printf("kill: %d not killable (unknown, self, or kernel)\n", id); return; }
+        uint32_t until = timer_get_ticks() + 500;
+        while (timer_get_ticks() < until) {
+            task_t *g = task_by_id((uint32_t)id);
+            if (!g || g->state == TASK_DEAD) { t_printf("killed task %d\n", id); return; }
+            task_sleep(20);
+        }
+        t_printf("task %d is stopping (it ends at its next statement)\n", id);
+        return;
+    }
     int r = task_kill((uint32_t)id);
-    if (r == 0 && sc) { kt->soupyc = 0; soupyc_release_killed(sc); }
     if (r == 0) t_printf("killed task %d\n", id);
     else        t_printf("kill: %d not killable (unknown, self, or kernel)\n", id);
 }

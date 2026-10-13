@@ -98,7 +98,7 @@ static int pipe_read_op(vfs_node_t *n, void *buf, uint32_t count) {
     for (;;) {
         preempt_disable();
         if (p->count > 0 || p->writers == 0) { preempt_enable(); break; }
-        if (proc_kill_pending())             { preempt_enable(); return 0; }
+        if (proc_kill_pending() || task_kill_requested()) { preempt_enable(); return 0; }
         pipe_block(&p->rwq);
         preempt_enable();
     }
@@ -130,7 +130,7 @@ static int pipe_write_op(vfs_node_t *n, const void *buf, uint32_t count) {
         for (;;) {
             preempt_disable();
             if (p->count < PIPE_CAP || p->readers == 0) { preempt_enable(); break; }
-            if (proc_kill_pending())                    { preempt_enable(); return (int)put; }
+            if (proc_kill_pending() || task_kill_requested()) { preempt_enable(); return (int)put; }
             pipe_block(&p->wwq);
             preempt_enable();
         }

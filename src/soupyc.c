@@ -64,6 +64,7 @@
 #include "ai.h"
 #include "soupyc_types.h"
 #include "task.h"
+#include "klog.h"   /* (v0.60.300) a killed spawn says so */
 #include "users.h"
 
 /* Every file soupyc opens (v0.60.262, review R-K12): open(), lines(),
@@ -1022,6 +1023,7 @@ static val_t eval_block(node_t *n) {
  * ============================================================ */
 static val_t eval_node(node_t *n) {
     if (!n || err_flag) return mkival(0);
+    if (task_kill_requested()) { set_err("killed"); return mkival(0); }   /* (v0.60.300) */
     if (n->line) g_err_line = n->line;   /* locate runtime errors */
 
     switch (n->type) {
@@ -1606,7 +1608,9 @@ static int call_builtin(node_t *n, val_t *out) {
         int ms = as_int(a[0]);
         if (ms < 0)     ms = 0;
         if (ms > 10000) ms = 10000;   /* a typo should not park a task for an hour */
-        task_sleep((uint32_t)ms);
+        for (int left = ms; left > 0 && !task_kill_requested(); left -= 50)
+            task_sleep((uint32_t)(left < 50 ? left : 50));   /* a kill is seen within 50 ms (v0.60.300) */
+        if (ms == 0) task_sleep(0);
         *out = mkival(0);
         return 1;
     }
@@ -1914,17 +1918,6 @@ static void release_ctx(soupyc_ctx_t *c) {
         if (c->m_arr_owned & (1u << i)) arrays[i].used = 0;
 }
 
-/* A spawned script killed by `kill` (v0.60.290, review R-K29): its task is
- * marked dead and never runs on to release_ctx, so its files were never
- * closed, and a write file's pages stayed in the shared write budget for
- * good (every buffered write refused until a reboot). The killer releases
- * its context instead: files closed (and flushed), arrays and strings back. */
-void soupyc_release_killed(void *ctx) {
-    if (!ctx) return;
-    release_ctx((soupyc_ctx_t *)ctx);
-    kfree(ctx);
-}
-
 static void soupyc_child(void *arg) {
     soupyc_ctx_t *ctx = (soupyc_ctx_t *)arg;
     task_current()->soupyc = ctx;
@@ -1935,7 +1928,14 @@ static void soupyc_child(void *arg) {
 
     eval_block(funcs[ctx->m_entry_func].body);
 
-    if (err_flag) {
+    /* Killed (v0.60.300, review R-K33): kill asked and the script stopped at
+     * a safe point, so it closes its own files below, as its own cook. The
+     * killer releasing them (v0.60.290) ran from wherever the dead task had
+     * stopped: inside a close it hung on fat_mtx for good, and a cook's file
+     * was flushed as the headchef's (R-K34). */
+    if (task_current()->kill_req) {
+        klog("[soupyc] spawned %s stopped: killed\n", funcs[ctx->m_entry_func].name);
+    } else if (err_flag) {
         term_color(term_current(), VGA_LIGHT_RED, VGA_BLACK);
         term_printf(term_current(), "\nsoupyc: spawned %s failed (line %d): %s\n",
                    funcs[ctx->m_entry_func].name, err_line, err_msg);

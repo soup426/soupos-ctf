@@ -156,6 +156,7 @@ task_t *task_spawn(const char *name, void (*entry)(void *), void *arg) {
     t->user_resume_esp = 0; /* never been in ring 3 */
     t->proc          = 0;
     t->uid           = -1;
+    t->kill_req      = 0;
     t->page_dir      = paging_kernel_dir();
     /* A task prints where its parent prints: a program cooked from an SSH
      * session writes to that session, a script's spawn to the same place. */
@@ -350,6 +351,20 @@ int task_kill(uint32_t id) {
     t->state = TASK_DEAD;
     return 0;
 }
+
+int task_request_kill(uint32_t id) {
+    task_t *t = task_by_id(id);
+    if (!t || t == current || t->id == 0 || t->state == TASK_DEAD) return -1;
+    /* Woken from a queue, as proc_kill does: the only queues are a pipe's
+     * (which looks at kill_req), a mutex's (which tries again) and a stopped
+     * program's; its sleep looks every 50 ms. */
+    preempt_disable();
+    t->kill_req = 1;
+    task_unblock(t);
+    preempt_enable();
+    return 0;
+}
+int task_kill_requested(void) { return current && current->kill_req; }
 
 char task_state_letter(task_state_t s) {
     switch (s) {

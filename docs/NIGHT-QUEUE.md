@@ -204,6 +204,7 @@ gaps [14, 15, ...], one a tick under its 15 floor; three runs alone passed.
 Seen 2026-10-12 (v0.60.278's first run): ctslots-test "the hog held none";
 two runs alone passed. Probably a kernel line landing mid-line in "prod: hog
 holds N" (prodwin-test strips them for that reason); fixed v0.60.279.
+- while-test W6 failed once in a full check (2026-10-13, v0.60.300; its Ctrl-C after a fixed WAIT:4), passed twice alone and in the rerun.
 
 ## 6. Doom: the face
 
@@ -1033,7 +1034,7 @@ tests, build and docs. Nothing critical, so the full review stays at 30.
 
 ### Kernel and shell (reviewer confirmed K33 and K34 in QEMU on copies)
 
-- **R-K33 (high, my v0.60.290).** kill can hang the shell for good.
+- **R-K33 (high, my v0.60.290) — DONE v0.60.300 (killclose-test).** kill can hang the shell for good.
   task_kill only marks the task DEAD wherever it stopped, and
   soupyc_release_killed then runs release_ctx on the killer from the dead
   task's half-done state. Killed inside close(f): fat_write_from holds
@@ -1050,7 +1051,7 @@ tests, build and docs. Nothing critical, so the full review stays at 30.
   and soupyc_child's own release_ctx unwinds. Test: a script writes 24 MB,
   prints CLOSING, closes; kill right after CLOSING; the shell answers in
   10 s and the file is 24 MB.
-- **R-K34 (medium, rights, my v0.60.290).** A killed cook's file is
+- **R-K34 (medium, rights, my v0.60.290) — DONE v0.60.300 (killclose-test).** A killed cook's file is
   created as the headchef's: the flush runs in the headchef's shell task,
   so creator_now() and may_use_reserve() give uid 0 (perms said owner:
   headchef for /home/saucier/own.txt). R-K33's deferred kill fixes it;

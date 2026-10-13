@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.299
+Current version: v0.60.300
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,22 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.300 (2026-10-13)  — KILLING A SCRIPT ASKS IT TO STOP
+  - v0.60.290's kill marked a spawned script dead where it stood and
+    released its files from the killer. Killed inside close(), the dead
+    task still held fat_mtx for the flush and the killer's close of the
+    same node waited on it for good: the shell hung (review R-K33). And the
+    flush ran as the headchef, so a cook's file was created the
+    headchef's (R-K34).
+  - kill now asks (task_request_kill: kill_req, and the task woken from a
+    pipe or mutex queue). The script stops at its next statement, within
+    50 ms of its sleep, or at a pipe, and closes its own files as its own
+    cook. kill waits up to 5 s and says "killed task" when it is gone.
+  - scripts/killclose-test.sh: saucier's script holding its file is killed
+    by the headchef (owner: saucier), and one killed just after CLOSING:
+    the shell answers and the file holds all 12578816 bytes. Before the
+    fix the shell hung after kill.
 
 v0.60.299 (2026-10-13)  — DOOM: THE SKY
   - The sky was black: sky_ensure decoded SKY1 with patch_blit, which took
