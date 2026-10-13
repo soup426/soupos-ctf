@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.287
+Current version: v0.60.288
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,16 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.288 (2026-10-12)  — NEOSIM: A PASTE INTO A FULL BUFFER IS NO CRASH
+  - With 2048 lines (neosim's most), a linewise p inserted nothing, but
+    the cursor still went to the line it would have made, one past the
+    last, and the next read of it took neosim down with its unsaved work
+    (review R-N2). Nothing put is said so and the cursor stays. The other
+    insert sites already ask (o, O, splits) or follow a delete (c).
+  - scripts/neosim-fullpaste-test.sh: a 2048-line file, yyGp, x, :w:
+    2048 lines written, the last one shorter. Before the fix neosim was
+    killed by a page fault.
 
 v0.60.287 (2026-10-12)  — NEOSIM: A LONG COMMAND LINE IS NO CRASH
   - The command line's cursor was drawn at column cmdn + 1 with nothing to

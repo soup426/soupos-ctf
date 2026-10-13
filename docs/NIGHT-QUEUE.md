@@ -549,7 +549,7 @@ Mincecraft; neosim and rx.c; Doom; tests, build and docs.)
 
 - **R-N1 (high) — DONE v0.60.287 (neosim-longcmd-test).** A 79-character : or / command crashes neosim (the
   cursor drawn at column 80, past the body; screen.c:114, :67). Fix: clamp.
-- **R-N2 (high).** A linewise p on the last line of a full 2048-line buffer
+- **R-N2 (high) — DONE v0.60.288 (neosim-fullpaste-test; the other insert sites checked).** A linewise p on the last line of a full 2048-line buffer
   crashes it (paste_from after a failed insert). Fix: return when nothing
   was put in; audit the cy++ after failed inserts.
 - **R-N3 (high, data) — DONE v0.60.278 (neosim-writeas-test).** :w OTHER renames the buffer and clears [+]: the

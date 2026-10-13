@@ -945,13 +945,18 @@ static void paste_from(int after, int cnt, const char *reg, int reg_n, int reg_l
     if (!reg_n && !reg_lines) return;
     change_begin();
     if (reg_lines) {
-        int y = after ? E.cy + 1 : E.cy, at = y;
+        int y = after ? E.cy + 1 : E.cy, at = y, put = 0;
         for (int c = 0; c < cnt; c++) {
             if (text_insert_line(&E.t, y) < 0) break;
             int yy = y, xx = 0;
             insert_text(&yy, &xx, reg, reg_n);
-            y = yy + 1;
+            y = yy + 1; put++;
         }
+        /* Nothing in (v0.60.288, review R-N2): the buffer is full. The cursor
+         * went to the line it would have made, one past the last, and the
+         * next read of it killed neosim. It stays where it was. */
+        if (!put) { msg("E: the file is full (2048 lines): nothing put", 0, 0); return; }
+        if (at >= E.t.n) at = E.t.n - 1;
         E.cy = at; E.cx = first_nonblank(&E.t, at); E.want = E.cx;
         return;
     }
