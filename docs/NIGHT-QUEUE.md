@@ -1240,7 +1240,7 @@ and waits match. v0.60.308 regressed (R-D45).
   per-column depth of the solid wall, hiding a sprite column only when
   the wall is nearer. Test: that view in its first 0.3 s, columns 114-143
   rows 0-56 are TROOA1.
-- **R-D46 (high, play).** Monsters fire on the tic they wake, all at once
+- **R-D46 (high, play) — DONE v0.60.316 (doom-wake-test; still dead in 3 s there until R-D2 and R-D30).** Monsters fire on the tic they wake, all at once
   (atk_cd starts 0): doom at 3216 -3184 270 has 10% health at 0.35 s,
   dead in 1.5 s with no input. Doom: reactiontime 8, counted down per
   chase, no missile while it is set; and the range chance. Test: that

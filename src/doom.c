@@ -475,6 +475,14 @@ static thing_ai_t *lv_thing_ai = NULL;
  * pl_dir: coarse 8-direction (= pl_angle / ANG_PER_DIR), for sprite rotation. */
 static int32_t pl_x = 0, pl_y = 0;
 static uint32_t g_gametic;                           /* Doom's 35 Hz tics since boot (v0.60.309) */
+static int pl_health;
+static uint32_t g_level_tic;                         /* g_gametic when this level came up (v0.60.316) */
+/* A monster's hit on the player, logged with the level's tic (v0.60.316):
+ * what doom-wake-test reads to see when the first attack lands. */
+static void player_hurt(int n, const char *by) {
+    pl_health -= n; if (pl_health < 0) pl_health = 0;
+    klog("[doom] hurt %d by %s at tic %u, health %d\n", n, by, (unsigned)(g_gametic - g_level_tic), pl_health);
+}
 static int g_at_set = 0, g_at_x, g_at_y, g_at_deg;   /* doom at X Y DEG (v0.60.299) */
 void doom_spawn_at(int x, int y, int deg) { g_at_set = 1; g_at_x = x; g_at_y = y; g_at_deg = deg; }
 static int     pl_angle = 0;
@@ -1787,8 +1795,7 @@ static void projs_tick(void) {
         int32_t dx = g_projs[i].x - px;
         int32_t dy = g_projs[i].y - py;
         if (dx*dx + dy*dy <= PROJ_HIT_R * PROJ_HIT_R) {
-            pl_health -= g_projs[i].dmg;
-            if (pl_health < 0) pl_health = 0;
+            player_hurt(g_projs[i].dmg, "fireball");
             g_projs[i].active = 0;
         }
     }
@@ -2159,6 +2166,25 @@ static int los_clear(int32_t x1, int32_t y1, int32_t x2, int32_t y2) {
     return 1;
 }
 
+/* A chase step's tics, by Doom's run states (v0.60.316): the zombieman's
+ * are 4, the imp's, sergeant's and baron's 3, the demon's 2. */
+static int chase_tics(int type) { return type == 3004 ? 4 : type == 3002 ? 2 : 3; }
+/* A byte of noise (v0.60.316): Doom draws P_Random from its table; this is a
+ * plain LCG, which is all the chances below need. */
+static uint32_t g_rng = 1;
+static int rnd8(void) { g_rng = g_rng * 1103515245u + 12345u; return (int)((g_rng >> 16) & 255); }
+/* P_CheckMissileRange's chance (v0.60.316): the distance less 64, less 128
+ * more for a monster with no melee (zombieman, sergeant), at most 200; a
+ * byte under it holds the shot for a chase step. */
+static int missile_hold(int type, int64_t d2, thing_ai_t *ai) {
+    int dist = (int)isqrt32((uint32_t)(d2 > 0x7FFFFFFF ? 0x7FFFFFFF : d2)) - 64;
+    if (type == 3004 || type == 9) dist -= 128;
+    if (dist < 0) dist = 0;
+    if (dist > 200) dist = 200;
+    if (rnd8() >= dist) return 0;
+    ai->atk_cd = (uint8_t)chase_tics(type);
+    return 1;
+}
 static void thing_think(void) {
     if (!lv_things || !lv_thing_ai) return;
     int32_t px = pl_x >> 8, py = pl_y >> 8;
@@ -2182,8 +2208,14 @@ static void thing_think(void) {
 
         /* Wake up when player is near */
         if (ai->state == AI_IDLE && d2 <= ENEMY_SEE_D2 &&
-            los_clear((int32_t)th->x, (int32_t)th->y, px, py))
+            los_clear((int32_t)th->x, (int32_t)th->y, px, py)) {
             ai->state = AI_CHASE;
+            /* Doom's reactiontime (v0.60.316, review R-D46): 8, counted down
+             * a chase step at a time, no attack until 0. The cooldown started
+             * at 0, and every monster that saw the player fired on the tic
+             * it woke: 90 damage on tic 1 in E1M1's nukage room. */
+            ai->atk_cd = (uint8_t)(8 * chase_tics(th->type));
+        }
         if (ai->state != AI_CHASE) continue;
 
         /* Cooldown tick */
@@ -2191,24 +2223,22 @@ static void thing_think(void) {
 
         /* Melee attack */
         if (d2 <= ENEMY_MEL_D2 && ai->atk_cd == 0) {
-            pl_health -= 10;
-            if (pl_health < 0) pl_health = 0;
+            player_hurt(10, "melee");
             ai->atk_cd = ENEMY_ATK_CD;
         }
 
-        /* Ranged attack: Imp fires fireball, zombies hitscan */
+        /* Ranged attack: Imp fires fireball, zombies hitscan; not every time
+         * it may (v0.60.316): P_CheckMissileRange's chance by distance. */
         if (d2 > ENEMY_MEL_D2 && d2 <= ENEMY_RNG_D2 && ai->atk_cd == 0 &&
-            los_clear((int32_t)th->x, (int32_t)th->y, px, py)) {
+            los_clear((int32_t)th->x, (int32_t)th->y, px, py) && !missile_hold(th->type, d2, ai)) {
             if (th->type == 3001) {
                 spawn_proj((int32_t)th->x, (int32_t)th->y, 8);
             } else if (th->type == 3004) {
                 /* Zombieman hitscan */
-                pl_health -= 10;
-                if (pl_health < 0) pl_health = 0;
+                player_hurt(10, "zombieman");
             } else if (th->type == 9) {
                 /* Shotgun Guy hitscan */
-                pl_health -= 15;
-                if (pl_health < 0) pl_health = 0;
+                player_hurt(15, "shotgun guy");
             }
             if (th->type == 3001 || th->type == 3004 || th->type == 9)
                 ai->atk_cd = ENEMY_ATK_CD;
@@ -3015,6 +3045,7 @@ void doom_play_level(int ep, int skill) {
 
         int view3d = 1;
         if (view3d) draw_3d(); else draw_automap();
+        g_level_tic = g_gametic;
         klog("[doom] %s up\n", mapname);          /* the first frame is drawn, the world not yet run (v0.60.310) */
         keyboard_flush();
 
