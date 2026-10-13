@@ -873,14 +873,14 @@ Mincecraft; neosim and rx.c; Doom; tests, build and docs.)
   headchef with the stock secret and drops every hired cook. Fix: under
   NO_CHALLENGE users_may(path, 'w') as strain asks, bowls refused; a
   soupyc-perms-test case.
-- **R-K22 (high, panic).** user_ok's budget counts every page past the cap
+- **R-K22 (high, panic) — SET ASIDE 2026-10-12: left for the user; the loop skips it.** user_ok's budget counts every page past the cap
   as one eviction can buy, but only resident heap pages in the fifo can be
   evicted: the image and the stack cannot. Reproduced: a 1010-page .bss,
   then a 200-page read into the stack: panic at cr2 0xc7f28000. Also, after
   swap_in's own eviction fails, upages stays at CAP+1. Fix: count past the
   cap only up to fifo_len (heap pages); better, a ring-0 copy that can
   return -1 (an exception table).
-- **R-K23 (high, panic).** A page on swap is not counted at all, but
+- **R-K23 (high, panic) — SET ASIDE 2026-10-12 with R-K22: left for the user.** A page on swap is not counted at all, but
   swap_in needs a free frame first: with every frame taken (write buffers,
   K24), a read into a swapped page panicked (reproduced, cr2 0xc4000000).
   Fix: at least one free frame when any page of the range is on swap.
@@ -960,7 +960,7 @@ Mincecraft; neosim and rx.c; Doom; tests, build and docs.)
    K2 and K1, which can pass broken), R-K12 (critical), R-C2, R-K13,
    R-C10, R-K14, R-C12 (the area review's, 2026-10-12), then R-C16
    (the second area review's).
-2a. R-K21 first (critical, the second full review's); then K22, K23, K24 with the kernel crashes.
+2a. R-K21 first (critical, the second full review's); then K24 with the kernel crashes (K22 and K23 set aside for the user).
 2c. R-T28 and R-T29 (my tests that cannot fail) right after R-K21.
 2b. R-T24 and R-T25 with R-K20 (tests that cannot fail, the second area review's).
 3. Kernel crashes any cook can cause: R-K15 (my K3, incomplete), R-K16, then R-K17 (security), R-K4b (R-K5 set aside for the user).
