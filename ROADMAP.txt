@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.284
+Current version: v0.60.285
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,15 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.285 (2026-10-12)  — NEOSIM KEEPS TABS AND CRLF
+  - Reading a file made every tab a space and dropped every CR, so a
+    Makefile saved after any edit lost its tabs and a CRLF file came back
+    LF (review R-N4). Tabs stay tabs now (drawn as one blank cell, not
+    expanded as vim draws them), and a CR just before a newline marks the
+    file CRLF, which :w writes back; any other CR stays in the line.
+  - scripts/neosim-bytes-test.sh: a tab-indented line edited keeps its
+    tab; a CRLF file edited stays CRLF. Before the fix both were lost.
 
 v0.60.284 (2026-10-12)  — NEOSIM: :wq OTHER DOES NOT QUIT A CHANGED BUFFER
   - v0.60.278 fixed :w OTHER but not the quits: :wq OTHER (and :x OTHER)

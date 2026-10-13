@@ -86,7 +86,9 @@ void screen_draw(const ed_t *e, unsigned *b) {
         for (int c = 0; c < SCR_COLS - nw; c++) {
             int x = e->left + c;
             if (x >= e->t.len[l]) break;
-            cell(b, nw + c, r, e->t.s[l][x], hl_colour[cls[x]], selected(e, l, x) ? SELECT : PAGE);
+            char ch = e->t.s[l][x];
+            if (ch == '\t' || ch == '\r') ch = ' ';     /* (v0.60.285) kept in the text, drawn blank */
+            cell(b, nw + c, r, ch, hl_colour[cls[x]], selected(e, l, x) ? SELECT : PAGE);
         }
     }
     /* The cursor: rows 14 and 15 of its cell (two for normal, one for insert). */

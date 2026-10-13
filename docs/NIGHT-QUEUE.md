@@ -555,7 +555,7 @@ Mincecraft; neosim and rx.c; Doom; tests, build and docs.)
 - **R-N3 (high, data) — DONE v0.60.278 (neosim-writeas-test).** :w OTHER renames the buffer and clears [+]: the
   original is never written, :q then quits losing it. Fix: rename only a
   nameless buffer; saved/changed only for its own path.
-- **R-N4 (high, data).** Tabs become spaces and CRs vanish on load, so a
+- **R-N4 (high, data) — DONE v0.60.285 (neosim-bytes-test; a tab is one blank cell, not expanded).** Tabs become spaces and CRs vanish on load, so a
   saved Makefile is broken (text.c:41). Fix: keep tabs (expand when drawn),
   keep or report CRLF.
 - **R-N5 (high, data).** Joins over 255 columns drop text (J, multi-line

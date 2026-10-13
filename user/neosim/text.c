@@ -19,17 +19,28 @@ static void unblk(char *b) { if (b) freel[nfree++] = b; }
 
 void text_clear(text_t *t) {
     for (int i = 0; i < t->n; i++) unblk(t->s[i]);
-    t->n = 1; t->s[0] = blk(); t->len[0] = 0; t->cut = 0;
+    t->n = 1; t->s[0] = blk(); t->len[0] = 0; t->cut = 0; t->crlf = 0;
 }
 int text_load(text_t *t, const char *path) {
     text_clear(t);
     int fd = sys_open(path, O_READ);
     if (fd < 0) return -1;
     static char buf[4096];
-    int got, line = 0, over = 0, full = 0;
+    int got, line = 0, over = 0, full = 0, cr = 0;
+    /* (v0.60.285, review R-N4) The bytes as they are: a tab stays a tab (it
+     * was made a space, and a Makefile saved after any edit lost its tabs),
+     * and a CR is dropped only just before a newline, the file then noted
+     * as CRLF and written back so; any other CR stays. cr: one was the last
+     * byte of a read, its newline perhaps in the next. */
     while ((got = sys_read(fd, buf, sizeof(buf))) > 0) {
         for (int i = 0; i < got; i++) {
             char c = buf[i];
+            if (cr && c != '\n') {                  /* a CR not before a newline: kept */
+                if (t->len[line] < T_COLS) t->s[line][t->len[line]++] = '\r'; else over = 1;
+            }
+            if (c == '\n' && cr) t->crlf = 1;
+            cr = c == '\r';
+            if (cr) continue;
             if (c == '\n') {
                 if (t->n == T_MAXL) { full = 1; break; }
                 if (over) t->cut++;
@@ -38,13 +49,12 @@ int text_load(text_t *t, const char *path) {
                 t->s[line] = blk(); t->len[line] = 0;
                 continue;
             }
-            if (c == '\r') continue;
-            if (c == '\t') c = ' ';
             if (t->len[line] < T_COLS) t->s[line][t->len[line]++] = c;
             else over = 1;
         }
         if (full) break;
     }
+    if (cr && !full) { if (t->len[line] < T_COLS) t->s[line][t->len[line]++] = '\r'; else over = 1; }   /* the last byte */
     sys_close(fd);
     if (over) t->cut++;
     /* A last newline ends the last line rather than starting another. */
@@ -59,6 +69,10 @@ int text_save(const text_t *t, const char *path, unsigned *bytes) {
     unsigned total = 0;
     for (int i = 0; i < t->n; i++) {
         for (int k = 0; k <= t->len[i]; k++) {
+            if (k == t->len[i] && t->crlf) {            /* (v0.60.285) CRLF back as it came */
+                buf[n++] = '\r';
+                if (n == (int)sizeof(buf)) { if (sys_write(fd, buf, n) != n) bad = 1; total += (unsigned)n; n = 0; }
+            }
             buf[n++] = k < t->len[i] ? t->s[i][k] : '\n';
             if (n == (int)sizeof(buf)) { if (sys_write(fd, buf, n) != n) bad = 1; total += (unsigned)n; n = 0; }
         }

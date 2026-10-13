@@ -9,6 +9,7 @@ typedef struct {
     int   len[T_MAXL];
     int   n;                 /* lines: always 1 or more */
     int   cut;               /* lines cut at load */
+    int   crlf;              /* its lines ended \r\n: written back so (v0.60.285) */
 } text_t;
 int  text_init(void);                                   /* the pool; 0, or -1 */
 void text_clear(text_t *t);                             /* one empty line */
