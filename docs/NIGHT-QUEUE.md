@@ -111,7 +111,7 @@ the ones they saw first if they are around.
 
 The Doom reviewer's findings (2026-10-12, confirmed against the WAD and
 linuxdoom; most visible in play first):
-- **R-D3 (high).** The game runs at the frame rate: thinkers, doors, lifts
+- **R-D3 (high) — DONE v0.60.309 (doom-tics-test).** The game runs at the frame rate: thinkers, doors, lifts
   and projectiles advance once a frame (50 Hz idle, up to 100 while a key
   is held, more with the mouse), so monsters speed up as you move; the
   automap freezes the world. Fix: game logic on a fixed 35 Hz tick

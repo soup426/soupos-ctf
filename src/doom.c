@@ -474,6 +474,7 @@ static thing_ai_t *lv_thing_ai = NULL;
  * pl_angle: fine view angle 0-127 (128 steps, 2.8125° each; 0=East).
  * pl_dir: coarse 8-direction (= pl_angle / ANG_PER_DIR), for sprite rotation. */
 static int32_t pl_x = 0, pl_y = 0;
+static uint32_t g_gametic;                           /* Doom's 35 Hz tics since boot (v0.60.309) */
 static int g_at_set = 0, g_at_x, g_at_y, g_at_deg;   /* doom at X Y DEG (v0.60.299) */
 void doom_spawn_at(int x, int y, int deg) { g_at_set = 1; g_at_x = x; g_at_y = y; g_at_deg = deg; }
 static int     pl_angle = 0;
@@ -2279,7 +2280,7 @@ static void fire_weapon(void) {
  * ══════════════════════════════════════════════════════════════════════════ */
 
 #define DOOR_SPEED    2    /* map units per tick (100 Hz) */
-#define DOOR_WAIT   150    /* ticks open before DR auto-close (~1.5 s) */
+#define DOOR_WAIT   150    /* tics open before DR auto-close: Doom's VDOORWAIT, 4.3 s (v0.60.309; were 1.5 s of timer) */
 #define MAX_DOORS    16
 
 typedef struct {
@@ -2338,7 +2339,7 @@ static void door_activate(int sec, int stays_open) {
 }
 
 static void doors_tick(void) {
-    uint32_t now = timer_get_ticks();
+    uint32_t now = g_gametic;               /* the waits are in tics (v0.60.309) */
     for (int i = 0; i < g_ndoors; ) {
         door_t    *d = &g_doors[i];
         dsector_t *s = &lv_sectors[d->sec];
@@ -2501,7 +2502,7 @@ static void walk_trigger(int32_t ox, int32_t oy, int32_t nx, int32_t ny) {
 
 /* ── Lifts ────────────────────────────────────────────────────────────────── */
 #define LIFT_SPEED    4    /* map units per tick */
-#define LIFT_WAIT   105    /* ticks at bottom before raising (~1.0 s) */
+#define LIFT_WAIT   105    /* tics at bottom before raising: Doom's 3 s PLATWAIT (v0.60.309; were 1.05 s of timer) */
 #define MAX_LIFTS    16
 
 typedef struct {
@@ -2548,7 +2549,7 @@ static void lift_activate(int sec, int repeatable) {
 }
 
 static void lifts_tick(void) {
-    uint32_t now = timer_get_ticks();
+    uint32_t now = g_gametic;               /* the waits are in tics (v0.60.309) */
     for (int i = 0; i < g_nlifts; ) {
         lift_t    *lt = &g_lifts[i];
         dsector_t *s  = &lv_sectors[lt->sec];
@@ -2893,6 +2894,23 @@ static void sectors_tick(int psec) {
 
 /* ── Full 3D frame ───────────────────────────────────────────────────────── */
 
+/* The world, one of Doom's 35 Hz tics (v0.60.309, review R-D3): doors,
+ * lifts, sectors, pickups, monsters and missiles stepped once a drawn frame,
+ * 50 a second standing still and 73 turning, so monsters sped up as you
+ * moved, and the automap (which draws no 3D frame) stopped the world. The
+ * play loop runs it from a 35 Hz accumulator now, whatever is drawn. Logged
+ * every 35 for doom-tics-test. */
+static void world_tick(void) {
+    int psec = find_sector_at(pl_x >> 8, pl_y >> 8);
+    g_gametic++;
+    doors_tick();
+    lifts_tick();
+    sectors_tick(psec);
+    try_pickups();
+    thing_think();
+    projs_tick();
+    if (g_gametic % 35 == 0) klog("[doom] world %u steps at tick %u\n", (unsigned)g_gametic, (unsigned)timer_get_ticks());
+}
 static void draw_3d(void) {
     int psec = find_sector_at(pl_x >> 8, pl_y >> 8);
     if (psec >= 0 && psec < lv_nsectors)
@@ -2917,14 +2935,6 @@ static void draw_3d(void) {
         bsp_traverse(0x8000);
     PF_ACC(pf_bsp, t_bsp);
 
-    PF_T0(t_things);
-    doors_tick();
-    lifts_tick();
-    sectors_tick(psec);
-    try_pickups();
-    thing_think();
-    projs_tick();
-    PF_ACC(pf_things, t_things);
 
     PF_T0(t_spr);
     draw_vissprites();
@@ -3004,6 +3014,7 @@ void doom_play_level(int ep, int skill) {
         keyboard_flush();
 
         uint32_t last_draw = timer_get_ticks();
+        uint32_t world_last = last_draw, world_acc = 0;   /* 35 Hz from the 100 Hz timer (v0.60.309) */
         uint32_t turn_last = last_draw;
         uint32_t cd_last = last_draw;            /* (v0.60.220) when the fire cooldown last went down */
         int m_last = 0, m_left = 0;              /* (v0.60.220) the mouse: counts seen, the left button */
@@ -3119,6 +3130,10 @@ void doom_play_level(int ep, int skill) {
             if (keyboard_key_pressed(KEY_SC_ESC)) break;
 
             if (moved) { am_cx = pl_x >> 8; am_cy = pl_y >> 8; }
+
+            world_acc += (now - world_last) * 35; world_last = now;
+            for (int k = 0; world_acc >= 100 && k < 8; k++) { world_tick(); world_acc -= 100; }
+            if (world_acc >= 100) world_acc = 0;          /* far behind (a stall): drop it, not a burst */
 
             if (moved || now - last_draw >= FRAME_TICKS) {
                 if (view3d) draw_3d(); else draw_automap();

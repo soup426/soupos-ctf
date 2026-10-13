@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.308
+Current version: v0.60.309
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,20 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.309 (2026-10-13)  — DOOM: THE WORLD RUNS AT 35 TICS A SECOND
+  - Doors, lifts, sectors, pickups, monsters and missiles stepped once a
+    drawn 3D frame: 50 a second standing still, 73 turning (measured), so
+    monsters sped up as you moved, and the automap, which draws no 3D
+    frame, stopped the world (review R-D3). world_tick() steps them once a
+    tic, from a 35 Hz accumulator in the play loop (8 tics at most at a
+    time; a longer stall is dropped), in the 3D view and the automap.
+  - The door and lift waits were 150 and 105 of the 100 Hz timer (1.5 s,
+    1.05 s); they are Doom's 150 and 105 tics now (VDOORWAIT 4.3 s,
+    PLATWAIT 3 s).
+  - scripts/doom-tics-test.sh: from a "[doom] world N steps at tick T"
+    line every 35 steps, the world steps 35 a second standing still and
+    turning. Measured with the counter before the fix: 50 and 73.
 
 v0.60.308 (2026-10-13)  — DOOM: SOLID WALLS HIDE THE SPRITES BEHIND THEM
   - A solid wall closed col_top/col_bot but not spr_top/spr_bot, so a
