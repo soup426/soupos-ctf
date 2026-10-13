@@ -37,6 +37,10 @@ static void move_z(player_t *p, fx d) {
 }
 static void move_y(player_t *p, fx d) {
     fx n = p->y + d;
+    /* No move, no snap (v0.60.315, review R-M17), as move_x and move_z: flying
+     * with nothing held while the box overlapped a block (fallen sugar), it
+     * snapped the feet a block down every tick, through the floor and on. */
+    if (!d) return;
     if (!box_hits(p->x, n, p->z)) { p->y = n; p->ground = 0; return; }
     if (d < 0) { p->y = ((n >> 16) + 1) << 16; p->ground = 1; }
     else p->y = (((n + P_H - 1) >> 16) << 16) - P_H;

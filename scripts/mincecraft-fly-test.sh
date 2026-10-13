@@ -3,7 +3,8 @@
 # key downs and ups) Space twice quickly: "fly on"; Space held a second: the
 # cook rises; let go: it hangs there; Shift held: it sinks; P saves. Boot 2
 # loads it: still flying (the save keeps it), hanging, not falling. A
-# single Space is still a jump (boot 1's first tap goes up and lands).
+# single Space is still a jump (boot 1's first tap goes up and lands). Boot
+# 3 (v0.60.315): a block in the flying cook's cell, and it hangs.
 set -uo pipefail
 cd "$(dirname "$0")/.."
 fail=0
@@ -51,6 +52,34 @@ tap('p', 0.05); time.sleep(1.5)" "KEY:esc" "WAIT:3"
 boot load "" "time.sleep(2.0)
 tap('m', 0.05); time.sleep(1.5)
 tap('m', 0.05); time.sleep(0.3)" "KEY:esc" "WAIT:3"
+# (v0.60.315, review R-M17) A block in the cook's cell while it flies with
+# nothing held (sugar falls into it so): move_y ran with no move and snapped
+# the feet down a block a tick, through the floor without end. The saved
+# world has the cook put on the floor (feet 11.0) with a crumb in its feet's
+# cell (grid re-encoded, CRC-32 again); boot 3 loads it: the cook stays at 11
+# (each snap put it in the ground, and the next snapped it lower).
+mcopy -n -i "$WORK/disk.img" ::/FLY.WLD "$WORK/fly.wld" 2>/dev/null
+python3 - "$WORK/fly.wld" <<'EDIT' && mcopy -o -i "$WORK/disk.img" "$WORK/fly.wld" ::/FLY.WLD || { echo "  FAIL  could not put a block in the saved world"; fail=1; }
+import struct, sys, zlib
+d = open(sys.argv[1], 'rb').read(); body, crc = d[:-4], struct.unpack('<I', d[-4:])[0]
+assert d[:4] == b'MINC' and zlib.crc32(body) == crc, 'not a world file'
+x, y, z = (struct.unpack('<i', d[16 + 4 * k:20 + 4 * k])[0] >> 16 for k in range(3))
+y = 11                                               # down to the flat world's floor (its top is 11): a snap lands in the ground
+body = body[:20] + struct.pack('<i', y << 16) + body[24:]
+grid = bytearray(); i = 100
+while i < len(body): grid += bytes([body[i + 1]]) * body[i]; i += 2
+assert len(grid) == 128 * 128 * 64
+grid[(y * 128 + z) * 128 + x] = 2                    # B_CRUMB, in the feet's cell
+out = bytearray(body[:100]); i = 0
+while i < len(grid):
+    n = 1
+    while i + n < len(grid) and n < 255 and grid[i + n] == grid[i]: n += 1
+    out += bytes([n, grid[i]]); i += n
+open(sys.argv[1], 'wb').write(out + struct.pack('<I', zlib.crc32(bytes(out))))
+EDIT
+boot inside "" "time.sleep(2.0)
+tap('m', 0.05); time.sleep(1.5)
+tap('m', 0.05); time.sleep(0.3)" "KEY:esc" "WAIT:3"
 python3 - "$WORK" <<'PY' || fail=1
 import re, sys
 work = sys.argv[1]
@@ -80,6 +109,11 @@ check(len(q) >= 2, 'boot 2: a mark after the load: %d stretches' % len(q))   # (
 if len(q) >= 2:
     h = ys(q[1])
     check(h and max(h) - min(h) < 0.01 and h[0] > 12, 'still flying after the load: hanging at %.1f, not falling' % (h[0] if h else 0))
+t3, r = parts('inside')
+check('[mincecraft] loaded /FLY.WLD' in t3 and len(r) >= 2, 'boot 3: the world with a block in the cook loaded, a mark after it')
+if len(r) >= 2:
+    h = ys(r[1])
+    check(h and max(h) - min(h) < 0.01 and min(h) > 10, 'a block in the flying cook, nothing held: it hangs at %.1f (%.2f of movement), not sinking through the floor' % ((h[0], max(h) - min(h)) if h else (0, -1)))
 sys.exit(0 if ok else 1)
 PY
 [ "$fail" = 0 ] && echo "mincecraft-fly-test: PASS" || echo "mincecraft-fly-test: FAIL"

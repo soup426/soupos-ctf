@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.314
+Current version: v0.60.315
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,18 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.315 (2026-10-13)  — MINCECRAFT: A FLYING COOK INSIDE A BLOCK STAYS PUT
+  - move_y had no early return for no move (move_x and move_z do): flying
+    with nothing held while the box overlapped a block (sugar fallen into
+    the cook) snapped the feet a block down every tick, into the ground and
+    on through the floor without end; the save was then refused (y < 0)
+    and the next start set it aside and saved a new world over it (review
+    R-M17). No move, no snap now.
+  - mincecraft-fly-test, boot 3: the saved flying world is given the cook
+    on the floor with a crumb in its feet's cell (re-encoded, CRC-32
+    again); loaded, it stays at 11.0. Before the fix it was at -78.8 a
+    second and a half later.
 
 v0.60.314 (2026-10-13)  — DOOM-TICS-TEST SPLITS ITS PHASES BY THE LOG
   - doom-tics-test cut its standing-still and turning phases at fixed

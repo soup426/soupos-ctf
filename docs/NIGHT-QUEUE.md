@@ -1178,7 +1178,7 @@ was queued.
 
 ### Mincecraft (reviewer: host build with ASan/UBSan, 3000 fuzzed files, 2.4M random ticks)
 
-- **R-M17 (high, data).** move_y has no `if (!d) return;` (move_x and
+- **R-M17 (high, data) — DONE v0.60.315 (mincecraft-fly-test boot 3).** move_y has no `if (!d) return;` (move_x and
   move_z do): flying with nothing held while the box overlaps a block
   (sugar fallen into the cook, R-M2's trigger) snaps the feet down a block
   a tick, through the floor without end; the save is then refused (y < 0)
