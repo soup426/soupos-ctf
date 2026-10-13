@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.309
+Current version: v0.60.310
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,19 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.310 (2026-10-13)  — DOOM: A SPRITE IS CUT ONLY BY WALLS IN FRONT OF IT
+  - v0.60.308 had solid walls close the sprite span as they were drawn,
+    and a sprite is wider than its subsector: walls of subsectors the BSP
+    reached first could stand behind it and cut it off with a straight
+    edge (review R-D45; the reviewer found 139 such views in E1M1). Each
+    column keeps the nearest solid wall's depth now (g_solid_vx), and a
+    sprite column is hidden only where that wall is nearer than the
+    sprite; R-D22's armor behind the pillar stays hidden.
+  - "[doom] E1M1 up" when the first frame is drawn, before the world runs.
+  - scripts/doom-spritecut-test.sh: the imp on E1M1's nukage ledge,
+    screendumped as the level comes up, is drawn past where the wall
+    behind it cut it (17% of its right part brown; before the fix 0%).
 
 v0.60.309 (2026-10-13)  — DOOM: THE WORLD RUNS AT 35 TICS A SECOND
   - Doors, lifts, sectors, pickups, monsters and missiles stepped once a

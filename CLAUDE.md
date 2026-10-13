@@ -3,7 +3,7 @@
 ## What this is
 
 soupOS is a 32-bit x86 hobby OS written in C and NASM assembly (currently
-**v0.60.309**; ROADMAP.txt is the authority on the version). It boots via GRUB and runs in protected mode with paging, a
+**v0.60.310**; ROADMAP.txt is the authority on the version). It boots via GRUB and runs in protected mode with paging, a
 physical/heap allocator, and a cooperative scheduler. On top of that:
 
 - **Filesystem**: FAT16 read/write with subdirectories ("bowls") and a VFS shim
@@ -1596,7 +1596,7 @@ void    vga13h_blit(int x, int y, int w, int h, const uint8_t *pixels);
 5. **WAD lump names** are 8 bytes, NOT null-terminated when all 8 bytes are used. Always copy to a `char safe[9]` before passing to `wad_find_lump`. Use `tex_name_eq()` for 8-byte comparison.
 6. **Fixed-point math**: player position is ×256. View vectors are ×1024. Use int64 for intermediate products to avoid overflow — a prior bug truncated `PROJ_DIST*1024/vx` to 0 for distant sprites, making them invisible.
 7. **BSP side test uses `s >= 0`** (not `s > 0`) for child[0]. Both `bsp_traverse` and `find_sector_at` must use the same convention — a prior bug with `s > 0` caused things exactly on splitters to land in invalid subsectors.
-8. **`spr_top`/`spr_bot` vs `col_top`/`col_bot`**: solid walls close both (v0.60.308; before, only `col_*`, and a sprite in a subsector behind a solid wall drew through it). This is safe because the vissprite pipeline **snapshots** `spr_top`/`spr_bot` when the sprite's own subsector is reached, *before* that subsector's segs are drawn: its own visible walls are behind it, so they never clip it. A subsector never reached (cols_open hit 0 first) skips its sprites. Keep the snapshot before the segs.
+8. **Sprites and solid walls**: solid walls close `col_top`/`col_bot` but NOT `spr_top`/`spr_bot`; instead each column keeps the nearest solid wall's depth (`g_solid_vx`), and a sprite column is hidden only where that wall is nearer than the sprite (v0.60.310). Closing the sprite span (v0.60.308) cut sprites off at walls *behind* them: a sprite is wider than its subsector, and walls of subsectors the BSP reaches first can stand behind it. Portal steps still flow into the sprite span, which the vissprite pipeline **snapshots** when the sprite's own subsector is reached, before its segs.
 9. **Sprite transparency sentinel is 0xFF**. The sprite cache is filled with 0xFF before `patch_blit` decodes posts into it, and `draw_vissprites` skips `pix == 0xFF`. Never write 0xFF into a sprite bitmap as a real pixel — it will be invisible. (Doom's palette index 255 is rarely used by `DOOM1.WAD` sprites, so this is safe in practice.)
 10. **Texture V wrap fast path**: `col_fill_tex` special-cases power-of-2 `tex->height` with `& (th-1)` and always advances the backbuffer pointer by `VGA13_W` per row (no per-pixel multiply). Almost all Doom textures are power-of-2 tall, so this path is hit for walls at all times.
 11. **Any blocking wait loop must yield**: the cooperative scheduler can

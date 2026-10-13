@@ -807,6 +807,7 @@ static int     cols_open;
  * closures. Solid walls behind sprites must not hide them. */
 static int16_t spr_top[DMAX_W];
 static int16_t spr_bot[DMAX_W];
+static int32_t g_solid_vx[DMAX_W];                    /* the nearest solid wall's depth per column (v0.60.310) */
 
 /* ── COLORMAP-based diminished lighting ───────────────────────────────────
  * COLORMAP is 34 × 256 bytes: 32 shade levels (0 = full-bright, 31 = black),
@@ -1097,6 +1098,7 @@ static void spans_reset(void) {
         col_bot[i] = VIEW_H - 1;   /* clip to viewport, not full screen */
         spr_top[i] = 0;
         spr_bot[i] = VIEW_H - 1;
+        g_solid_vx[i] = 0x7FFFFFFF;
     }
     cols_open = dw;
 }
@@ -1624,12 +1626,13 @@ static void render_seg_3d(const dseg_t *seg) {
                 col_fill(sx, yfc, yff, flat_col);
             }
             col_top[sx] = (int16_t)(col_bot[sx] + 1);
-            /* The sprites' span closes too (v0.60.308, review R-D22): left
-             * open, a sprite in a subsector behind this wall drew through it.
-             * A sprite's own subsector is snapshotted before its segs, and a
-             * convex subsector's visible walls are behind what stands in it,
-             * so this hides no sprite in front of its wall. */
-            spr_top[sx] = (int16_t)(spr_bot[sx] + 1);
+            /* Its depth here, for the sprites (v0.60.310, review R-D45): a
+             * sprite column is hidden only where this wall is nearer than
+             * the sprite (R-D22: one behind it drew through it). v0.60.308
+             * closed the sprites' span instead, and a sprite is wider than
+             * its subsector: walls the BSP reached first behind it cut it
+             * off. The first solid wall in a column is its nearest. */
+            if (g_solid_vx[sx] > vx) g_solid_vx[sx] = vx;
             cols_open--;
 
         } else {
@@ -2760,6 +2763,7 @@ static void draw_vissprites(void) {
             if (sx >= dw) break;
             int stop = v->snap_top[sx], sbot = v->snap_bot[sx];
             if (stop > sbot) continue;
+            if (g_solid_vx[sx] < v->vx) continue;   /* a solid wall in front of it here (v0.60.310) */
 
             int patch_col = u_fixed >> 8;
             if (patch_col < 0) patch_col = 0;
@@ -3011,6 +3015,7 @@ void doom_play_level(int ep, int skill) {
 
         int view3d = 1;
         if (view3d) draw_3d(); else draw_automap();
+        klog("[doom] %s up\n", mapname);          /* the first frame is drawn, the world not yet run (v0.60.310) */
         keyboard_flush();
 
         uint32_t last_draw = timer_get_ticks();

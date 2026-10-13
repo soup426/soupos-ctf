@@ -1226,7 +1226,7 @@ r_segs.c's texturemid (the pegged upper and lower too, which the walls test
 does not reach); v0.60.299's sky matches R_DrawPlanes; v0.60.309's speeds
 and waits match. v0.60.308 regressed (R-D45).
 
-- **R-D45 (high, looks, my v0.60.308).** Solid walls closing the sprite
+- **R-D45 (high, looks, my v0.60.308) — DONE v0.60.310 (doom-spritecut-test; per-column depth, not drawsegs).** Solid walls closing the sprite
   span cut sprites off with a straight edge: a sprite is wider than its
   subsector, and walls of subsectors the BSP visits first can be behind
   it (doom at 3216 -3184 270: the imp on the ledge spans columns 76-143,
