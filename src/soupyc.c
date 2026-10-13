@@ -1165,6 +1165,11 @@ static val_t eval_node(node_t *n) {
             #define INPUT_MAX 1024u
             static char ibuf[INPUT_MAX + 1];
             uint32_t i = 0; int c;
+            /* A spawn()ed script reads no keys (v0.60.274, review R-K17): on
+             * the console getc is the keyboard itself, with no foreground
+             * rule, so a background script raced the shell, and the next
+             * login after a clockout, for every key. An empty line. */
+            if (task_current()->uid >= 0) { ibuf[0] = '\0'; return mksvaln(ibuf, 0); }
             /* -1 is a terminal that has gone away (an SSH session hung up):
              * end the line rather than spin on it. */
             while ((c = term_current()->getc(term_current())) != '\n' && c >= 0) {

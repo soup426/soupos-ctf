@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.273
+Current version: v0.60.274
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,17 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.274 (2026-10-12)  — A SPAWNED SCRIPT READS NO KEYS
+  - soupyc's input reads its terminal's getc, which on the console is the
+    keyboard itself, with no foreground rule: a spawn()ed script raced the
+    shell for every key, and one left running after clockout raced the
+    next login (review R-K17, the /dev/kbd hole of v0.60.264 by another
+    door). A spawned script's input is an empty line now (a task with its
+    uid set is a spawned one); the foreground script's is as before.
+  - scripts/soupyc-spawn-input-test.sh: a spawned worker's input is empty
+    and the shell has the whole word typed after. Before the fix the
+    worker printed GOT [arsnipword] and the shell lost it.
 
 v0.60.273 (2026-10-12)  — ONE BIG SYSCALL PAST THE CAP IS SAFE, AND CHEAP
   - v0.60.269 faulted every page of a syscall's buffer in at its top. A

@@ -706,7 +706,7 @@ Mincecraft; neosim and rx.c; Doom; tests, build and docs.)
   costs the whole buffer, not what is copied: a 20 MB read of a 47-byte
   file maps, zeroes and swaps out thousands of pages first, filling the
   machine's swap. Fix: clamp to what can be copied, or chunk (with K15).
-- **R-K17 (medium, security, suspected).** A spawn()ed script's input()
+- **R-K17 (medium, security; reproduced) — DONE v0.60.274 (soupyc-spawn-input-test).** A spawn()ed script's input()
   reads the console's keyboard with no foreground rule (soupyc.c:1160):
   the /dev/kbd hole K13 closed, by another door; it outlives clockout and
   races the next login for its keys. Fix: input() gives an empty line in a
