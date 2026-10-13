@@ -746,6 +746,44 @@ Mincecraft; neosim and rx.c; Doom; tests, build and docs.)
 
 ## Full review findings (2026-10-12, began at c6c8d32)
 
+### Kernel and shell (reviewer confirmed K21-K24 and K27 in QEMU on copies)
+
+- **R-K21 (critical, security).** soupyc's remove(path) calls fat_delete
+  with no rights check in any build (soupyc.c:1585), missed by K12:
+  reproduced, saucier removed /etc/kitchen, and the next boot reseeds the
+  headchef with the stock secret and drops every hired cook. Fix: under
+  NO_CHALLENGE users_may(path, 'w') as strain asks, bowls refused; a
+  soupyc-perms-test case.
+- **R-K22 (high, panic).** user_ok's budget counts every page past the cap
+  as one eviction can buy, but only resident heap pages in the fifo can be
+  evicted: the image and the stack cannot. Reproduced: a 1010-page .bss,
+  then a 200-page read into the stack: panic at cr2 0xc7f28000. Also, after
+  swap_in's own eviction fails, upages stays at CAP+1. Fix: count past the
+  cap only up to fifo_len (heap pages); better, a ring-0 copy that can
+  return -1 (an exception table).
+- **R-K23 (high, panic).** A page on swap is not counted at all, but
+  swap_in needs a free frame first: with every frame taken (write buffers,
+  K24), a read into a swapped page panicked (reproduced, cr2 0xc4000000).
+  Fix: at least one free frame when any page of the range is on swap.
+- **R-K24 (high, my R-K4b incomplete).** The write limit is per handle:
+  each may buffer the whole free space, and a program has 13 (reproduced:
+  four at 28 MB each, then out of memory, ~120 MB of buffers). Fix: one
+  budget over all open write nodes (or a share per cook), charged in
+  mem_ensure, released at close.
+- **R-K25 (low-medium, suspected).** v0.60.277's overwrite needs size <=
+  free, but write_limit still allows room + old: such a rewrite is buffered
+  then fails at close (a big Mincecraft save on a nearly full disk). Fix:
+  limit = room; say an overwrite needs room for both. Room also counts the
+  reserve a cook cannot use.
+- **R-K26 (low).** swap_out_one drops a page from the fifo before its
+  ata_write: a failed write leaves it unevictable for good. Fix: out of
+  the fifo after the write.
+- **R-K27 (low, rights).** vfstest is not headchef-only: saucier made
+  /VFSTEST.TXT in / with it (shell.c:5667). Fix: headchef_only.
+- **R-K28 (low, suspected).** Ctrl-Z on a program blocked in a stdin read
+  waits for the next key, which the program eats. Fix: break on
+  stop_pending too.
+
 ### The desktop (reviewer confirmed 1-3 in QEMU on copies)
 
 - **R-C21 (medium).** Pastes and typed command lines over 128 keys are cut:
@@ -803,6 +841,7 @@ Mincecraft; neosim and rx.c; Doom; tests, build and docs.)
    K2 and K1, which can pass broken), R-K12 (critical), R-C2, R-K13,
    R-C10, R-K14, R-C12 (the area review's, 2026-10-12), then R-C16
    (the second area review's).
+2a. R-K21 first (critical, the second full review's); then K22, K23, K24 with the kernel crashes.
 2b. R-T24 and R-T25 with R-K20 (tests that cannot fail, the second area review's).
 3. Kernel crashes any cook can cause: R-K15 (my K3, incomplete), R-K16, then R-K17 (security), R-K4b (R-K5 set aside for the user).
 4. Data loss: R-M1, R-M4, R-N3, R-N4, R-N5, R-N1, R-N2.
