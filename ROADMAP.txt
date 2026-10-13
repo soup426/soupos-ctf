@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.268
+Current version: v0.60.269
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,18 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.269 (2026-10-12)  — A SYSCALL'S COPY THE PAGER CANNOT BACK IS A -1
+  - user_ok passed any heap page below the break (and any stack page above
+    the guard) as one the demand pager would give, but at the page cap
+    with the swap full it gives none: the kernel's own copy into it faulted
+    in ring 0, the pager declined, and the machine panicked (review R-K3).
+    Such a page is faulted in at the syscall's top now, where nothing is
+    held, and refused if the pager cannot back it: the call gives -1.
+  - proof.elf kfill: 32 MB, every page written by the kernel through
+    sys_random. scripts/kfill-test.sh: refused at page 5114 of 8192 (the
+    cap and the swap), no panic, the shell answers. Before the fix it
+    panicked at 0xc53fa000.
 
 v0.60.268 (2026-10-12)  — EVERY FRAME PMM GIVES IS MAPPED
   - The kernel's identity map ran to pmm_total_pages(), a count of usable

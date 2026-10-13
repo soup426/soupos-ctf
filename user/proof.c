@@ -17,6 +17,9 @@
  *                           doing nothing, so `ps` can be asked what it
  *                           holds: 1024 resident (the cap) and the rest on
  *                           disk
+ *   cook proof.elf kfill     (v0.60.269) 32 MB again, every page written
+ *                           by the KERNEL (sys_random into it): past the cap
+ *                           and the swap a call must give -1, not panic
  *   cook proof.elf read      has the KERNEL touch the page first: a read()
  *                           into a buffer this program never wrote to, so
  *                           the fault is taken in ring 0 and must be
@@ -33,7 +36,8 @@ int main(void) {
     int greedy = (n > 0 && (arg[0] == 'g' || arg[0] == 'a'));
     int kread  = (n > 0 && arg[0] == 'r');
     int hold   = (n > 0 && arg[0] == 'h');
-    int pages  = (n > 0 && arg[0] == 'a') ? 2 * PAGES : PAGES;
+    int kfill  = (n > 0 && arg[0] == 'k');
+    int pages  = (n > 0 && (arg[0] == 'a' || kfill)) ? 2 * PAGES : PAGES;
 
     char *base = (char *)sys_sbrk(pages * PAGE);
     if (base == (char *)-1 || base == 0) {
@@ -49,6 +53,20 @@ int main(void) {
         for (int i = 0; i < 1500; i++)
             if (base[(long)i * PAGE] != (char)(i & 0x7F)) { eprint("LAZY FAIL held page\n"); return 6; }
         eprint("LAZY held 1500 pages ok\n");
+        return 0;
+    }
+    if (kfill) {                       /* (v0.60.269, review R-K3) */
+        for (int i = 0; i < pages; i++) {
+            if (sys_random(base + (long)i * PAGE, 4) < 0) {
+                eprint("LAZY kernel refused page ");
+                eprint_int(i);
+                eprint(" of ");
+                eprint_int(pages);
+                eprint("\n");
+                return 7;
+            }
+        }
+        eprint("LAZY kernel filled every page\n");
         return 0;
     }
     if (kread) {

@@ -445,7 +445,7 @@ Mincecraft; neosim and rx.c; Doom; tests, build and docs.)
   MKDIR READDIR STAT KILL). Reproduced: the probe read /etc/kitchen as the
   headchef. Fix: every check from pr->owner; clockout and the desktop's
   shift end kill or hang up the user's jobs.
-- **R-K3 (high).** A syscall copying into a program's promised but unmapped
+- **R-K3 (high) — DONE v0.60.269 (kfill-test).** A syscall copying into a program's promised but unmapped
   heap panics the kernel when the page cap and swap are full (a ring-0
   fault the pager declines). Fix: fail safely in ring 0 (pre-fault, or an
   exception-table return of -1).

@@ -82,10 +82,18 @@ static uint32_t g_fault_exc, g_fault_err, g_fault_eip, g_fault_cr2;
  * the pager declined, and isr.c panicked the machine. Checked before the
  * copy rather than caught in the fault, because by then the call may hold
  * a lock (FAT's, the desktop's) that unwinding would strand. */
+/* (v0.60.269, review R-K3) A promised page the pager might not give (at
+ * the page cap with the swap full) is faulted in HERE, at the syscall's
+ * top where nothing is held: "would give" let the copy fault in ring 0 on a
+ * page the pager then declined, and isr.c panicked. Refused, the call is
+ * a -1. A copy longer than the cap can still evict its own earlier pages;
+ * those come back through the pager as before, swap having just made room. */
 static int user_page_ok(const proc_t *pr, uint32_t pg) {
     if (paging_is_mapped(pg)) return 1;
-    if (pr && pg >= USER_HEAP && pg < pr->brk) return 1;
-    return pg >= USTACK_GUARD + 4096 && pg < USTACK_TOP;
+    int promised = (pr && pg >= USER_HEAP && pg < pr->brk) ||
+                   (pg >= USTACK_GUARD + 4096 && pg < USTACK_TOP);
+    if (!promised) return 0;
+    return usermode_demand_page(pg, 0) == 0;
 }
 static int user_ok(uint32_t ptr, uint32_t len) {
     if (ptr < USER_LO || ptr >= USER_HI) return 0;
