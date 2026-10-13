@@ -746,6 +746,67 @@ Mincecraft; neosim and rx.c; Doom; tests, build and docs.)
 
 ## Full review findings (2026-10-12, began at c6c8d32)
 
+### Doom (reviewer's host harness matched a QEMU frame on 100% of pixels; item 0b)
+
+- **R-D20 (high, looks).** The sky is black: sky_ensure decodes SKY1 with
+  patch_blit, which subtracts its offsets (127, 123), leaving a 129x5
+  strip (doom.c:899). It also turns the wrong way, at a quarter of Doom's
+  scale, and squeezes 128 rows into 84. Fix: patch_composite; u from
+  pl_angle*8 + (SCR_CX - sx)*256/dw, v = y/ds + 16.
+- **R-D21 (high, looks).** Wall textures stretch over the sector's height
+  instead of a texel a map unit (v_step = th/wall_h); the upper and lower
+  pegging offsets have their signs wrong; lower-unpegged mids swim with
+  distance (doom.c:1365, 1573-1624). Fix: V in map units, offsets from the
+  front ceiling (mid 0; unpegged lower th-(fc-ff); upper bc+th-fc; lower
+  bf-fc; plus yoff).
+- **R-D22 (high, looks).** Sprites draw through solid walls: those close
+  col_top/col_bot only, never spr_top/spr_bot (doom.c:1589, 2701). Fix:
+  solid walls close the sprite clip too; CLAUDE.md pitfall 8 is stale.
+- **R-D23 (medium-high, looks).** Floors and ceilings are all at the
+  player's own sector heights (doom.c:978): steps and pits slide. Fix:
+  visplanes, a span per sector height.
+- **R-D24 (medium).** Imp fireballs are a 3x3 dot at screen centre, seen
+  through walls. Fix: the BAL1 sprite, clipped.
+- **R-D25 (medium).** Armor does nothing: all damage comes off health.
+  Fix: a third (green) or half (blue) absorbed, as P_DamageMobj.
+- **R-D26 (medium).** Things are not solid (try_move tests lines only);
+  barrels can be neither shot nor exploded.
+- **R-D27 (medium).** Chasing monsters never turn: the rotation is from the
+  spawn angle, so one facing away runs at you back first. Fix: the angle
+  from the move direction.
+- **R-D28 (medium).** Only the first sector with a tag moves (both loops
+  break at it): E1M4's 4-sector door, E1M6's 5, lifts with 2.
+- **R-D29 (medium).** Many E1 line specials do nothing (5 7 8 9 16 18 20
+  22 23 35 36 48 70 76 82 90 91 97 98: teleports, stairs, floor lowers,
+  the donut, scrollers); sector lights 2 8 12 13 do nothing, 17 is really
+  8's glow, strobes dim to 0, flicker is a fixed blink. Whether any blocks
+  a map is a play-through each.
+- **R-D30 (medium).** Monster attacks are one rule: every monster melees
+  10 within 72 units, through thin walls; hitscans never miss; no pain
+  states; barons have no fireball.
+- **R-D31 (medium-low).** Waking: all 360 degrees within 1024 units, no
+  gunfire alert, ambush flag ignored, no shots past 768.
+- **R-D32 (medium).** The player moves 800 u/s (Doom 280 walking, 560
+  running; no run key); the pistol fires every 0.15 s (Doom 0.54;
+  doom-mouse-test asserts 0.15); fixed 10 damage; a 20-degree autoaim cone.
+- **R-D33 (medium-low).** Keys carry over to the next map.
+- **R-D34 (low-medium, looks).** Lighting: bright sectors fade to black
+  with distance; rows by the horizon are black; no wall contrast. Fix:
+  scalelight/zlight.
+- **R-D35 (low-medium, looks).** Masked middle textures (window bars) never
+  drawn; upper textures between two sky ceilings drawn where Doom shows sky.
+- **R-D36 (low).** Bloody mess (10, 12) draws a standing marine; dead
+  player, backpack, candle, candelabra missing; items never animate; the
+  spectre is opaque.
+- **R-D37 (low).** Use reaches through walls (player_use does not stop at
+  the first closed line).
+- **R-D38 (low, looks).** Flats mirrored north-south (v = wy & 63).
+- **R-D39 (low).** vy*PROJ_DIST overflows at 960x600 past ~4370 units
+  (doom.c:2643, 1479). Fix: int64.
+- **R-D40 (low).** Pickups that do nothing: radiation suit, light amp,
+  computer map, invisibility, rocket launcher, chainsaw; no fist; the
+  automap shows everything and secret lines.
+
 ### Kernel and shell (reviewer confirmed K21-K24 and K27 in QEMU on copies)
 
 - **R-K21 (critical, security).** soupyc's remove(path) calls fat_delete
@@ -845,7 +906,7 @@ Mincecraft; neosim and rx.c; Doom; tests, build and docs.)
 2b. R-T24 and R-T25 with R-K20 (tests that cannot fail, the second area review's).
 3. Kernel crashes any cook can cause: R-K15 (my K3, incomplete), R-K16, then R-K17 (security), R-K4b (R-K5 set aside for the user).
 4. Data loss: R-M1, R-M4, R-N3, R-N4, R-N5, R-N1, R-N2.
-5. Item 0b, Doom, from R-D3, R-D2, R-D4, R-D1 down.
+5. Item 0b, Doom: R-D20, R-D21, R-D22 (what the user sees first), then R-D3, R-D2, R-D4, R-D1 and the rest by severity.
 6. The rest by severity, the area's mediums before the lows; items 1-9
    where they fit.
 7. Items 10 and 11 (the user's ideas, 2026-10-12) after the review;
