@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.295
+Current version: v0.60.296
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,15 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.296 (2026-10-13)  — NEOSIM: A FULL BUFFER'S REFUSALS CHANGE NOTHING
+  - A linewise p, o or O into a 2048-line buffer began its undo step
+    before finding there was no room: an empty step and [+], so :q said
+    E37 though nothing had changed (review R-N49; v0.60.288 had stopped
+    only the crash). text_room() is asked first now, and the full buffer
+    is said.
+  - neosim-fullpaste-test: yyGp, o and O on a full buffer, then :q quits.
+    Before the fix :q was refused.
 
 v0.60.295 (2026-10-13)  — NEOSIM: A REFUSED JOIN CHANGES NOTHING
   - v0.60.286 asked whether a join would pass 255 columns inside

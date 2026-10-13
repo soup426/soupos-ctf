@@ -947,6 +947,9 @@ static void paste(int after, int cnt) {               /* (v0.60.240) from the re
 }
 static void paste_from(int after, int cnt, const char *reg, int reg_n, int reg_lines) {
     if (!reg_n && !reg_lines) return;
+    /* Before the undo step (v0.60.296, review R-N49): refused after it, a
+     * paste into a full buffer left an empty step and [+]. */
+    if (reg_lines && !text_room(&E.t)) { msg("E: the file is full (2048 lines): nothing put", 0, 0); return; }
     change_begin();
     if (reg_lines) {
         int y = after ? E.cy + 1 : E.cy, at = y, put = 0;
@@ -1199,8 +1202,10 @@ static void normal_key(unsigned k) {
     case 'a': insert_mode(len() ? E.cx + 1 : 0, 1); ins_count = cnt; break;
     case 'A': insert_mode(len(), 1); ins_count = cnt; break;
     case 'I': insert_mode(len() ? first_nonblank(&E.t, E.cy) : 0, 1); ins_count = cnt; break;
-    case 'o': { int ind = indent_of(E.cy); change_begin(); if (text_insert_line(&E.t, E.cy + 1) == 0) { E.cy++; put_indent(E.cy, ind); insert_mode(ind, 0); ai_pending = ind; ins_count = cnt; ins_open = 1; } break; }
-    case 'O': { int ind = indent_of(E.cy); change_begin(); if (text_insert_line(&E.t, E.cy) == 0) { put_indent(E.cy, ind); insert_mode(ind, 0); ai_pending = ind; ins_count = cnt; ins_open = 1; } break; }
+    case 'o': { if (!text_room(&E.t)) { msg("E: the file is full (2048 lines)", 0, 0); break; }   /* (v0.60.296) */
+                int ind = indent_of(E.cy); change_begin(); if (text_insert_line(&E.t, E.cy + 1) == 0) { E.cy++; put_indent(E.cy, ind); insert_mode(ind, 0); ai_pending = ind; ins_count = cnt; ins_open = 1; } break; }
+    case 'O': { if (!text_room(&E.t)) { msg("E: the file is full (2048 lines)", 0, 0); break; }
+                int ind = indent_of(E.cy); change_begin(); if (text_insert_line(&E.t, E.cy) == 0) { put_indent(E.cy, ind); insert_mode(ind, 0); ai_pending = ind; ins_count = cnt; ins_open = 1; } break; }
     case ':': E.mode = M_COMMAND; E.cmdch = ':'; E.cmdn = 0; break;
     }
 }

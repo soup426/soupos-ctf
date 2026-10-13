@@ -15,7 +15,8 @@ int  text_init(void);                                   /* the pool; 0, or -1 */
 void text_clear(text_t *t);                             /* one empty line */
 int  text_load(text_t *t, const char *path);            /* 0, -1 no such file (empty), -2 too many lines */
 int  text_save(const text_t *t, const char *path, unsigned *bytes);   /* 0, or -1 */
-int  text_insert_line(text_t *t, int at);               /* an empty line at `at`; 0, or -1 full */
+int  text_insert_line(text_t *t, int at);
+int  text_room(const text_t *t);                      /* room for a line (v0.60.296) */               /* an empty line at `at`; 0, or -1 full */
 void text_delete_line(text_t *t, int at);
 int  text_insert_char(text_t *t, int line, int col, char c);          /* 0, or -1 line full */
 void text_delete_char(text_t *t, int line, int col);

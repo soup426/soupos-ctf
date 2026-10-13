@@ -1013,7 +1013,7 @@ Mincecraft; neosim and rx.c; Doom; tests, build and docs.)
   delete_chars, after reg_take_chars and change_begin); a refused c goes on
   into insert; J starts its step before its check. Fix: ask before any of
   that.
-- **R-N49 (medium, my v0.60.288).** A refused paste or o/O into a full buffer
+- **R-N49 (medium, my v0.60.288) — DONE v0.60.296 (neosim-fullpaste-test).** A refused paste or o/O into a full buffer
   leaves an empty undo step and [+] (change_begin first). Fix: room first.
 - **R-N50 (low-medium).** A multi-line paste into a nearly full buffer joins
   the register's lines (insert_text drops the \n when text_split fails),
