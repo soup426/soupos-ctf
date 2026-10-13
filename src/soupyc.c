@@ -1921,6 +1921,7 @@ static void release_ctx(soupyc_ctx_t *c) {
 static void soupyc_child(void *arg) {
     soupyc_ctx_t *ctx = (soupyc_ctx_t *)arg;
     task_current()->soupyc = ctx;
+    task_current()->spawned_script = 1;      /* the deferred kill is for this task only (v0.60.312, review R-K37) */
     /* Before anything it opens (v0.60.266, review R-K14): a kernel task has
      * no program, so its rights were its shell's current cook, and a script
      * left running after clockout had the next cook's. */
@@ -2005,6 +2006,9 @@ int soupyc_run(const char *source) {
         if (arr_owned & (1u << i)) arrays[i].used = 0;
 
     t->soupyc = prev;
+    /* A kill asked of a session while this ran (v0.60.312, review R-K37)
+     * ends here: left set, every later script there failed "killed". */
+    if (!t->spawned_script) t->kill_req = 0;
     kfree(ctx);
     return rc;
 }

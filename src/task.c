@@ -157,6 +157,7 @@ task_t *task_spawn(const char *name, void (*entry)(void *), void *arg) {
     t->proc          = 0;
     t->uid           = -1;
     t->kill_req      = 0;
+    t->spawned_script = 0;
     t->page_dir      = paging_kernel_dir();
     /* A task prints where its parent prints: a program cooked from an SSH
      * session writes to that session, a script's spawn to the same place. */

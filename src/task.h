@@ -42,6 +42,8 @@ typedef struct task {
                                   * Inherited by every task it spawns (v0.36.0) */
     void         *shell;         /* the shell it belongs to (shell_t), inherited */
     void         *soupyc;        /* soupyc_ctx_t while this task interprets  */
+    int           spawned_script;/* a spawn()ed soupyc script's task (v0.60.312):
+                                  * only it takes the deferred kill */
     int           kill_req;      /* kill asked of a spawned script (v0.60.300):
                                   * it stops at its next statement, sleep or
                                   * write and closes its own files */

@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.311
+Current version: v0.60.312
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,19 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.312 (2026-10-13)  — ONLY A SPAWNED SCRIPT TAKES THE DEFERRED KILL
+  - v0.60.300 sent any task with ->soupyc down the deferred kill, and a
+    session running a foreground soup has it too: the session got
+    kill_req for good, so every later soup there failed "killed", every
+    pipe read was EOF, and the killer was told "is stopping" forever
+    (review R-K37). A spawn()ed script's task is marked (spawned_script)
+    and only it is asked; a session's task is killed as before, and
+    kill_req is cleared when a foreground script returns.
+  - scripts/killsession-test.sh: an SSH session runs a sleeping loop and
+    the console kills its task: "killed task N" and it is gone from ps.
+    Before the fix: "is stopping", then the session's scripts failed
+    "killed". (Its SSH channel stays open with nothing behind it: R-K41.)
 
 v0.60.311 (2026-10-13)  — NEOSIM: A PASTE ACROSS LINES SPLITS FIRST
   - insert_text put a multi-line paste's first part into the line before

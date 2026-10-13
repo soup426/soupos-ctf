@@ -4457,7 +4457,10 @@ static void cmd_kill(const char *args) {
         return;
     }
     task_t *kt = task_by_id((uint32_t)id);
-    if (kt && kt->soupyc) {
+    /* Only a spawn()ed script's task (v0.60.312, review R-K37): a session
+     * running a foreground soup has ->soupyc too, and the deferred kill left
+     * it flagged for good; it is killed as any task is. */
+    if (kt && kt->soupyc && kt->spawned_script) {
         /* A spawned script is asked, not killed where it stands (v0.60.300,
          * review R-K33): it stops at its next statement, sleep or write and
          * closes its own files as its own cook. Up to 5 s for it to go. */

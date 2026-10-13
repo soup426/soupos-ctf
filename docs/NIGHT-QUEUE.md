@@ -1130,7 +1130,7 @@ was queued.
 
 ### Kernel and shell (reviewer confirmed K37 and K38 in QEMU on copies)
 
-- **R-K37 (medium, my v0.60.300).** kill of a shell session running a
+- **R-K37 (medium, my v0.60.300) — DONE v0.60.312 (killsession-test).** kill of a shell session running a
   foreground script takes the deferred path (soupyc_run sets ->soupyc on
   the shell's own task, soupyc.c:1994) and leaves kill_req set for good:
   every later soup in that session fails "killed", every pipe read gives
@@ -1139,6 +1139,10 @@ was queued.
   shell's task keeps task_kill; clear kill_req when soupyc_run returns.
   Test: SSH session runs a sleep loop, the console kills its task; then
   soup /HI.SC and a here-string in it must work, or the session be gone.
+- **R-K41 (low, seen 2026-10-13).** A session's task killed from the
+  console: the vault never closes its SSH channel, and the client hangs
+  with nothing behind it (killsession-test sees it; it accepts the task
+  gone from ps). Fix: the vault notices its session task gone and closes.
 - **R-K38 (low-medium).** A cook cannot kill their own spawned script
   ("only the headchef may kill a kernel task"), and ps shows OWNER - for
   it. Fix: allow t->soupyc && t->uid == the caller's; ps shows t->uid.
