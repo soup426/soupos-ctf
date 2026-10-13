@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.324
+Current version: v0.60.325
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,18 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.325 (2026-10-13)  — DESKTOP: A DROP CLOSES THE MENU ON ITS WINDOW
+  - A file held in one files window, the right button on a row of
+    another, then let go there: the drop reloaded the listing under the
+    menu, and the menu read its row out of the new one. The dropped file
+    took a strained file's slot, so "remove" twice composted it, not the
+    file the menu named (review R-C31). files_load closes a menu on its
+    window now.
+  - scripts/ctdropmenu-test.sh: as saucier, HELLO.TXT dropped with the
+    menu up on b.txt; the two clicks do nothing and HELLO.TXT stays, then
+    b.txt removed as meant is the positive control. Before the fix:
+    "composted /home/saucier/HELLO.TXT".
 
 v0.60.324 (2026-10-13)  — CTCTXNAV-TEST: A POSITIVE CONTROL, AND EACH PART OF ITS FIX
   - ctctxnav-test's checks were both absences, so keys or clicks that

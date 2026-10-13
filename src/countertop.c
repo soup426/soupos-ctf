@@ -417,7 +417,9 @@ struct files {
     uint8_t dir[FMAX];
     uint32_t size[FMAX];
 };
+static void ctx_close_for(const struct files *f);
 static void files_load(struct files *f) {
+    ctx_close_for(f);                                /* its menu read a row of this listing (v0.60.325) */
     f->n = 0; f->sel = 0; f->top = 0;
     if (f->path[1]) { strcpy(f->name[0], ".."); f->dir[0] = 1; f->size[0] = 0; f->n = 1; }
     if (!users_may(f->path, 'r')) return;
@@ -1450,6 +1452,10 @@ static void ctx_close(void) {
     ctx_win = -1; ctx_armed = 0;
     repaint(ctx_x, ctx_y, CTX_W, h);
 }
+/* A listing reloaded under its menu (v0.60.325, review R-C31): a drop onto
+ * the window with the menu up put the dropped file in the row the menu was
+ * opened on, and "remove" composted it, not the file the menu named. */
+static void ctx_close_for(const struct files *f) { if (ctx_win >= 0 && win[ctx_win].files == f) ctx_close(); }
 static void ctx_open(int k, int r, int x, int y) {
     ctx_close();
     ctx_win = k; ctx_row = r; ctx_armed = 0;

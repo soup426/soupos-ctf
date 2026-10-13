@@ -205,6 +205,7 @@ Seen 2026-10-12 (v0.60.278's first run): ctslots-test "the hog held none";
 two runs alone passed. Probably a kernel line landing mid-line in "prod: hog
 holds N" (prodwin-test strips them for that reason); fixed v0.60.279.
 - doom-mouse-test failed once in a full check (2026-10-13, v0.60.321: one gap of 14 ticks against 15), passed in the rerun.
+- doom-mouse-test again (2026-10-13, v0.60.325: one gap of 14 against 15, the first), passed in the rerun.
 - while-test W6 failed once in a full check (2026-10-13, v0.60.300; its Ctrl-C after a fixed WAIT:4), passed twice alone and in the rerun.
 
 ## 6. Doom: the face
@@ -1301,7 +1302,7 @@ show).
 
 ### The desktop (reviewer confirmed C31 in QEMU on a copy)
 
-- **R-C31 (low-medium, data).** A drop onto a files window with its menu
+- **R-C31 (low-medium, data) — DONE v0.60.325 (ctdropmenu-test).** A drop onto a files window with its menu
   open reloads its listing under the menu; the same row is another file
   (a remove composted the dropped file, not the one the menu was for).
   Fix: files_load closes a menu on its window.
