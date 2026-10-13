@@ -1,7 +1,7 @@
 soupOS — Feature Roadmap
 ========================
 A 32-bit hobby OS written in C and NASM.
-Current version: v0.60.270
+Current version: v0.60.271
 
 Features are grouped roughly by effort. Nothing here is required;
 everything is just "it would be funny/cool to build."
@@ -9,6 +9,15 @@ everything is just "it would be funny/cool to build."
 ────────────────────────────────────────────────────────────────
 CHANGELOG
 ────────────────────────────────────────────────────────────────
+
+v0.60.271 (2026-10-12)  — KBDTAP-TEST TESTS ONLY WHAT IT CAN
+  - kbdtap-test's SSH half passed with v0.60.264's dev_kbd_read guard
+    taken out: the shell's pour opens only files on the disk ("Not found:
+    /dev/kbd"), so it never reached the device, and no reader on another
+    terminal that does was found (review R-T24). That half is gone; the
+    guard stays as a backstop, and its comment and CLAUDE.md say it has
+    no known caller and no test. The soupyc half (open gives -1) is what
+    the test checks.
 
 v0.60.270 (2026-10-12)  — A COMPOSTED FILE KEEPS ITS MODE
   - The desktop's compost, copy and put back made every new file rwxr-x,

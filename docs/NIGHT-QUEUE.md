@@ -671,7 +671,7 @@ Mincecraft; neosim and rx.c; Doom; tests, build and docs.)
 
 ### Tests, build and docs (reviewer reverted 11 fixes in copies; 9 tests failed as they should)
 
-- **R-T24 (medium).** kbdtap-test's SSH half cannot fail: the shell's pour
+- **R-T24 (medium) — DONE v0.60.271 (the SSH half removed; the guard kept, said untested).** kbdtap-test's SSH half cannot fail: the shell's pour
   never reaches the device ("Not found: /dev/kbd"), so with v0.60.264's
   dev_kbd_read guard removed it still passed; no ring-0 reader on another
   terminal was found at all (cook spoon.elf < /dev/kbd over SSH hangs on

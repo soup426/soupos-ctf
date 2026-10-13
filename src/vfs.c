@@ -319,7 +319,9 @@ static int dev_serial_write(vfs_node_t *n, const void *buf, uint32_t count) {
 static int dev_kbd_read(vfs_node_t *n, void *buf, uint32_t count) {
     /* The console's keyboard, for the console's tasks only (v0.60.264): a
      * task on another terminal (an SSH session) reads EOF, never the keys
-     * typed at the console. Programs never get here (SYS_READ's stdin rule,
+     * typed at the console. A backstop: no reader on another terminal is
+     * known to get here (the shell's pour and redirects never open the
+     * device, review R-T24). Programs never do (SYS_READ's stdin rule,
      * v0.60.257), nor soupyc (sc_open). */
     task_t *me = task_current();
     if (me && me->term && me->term != &term_vga) return 0;
